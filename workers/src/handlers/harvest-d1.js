@@ -379,11 +379,12 @@ export async function handleSackScan(request, env, ctx) {
   try {
     const url = new URL(request.url);
     const sackId = url.pathname.replace(/^\/s\//, '').trim();
-    if (isDemoSack(sackId)) {
+    const demo = demoKey(sackId);
+    if (demo) {
       const view = demoSackView(url.searchParams.get('opened') === '1',
-                                url.searchParams.get('voided') === '1');
-      return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
-        demoBanner(ui, url) + sackDetailBody(ui, view));
+                                url.searchParams.get('voided') === '1', demo);
+      return renderPage(ui, `${ui.t('sack')} ${demo}`,
+        demoBanner(ui, url, null, demo) + sackDetailBody(ui, view));
     }
     const view = await getSackView(env.DB, sackId);
     if (!view) {
@@ -1275,6 +1276,30 @@ async function handleSackLabel(ui, db, env, params) {
       { autoPrint: false, banner, stock: params.stock });
   }
 
+  // ?examples=1 — the two hand-out tags. Separate from ?calibrate=1, which is
+  // three tags chosen to stress the printer rather than to be given to anyone.
+  if (params.examples === '1') {
+    const banner = ui.lang === 'es'
+      ? `<div class="banner">
+      <strong>Dos etiquetas de ejemplo</strong> — Sour Lifter y Lifter.
+      <br><br><strong>Escanea cualquiera de las dos.</strong> Abre la página real de la bolsa, con el recorrido
+      completo: sembrada, cortada, embolsada, abierta y los pesos. Nada de lo que toques ahí se guarda.
+      <br><br>El número de bolsa dice <strong>#DEMO</strong> a propósito: así ninguna bolsa real puede quedar
+      apuntando a estos pesos. Todo lo demás — variedad, código, zona, bahía, fecha — es real.
+      <br><br>No se creó ninguna fila, así que <strong>no se gastó ningún número de serie</strong>.
+      </div>`
+      : `<div class="banner">
+      <strong>Two example tags</strong> — Sour Lifter and Lifter.
+      <br><br><strong>Scan either one.</strong> It opens the real sack page with the full journey — planted, cut,
+      bagged, opened, and the weights. Nothing you press there is saved.
+      <br><br>The bag number reads <strong>#DEMO</strong> on purpose, so no real bag can ever point at these
+      weights. Everything else — cultivar, code, zone, bay, date — is real.
+      <br><br>No rows were created, so <strong>no serial numbers were used up</strong>.
+      </div>`;
+    return renderLabelSheet(ui, exampleTagSacks(), null,
+      { autoPrint: false, banner, stock: params.stock });
+  }
+
   const raw = String(params.ids || params.id || '').trim();
   const ids = raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_PRINT_QTY);
   if (!ids.length) throw createError('VALIDATION_ERROR', ui.t('noSackId'));
@@ -1367,10 +1392,57 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  * ?opened=1 shows the state after ABRIR BOLSA, with floor-allocated weights.
  * ?voided=1 shows a retired number, which has no sack behind it to open.
  */
-const DEMO_SACK_ID = 'DEMO';
+/**
+ * The example sacks, one per cultivar Koa hands out as a physical specimen.
+ *
+ * THE IDS END IN `-DEMO` ON PURPOSE. A real bag number is
+ * `<yy>-<PREFIX>-<digits>`, so a non-numeric tail can never collide with one —
+ * which matters because these tags are laminated and will outlive several
+ * seasons. `26-SLIFT-7` would have been prettier and would eventually have
+ * pointed a real bag at fake weights.
+ *
+ * The five parts sum to the 37 lb that went into the sack, because that is how
+ * the real figures behave: waste is the remainder, not a reading. Lifter is
+ * given a lower tops share than Sour Lifter, which is the direction the real
+ * supersack data actually goes — a demo with the ranking backwards teaches the
+ * wrong thing.
+ */
+const DEMO_SACKS = {
+  '26-SLIFT-DEMO': {
+    code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut: 1, bay: 7, lotSacks: 14,
+    parts: { tops: 21.4, smalls: 11.9, biomass: 2.1, trim: 1.2, waste: 0.4 },
+    notes: [
+      { note: 'Bottom of the rack was still damp — held back a day.', at: '16:05:00' },
+      { note: 'Tape said Z4 cut 1, matches the lot picker.', at: '14:22:00' },
+    ],
+  },
+  '26-LIFT-DEMO': {
+    code: 'LIFT', cultivar: 'Lifter', zone: 'Z19', cut: 1, bay: 11, lotSacks: 9,
+    parts: { tops: 18.2, smalls: 14.6, biomass: 2.6, trim: 1.3, waste: 0.3 },
+    notes: [
+      { note: 'Top bay, dried fast — came down two days early.', at: '15:40:00' },
+      { note: 'Z19 cut 1, whole plant.', at: '15:38:00' },
+    ],
+  },
+};
+
+const DEMO_SACK_ID = '26-SLIFT-DEMO';
+
+/**
+ * Which example sack an id names, or null for a real one.
+ *
+ * Bare `DEMO` still resolves — it is printed on the calibration specimen sheet
+ * and may be on a laminated tag already.
+ */
+function demoKey(id) {
+  const raw = String(id || '').trim().toUpperCase();
+  if (!raw) return null;
+  if (raw === 'DEMO') return DEMO_SACK_ID;
+  return Object.prototype.hasOwnProperty.call(DEMO_SACKS, raw) ? raw : null;
+}
 
 function isDemoSack(id) {
-  return String(id || '').trim().toUpperCase() === DEMO_SACK_ID;
+  return demoKey(id) !== null;
 }
 
 /**
@@ -1379,18 +1451,22 @@ function isDemoSack(id) {
  * Without this the page is indistinguishable from a real sack, which is how a
  * demo ends up quoted as a measurement later.
  */
-function demoBanner(ui, url, msg) {
+function demoBanner(ui, url, msg, id = DEMO_SACK_ID) {
   const es = ui.lang === 'es';
   const opened = url ? url.searchParams.get('opened') === '1' : true;
-  const other = opened ? '/s/DEMO' : '/s/DEMO?opened=1';
+  const key = demoKey(id) || DEMO_SACK_ID;
+  const other = opened ? `/s/${key}` : `/s/${key}?opened=1`;
   const otherLabel = opened
     ? (es ? 'ver sin abrir' : 'see it unopened')
     : (es ? 'ver ya abierta, con pesos' : 'see it opened, with weights');
+  // The zone is read off the sack being shown, not hard-coded: with two example
+  // sacks a fixed "Z4" was a plain lie on the Lifter one.
+  const zone = (DEMO_SACKS[key] || {}).zone || 'Z4';
   const line = msg
     ? msg
     : (es
-        ? 'Bolsa de <strong>ejemplo</strong> — no existe. Los números son de la Z4 real para que las proporciones sean honestas.'
-        : '<strong>Example</strong> sack — it does not exist. The figures come from the real Z4 so the proportions are honest.');
+        ? `Bolsa de <strong>ejemplo</strong> — no existe. Los números son de la ${zone} real para que las proporciones sean honestas.`
+        : `<strong>Example</strong> sack — it does not exist. The figures come from the real ${zone} so the proportions are honest.`);
   // Explicit dark text: the page body is white-on-dark-green, so a light
   // banner without its own colour inherits white and disappears.
   return `<div style="background:#fff4d6;border:1px solid #e0c86a;border-radius:6px;padding:11px 13px;margin:0 0 16px;font-size:14px;line-height:1.5;color:#3a2f05">
@@ -1398,8 +1474,10 @@ function demoBanner(ui, url, msg) {
   </div>`;
 }
 
-function demoSackView(opened, voided) {
-  const facts = zoneFacts('Z4') || {};
+function demoSackView(opened, voided, id = DEMO_SACK_ID) {
+  const key = demoKey(id) || DEMO_SACK_ID;
+  const d = DEMO_SACKS[key];
+  const facts = zoneFacts(d.zone) || {};
   const today = new Date();
   // Cut 16 days ago, bagged after the typical dry cycle, opened yesterday —
   // so the journey on the page shows the shape of a real sack's timeline.
@@ -1410,33 +1488,30 @@ function demoSackView(opened, voided) {
     : null;
   return {
     sack: {
-      sack_id: DEMO_SACK_ID, season: 2026, serial: 7, cultivar_code: 'SLIFT',
-      cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1,
+      sack_id: key, season: 2026, serial: 'DEMO', cultivar_code: d.code,
+      cultivar: d.cultivar, zone: d.zone, cut_number: d.cut,
       harvest_date: cut,
-      bay: 7,
+      bay: d.bay,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
       // The five parts sum to the 37 lb that went into the sack, because that
       // is how the real figures behave — waste is the remainder, not a reading.
       // A demo that did not add up would teach the wrong thing.
-      tops_lbs: opened ? 21.4 : null,
-      smalls_lbs: opened ? 11.9 : null,
-      biomass_lbs: opened ? 2.1 : null,
-      trim_lbs: opened ? 1.2 : null,
-      waste_lbs: opened ? 0.4 : null,
+      tops_lbs: opened ? d.parts.tops : null,
+      smalls_lbs: opened ? d.parts.smalls : null,
+      biomass_lbs: opened ? d.parts.biomass : null,
+      trim_lbs: opened ? d.parts.trim : null,
+      waste_lbs: opened ? d.parts.waste : null,
       weights_source: opened ? 'allocated' : null,
       voided_at: voided ? cut + ' 15:10:00' : null, is_test: 1,
     },
-    notes: [
-      { note: 'Bottom of the rack was still damp — held back a day.', created_at: bagged + ' 16:05:00' },
-      { note: 'Tape said Z4 cut 1, matches the lot picker.', created_at: bagged + ' 14:22:00' },
-    ],
+    notes: d.notes.map(n => ({ note: n.note, created_at: bagged + ' ' + n.at })),
     plantDate: facts.plantDate || null,
     plantDateApprox: !!facts.multiDay,
     acres: facts.acres ?? null,
-    plants: plantCountFor('Z4'),
+    plants: plantCountFor(d.zone),
     growDays,
-    lotSacks: 14,
+    lotSacks: d.lotSacks,
   };
 }
 
@@ -1565,12 +1640,13 @@ async function handleSackFind(ui, db, env, input) {
  */
 async function handleSackOpen(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
-  if (isDemoSack(sackId)) {
+  const demoOpen = demoKey(sackId);
+  if (demoOpen) {
     const msg = ui.lang === 'es'
       ? 'Así se ve después de <strong>ABRIR BOLSA</strong>. No se guardó nada — es la bolsa de ejemplo.'
       : 'This is how it looks after <strong>OPEN SACK</strong>. Nothing was saved — it is the example sack.';
-    return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
-      demoBanner(ui, null, msg) + sackDetailBody(ui, demoSackView(true)));
+    return renderPage(ui, `${ui.t('sack')} ${demoOpen}`,
+      demoBanner(ui, null, msg, demoOpen) + sackDetailBody(ui, demoSackView(true, false, demoOpen)));
   }
   const view = await getSackView(db, sackId);
   if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
@@ -1795,12 +1871,13 @@ export async function runNightlyAllocation(env, { days = ALLOCATION_WINDOW_DAYS 
 
 async function handleSackNote(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
-  if (isDemoSack(sackId)) {
+  const demoNote = demoKey(sackId);
+  if (demoNote) {
     const msg = ui.lang === 'es'
       ? 'La nota no se guardó — es la bolsa de ejemplo.'
       : 'The note was not saved — it is the example sack.';
-    return renderPage(ui, `${ui.t('sack')} ${DEMO_SACK_ID}`,
-      demoBanner(ui, null, msg) + sackDetailBody(ui, demoSackView(false)));
+    return renderPage(ui, `${ui.t('sack')} ${demoNote}`,
+      demoBanner(ui, null, msg, demoNote) + sackDetailBody(ui, demoSackView(false, false, demoNote)));
   }
   const note = String(body.note || '').trim().substring(0, 500);
   if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
@@ -3692,6 +3769,30 @@ ${pages.join('')}
  * densest QR the season can produce: if that one scans off the printed tag,
  * every real tag will.
  */
+/**
+ * The two hand-out tags: one Sour Lifter, one Lifter (Koa, 2026-09-07).
+ *
+ * Real in every respect a printer or a person can check — real cultivar, real
+ * sku prefix, real zone, real bay, a plausible cut date — except the bag
+ * number, which reads `#DEMO`. Both QRs open a working sack page, so a person
+ * handed one of these can scan it and see the whole journey, and nothing they
+ * press on that page writes anything.
+ *
+ * No rows, so no serials are consumed: an is_test sack row would take
+ * `26-SLIFT-1` and push the first real bag of the season to `-2`, which is
+ * exactly what happened on 2026-09-04.
+ */
+function exampleTagSacks() {
+  // Cut on the typical dry cycle back from today, so the date on the tag is
+  // always plausible against the day it is being looked at.
+  const cut = new Date(Date.now() - DRY_DAYS_TYPICAL * 86400000).toISOString().slice(0, 10);
+  return Object.entries(DEMO_SACKS).map(([id, d]) => ({
+    sack_id: id, qr_id: id, serial: 'DEMO',
+    cultivar_code: d.code, cultivar: d.cultivar, zone: d.zone,
+    cut_number: d.cut, harvest_date: cut, bay: d.bay,
+  }));
+}
+
 function specimenSacks() {
   const today = new Date().toISOString().slice(0, 10);
   // Real cultivar/sku_prefix pairs from the 2026 roster, not invented ones, so

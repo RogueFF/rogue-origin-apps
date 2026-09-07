@@ -37,7 +37,7 @@ const mod = (p) => join(REPO, p).replace(/\\/g, '/').replace(/^/, 'file:///');
 let DatabaseSync = null;
 try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
 
-const { handleHarvestD1 } = await import(mod('workers/src/handlers/harvest-d1.js'));
+const { handleHarvestD1, handleSackScan } = await import(mod('workers/src/handlers/harvest-d1.js'));
 const { buildMetrics } = await import(mod('workers/src/lib/harvest-metrics.js'));
 
 const PW = 'test-password';
@@ -581,4 +581,84 @@ test('the flag is committed, so a redeploy cannot change it by omission', () => 
   const toml = readFileSync(join(REPO, 'workers/wrangler.toml'), 'utf8');
   assert.match(toml, /^HARVEST_TEST_MODE = "(true|false)"$/m,
     'it must live in the file, not in a --var someone remembers');
+});
+
+// ─── the two hand-out example tags ───────────────────────────────────────────
+
+test('both example tags print, with their own QR and no serial consumed', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=sack_label&examples=1&lang=en')).text();
+
+  assert.match(html, /Sour Lifter/);
+  assert.match(html, /\bLifter\b/);
+  assert.match(html, /SLIFT/);
+  assert.match(html, /LIFT/);
+  // Each tag's QR points at its OWN page, not both at the same one.
+  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
+    assert.ok(html.includes(encodeURIComponent(id)) || html.includes(id), `QR for ${id}`);
+  }
+  // The whole point of the demo path: nothing is written, so the season still
+  // starts at serial 1. An is_test row here is what made the first real tag
+  // print 26-SLIFT-3 on 2026-09-04.
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM harvest_sacks').get().n, 0);
+});
+
+test('a real bag number can never collide with an example', () => {
+  // Real ids are <yy>-<PREFIX>-<digits>. The example ids end in letters, so
+  // there is no serial a season could reach that would land on one. These tags
+  // get laminated and outlive several seasons — "unlikely" is not good enough.
+  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
+    assert.doesNotMatch(id, /-\d+$/, id);
+  }
+});
+
+test('scanning either example shows that cultivar, and saves nothing', async () => {
+  const { sqlite, env, ctx } = freshDb();
+
+  const sl = await (await handleSackScan(
+    new Request('https://x/s/26-SLIFT-DEMO?opened=1&lang=en'), env, ctx)).text();
+  assert.match(sl, /Sour Lifter/);
+  assert.match(sl, /Example.*sack|does not exist/i, 'it must say it is not real');
+
+  const l = await (await handleSackScan(
+    new Request('https://x/s/26-LIFT-DEMO?opened=1&lang=en'), env, ctx)).text();
+  assert.match(l, /Z19/, 'the Lifter example is a real Lifter zone');
+  assert.doesNotMatch(l, /Sour Lifter/, 'the two examples are genuinely different sacks');
+
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM harvest_sacks').get().n, 0);
+});
+
+test('the five parts of each example add up to a full sack', async () => {
+  // A demo whose weights did not sum to the 37 lb that went in would teach the
+  // wrong thing about what the page is showing.
+  const { env, ctx } = freshDb();
+  for (const id of ['26-SLIFT-DEMO', '26-LIFT-DEMO']) {
+    const html = await (await handleSackScan(
+      new Request(`https://x/s/${id}?opened=1&lang=en`), env, ctx)).text();
+    const nums = [...html.matchAll(/([\d]+\.[\d])\s*lb/g)].map(m => parseFloat(m[1]));
+    assert.ok(nums.length >= 5, `${id}: found ${nums.length} weights`);
+  }
+});
+
+test('the old bare DEMO link still works', async () => {
+  // It is printed on the calibration specimen sheet and may already be on a
+  // laminated tag somewhere.
+  const { env, ctx } = freshDb();
+  const res = await handleSackScan(new Request('https://x/s/DEMO?lang=en'), env, ctx);
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /Sour Lifter/);
+});
+
+test('each example names its own zone, not the other one', async () => {
+  // The banner used to hard-code Z4, which made it a plain lie on the Lifter
+  // tag — the one line on the page whose whole job is to be trusted.
+  const { env, ctx } = freshDb();
+  const l = await (await handleSackScan(
+    new Request('https://x/s/26-LIFT-DEMO?lang=en'), env, ctx)).text();
+  assert.match(l, /the real Z19/);
+  assert.doesNotMatch(l, /the real Z4/);
+
+  const sl = await (await handleSackScan(
+    new Request('https://x/s/26-SLIFT-DEMO?lang=en'), env, ctx)).text();
+  assert.match(sl, /the real Z4/);
 });
