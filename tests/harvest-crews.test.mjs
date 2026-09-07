@@ -32,7 +32,8 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 let DatabaseSync = null;
 try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
 
-const { handleHarvestD1, handleZoneScan, handleCrewScan, handleBarnScan } = await import(
+const { handleHarvestD1, handleZoneScan, handleCrewScan, handleBarnScan,
+  handleDayEndScan } = await import(
   join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///')
 );
 
@@ -495,6 +496,7 @@ test('the print sheet encodes the real scan targets, not a description of them',
   assert.deepEqual(targets, [
     'https://rogue-origin-api.roguefamilyfarms.workers.dev/c/A',
     'https://rogue-origin-api.roguefamilyfarms.workers.dev/c/B',
+    'https://rogue-origin-api.roguefamilyfarms.workers.dev/fin',
     'https://rogue-origin-api.roguefamilyfarms.workers.dev/b/1',
     'https://rogue-origin-api.roguefamilyfarms.workers.dev/b/2',
   ]);
@@ -504,9 +506,12 @@ test('every code on the sheet is one this build actually accepts', async () => {
   const { env, ctx } = freshDb();
   for (const target of qrTargets(await codeSheet(env, ctx))) {
     const path = new URL(target).pathname;
+    const req = () => new Request(`https://x${path}?lang=en`);
     const res = path.startsWith('/c/')
-      ? await quiet(() => handleCrewScan(new Request(`https://x${path}?lang=en`), env, ctx))
-      : await quiet(() => handleBarnScan(new Request(`https://x${path}?lang=en`), env, ctx));
+      ? await quiet(() => handleCrewScan(req(), env, ctx))
+      : path === '/fin'
+        ? await quiet(() => handleDayEndScan(req(), env, ctx))
+        : await quiet(() => handleBarnScan(req(), env, ctx));
     assert.equal(res.status, 200, `${path} does not answer`);
   }
 });
@@ -516,11 +521,18 @@ test('the sheet is one card per crew and one page per door', async () => {
   const html = await codeSheet(env, ctx);
   // Generated from CREWS and STATION_CREW rather than typed out, so a third
   // crew or a third intake grows the sheet instead of quietly going unprinted.
-  assert.equal((html.match(/class="card"/g) || []).length, 2);
+  // Two crew cards plus ONE end-of-day card — the crew tag lives on the lead's
+  // phone, so a single code closes whichever crew scans it.
+  assert.equal((html.match(/class="card"/g) || []).length, 3);
+  // Two to a page and no more: a card is 4.6in and a letter page holds 9.35in
+  // of them, so a third on the same sheet is cut in half at the fold.
+  const cardPages = html.match(/class="sheet cards"/g) || [];
+  assert.equal(cardPages.length, 2);
   assert.equal((html.match(/class="sheet door"/g) || []).length, 2);
   assert.match(html, /CUADRILLA A/);
   assert.match(html, /RECEPCI[ÓO]N 2/);
   assert.match(html, /Cuadrilla \/ Crew B/);
+  assert.match(html, /FIN DEL D[ÍI]A/);
 });
 
 test('the sheet reads in Spanish first, like the screens the crew use', async () => {
