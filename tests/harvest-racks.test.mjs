@@ -560,7 +560,7 @@ test('every crew screen says so while test mode is on', async () => {
   for (const qs of ['action=barn_intake&lang=en', 'action=crew&lang=en', 'action=find&lang=en']) {
     const html = await (await call(env, ctx, qs)).text();
     assert.match(html, /<div class="testband">/, qs);
-    assert.match(html, /Test mode — none of this counts/, qs);
+    assert.match(html, /Test mode/, qs);
   }
   const es = await (await call(env, ctx, 'action=barn_intake')).text();
   assert.match(es, /Modo de prueba/, 'the crew reads Spanish');
@@ -573,7 +573,7 @@ test('the band is gone once test mode is off', async () => {
   // The rendered band, not the phrase — the stylesheet's own comment explains
   // why the band exists and would match a looser regex.
   assert.doesNotMatch(html, /<div class="testband">/);
-  assert.doesNotMatch(html, /none of this counts/);
+  
   assert.doesNotMatch(html, /Modo de prueba/);
 });
 

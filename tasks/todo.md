@@ -1,104 +1,55 @@
-# What's drying in what bay
+# End-of-day close
 
-Koa, 2026-09-06: *"can we use a similar layout to see what is being dried in what bay"*
+Koa, 2026-09-07: *"do the end-of-day close next"* — the #1 finding from the
+Fable review.
 
-## The gap
+## The problem
 
-The bay is written **once**, at takedown, onto `harvest_sacks.bay`. Nothing
-records what goes *into* a bay when it is hung — the scan log has exactly two
-event types, `enter` and `barn_load`, and neither carries a bay. So the existing
-"After the tag" grid shows what came **out** of each bay, not what is in it.
+`buildLotRow` withholds `cutter_person_hours` for any session where
+`pacificDay(opened) !== pacificDay(closed)`. That rule is right: the crew stops
+in the last zone of the day and picks up there next morning, so nothing closes
+the session and open-to-close contains a night.
 
-Koa confirmed (2026-09-06) the person logging a trailer at the barn door **does
-know** which bay it is going onto. So the capture rides on a form that is
-already being filled once per trailer — no new scan, nothing new for the
-hangers, and SOP §4's "a screen tap per lot change for the crew under the most
-pressure" is not what this asks for.
+But a zone is ~1 acre / 1,936 plants / ~88 trailers ≈ **1.5–2 days of cutting**.
+So nearly every lot spans a night, `cutter_person_hours` is null on nearly every
+lot, and the Crews card, bins-per-cutter-hour and time-in-zone read empty for the
+whole season. Honest, and indistinguishable from broken.
 
-## Structural rule
+## Part 1 — the scan (primary)
 
-The `barn_load` row is the many-to-many record, not the session. A bay takes
-material from several lots; a lot spreads over several bays. A `bay` column on
-the *session* would model one bay per lot and be wrong the first time a bay
-takes two zones — in a way that passes tests.
+- [ ] `day_end` action. Closes THIS crew's open session (`crew IS ?`, NULL-safe,
+      same scoping as everything else). Confirms which zone/cultivar closed and
+      after how long. Says so plainly when nothing is open — not an error.
+- [ ] One laminated card on the print sheet. One card serves both crews: the
+      cookie on the lead's phone decides whose session closes.
+- [ ] Spanish first, like every crew screen.
 
-## Capture
+Cost: two scans a day per lead, and they already re-scan the zone sign every
+morning — so one of the two is new.
 
-- [x] `0030-harvest-load-bay.sql` — `bay INTEGER` on `harvest_scan_log`, set on
-      `barn_load` rows only. Nullable on purpose (see below).
-- [x] `getLastFilledBay(db, isTest, crew)` — last load with a bay; this crew's
-      first, then anyone's. Different question from `getLastBay()`, which reads
-      the last bay *emptied*.
-- [x] Bay select on the intake form, defaulted, reusing `bayOptions()`.
-- [x] `handleBarnLog` parses the bay with `parseBay` (nullable). A bookmark that
-      posts without one still logs the bins — losing bins is worse than an
-      unknown bay.
-- [x] Confirm screen names the bay.
+## Part 2 — the fallback (because a forgotten scan is certain)
 
-## The rule for "still hanging" — fills, not pairings
+**The trap.** Clipping a spanning session to its observed capture events
+(first→last barn load / headcount tap that Pacific day) gives a window that is
+always **shorter** than the truth: the crew cut before the first trailer arrived
+and after the last one left. Short hours ⇒ **inflated** bins/cutter-hour. That is
+inventing optimism in the exact number the feature exists to produce, and it
+would be invisible — an overstated rate looks like a good day.
 
-First attempt was *"a `(lot, bay)` pairing is down once a sack exists for that
-lot from that bay."* **Wrong**, and wrong in the case that matters: the code's
-own comment at `getLastBay` says a bay sees several takedowns. Under that rule
-the FIRST sack tagged marks the whole pairing down, so a bay still half full of
-hanging material reads empty — the same "screen disagrees with the barn" failure
-as the current grid, just inverted.
+So the fallback must not be presented as the same measurement as a clean
+session. Decision needed on which of these:
 
-Checked for a real completion signal at takedown: there is none. The sack print
-form picks a bay, `handleSackAlloc` writes it to the sack, and nothing anywhere
-records *"bay emptied"*.
-
-So group each bay's loads into **fills**, and describe only the current one:
-
-- A fill ends at the first sack tagged from that bay after it started.
-- A load arriving after that starts the **next** fill — you cannot hang fresh
-  material in a full bay, so a load into bay 5 after bay 5 began coming down
-  means bay 5 was emptied. That is the completion signal, and it is free.
-
-States, judged on the current fill only:
-
-- `hanging` — loads in this fill, nothing tagged from the bay since it started
-- `coming_down` — tagging has started; **open-ended on purpose**, we never learn
-  when it finished, only that the bay was refilled
-- `empty` — nothing has ever been hung there
-
-Age while hanging = now − the fill's first load, badged against the same
-`DRY_DAYS` window the takedown picker uses. Once coming down, the age freezes at
-first-load → first-tag: the days it actually got.
-
-Deferred: an explicit "bay emptied" tick at takedown would make `coming_down`
-close exactly. Not building it yet — the refill signal self-corrects within a
-day or two at steady state, and an unproven capture step is the thing to defer.
-
-## The default must be named across a day boundary
-
-`bay` is nullable so a bookmark posting without one still logs the bins. But a
-*defaulted* select plus a nullable column means the day the crew starts filling
-bay 6 while the default still reads bay 5, three loads land in bay 5 silently. A
-missing bay is recoverable; a wrong one is not.
-
-Same treatment the borrowed zone default already gets: same Pacific day, silent
-one tap. Previous day, **named** on the form so it is confirmed, not assumed.
-
-## Read
-
-- [x] `bay` on the loads query in `getMetrics`.
-- [x] `racks` in `harvest-metrics.js` — 12 bays, always all 12, so an empty bay
-      reads as empty rather than missing.
-- [x] "On the racks right now" card on the dashboard, same two-barn grid.
-
-## The board is not season-scoped
-
-Every other dashboard figure is one season's bookkeeping. The rack board is a
-physical question about the barn right now, and the answer does not change at
-midnight on 31 December — cutting runs to about November and takedowns trail it,
-so a bay filled in December would have read empty on 1 January. Its loads and
-sacks come from their own two-season queries; the season-scoped ones are left
-alone so cadence, crew rates and the feed do not inherit last year.
+- **(a) Clip, and label it.** `cutter_person_hours_basis` says
+  `clipped to observed activity — a floor on hours, so the rate is a ceiling`.
+  Rate figures must then keep clipped sessions in their own bucket rather than
+  pooling them with measured ones (the `bins_rated` machinery already tracks
+  which sessions are rated; extend it).
+- **(b) Do not clip.** Ship the scan alone; a forgotten scan loses that lot's
+  hours exactly as today. Fewer moving parts, no optimistic bias, but the review
+  called a forgotten scan certain — so the metric stays patchy in the first
+  weeks while the habit forms.
 
 ## Then
 
-- [x] Tests: the capture cascade, the down rule, the three states.
-- [x] Regenerate the demo fixture.
-- [x] SOP §4 — this is now a step at the barn door, and §4 must stop saying
-      "nothing new to do".
+- [ ] Tests + mutation on both parts
+- [ ] SOP §1 gains the end-of-day step; the review page item ticks
