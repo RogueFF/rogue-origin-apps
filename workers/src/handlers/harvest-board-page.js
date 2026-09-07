@@ -244,7 +244,10 @@ export const BOARD_PAGE = `<!doctype html>
   .field input:focus, .field select:focus { outline: none; }
   .field:focus-within { border-color: var(--focus); }
 
-  button.act {
+  /* Anchors share this: the toolbar now holds a link to the cycle-time
+     dashboard alongside the buttons, and it has to sit on the same baseline
+     with the same weight rather than looking like stray body text. */
+  button.act, a.act {
     font-family: "Barlow Condensed", sans-serif;
     font-weight: 600;
     font-size: .85rem;
@@ -256,9 +259,12 @@ export const BOARD_PAGE = `<!doctype html>
     border-radius: var(--radius);
     padding: .38rem .75rem;
     cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
     transition: border-color .12s, color .12s, background-color .12s;
   }
-  button.act:hover { border-color: var(--slate); color: var(--slate); }
+  button.act:hover, a.act:hover { border-color: var(--slate); color: var(--slate); }
   button.act[hidden] { display: none; }
   button.act:disabled { opacity: .55; cursor: default; }
 
@@ -1242,6 +1248,7 @@ export const BOARD_PAGE = `<!doctype html>
           </select>
         </span>
       </div>
+      <a class="act" id="cycletimes" href="/api/harvest?action=harvest_dash">Cycle times</a>
       <button class="act" id="export" type="button">Export</button>
       <span class="save" id="save">&nbsp;</span>
     </div>
@@ -1259,7 +1266,8 @@ export const BOARD_PAGE = `<!doctype html>
   <footer class="foot">
     <strong>This board is the stage overlay, not the yield record.</strong>
     Weights, bins and sack tags stay in <code>wiki/seasons/2026/harvest.md</code>, built from the
-    QR scan data &mdash; if the two ever disagree, the scans win. PDFs of record live in
+    QR scan data &mdash; if the two ever disagree, the scans win. The timings behind those scans
+    live on the <a href="/api/harvest?action=harvest_dash">cycle-time dashboard</a>. PDFs of record live in
     <code>raw/compliance/2026/</code> and the compliance Drive; cards hold the link, not the file.
   </footer>
 </div>
