@@ -741,6 +741,5 @@ test('a real tag carries no example band', async () => {
   // The rendered element and the label's modifier class — the .exbar rule
   // itself ships in every sheet's stylesheet whether or not a tag uses it.
   assert.doesNotMatch(html, /class="exbar"/);
-  assert.doesNotMatch(html, /class="label ex"/);
   assert.doesNotMatch(html, /EJEMPLO/);
 });

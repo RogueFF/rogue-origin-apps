@@ -290,6 +290,9 @@ export async function handleHarvestD1(request, env, ctx) {
       return await getReconcile(db, env, params);
     case 'allocate':
       return await handleAllocate(db, env, params);
+    case 'day_end':
+      return await handleDayEnd(ui, db, env, ctx);
+
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
     case 'sack_void':
@@ -354,6 +357,21 @@ export async function handleZoneScan(request, env, ctx) {
  * this code is posted on a barn wall for a whole season and scanned dozens of
  * times a day, often in poor light with dusty hands.
  */
+/**
+ * `/fin` — the end-of-day card. Its own short path for the same reason the
+ * others have one: it is laminated for a season, and a shorter URL is a
+ * lower-version QR with bigger modules.
+ */
+export async function handleDayEndScan(request, env, ctx) {
+  const ui = makeUi(request, env);
+  try {
+    return await handleDayEnd(ui, env.DB, env, ctx);
+  } catch (e) {
+    const { message, status } = formatError(e);
+    return errorPage(ui, message, status);
+  }
+}
+
 export async function handleBarnScan(request, env, ctx) {
   const ui = makeUi(request, env);
   try {
@@ -755,6 +773,96 @@ async function handleCrewTag(ui, request) {
 <div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`);
   res.headers.append('Set-Cookie', crewCookie(raw));
   return res;
+}
+
+// ─── END OF DAY ─────────────────────────────────────────
+// The crew does not leave the last zone of the day — they stop, and pick up in
+// that same zone next morning. So nothing closes that session, open-to-close
+// contains a night, and the ledger withholds cutter-hours for it.
+//
+// That rule is right and the arithmetic makes it fatal: a zone is ~1 acre,
+// ~1,936 plants, ~88 trailers, which is a day and a half to two days of
+// cutting. Nearly every lot of the season spans a night, so nearly every lot
+// reports nothing, and the crew rate the whole dashboard is built around reads
+// empty all harvest — honest, and indistinguishable from broken.
+//
+// One scan fixes it. The lead already re-scans the zone sign every morning, so
+// this is the only new habit in the whole chain.
+
+/**
+ * Close this crew's open session.
+ *
+ * Scoped by the cookie, so ONE laminated card serves both crews: crew A's lead
+ * scans it and crew A's session closes. An untagged phone closes an untagged
+ * session, the same NULL-safe scoping as everywhere else.
+ */
+async function handleDayEnd(ui, db, env, ctx) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const crew = ui.crew ?? null;
+
+  const open = await getActiveSession(db, isTest, crew);
+  if (!open) {
+    // Not an error. Scanning twice, or scanning after the crew already moved
+    // on, is a person being careful — it must not look like a fault.
+    const other = await getAnyOpenSession(db, isTest);
+    return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null, other, crew));
+  }
+
+  await execute(db, `
+    UPDATE harvest_scan_log SET closed_at = datetime('now')
+    WHERE id = ? AND closed_at IS NULL
+  `, [open.id]);
+
+  const hours = (Date.now() - parseSqliteUtc(open.occurred_at).getTime()) / 3600000;
+
+  // Anyone else still open — the other lead, or a phone with no crew tag. Said
+  // out loud because the person holding this card is the one who can go and
+  // tell them, and a session left open all night is what this exists to stop.
+  const other = await getAnyOpenSession(db, isTest);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `🌙 Fin del día: *${open.zone}*${open.cultivar ? ` · ${open.cultivar}` : ''}`
+      + `${crew ? ` (Cuadrilla ${crew})` : ''} cerrada tras ${hours.toFixed(1)} h.`
+      + `${other ? ` ⚠️ ${other.zone} sigue abierta.` : ''}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, { ...open, hours }, other, crew));
+}
+
+function dayEndBody(ui, closed, other, crew) {
+  const crewNote = crew
+    ? `<p class="sub">${ui.t('crewTag', { crew })}</p>`
+    : `<p class="sub">${ui.t('dayEndNoCrew')}</p>`;
+
+  const otherNote = other && (!closed || other.id !== closed.id)
+    ? `<p class="note">${ui.t('dayEndOtherOpen', {
+        zone: escapeHtml(other.zone),
+        crew: other.crew ? ui.t('crewTag', { crew: other.crew }) : ui.t('dayEndUntagged'),
+      })}</p>`
+    : '';
+
+  if (!closed) {
+    return `
+<h1>${ui.t('dayEndNothing')}</h1>
+${crewNote}
+<p class="note">${ui.t('dayEndNothingSub')}</p>
+${otherNote}
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a></div>`;
+  }
+
+  return `
+<h1>✅ ${ui.t('dayEndClosed', {
+    lot: `${escapeHtml(closed.zone)}${closed.cultivar ? ` · ${escapeHtml(closed.cultivar)}` : ''}`,
+  })}</h1>
+${crewNote}
+<div class="status">
+  <div class="lotmeta"><strong>${ui.t('cut', { n: closed.cut_number })}</strong></div>
+  <div class="lotmeta">${ui.t('dayEndAfter', { h: closed.hours.toFixed(1) })}</div>
+</div>
+<p class="note">${ui.t('dayEndTomorrow')}</p>
+${otherNote}
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── BARN INTAKE ────────────────────────────────────────
@@ -2718,6 +2826,22 @@ function codeSheetBody(ui) {
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
 </section>`;
 
+  // ONE card for both crews. The crew tag lives on the lead's phone, so the
+  // same code closes whichever crew scans it — printing one per crew would be
+  // two things to laminate and one more way to grab the wrong one.
+  const dayEndCard = `
+  <div class="card">
+    <div class="kicker">Rogue Family Farms · 2026</div>
+    <div class="big">FIN DEL DÍA</div>
+    <div class="sub">End of day</div>
+    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/fin`, 420)}" alt="">
+    <div class="how">Escanéalo <strong>al terminar el día</strong>, con el mismo teléfono
+      que abrió la zona. Cierra la zona de tu cuadrilla.</div>
+    <div class="how en">Scan at the <strong>end of the day</strong>, on the phone that opened the
+      zone. Closes that crew's zone.</div>
+    <div class="url">${PUBLIC_BASE.replace('https://', '')}/fin</div>
+  </div>`;
+
   const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
 
   return `
@@ -2780,7 +2904,7 @@ function codeSheetBody(ui) {
     </ul>
   </div>
 
-  <section class="sheet cards">${CREWS.map(card).join('')}</section>
+  <section class="sheet cards">${CREWS.map(card).join('')}${dayEndCard}</section>
   ${doors}
 </div>`;
 }
@@ -3639,7 +3763,7 @@ function labelInner(s) {
   // barn, and one word each so it reads across a room. Solid black rather than
   // an outline: this has to survive being glanced at, not studied.
   const exampleBar = s.example
-    ? `<div class="exbar">EJEMPLO &middot; EXAMPLE</div>`
+    ? `<div class="exbar"><span>EJEMPLO &middot; EXAMPLE</span></div>`
     : '';
   // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
   // person actually needs, and it removes the width pressure that used to push
@@ -3647,13 +3771,13 @@ function labelInner(s) {
   // reconstructable by eye: code + serial + the year off the harvest date.
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
   return `
-    ${exampleBar}
     <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
       ${s.cultivar_code ? `<div class="code">${escapeHtml(s.cultivar_code)}</div>` : ''}
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
       <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}${s.bay ? ` · ${escapeHtml(translate(TAG_LANG, 'bayN', { n: s.bay }))}` : ''}</div>
+      ${exampleBar}
     </div>`;
 }
 
@@ -3854,11 +3978,11 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 
   const labels = sacks.map(s => oversize
     ? `<div class="page">
-         <div class="label${s.example ? ' ex' : ''}">${labelInner(s)}
+         <div class="label">${labelInner(s)}
          </div>
          <div class="cutline"><span>real 4&Prime; × 2&Prime; tag ends here</span></div>
        </div>`
-    : `<div class="label${s.example ? ' ex' : ''}">${labelInner(s)}
+    : `<div class="label">${labelInner(s)}
   </div>`).join('');
 
   const backLink = `<a href="${API}?action=sack_print">${ui.t('changeLot')}</a>`;
@@ -3882,12 +4006,17 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   /* Example tags only. Absolutely positioned so the flex row above is untouched
      — the name/code/number/meta stack keeps the widths it was tuned for, and
      only the bottom padding grows to make room. */
-  .label.ex { padding-bottom: 0.30in; }
-  .exbar {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 0.22in;
-    background: #000; color: #fff;
-    font-size: 10pt; font-weight: 800; letter-spacing: 0.10em;
-    display: flex; align-items: center; justify-content: center;
+  /* In the TEXT COLUMN, not on the label edge. Koa printed one and the band
+     came out trimmed: a thermal printer has an unprintable margin and the
+     stock is never exactly 2in, so anything at bottom:0 is the first thing to
+     go. The name, code, number and meta line already print reliably — sharing
+     their column is the only guarantee available. */
+  .exbar { margin-top: 0.05in; }
+  .exbar span {
+    display: inline-block; background: #000; color: #fff;
+    padding: 0.02in 0.07in;
+    font-size: 9.5pt; font-weight: 800; letter-spacing: 0.09em;
+    white-space: nowrap;
   }
   .txt { min-width: 0; flex: 1; }
   .cutline { border-top: 1pt dashed #999; text-align: center; }
