@@ -3233,13 +3233,22 @@ function renderPage(ui, title, bodyHtml, status = 200) {
      which the season's own cleanup step then DELETEs. Nothing on screen used to
      say so, so the failure would have been invisible until the barn was empty
      and the ledger was too. Loud, top of every crew screen, both languages. */
+  /* The language toggle is position:fixed at top right, so a band in normal
+     flow runs straight underneath it — on a 390px phone the message crossed
+     "Cuadrilla A / English". Reserving side gutters was not enough: the toggle
+     plus the crew chip is wider than any gutter that leaves room for the text.
+     So the toggle moves DOWN below the band instead, which also puts it in the
+     same relationship to the page content it has on every other screen.
+     The band exists to be unmistakable, not to explain; the explaining is the
+     SOP's job, which is why the copy is two words. */
   .testband { background: #7a3a3a; color: #fff; font-weight: 800; font-size: 0.9rem;
               letter-spacing: 0.14em; text-transform: uppercase; text-align: center;
-              padding: 10px 12px; margin: -24px -20px 18px; }
+              padding: 11px 12px; margin: -24px -20px 18px; }
+  body.testmode .lang { top: 50px; }
   @media print { .testband { display: none; } }
 </style>
 </head>
-<body>
+<body${ui.isTest ? ' class="testmode"' : ''}>
 ${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
 <div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}">${ui.t('langOther')}</a></div>
 ${bodyHtml}
