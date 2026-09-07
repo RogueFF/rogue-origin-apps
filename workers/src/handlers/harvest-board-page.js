@@ -262,6 +262,9 @@ export const BOARD_PAGE = `<!doctype html>
     text-decoration: none;
     display: inline-flex;
     align-items: center;
+    /* Buttons do not inherit line-height; anchors do. Without this the link
+       stood 4px taller than the Export button next to it and sat 2px high. */
+    line-height: normal;
     transition: border-color .12s, color .12s, background-color .12s;
   }
   button.act:hover, a.act:hover { border-color: var(--slate); color: var(--slate); }
