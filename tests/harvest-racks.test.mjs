@@ -1,0 +1,412 @@
+/**
+ * What is drying in what bay.
+ *
+ * Koa, 2026-09-06, looking at the "After the tag" grid: *"can we use a similar
+ * layout to see what is being dried in what bay"*. He could not, because the
+ * bay was written exactly once — at TAKEDOWN, onto the sack. That grid shows
+ * what came OUT of a bay. Nothing recorded what went in.
+ *
+ * The bay is now captured at the barn door, on the load row, and this suite
+ * holds the two things that make the board honest rather than merely populated:
+ *
+ * 1. A BAY IS EMPTIED OVER SEVERAL TAKEDOWNS. So "this lot has a sack from this
+ *    bay, therefore it is down" — the obvious rule, and the first one written —
+ *    calls a bay empty while half of it is still hanging. Bays group their
+ *    loads into FILLS instead, and a fill only ends when the bay is refilled,
+ *    because you cannot hang a trailer in a full bay. That refill is the only
+ *    completion signal that exists: nothing anywhere records "bay emptied".
+ *
+ * 2. THE DEFAULT MUST NOT SILENTLY GO STALE. The bay is nullable so an old
+ *    bookmark still logs its bins — losing bins is the worst outcome available.
+ *    But nullable + pre-selected means the morning the crew moves to bay 6, the
+ *    form still says 5 and nothing objects. A missing bay is recoverable; a
+ *    wrong one is not. So a default carried over from a previous Pacific day is
+ *    named on the form.
+ *
+ * Run with `node --test`.
+ */
+import { test, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
+const mod = (p) => join(REPO, p).replace(/\\/g, '/').replace(/^/, 'file:///');
+
+let DatabaseSync = null;
+try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+
+const { handleHarvestD1 } = await import(mod('workers/src/handlers/harvest-d1.js'));
+const { buildMetrics } = await import(mod('workers/src/lib/harvest-metrics.js'));
+
+const PW = 'test-password';
+const SEASON = new Date().getUTCFullYear();
+const DRY = { min: 6, typical: 10, max: 21 };
+
+const MIGRATIONS = [
+  '0009-harvest-scan-log.sql', '0010-harvest-sacks.sql', '0011-harvest-sacks-void.sql',
+  '0012-harvest-scan-log-cultivar.sql', '0013-harvest-crew-roster.sql',
+  '0014-harvest-sack-notes.sql', '0015-harvest-sacks-per-cultivar-serial.sql',
+  '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
+  '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
+  '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
+  '0029-harvest-crew-tag.sql',
+  '0030-harvest-load-bay.sql',
+];
+
+function freshDb() {
+  const sqlite = new DatabaseSync(':memory:');
+  for (const f of MIGRATIONS) {
+    const clean = readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
+      .split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+    for (const st of clean.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); }
+  }
+  sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
+  sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER)');
+  const DB = {
+    async batch(x) { return Promise.all(x.map(s => s.run())); },
+    prepare(sql) {
+      return { bind(...a) {
+        return {
+          all: async () => ({ results: sqlite.prepare(sql).all(...a) }),
+          first: async () => sqlite.prepare(sql).get(...a) ?? null,
+          run: async () => { const r = sqlite.prepare(sql).run(...a);
+            return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; },
+        };
+      } };
+    },
+  };
+  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true', ORDERS_PASSWORD: PW }, ctx: { waitUntil() {} } };
+}
+
+const call = (env, ctx, qs, init) => handleHarvestD1(
+  new Request(`https://x/api/harvest?${qs}`, init), env, ctx);
+
+const post = (env, ctx, qs, form, headers = {}) => call(env, ctx, qs, {
+  method: 'POST',
+  headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
+  body: new URLSearchParams(form).toString(),
+});
+
+/** `daysAgo` days back, at a fixed hour, as SQLite's own UTC text format. */
+const ago = (days, hUtc = 18) => {
+  const d = new Date(Date.now() - days * 86400000);
+  d.setUTCHours(hUtc, 0, 0, 0);
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+};
+
+const L = (o) => ({
+  id: o.id, zone: o.zone, bins: o.bins ?? 20, crew: o.crew ?? null,
+  bay: o.bay ?? null, occurred_at: o.at, session_id: o.session ?? null,
+});
+const S = (o) => ({
+  sack_id: o.id, zone: o.zone, cultivar: o.cultivar ?? 'Sour Lifter',
+  session_id: o.session ?? null, bay: o.bay ?? null,
+  printed_at: o.printed ?? null, opened_at: null,
+});
+
+/** One lot, one session, so the loads have something to resolve to. */
+const LOT = {
+  lot_id: 'L1', season: SEASON, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
+  cut_date: ago(20).slice(0, 10), session_ids: [1], sacks: 0,
+};
+const SESSIONS = [{ id: 1, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
+                    crew: 'A', occurred_at: ago(20), closed_at: ago(20, 22), headcount: 6 }];
+
+const build = (loads, sacks, lots = [LOT], sessions = SESSIONS) => buildMetrics({
+  lots, sessions, loads, sacks, dryWindow: DRY, bottomBarnLastBay: 8, bayCount: 12,
+});
+const bay = (d, n) => d.racks.find(r => r.bay === n);
+
+before(function () {
+  if (!DatabaseSync) this.skip('node:sqlite unavailable (needs Node >= 22.5)');
+});
+
+// ─── the shape of the board ──────────────────────────────────────────────────
+
+test('every bay is reported, even the ones nothing has been near', () => {
+  const d = build([], []);
+  assert.equal(d.racks.length, 12);
+  assert.deepEqual(d.racks.map(r => r.bay), [1,2,3,4,5,6,7,8,9,10,11,12]);
+  // A bay missing from the list and a bay standing empty look identical on a
+  // grid, and only one of them is true.
+  assert.ok(d.racks.every(r => r.state === 'empty'));
+  assert.equal(bay(d, 9).barn, 'top');
+  assert.equal(bay(d, 8).barn, 'bottom');
+});
+
+test('a bay with material hanging says how long it has been up', () => {
+  const d = build([L({ id: 1, zone: 'Z4', bay: 5, bins: 30, at: ago(8), session: 1 })], []);
+  const b = bay(d, 5);
+  assert.equal(b.state, 'hanging');
+  assert.equal(b.bins, 30);
+  assert.ok(Math.abs(b.days - 8) < 0.1, `got ${b.days}`);
+  assert.equal(b.level, 'ready');            // 8 days, inside 6-21
+  assert.equal(b.lots.length, 1);
+  assert.equal(b.lots[0].cultivar, 'Sour Lifter');
+});
+
+test('a bay holds material from more than one lot at once', () => {
+  // The reason the bay lives on the LOAD row and not on the session. Koa,
+  // 2026-09-03: "there will probably be multiple takedowns within the same bay."
+  const sessions = [...SESSIONS,
+    { id: 2, zone: 'Z7', cultivar: 'Lifter', cut_number: 1, crew: 'B',
+      occurred_at: ago(9), closed_at: ago(9, 22), headcount: 5 }];
+  const lots = [LOT, { ...LOT, lot_id: 'L2', zone: 'Z7', cultivar: 'Lifter', session_ids: [2] }];
+  const d = build([
+    L({ id: 1, zone: 'Z4', bay: 3, bins: 20, at: ago(9), session: 1 }),
+    L({ id: 2, zone: 'Z7', bay: 3, bins: 35, at: ago(9, 20), session: 2 }),
+  ], [], lots, sessions);
+
+  const b = bay(d, 3);
+  assert.equal(b.bins, 55);
+  assert.equal(b.lots.length, 2);
+  // Biggest share first — that is the one someone naming the bay says out loud.
+  assert.deepEqual(b.lots.map(l => l.cultivar), ['Lifter', 'Sour Lifter']);
+});
+
+test('one lot spread over several bays is in all of them', () => {
+  const d = build([
+    L({ id: 1, zone: 'Z4', bay: 2, bins: 20, at: ago(7), session: 1 }),
+    L({ id: 2, zone: 'Z4', bay: 3, bins: 20, at: ago(7, 20), session: 1 }),
+  ], []);
+  assert.equal(bay(d, 2).state, 'hanging');
+  assert.equal(bay(d, 3).state, 'hanging');
+});
+
+// ─── the fill model, which is the whole point ────────────────────────────────
+
+test('a part-emptied bay is still coming down, not empty', () => {
+  // THE BUG THIS FILE EXISTS FOR. The first rule written was "a (lot, bay)
+  // pairing is down once a sack exists for it from that bay". A bay is emptied
+  // over several takedowns, so under that rule the very first sack tagged
+  // marked the whole bay done — the board would call bay 5 empty with most of
+  // it still on the rack. That is the same disagreement-with-the-barn the old
+  // grid had, only inverted and harder to notice.
+  const d = build(
+    [L({ id: 1, zone: 'Z4', bay: 5, bins: 40, at: ago(11), session: 1 })],
+    [S({ id: 'T-1', zone: 'Z4', bay: 5, session: 1, printed: ago(1) })],
+  );
+  const b = bay(d, 5);
+  assert.equal(b.state, 'coming_down');
+  assert.notEqual(b.state, 'empty');
+  assert.equal(b.sacks_out, 1);
+  assert.equal(b.bins, 40, 'what was hung there does not shrink as it comes down');
+});
+
+test('days freeze at the first tag — material on the floor stops ageing', () => {
+  const d = build(
+    [L({ id: 1, zone: 'Z4', bay: 5, bins: 40, at: ago(30), session: 1 })],
+    [S({ id: 'T-1', zone: 'Z4', bay: 5, session: 1, printed: ago(20) })],
+  );
+  const b = bay(d, 5);
+  // Hung 30 days ago, first tagged 20 days ago: it got ten days on the rack.
+  // Reporting "now minus hung" would say 30 and badge a bay OVERDUE for
+  // material that came down three weeks back.
+  assert.ok(Math.abs(b.days - 10) < 0.1, `got ${b.days}`);
+  assert.equal(b.level, 'ready');
+});
+
+test('a refill starts a new fill, because you cannot hang in a full bay', () => {
+  // The only completion signal that exists. Nothing records "bay emptied" —
+  // the takedown screen picks a bay and writes it on the sack, and that is all.
+  const d = build([
+    L({ id: 1, zone: 'Z4', bay: 5, bins: 40, at: ago(30), session: 1 }),
+    L({ id: 2, zone: 'Z4', bay: 5, bins: 25, at: ago(4), session: 1 }),
+  ], [S({ id: 'T-1', zone: 'Z4', bay: 5, session: 1, printed: ago(20) })]);
+
+  const b = bay(d, 5);
+  assert.equal(b.state, 'hanging', 'the old fill came down; this is the new one');
+  assert.equal(b.bins, 25, 'the 40 bins from the previous fill are long gone');
+  assert.equal(b.loads, 1);
+  assert.ok(Math.abs(b.days - 4) < 0.1, `got ${b.days}`);
+  assert.equal(b.level, 'green', '4 days is under the 6-day minimum');
+});
+
+test('topping a bay up over two days is one fill, not two', () => {
+  // A fill is not "one trailer". A bay takes several loads while it fills, and
+  // splitting on every load would reset the clock each time and report the bay
+  // a day old when its first material has been up for three.
+  const d = build([
+    L({ id: 1, zone: 'Z4', bay: 6, bins: 20, at: ago(9), session: 1 }),
+    L({ id: 2, zone: 'Z4', bay: 6, bins: 20, at: ago(8), session: 1 }),
+    L({ id: 3, zone: 'Z4', bay: 6, bins: 15, at: ago(7), session: 1 }),
+  ], []);
+  const b = bay(d, 6);
+  assert.equal(b.loads, 3);
+  assert.equal(b.bins, 55);
+  assert.ok(Math.abs(b.days - 9) < 0.1, `aged from the FIRST load, got ${b.days}`);
+});
+
+test('a tag from a different bay does not end this one', () => {
+  const d = build([
+    L({ id: 1, zone: 'Z4', bay: 5, bins: 20, at: ago(9), session: 1 }),
+    L({ id: 2, zone: 'Z4', bay: 5, bins: 20, at: ago(2), session: 1 }),
+  ], [S({ id: 'T-1', zone: 'Z4', bay: 11, session: 1, printed: ago(5) })]);
+  // Bay 11 coming down says nothing about bay 5. Keying the fill boundary on
+  // the LOT rather than the bay would have ended it here.
+  const b = bay(d, 5);
+  assert.equal(b.state, 'hanging');
+  assert.equal(b.loads, 2);
+  assert.ok(Math.abs(b.days - 9) < 0.1, `still one fill, got ${b.days}`);
+});
+
+test('a bay past the window is flagged while it is still hanging', () => {
+  const d = build([L({ id: 1, zone: 'Z4', bay: 7, bins: 20, at: ago(26), session: 1 })], []);
+  assert.equal(bay(d, 7).level, 'overdue');
+  assert.equal(bay(d, 7).state, 'hanging');
+});
+
+test('a load with no lot still occupies the bay', () => {
+  // It is physically on the rack whatever the attribution says. Dropping it
+  // would make the board disagree with the barn to protect a tidy join.
+  const d = build([L({ id: 1, zone: 'Z9', bay: 4, bins: 18, at: ago(6), session: null })], []);
+  const b = bay(d, 4);
+  assert.equal(b.state, 'hanging');
+  assert.equal(b.bins, 18);
+  assert.equal(b.lots[0].zone, 'Z9');
+  assert.equal(b.lots[0].lot_id, null);
+});
+
+// ─── capture at the barn door ────────────────────────────────────────────────
+
+test('the intake form offers a bay and lets it be left blank', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  assert.match(html, /name="bay"/);
+  assert.match(html, /<option value=""/, 'blank is a real choice, not an oversight');
+  assert.match(html, /Bay 12/);
+});
+
+test('the bay field is in Spanish by default, because the door is', async () => {
+  // Not decoration. This form is filled by the intake crew, and an English-only
+  // field added to a Spanish screen is a field that gets skipped.
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=barn_intake')).text();
+  assert.match(html, /¿En cuál bahía se cuelga\?/);
+  assert.match(html, /No sé todavía/);
+  assert.match(html, /Bodega de abajo/);
+});
+
+test('a load logged with a bay lands on the rack board', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, is_test)
+    VALUES ('enter', 'Z4', 'Sour Lifter', ?, 1, ?, 1)`).run(SEASON, ago(0, 15));
+
+  const res = await post(env, ctx, 'action=barn_log&lang=en', { zone: 'Z4', bins: '24', bay: '5' });
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /bay 5/i, 'the confirm names the bay it recorded');
+
+  const row = sqlite.prepare(
+    `SELECT bay, bins FROM harvest_scan_log WHERE event_type = 'barn_load'`).get();
+  assert.equal(row.bay, 5);
+  assert.equal(row.bins, 24);
+});
+
+test('a load with no bay still logs its bins', async () => {
+  // An old bookmark, or a door where nobody knows yet. Rejecting it would drop
+  // the bins off the lot entirely — the ledger counts them by joining on the
+  // session FK — and losing bins is far worse than an unknown bay.
+  const { sqlite, env, ctx } = freshDb();
+  const res = await post(env, ctx, 'action=barn_log', { zone: 'Z4', bins: '24' });
+  assert.equal(res.status, 200);
+  const row = sqlite.prepare(
+    `SELECT bay, bins FROM harvest_scan_log WHERE event_type = 'barn_load'`).get();
+  assert.equal(row.bay, null);
+  assert.equal(row.bins, 24);
+});
+
+test('a bay outside 1-12 is refused, not clamped', async () => {
+  // That is a typo, not an old bookmark, and a silently-corrected bay would be
+  // tied to physical material and read as fact months later.
+  const { sqlite, env, ctx } = freshDb();
+  const res = await post(env, ctx, 'action=barn_log', { zone: 'Z4', bins: '24', bay: '19' });
+  assert.notEqual(res.status, 200);
+  assert.equal(sqlite.prepare(
+    `SELECT COUNT(*) n FROM harvest_scan_log WHERE event_type = 'barn_load'`).get().n, 0);
+});
+
+test('the form defaults to the last bay filled, silently on the same day', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 20, 7, ?, 1)`).run(SEASON, ago(0, 15));
+
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  assert.match(html, /<option value="7" selected/);
+  assert.match(html, /Last load went to 7/);
+  assert.doesNotMatch(html, /different day/, 'same day is a confirm, not a warning');
+});
+
+test('a default carried over from yesterday is named, not just pre-selected', async () => {
+  // A missing bay is recoverable; a wrong one is not — nothing afterwards tells
+  // it from a right one. The morning the crew starts filling bay 8, the form
+  // still reads 7 and only the person at the door can catch it. So say it.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 20, 7, ?, 1)`).run(SEASON, ago(2, 15));
+
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  assert.match(html, /<option value="7" selected/, 'still the best guess available');
+  assert.match(html, /different day/, 'but it must not pass unremarked');
+});
+
+test('the last bay FILLED is not the last bay emptied', async () => {
+  // Mid-season one crew hangs bay 9 while the other pulls bay 3, and the
+  // takedown form's default (getLastBay, off harvest_sacks) is the wrong
+  // answer to the intake question.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 20, 9, ?, 1)`).run(SEASON, ago(0, 15));
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, bay, printed_at, is_test)
+    VALUES ('T-9', ?, 9, 'Z4', 'Sour Lifter', 1, 3, ?, 1)`).run(SEASON, ago(0, 16));
+
+  const html = await (await call(env, ctx, 'action=barn_intake')).text();
+  assert.match(html, /<option value="9" selected/);
+  assert.doesNotMatch(html, /<option value="3" selected/);
+});
+
+// ─── the worked example ──────────────────────────────────────────────────────
+
+test('the demo fixture shows every state the board can be in', async () => {
+  // The dashboard ships a worked example so the page explains itself before a
+  // single trailer has been logged. If a later regeneration quietly flattened
+  // it to one state, the card would still render and still be useless.
+  const { DEMO_METRICS } = await import(mod('workers/src/lib/harvest-demo-fixture.js'));
+  const r = DEMO_METRICS.racks;
+  assert.equal(r.length, 12);
+
+  const states = new Set(r.map(x => x.state));
+  assert.ok(states.has('hanging') && states.has('coming_down') && states.has('empty'),
+    [...states].join(','));
+  const levels = new Set(r.filter(x => x.state !== 'empty').map(x => x.level));
+  assert.ok(levels.has('green') && levels.has('ready') && levels.has('overdue'),
+    [...levels].join(','));
+
+  // Bay 1 is the fill model made visible: filled on day 0, tagged out on day
+  // 10, refilled on day 26. It must read as a fresh two-day fill — not as
+  // hanging since day 0, and not as still coming down.
+  const one = r.find(x => x.bay === 1);
+  assert.equal(one.state, 'hanging');
+  assert.ok(one.days < 5, `bay 1 should be a young refill, got ${one.days}`);
+  assert.equal(one.lots.length, 1);
+  assert.equal(one.lots[0].zone, 'Z21');
+
+  // Nothing in the fixture may be dated ahead of the clock. The window is 34
+  // days long — the last sack is opened nine days after a takedown that is
+  // itself 25 days after the cut — so nudging DAY0 forward to make a bay look
+  // freshly hung silently posts sacks into next week. It did, once.
+  assert.ok(new Date(String(DEMO_METRICS.feed[0].at).replace(' ', 'T') + 'Z') <= new Date(),
+    `newest fixture event is in the future: ${DEMO_METRICS.feed[0].at}`);
+
+  // Bay 9 took Z9 and Z11 in one fill — the reason the bay lives on the load
+  // row rather than the session.
+  const nine = r.find(x => x.bay === 9);
+  assert.equal(nine.lots.length, 2);
+  assert.deepEqual(nine.lots.map(l => l.zone).sort(), ['Z11', 'Z9']);
+});

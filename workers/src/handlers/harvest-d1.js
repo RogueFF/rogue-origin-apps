@@ -449,6 +449,33 @@ async function getLastBay(db, isTest) {
   return row ? row.bay : null;
 }
 
+/**
+ * The bay the last trailer was hung into, and when.
+ *
+ * NOT `getLastBay()`. That one reads the last bay a sack came OUT of, which is
+ * the takedown question; this is the fill question, and mid-season the two are
+ * routinely different bays — one crew is hanging bay 9 while the other is
+ * pulling bay 3.
+ *
+ * Scoped to this door's crew first because two crews filling two barns would
+ * otherwise hand each other the wrong default all day.
+ */
+async function getLastFilledBay(db, isTest, crew = null) {
+  const pick = (c) => queryOne(db, `
+    SELECT bay, occurred_at FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
+      AND crew IS ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [isTest, c]);
+  const mine = crew ? await pick(crew) : null;
+  if (mine) return mine;
+  return await queryOne(db, `
+    SELECT bay, occurred_at FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [isTest]);
+}
+
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
 function parseSqliteUtc(ts) {
   return new Date(ts.replace(' ', 'T') + 'Z');
@@ -702,9 +729,20 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
     nowMs: Date.now(),
   });
 
+  // The bay default is worth more care than it looks. A wrong bay is
+  // unrecoverable — nothing afterwards distinguishes it from a right one —
+  // whereas a missing bay is merely unknown. So the default is silent while it
+  // is still the same Pacific day, and NAMED once the day has turned, which is
+  // exactly when the crew has moved on to the next bay and the default has
+  // quietly stopped being true. Same treatment the borrowed zone gets above.
+  const lastFill = await getLastFilledBay(db, isTest, crew);
+  const bayStale = !!(lastFill && lastFill.occurred_at &&
+    pacificDay(parseSqliteUtc(lastFill.occurred_at)) !== pacificDay(new Date()));
+
   return renderPage(ui, ui.t('barnIntake'),
     barnIntakeFormBody(ui, active, suggested ? lastClosed : null, station,
-      borrowed ? { crew: active.crew || null } : null));
+      borrowed ? { crew: active.crew || null } : null,
+      { bay: lastFill ? lastFill.bay : null, stale: bayStale }));
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -719,6 +757,13 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   if (!Number.isInteger(bins) || bins < 1 || bins > 500) {
     throw createError('VALIDATION_ERROR', ui.t('binsRange'));
   }
+
+  // Nullable: an old bookmark that posts no bay still logs its bins. Losing
+  // bins is the worst outcome available (the ledger joins on the session FK, so
+  // a rejected load drops off the lot entirely); an unknown bay only costs a
+  // cell on the rack board. An out-of-range bay still throws — that is a typo,
+  // not an old bookmark, and it would print on a tag.
+  const bay = parseBay(body.bay, ui);
 
   const isTest = isTestMode(env) ? 1 : 0;
   const crew = station ? STATION_CREW[station] : null;
@@ -755,9 +800,9 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const crossedCrew = !!(crew && zoneSession && zoneSession.crew && zoneSession.crew !== crew);
 
   await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, crew, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, crew, bay, is_test)
+    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
+  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, bay, isTest]);
 
   const todayCount = await queryOne(db, `
     SELECT COUNT(*) as n FROM harvest_scan_log
@@ -775,7 +820,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
-    zone, bins, loadNumber, station,
+    zone, bins, loadNumber, station, bay,
     hasActiveSession: !!zoneSession,
     grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
     crossedCrew: crossedCrew ? zoneSession.crew : null,
@@ -2385,7 +2430,7 @@ async function getMetrics(request, db, env, params, body) {
       WHERE event_type = 'enter' AND season = ? AND is_test = ?
       ORDER BY occurred_at ASC, id ASC`, [season, isTest]),
     query(db, `
-      SELECT id, zone, bins, crew, occurred_at, attributed_zone_session_id AS session_id
+      SELECT id, zone, bins, crew, bay, occurred_at, attributed_zone_session_id AS session_id
       FROM harvest_scan_log
       WHERE event_type = 'barn_load' AND season = ? AND is_test = ?
       ORDER BY occurred_at ASC, id ASC`, [season, isTest]),
@@ -2410,6 +2455,7 @@ async function getMetrics(request, db, env, params, body) {
     sacks,
     dryWindow: { min: DRY_DAYS_MIN, typical: DRY_DAYS_TYPICAL, max: DRY_DAYS_MAX },
     bottomBarnLastBay: BOTTOM_BARN_LAST_BAY,
+    bayCount: BAY_MAX,
   });
 
   return successResponse({
@@ -2935,7 +2981,8 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 ${headcountScript(ui)}`;
 }
 
-function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null) {
+function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null,
+                            lastFill = null) {
   // Within the grace window the just-closed zone is the better default — the
   // trailer at the door left that zone before the crew moved.
   const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
@@ -2979,6 +3026,14 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null, borro
         : ui.t('untaggedZone')}</p>`
     : '';
 
+  // Stale means the last load with a bay was on an earlier Pacific day, so the
+  // crew has almost certainly moved to the next bay since. Say the number out
+  // loud rather than leaving it pre-selected and unremarked.
+  const bayHint = !lastFill || !lastFill.bay
+    ? ui.t('bayHungHint')
+    : (lastFill.stale ? ui.t('bayStale', { n: lastFill.bay })
+                      : ui.t('bayHungLast', { n: lastFill.bay }));
+
   return `
 <h1>${ui.t('barnIntake')}</h1>
 ${stationNote}
@@ -2991,12 +3046,17 @@ ${graceNote}
   <select id="zone" name="zone" required>${options}</select>
   <label for="bins">${ui.t('binsOnLoad')}</label>
   <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required autofocus>
+  <label for="bay">${ui.t('bayHung')} <span class="hint">${bayHint}</span></label>
+  <select id="bay" name="bay">
+    <option value="">${ui.t('bayUnknown')}</option>
+    ${bayOptions(ui, lastFill ? lastFill.bay : null)}
+  </select>
   <button class="btn" type="submit">${ui.t('logLoad')}</button>
 </form>`;
 }
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
-                                  crossedCrew = null, station = null }) {
+                                  crossedCrew = null, station = null, bay = null }) {
   // Four outcomes, and the person at the door should be able to tell them
   // apart: attributed to the open lot (silent), to a lot that just closed (say
   // so — it is a correction), to the OTHER crew's lot (say so — only they can
@@ -3009,7 +3069,7 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grac
     : '';
   return `
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
-<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}</p>
+<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}${bay ? ` · ${ui.t('hungInBay', { n: bay })}` : ''}</p>
 ${attribution}
 ${crossNote}
 <div class="footer"><a href="${API}?action=barn_intake${station ? `&station=${station}` : ''}">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;

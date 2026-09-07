@@ -112,6 +112,37 @@ export function dashPage() {
   .baygroup h3 { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em;
                  color:var(--muted); margin:0 0 8px; }
 
+  /* The rack board. Bigger than the .bay cells above on purpose: this is the
+     card that answers a question someone is asking while standing up, and the
+     state is carried by a colour lane down the left edge rather than by a word
+     you have to stop and read. */
+  .racks { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .rack { position:relative; background:var(--raised); border:1px solid var(--line2);
+          border-radius:10px; padding:11px 12px 11px 15px; overflow:hidden; min-height:96px; }
+  .rack::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
+                  background:var(--line2); }
+  .rack.green::before     { background:var(--straw); }
+  .rack.ready::before     { background:var(--leaf); }
+  .rack.overdue::before   { background:var(--clay); }
+  .rack.coming::before    { background:var(--sky); }
+  .rack.vacant { opacity:.4; }
+  .rack .n { font-family:var(--mono); font-size:.72rem; color:var(--muted);
+             display:flex; justify-content:space-between; align-items:baseline; gap:6px; }
+  .rack .age { font-size:1.45rem; font-weight:800; font-variant-numeric:tabular-nums;
+               line-height:1.15; margin:2px 0 1px; }
+  .rack .age small { font-size:.8rem; font-weight:700; color:var(--muted); margin-left:3px; }
+  .rack .st { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+  .rack.green .st   { color:var(--straw); }
+  .rack.ready .st   { color:var(--leaf); }
+  .rack.overdue .st { color:var(--clay); }
+  .rack.coming .st  { color:var(--sky); }
+  .rack.vacant .st  { color:var(--muted); }
+  .rack ul { list-style:none; margin:7px 0 0; padding:0; }
+  .rack li { font-size:.76rem; color:var(--ink2); display:flex; justify-content:space-between;
+             gap:8px; padding:1px 0; }
+  .rack li b { font-weight:700; color:var(--ink); }
+  .rack li span { font-family:var(--mono); font-size:.72rem; color:var(--muted); white-space:nowrap; }
+
   table.feed { width:100%; border-collapse:collapse; font-size:.88rem; }
   table.feed th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em;
                   color:var(--muted); border-bottom:1px solid var(--line2); padding:0 10px 7px 0; }
@@ -308,7 +339,7 @@ export function dashPage() {
     }
 
     $('cards').innerHTML = [
-      cardDry(d), cardCadence(d), cardCrew(d), cardAfterTag(d), cardFeed(d)
+      cardRacks(d), cardDry(d), cardCadence(d), cardCrew(d), cardAfterTag(d), cardFeed(d)
     ].join('');
   }
 
@@ -430,7 +461,77 @@ export function dashPage() {
       'sales fact, not a delay to go and fix.</p></div></div></section>';
   }
 
-  // 5 ── the feed
+  // 5 ── what is hanging where, right now
+  function cardRacks(d) {
+    var racks = d.racks || [];
+    var hung = 0, binsUp = 0, oldest = null;
+    for (var k = 0; k < racks.length; k++) {
+      if (racks[k].state !== 'hanging') continue;
+      hung++;
+      binsUp += racks[k].bins;
+      if (oldest === null || racks[k].days > oldest) oldest = racks[k].days;
+    }
+
+    var bottom = [], top = [];
+    for (var i = 0; i < racks.length; i++) {
+      var r = racks[i];
+      // The colour lane says the state AND, while hanging, whether it is ready.
+      // Coming down gets its own lane rather than a readiness colour: the
+      // question has already been answered for that bay.
+      var cls = r.state === 'empty' ? 'vacant'
+        : r.state === 'coming_down' ? 'coming' : r.level;
+      var word = r.state === 'empty' ? 'empty'
+        : r.state === 'coming_down' ? 'coming down' : 'hanging';
+
+      var lots = r.lots.map(function (l) {
+        var name = l.cultivar
+          ? esc(l.zone) + ' · ' + esc(l.cultivar) + (l.cut_number ? ' c' + l.cut_number : '')
+          : esc(l.zone) + ' · no lot';
+        return '<li><b>' + name + '</b><span>' + l.bins + ' bins</span></li>';
+      }).join('');
+
+      var body = r.state === 'empty'
+        ? '<div class="age">—</div><div class="st">empty</div>'
+        : '<div class="age">' + r.days + '<small>d</small></div>' +
+          '<div class="st">' + word + '</div>' + '<ul>' + lots + '</ul>';
+
+      var cell = '<div class="rack ' + cls + '"><div class="n"><span>Bay ' + r.bay + '</span>' +
+        (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + '</div>';
+      (r.barn === 'top' ? top : bottom).push(cell);
+    }
+
+    return '<section class="card"><h2>On the racks right now</h2>' +
+      '<p class="lede">What is hanging in which bay, and how long it has been up there. ' +
+      'The bay is recorded at the barn door when the trailer is logged.</p>' +
+      '<div class="strip" style="margin:0 0 16px">' +
+      '<div class="tile"><div class="k">Bays hanging</div><div class="v">' + hung + '</div>' +
+      '<div class="n">of ' + racks.length + '</div></div>' +
+      '<div class="tile"><div class="k">Bins on the racks</div><div class="v">' + binsUp + '</div>' +
+      '<div class="n">still drying</div></div>' +
+      '<div class="tile"><div class="k">Longest up</div><div class="v">' +
+      (oldest == null ? '—' : oldest + ' d') + '</div><div class="n">' +
+      (oldest == null ? 'nothing hanging' : 'ready at ' + d.dry_window.min + ' d') + '</div></div></div>' +
+      (hung || racks.some(function (r) { return r.state !== 'empty'; })
+        ? '<div class="baygroup"><h3>Bottom barn · bays 1–8</h3><div class="racks">' + bottom.join('') + '</div></div>' +
+          '<div class="baygroup"><h3>Top barn · bays 9–12</h3><div class="racks">' + top.join('') + '</div></div>'
+        : '<p class="lede">No bay has been recorded at intake yet. Every bay below reads empty because ' +
+          'nothing has been logged, not because the barn is.</p>' +
+          '<div class="baygroup"><h3>Bottom barn · bays 1–8</h3><div class="racks">' + bottom.join('') + '</div></div>' +
+          '<div class="baygroup"><h3>Top barn · bays 9–12</h3><div class="racks">' + top.join('') + '</div></div>') +
+      '<div class="legend"><span><i style="background:var(--straw)"></i>hanging, under ' +
+      d.dry_window.min + ' d</span>' +
+      '<span><i style="background:var(--leaf)"></i>hanging, in the window</span>' +
+      '<span><i style="background:var(--clay)"></i>hanging, past ' + d.dry_window.max + ' d</span>' +
+      '<span><i style="background:var(--sky)"></i>coming down</span></div>' +
+      '<p class="caveat">A bay is <b>coming down</b> from the first sack tagged out of it, and stays that ' +
+      'way until a fresh load is hung there. Nothing records the moment a bay is emptied — the takedown ' +
+      'screen picks a bay and writes it on the sack, and that is all — so the board can say when takedown ' +
+      '<b>started</b> and never when it finished. A refill is the only honest end signal, because you ' +
+      'cannot hang a trailer in a full bay. Days freeze at the first tag: material already on the floor ' +
+      'should stop ageing.</p></section>';
+  }
+
+  // 6 ── the feed
   function cardFeed(d) {
     var rows = d.feed.map(function (e) {
       return '<tr><td class="t">' + esc(String(e.at).replace('T', ' ').slice(0, 19)) + '</td>' +

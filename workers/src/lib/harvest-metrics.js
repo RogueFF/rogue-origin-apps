@@ -44,9 +44,11 @@ function median(xs) {
  * @param {Array}  input.sacks     harvest_sacks rows (unvoided)
  * @param {object} input.dryWindow { min, typical, max } days on the rack
  * @param {number} input.bottomBarnLastBay  bays above this number are the top barn
+ * @param {number} [input.bayCount]  how many bays exist; all of them are reported
  * @param {number} [input.nowMs]
  */
-export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBarnLastBay, nowMs = Date.now() }) {
+export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBarnLastBay,
+                               bayCount = 12, nowMs = Date.now() }) {
   const sessionById = new Map(sessions.map(s => [s.id, s]));
   const lotOfSession = new Map();
   for (const lot of lots) for (const id of lot.session_ids || []) lotOfSession.set(id, lot);
@@ -239,6 +241,116 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     }))
     .sort((a, b) => a.bay - b.bay);
 
+  // ── The racks: what is hanging in which bay, right now ─────────────────
+  //
+  // The bay is captured twice now, and the two are different facts: on the LOAD
+  // row it is where material was hung, on the SACK row it is where material
+  // came from. This section is the only place they meet.
+  //
+  // WHY FILLS. A bay is not emptied in one go — the code's own comment at
+  // getLastBay says a bay sees several takedowns — so "this lot has a sack from
+  // this bay, therefore that lot is down" would call a bay empty while half of
+  // it is still hanging. That is the same disagreement-with-the-barn the old
+  // grid had, just inverted.
+  //
+  // Nothing records "bay emptied": the takedown form picks a bay and writes it
+  // to the sack, and that is all. But a REFILL is a completion signal and it is
+  // free — you cannot hang a fresh trailer in a full bay. So a bay's loads
+  // group into fills, a fill closes at the first tag out of that bay after it
+  // started, and a load arriving after that opens the next one. Only the
+  // current fill is described.
+  //
+  // `coming_down` is therefore open-ended ON PURPOSE. We learn when takedown
+  // STARTED and never when it finished — only that the bay was refilled. The
+  // card says so; a fourth state claiming completion would be invented.
+  const loadsByBay = new Map();
+  for (const l of loads) {
+    if (!l.bay) continue;
+    if (!loadsByBay.has(l.bay)) loadsByBay.set(l.bay, []);
+    loadsByBay.get(l.bay).push(l);
+  }
+  const tagsByBay = new Map();
+  for (const s2 of sacks) {
+    if (!s2.bay || !s2.printed_at) continue;
+    if (!tagsByBay.has(s2.bay)) tagsByBay.set(s2.bay, []);
+    tagsByBay.get(s2.bay).push(parseTs(s2.printed_at).getTime());
+  }
+
+  const racks = [];
+  for (let bay = 1; bay <= bayCount; bay++) {
+    // Every bay is reported, including the ones nothing has been near. A bay
+    // missing from the list and a bay standing empty look identical on a grid,
+    // and only one of them is true.
+    const cell = {
+      bay,
+      barn: bay > bottomBarnLastBay ? 'top' : 'bottom',
+      state: 'empty',
+      bins: 0,
+      loads: 0,
+      lots: [],
+      hung_at: null,
+      days: null,
+      level: null,
+      first_tag_at: null,
+      sacks_out: 0,
+    };
+
+    const bayLoads = (loadsByBay.get(bay) || [])
+      .slice()
+      .sort((a, b) => parseTs(a.occurred_at) - parseTs(b.occurred_at));
+    const bayTags = (tagsByBay.get(bay) || []).slice().sort((a, b) => a - b);
+
+    if (bayLoads.length) {
+      let fill = null;
+      for (const l of bayLoads) {
+        const at = parseTs(l.occurred_at).getTime();
+        // A tag between this fill's start and this load means the bay came down
+        // in between, so this load is the start of the next fill.
+        if (fill && bayTags.some(t => t > fill.startMs && t <= at)) fill = null;
+        if (!fill) fill = { startMs: at, loads: [] };
+        fill.loads.push(l);
+      }
+
+      const since = bayTags.filter(t => t > fill.startMs);
+      cell.state = since.length ? 'coming_down' : 'hanging';
+      cell.hung_at = new Date(fill.startMs).toISOString();
+      cell.loads = fill.loads.length;
+      cell.sacks_out = since.length;
+      cell.first_tag_at = since.length ? new Date(since[0]).toISOString() : null;
+
+      // Hanging: how long it has been up, and still climbing. Coming down: the
+      // days it actually got, frozen at the first tag. Reporting "now minus
+      // hung" for a bay already being emptied would keep ageing material that
+      // is on the floor.
+      const end = since.length ? since[0] : nowMs;
+      cell.days = r1((end - fill.startMs) / DAY);
+      cell.level = cell.days < dryWindow.min ? 'green'
+        : cell.days > dryWindow.max ? 'overdue' : 'ready';
+
+      const byLot = new Map();
+      for (const l of fill.loads) {
+        cell.bins += l.bins || 0;
+        const lot = l.session_id ? lotOfSession.get(l.session_id) : null;
+        // A load with no lot still counts its bins — it is physically in the
+        // bay. It is keyed by zone so the cell can still say where it came from.
+        const key = lot ? lot.lot_id : `?${l.zone}`;
+        if (!byLot.has(key)) {
+          byLot.set(key, {
+            lot_id: lot ? lot.lot_id : null,
+            zone: l.zone,
+            cultivar: lot ? lot.cultivar : null,
+            cut_number: lot ? lot.cut_number : null,
+            bins: 0,
+          });
+        }
+        byLot.get(key).bins += l.bins || 0;
+      }
+      cell.lots = [...byLot.values()].sort((a, b) => b.bins - a.bins);
+    }
+
+    racks.push(cell);
+  }
+
   // ── The feed — what Koa asked for first: the timestamps themselves ──────
   const feed = [];
   for (const s of sessions) {
@@ -271,6 +383,7 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     order_latency: orderLatency,
     crew,
     bays,
+    racks,
     feed: feed.slice(0, 200),
     feed_total: feed.length,
     counts: {

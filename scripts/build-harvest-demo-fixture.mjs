@@ -29,7 +29,7 @@ const MIGRATIONS = [
   '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
-  '0029-harvest-crew-tag.sql',
+  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql',
 ];
 
 const sqlite = new DatabaseSync(':memory:');
@@ -78,11 +78,11 @@ const insSession = (zone, cultivar, cut, crew, opened, closed, headcount) => {
   `).run(zone, cultivar, SEASON, cut, crew, opened, closed, headcount);
   return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
 };
-const insLoad = (zone, bins, crew, when, sessionId) => sqlite.prepare(`
+const insLoad = (zone, bins, crew, when, sessionId, bay) => sqlite.prepare(`
   INSERT INTO harvest_scan_log (event_type, zone, season, bins, crew, occurred_at,
-                                attributed_zone_session_id, is_test)
-  VALUES ('barn_load', ?, ?, ?, ?, ?, ?, 1)
-`).run(zone, SEASON, bins, crew, when, sessionId);
+                                attributed_zone_session_id, bay, is_test)
+  VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?, 1)
+`).run(zone, SEASON, bins, crew, when, sessionId, bay ?? null);
 
 let serial = 0;
 const insSack = (zone, cultivar, cut, sessionId, bay, printedAt, openedAt) => {
@@ -95,7 +95,8 @@ const insSack = (zone, cultivar, cut, sessionId, bay, printedAt, openedAt) => {
 };
 
 /** One zone worked for a stretch, with trailers arriving at a believable pace. */
-function cutZone({ zone, cultivar, crew, day, startH, hours, cutters, loads, gapMin, binsEach, overnight }) {
+function cutZone({ zone, cultivar, crew, day, startH, hours, cutters, loads, gapMin, binsEach,
+                  overnight, bay }) {
   const opened = at(day, startH);
   const closed = overnight ? at(day + 1, 15) : at(day, startH + hours);
   const id = insSession(zone, cultivar, 1, crew, opened, closed, cutters);
@@ -103,7 +104,7 @@ function cutZone({ zone, cultivar, crew, day, startH, hours, cutters, loads, gap
     // A little jitter so the histogram is not a single spike.
     const jitter = [0, 6, -4, 11, -7, 3, 9][i % 7];
     insLoad(zone, binsEach[i % binsEach.length], crew,
-      at(day, startH, 40 + i * gapMin + jitter), id);
+      at(day, startH, 40 + i * gapMin + jitter), id, bay);
   }
   return id;
 }
@@ -112,14 +113,18 @@ function cutZone({ zone, cultivar, crew, day, startH, hours, cutters, loads, gap
 // barn door. Two sessions deliberately run overnight, the way the last zone of
 // a day always does, so the dashboard's exclusion note has something to report.
 const s = [];
-s.push(cutZone({ zone: 'Z1', cultivar: 'Sour Lifter', crew: 'A', day: 0, startH: 15, hours: 4, cutters: 6, loads: 5, gapMin: 46, binsEach: [22, 20, 24, 21, 18] }));
-s.push(cutZone({ zone: 'Z9', cultivar: 'Sour Lifter', crew: 'B', day: 0, startH: 15, hours: 3, cutters: 5, loads: 4, gapMin: 52, binsEach: [19, 22, 20, 17] }));
-s.push(cutZone({ zone: 'Z2', cultivar: 'Sour Lifter', crew: 'A', day: 1, startH: 15, hours: 5, cutters: 7, loads: 6, gapMin: 41, binsEach: [23, 24, 22, 25, 21, 19] }));
-s.push(cutZone({ zone: 'Z11', cultivar: 'Sour Lifter', crew: 'B', day: 1, startH: 15, hours: 4, cutters: 5, loads: 4, gapMin: 58, binsEach: [18, 20, 19, 16], overnight: true }));
-s.push(cutZone({ zone: 'Z3', cultivar: 'Sour Lifter', crew: 'A', day: 2, startH: 16, hours: 4, cutters: 6, loads: 5, gapMin: 44, binsEach: [21, 23, 20, 22, 17] }));
-s.push(cutZone({ zone: 'Z12', cultivar: 'Sour Lifter', crew: 'B', day: 2, startH: 16, hours: 3, cutters: 6, loads: 4, gapMin: 49, binsEach: [20, 21, 18, 19], overnight: true }));
-s.push(cutZone({ zone: 'Z19', cultivar: 'Lifter', crew: 'A', day: 3, startH: 15, hours: 5, cutters: 8, loads: 6, gapMin: 38, binsEach: [24, 26, 23, 25, 22, 20] }));
-s.push(cutZone({ zone: 'Z20', cultivar: 'Lifter', crew: 'B', day: 3, startH: 15, hours: 4, cutters: 5, loads: 4, gapMin: 55, binsEach: [19, 21, 18, 20] }));
+s.push(cutZone({ bay: 1, zone: 'Z1', cultivar: 'Sour Lifter', crew: 'A', day: 0, startH: 15, hours: 4, cutters: 6, loads: 5, gapMin: 46, binsEach: [22, 20, 24, 21, 18] }));
+s.push(cutZone({ bay: 9, zone: 'Z9', cultivar: 'Sour Lifter', crew: 'B', day: 0, startH: 15, hours: 3, cutters: 5, loads: 4, gapMin: 52, binsEach: [19, 22, 20, 17] }));
+s.push(cutZone({ bay: 2, zone: 'Z2', cultivar: 'Sour Lifter', crew: 'A', day: 1, startH: 15, hours: 5, cutters: 7, loads: 6, gapMin: 41, binsEach: [23, 24, 22, 25, 21, 19] }));
+s.push(cutZone({ bay: 9, zone: 'Z11', cultivar: 'Sour Lifter', crew: 'B', day: 1, startH: 15, hours: 4, cutters: 5, loads: 4, gapMin: 58, binsEach: [18, 20, 19, 16], overnight: true }));
+s.push(cutZone({ bay: 3, zone: 'Z3', cultivar: 'Sour Lifter', crew: 'A', day: 2, startH: 16, hours: 4, cutters: 6, loads: 5, gapMin: 44, binsEach: [21, 23, 20, 22, 17] }));
+s.push(cutZone({ bay: 10, zone: 'Z12', cultivar: 'Sour Lifter', crew: 'B', day: 2, startH: 16, hours: 3, cutters: 6, loads: 4, gapMin: 49, binsEach: [20, 21, 18, 19], overnight: true }));
+s.push(cutZone({ bay: 4, zone: 'Z19', cultivar: 'Lifter', crew: 'A', day: 3, startH: 15, hours: 5, cutters: 8, loads: 6, gapMin: 38, binsEach: [24, 26, 23, 25, 22, 20] }));
+s.push(cutZone({ bay: 5, zone: 'Z20', cultivar: 'Lifter', crew: 'B', day: 3, startH: 15, hours: 4, cutters: 5, loads: 4, gapMin: 55, binsEach: [19, 21, 18, 20] }));
+// Still hanging — nothing tagged out of these yet, so the rack board has a live
+// bay to draw rather than a barn of finished ones.
+s.push(cutZone({ bay: 6, zone: 'Z13', cultivar: 'Lifter', crew: 'A', day: 26, startH: 15, hours: 4, cutters: 6, loads: 5, gapMin: 47, binsEach: [21, 19, 23, 20, 18] }));
+s.push(cutZone({ bay: 1, zone: 'Z21', cultivar: 'Sour Lifter', crew: 'B', day: 33, startH: 16, hours: 3, cutters: 5, loads: 4, gapMin: 51, binsEach: [20, 22, 19, 21] }));
 
 // One trailer that arrived with nothing open — the failure the barn screen warns
 // about, kept in the example so the alarm tile is not a surprise the first time.
