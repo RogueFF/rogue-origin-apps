@@ -743,3 +743,19 @@ test('a real tag carries no example band', async () => {
   assert.doesNotMatch(html, /class="exbar"/);
   assert.doesNotMatch(html, /EJEMPLO/);
 });
+
+test('the example mark is ink, not a background fill', async () => {
+  // Reported invisible on the printout twice. It was white text on a black
+  // box, and browsers drop background colours in print unless the viewer has
+  // ticked "Background graphics" — so the fill went, the white text went with
+  // it, and a thermal printer laid down nothing. Everything else on the tag is
+  // black on white, which is why everything else survives.
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=sack_label&examples=1&lang=en')).text();
+  const rule = html.match(/\.exbar\s*\{([^}]*)\}/);
+  assert.ok(rule, 'no .exbar rule');
+  assert.doesNotMatch(rule[1], /background:\s*#|background-color:\s*#/,
+    'a printed mark may not depend on a fill');
+  assert.match(rule[1], /border:[^;]*#000/, 'an outline prints without permission');
+  assert.match(rule[1], /color:\s*#000/, 'and the letters have to be ink');
+});

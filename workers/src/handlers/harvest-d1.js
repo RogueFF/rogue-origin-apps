@@ -4008,21 +4008,27 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   /* Example tags only. Absolutely positioned so the flex row above is untouched
      — the name/code/number/meta stack keeps the widths it was tuned for, and
      only the bottom padding grows to make room. */
-  /* UNDER THE QR, which is the only part of the tag with spare height.
-     Two earlier attempts were cut off in print: at bottom:0 it fell in the
-     printer's unprintable margin, and in the text column it had 4px of slack
-     on screen, which print DPI ate — .label is overflow:hidden, so the stack
-     silently loses its last line rather than growing. The QR is 1in in a 1.78in
-     column, so ~0.7in there is genuinely free and nothing has to be squeezed.
-     Two lines because one would be wider than the 1in the QR sets. */
+  /* BLACK INK ON WHITE, never a background fill.
+     This mark was reported invisible on the printout twice, and both times I
+     moved it — first off the label edge, then into the QR column — when the
+     geometry was never the problem. It was white text on a black box, and a
+     browser DROPS background colours when printing unless the user has ticked
+     "Background graphics". The fill vanished, the white text went with it, and
+     on a thermal printer that is nothing at all. In the print preview it read
+     as faint grey, which is exactly what a dropped fill looks like.
+     Everything else on this tag is black on white, which is why everything
+     else survives. print-color-adjust:exact would force the fill back, but it
+     hangs on a checkbox in someone's print dialog and inverts to black-on-black
+     when they tick it — an outline needs no permission from anybody.
+     It stays under the QR: that column really does have the spare height. */
   .qrwrap { flex: none; display: flex; flex-direction: column;
             align-items: center; gap: 0.05in; }
   .exbar {
-    background: #000; color: #fff; text-align: center; line-height: 1.2;
-    padding: 0.03in 0.07in;
+    border: 1.5pt solid #000; color: #000; background: none;
+    text-align: center; line-height: 1.18; padding: 0.02in 0.05in;
   }
   .exbar span {
-    display: block; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.07em;
+    display: block; font-size: 8pt; font-weight: 800; letter-spacing: 0.06em;
     white-space: nowrap;
   }
   .txt { min-width: 0; flex: 1; }
