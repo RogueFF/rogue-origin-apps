@@ -2962,9 +2962,15 @@ function codeSheetBody(ui) {
      would have broken again on any margin preset but the default. 2 x 4.6in
      plus the gap is 9.35in, inside the printable area even at 0.75in margins. */
   .cards { display: grid; gap: 0.15in; }
+  /* Fixed height so two fill a letter page exactly and cut identically —
+     10.2in printable, 2 x 4.6in + a 0.15in gap = 9.35in. A THIRD does not fit
+     (14.1in), which is why the end-of-day card gets its own page rather than
+     being appended here. break-inside guards the same mistake being made
+     again: a card that spills is a card cut in half. */
   .card { height: 4.6in; box-sizing: border-box;
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          border: 1.5pt dashed #bbb; border-radius: 8pt; padding: 12pt; text-align: center; }
+          border: 1.5pt dashed #bbb; border-radius: 8pt; padding: 12pt; text-align: center;
+          break-inside: avoid; page-break-inside: avoid; }
   .card .big { font-size: 34pt; }
   .card .qr { width: 2.1in; height: 2.1in; }
 
@@ -2988,7 +2994,7 @@ function codeSheetBody(ui) {
 </style>
 <div class="codesheet">
   <div class="noprint">
-    <strong>${ui.t('printCodes')}</strong> — ${Object.keys(STATION_CREW).length + 1} pages.
+    <strong>${ui.t('printCodes')}</strong> — ${Object.keys(STATION_CREW).length + 2} pages.
     Print at 100% (no &ldquo;fit to page&rdquo;), then laminate.
     <ul>
       <li><strong>Page 1</strong> — the two crew cards. Cut along the dashed line;
@@ -2998,7 +3004,8 @@ function codeSheetBody(ui) {
     </ul>
   </div>
 
-  <section class="sheet cards">${CREWS.map(card).join('')}${dayEndCard}</section>
+  <section class="sheet cards">${CREWS.map(card).join('')}</section>
+  <section class="sheet cards">${dayEndCard}</section>
   ${doors}
 </div>`;
 }
