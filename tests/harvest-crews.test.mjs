@@ -74,7 +74,7 @@ function freshDb() {
       };
     },
   };
-  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
+  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true', ORDERS_PASSWORD: 'test-password' }, ctx: { waitUntil() {} } };
 }
 
 const quiet = async (fn) => {
@@ -235,7 +235,8 @@ test('a crew returning next morning rejoins the cut its partner is still on', as
   assert.equal(fresh.cut_number, 1);
 
   const body = await handleHarvestD1(
-    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx).then(r => r.json());
+    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`,
+      { headers: { authorization: 'test-password' } }), env, ctx).then(r => r.json());
   const z4 = (body.lots || body.data?.lots || []).filter(l => l.zone === 'Z4');
   assert.equal(z4.length, 1, 'one cut, one lot, however many crews and days it took');
 });
@@ -246,7 +247,8 @@ test('two crews in one zone make one lot in the ledger', async () => {
   await scanZone(env, ctx, 'Z4', 'B');
 
   const body = await handleHarvestD1(
-    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx).then(r => r.json());
+    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`,
+      { headers: { authorization: 'test-password' } }), env, ctx).then(r => r.json());
   const z4 = (body.lots || body.data?.lots || []).filter(l => l.zone === 'Z4');
 
   assert.equal(z4.length, 1, 'same plants, same cut — two rows would claim the acreage twice');

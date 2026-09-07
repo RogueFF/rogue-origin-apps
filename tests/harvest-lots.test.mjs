@@ -44,6 +44,10 @@ const { handleHarvestD1 } = await import(
 
 const SEASON = new Date().getUTCFullYear();
 
+// The ledger is password-gated — it carries per-lot yield and acreage for the
+// whole season. Reading it in a test means saying so, same as the dashboard does.
+const TEST_PW = 'test-password';
+
 const MIGRATIONS = [
   '0009-harvest-scan-log.sql', '0010-harvest-sacks.sql', '0011-harvest-sacks-void.sql',
   '0012-harvest-scan-log-cultivar.sql', '0013-harvest-crew-roster.sql',
@@ -81,7 +85,7 @@ function freshDb() {
       };
     },
   };
-  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
+  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true', ORDERS_PASSWORD: TEST_PW }, ctx: { waitUntil() {} } };
 }
 
 /** One zone session. Minutes ago, so the fixtures read like a shift. */
@@ -129,7 +133,8 @@ const sack = (sqlite, { zone, cultivar, cut = 1, sessionId, serial }) => sqlite.
 `).run(`T-${serial}`, SEASON, serial, zone, cultivar, cut, sessionId);
 
 const lots = (env, ctx) => handleHarvestD1(
-  new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx)
+  new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`,
+    { headers: { authorization: TEST_PW } }), env, ctx)
   .then(r => r.json()).then(j => j.lots || j.data?.lots || []);
 
 const picker = (env, ctx) => handleHarvestD1(
@@ -265,7 +270,8 @@ test('the cutting-day window is declared as a known gap, not left implicit', asy
   enter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 120, closedMinAgo: 60, headcount: 6 });
 
   const body = await handleHarvestD1(
-    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx).then(r => r.json());
+    new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`,
+      { headers: { authorization: TEST_PW } }), env, ctx).then(r => r.json());
   const c = (body.constants || body.data?.constants).harvestDayLimits;
   // Same treatment as the uncalibrated bin weight: listed, pending, and paired
   // with what it would unblock, so it cannot quietly become someone's guess.

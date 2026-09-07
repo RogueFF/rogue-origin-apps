@@ -93,7 +93,7 @@ function freshDb() {
     },
   };
 
-  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
+  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true', ORDERS_PASSWORD: 'test-password' }, ctx: { waitUntil() {} } };
 }
 
 /** The handler narrates every load to Telegram, which is not what is under test. */
@@ -137,8 +137,10 @@ const logLoad = (env, ctx, zone, bins) => quiet(() => handleHarvestD1(
 const intakeForm = (env, ctx, lang = 'en') =>
   handleBarnScan(new Request(`https://x/b?lang=${lang}`), env, ctx).then(r => r.text());
 
+// Gated since 2026-09-04: the ledger is the season's yield and acreage.
 const rollup = (env, ctx) => handleHarvestD1(
-  new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`), env, ctx).then(r => r.json());
+  new Request(`https://x/api/harvest?action=rollup&season=${SEASON}`,
+    { headers: { authorization: 'test-password' } }), env, ctx).then(r => r.json());
 
 const lastLoadRow = (sqlite) => sqlite.prepare(
   `SELECT * FROM harvest_scan_log WHERE event_type='barn_load' ORDER BY id DESC LIMIT 1`).get();
