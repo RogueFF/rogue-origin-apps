@@ -3763,7 +3763,7 @@ function labelInner(s) {
   // barn, and one word each so it reads across a room. Solid black rather than
   // an outline: this has to survive being glanced at, not studied.
   const exampleBar = s.example
-    ? `<div class="exbar"><span>EJEMPLO &middot; EXAMPLE</span></div>`
+    ? `<div class="exbar"><span>EJEMPLO</span><span>EXAMPLE</span></div>`
     : '';
   // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
   // person actually needs, and it removes the width pressure that used to push
@@ -3771,13 +3771,15 @@ function labelInner(s) {
   // reconstructable by eye: code + serial + the year off the harvest date.
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
   return `
-    <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
+    <div class="qrwrap">
+      <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
+      ${exampleBar}
+    </div>
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
       ${s.cultivar_code ? `<div class="code">${escapeHtml(s.cultivar_code)}</div>` : ''}
       <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
       <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}${s.bay ? ` · ${escapeHtml(translate(TAG_LANG, 'bayN', { n: s.bay }))}` : ''}</div>
-      ${exampleBar}
     </div>`;
 }
 
@@ -4006,16 +4008,21 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   /* Example tags only. Absolutely positioned so the flex row above is untouched
      — the name/code/number/meta stack keeps the widths it was tuned for, and
      only the bottom padding grows to make room. */
-  /* In the TEXT COLUMN, not on the label edge. Koa printed one and the band
-     came out trimmed: a thermal printer has an unprintable margin and the
-     stock is never exactly 2in, so anything at bottom:0 is the first thing to
-     go. The name, code, number and meta line already print reliably — sharing
-     their column is the only guarantee available. */
-  .exbar { margin-top: 0.05in; }
+  /* UNDER THE QR, which is the only part of the tag with spare height.
+     Two earlier attempts were cut off in print: at bottom:0 it fell in the
+     printer's unprintable margin, and in the text column it had 4px of slack
+     on screen, which print DPI ate — .label is overflow:hidden, so the stack
+     silently loses its last line rather than growing. The QR is 1in in a 1.78in
+     column, so ~0.7in there is genuinely free and nothing has to be squeezed.
+     Two lines because one would be wider than the 1in the QR sets. */
+  .qrwrap { flex: none; display: flex; flex-direction: column;
+            align-items: center; gap: 0.05in; }
+  .exbar {
+    background: #000; color: #fff; text-align: center; line-height: 1.2;
+    padding: 0.03in 0.07in;
+  }
   .exbar span {
-    display: inline-block; background: #000; color: #fff;
-    padding: 0.02in 0.07in;
-    font-size: 9.5pt; font-weight: 800; letter-spacing: 0.09em;
+    display: block; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.07em;
     white-space: nowrap;
   }
   .txt { min-width: 0; flex: 1; }
