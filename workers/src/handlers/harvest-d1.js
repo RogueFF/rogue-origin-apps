@@ -200,7 +200,7 @@ const HTML_ACTIONS = new Set([
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
 export async function handleCrewScan(request, env, ctx) {
-  const ui = makeUi(request);
+  const ui = makeUi(request, env);
   try {
     return await handleCrewTag(ui, request);
   } catch (e) {
@@ -216,7 +216,7 @@ export async function handleHarvestD1(request, env, ctx) {
   const action = getAction(request, body);
   const params = getQueryParams(request);
   const db = env.DB;
-  const ui = makeUi(request);
+  const ui = makeUi(request, env);
 
   // The lot stage board is its own module (D1-backed, password-gated) so this
   // file doesn't grow another 400 lines. See harvest-board-d1.js.
@@ -307,7 +307,7 @@ export async function handleHarvestD1(request, env, ctx) {
  * anywhere else in the system — and the URL can't be changed after printing.
  */
 export async function handleZoneScan(request, env, ctx) {
-  const ui = makeUi(request);
+  const ui = makeUi(request, env);
   try {
     const url = new URL(request.url);
     const zone = normalizeZone(url.pathname.replace(/^\/z\//, '').trim());
@@ -355,7 +355,7 @@ export async function handleZoneScan(request, env, ctx) {
  * times a day, often in poor light with dusty hands.
  */
 export async function handleBarnScan(request, env, ctx) {
-  const ui = makeUi(request);
+  const ui = makeUi(request, env);
   try {
     const station = pickStation(request);
     const res = await handleBarnIntakeForm(ui, env.DB, env, ctx, station);
@@ -375,7 +375,7 @@ export async function handleBarnScan(request, env, ctx) {
  * bigger modules, which is what survives a scuffed label in barn lighting.
  */
 export async function handleSackScan(request, env, ctx) {
-  const ui = makeUi(request);
+  const ui = makeUi(request, env);
   try {
     const url = new URL(request.url);
     const sackId = url.pathname.replace(/^\/s\//, '').trim();
@@ -493,6 +493,61 @@ function parseSqliteUtc(ts) {
 const HARVEST_TZ = 'America/Los_Angeles';
 function pacificDay(date) {
   return date.toLocaleDateString('en-CA', { timeZone: HARVEST_TZ });
+}
+
+/** SQLite's own timestamp text, "YYYY-MM-DD HH:MM:SS", always UTC. */
+function sqliteUtc(d) {
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}
+
+/**
+ * The zone's UTC offset at a given instant, DST and all.
+ *
+ * `sv-SE` formats as "YYYY-MM-DD HH:MM:SS"; reading that wall time back as if
+ * it were UTC and subtracting the real instant leaves exactly the offset. Let
+ * Intl carry the rules rather than hard-coding -7 or -8, either of which is
+ * wrong for part of a season that runs across the November change.
+ */
+function pacificOffsetMs(at) {
+  const wall = at.toLocaleString('sv-SE', { timeZone: HARVEST_TZ });
+  return Date.parse(wall.replace(' ', 'T') + 'Z') - at.getTime();
+}
+
+/**
+ * The half-open UTC range [start, end) covering one Pacific civil day.
+ *
+ * `date(occurred_at) = '2026-10-14'` asks SQLite for a UTC day, and the barn's
+ * day is not a UTC day: 5pm Pacific is already tomorrow in UTC (4pm once the
+ * clocks go back). Every "today" in this file used to split mid-afternoon —
+ * the load counter reset while trailers were still arriving, and allocation
+ * paired a sack opened after 5pm with the NEXT day's floor weights, which is
+ * silent and unrecoverable.
+ *
+ * The offset is measured ONCE PER END. Measuring it once and applying it to
+ * both is the real DST bug: on 1 November the day opens in PDT and closes in
+ * PST, so a single offset makes a 25-hour day look like 24 and drops an hour
+ * of the barn's evening into the wrong day. Three tests cover that.
+ *
+ * Each end then re-measures at its own corrected instant. That second pass is
+ * unreachable for America/Los_Angeles — the changeover is at 2am local, so
+ * local midnight is always hours clear of it and the first probe is already
+ * right (a mutation test confirms removing it changes nothing today). It stays
+ * because it is two lines, and because it is the only thing keeping this
+ * function from silently depending on where in the day HARVEST_TZ happens to
+ * move its clocks.
+ */
+export function pacificDayRange(day) {
+  const at = (wallMs) => {
+    let t = wallMs - pacificOffsetMs(new Date(wallMs));
+    return wallMs - pacificOffsetMs(new Date(t));
+  };
+  const wall = Date.parse(day + 'T00:00:00Z');
+  return [sqliteUtc(new Date(at(wall))), sqliteUtc(new Date(at(wall + 86400000)))];
+}
+
+/** Today, as the barn means it. */
+function pacificToday() {
+  return pacificDay(new Date());
 }
 
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
@@ -781,6 +836,33 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   let zoneSession = crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null;
   if (!zoneSession) zoneSession = await getOpenSessionForZone(db, isTest, zone);
 
+  // A cultivar switch INSIDE one zone is invisible to the two steps above: the
+  // zone is still open, so the load attaches to whatever is being cut NOW, and
+  // `hasActiveSession` is true so the confirm screen stays silent about it.
+  //
+  // In a trial zone that is the whole error. Z10 is 15 cultivars in one acre at
+  // ~130 plants each — roughly six trailers a lot — so a single misplaced
+  // trailer is a 15-20% error on a lot whose only purpose is being compared
+  // against its neighbours. Z8 and R1 are the same shape.
+  //
+  // So before accepting an open session, ask whether the SAME crew closed a
+  // DIFFERENT cultivar in this zone inside the grace window. If they did, the
+  // trailer on the apron was loaded before the switch. Scoped to that crew
+  // because both crews can work one zone on different cultivars, and the other
+  // crew's just-closed lot says nothing about this door's load.
+  //
+  // Self-limiting: in a single-cultivar zone the previous session carries the
+  // same cultivar, so this never fires.
+  let viaSwitch = null;
+  if (zoneSession) {
+    const prev = await getLastClosedAnyCultivar(db, isTest, zone, zoneSession.crew ?? null);
+    const now = zoneSession.cultivar || null;
+    if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
+      viaSwitch = { from: prev.cultivar || null, to: now };
+      zoneSession = prev;
+    }
+  }
+
   // Nothing open for this zone — the crew has moved on. If it closed within the
   // grace window the load was cut there and is only now arriving, so it belongs
   // to that closed lot.
@@ -804,14 +886,20 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
     VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
   `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, bay, isTest]);
 
+  // "Carga #3 hoy" used to reset at 5pm Pacific, mid-afternoon, while trailers
+  // were still arriving — the crew would have seen this one long before anyone
+  // read a dashboard.
+  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
   const todayCount = await queryOne(db, `
     SELECT COUNT(*) as n FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND zone = ? AND date(occurred_at) = date('now') AND is_test = ?
-  `, [zone, isTest]);
+    WHERE event_type = 'barn_load' AND zone = ?
+      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
+  `, [zone, dayStart, dayEnd, isTest]);
   const loadNumber = (todayCount?.n) || 1;
 
   const cutNote = zoneSession
     ? `cut ${zoneSession.cut_number}${viaGrace ? ', just-closed lot' : ''}`
+      + `${viaSwitch ? `, ${viaSwitch.from || '?'} (cultivar just changed)` : ''}`
       + `${crossedCrew ? `, Crew ${zoneSession.crew}` : ''}`
     : 'no active session for this zone';
   ctx.waitUntil(sendTelegramMessage(env, {
@@ -823,6 +911,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
     zone, bins, loadNumber, station, bay,
     hasActiveSession: !!zoneSession,
     grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
+    switched: viaSwitch,
     crossedCrew: crossedCrew ? zoneSession.crew : null,
   }));
 }
@@ -1538,17 +1627,20 @@ async function handleSackOpen(ui, db, env, ctx, body) {
  */
 async function handleAllocate(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const day = String(params.date || '').substring(0, 10) || new Date().toISOString().substring(0, 10);
+  // Pacific, not UTC: the floor types its own civil day into
+  // `supersack_entries.date`, and this has to name the same day they did.
+  const day = String(params.date || '').substring(0, 10) || pacificToday();
+  const [dayStart, dayEnd] = pacificDayRange(day);
 
   // Grouped by season AND cultivar. The floor spends part of 2026 trimming
   // 2025 material, so "Lifter" alone is not a lot — 2025 Lifter and 2026
   // Lifter are different crops that happen to share a name.
   const rows = await query(db, `
     SELECT season, cultivar, COUNT(*) AS n FROM harvest_sacks
-    WHERE date(opened_at) = ? AND is_test = ? AND voided_at IS NULL
+    WHERE opened_at >= ? AND opened_at < ? AND is_test = ? AND voided_at IS NULL
       AND (weights_source IS NULL OR weights_source = 'allocated')
     GROUP BY season, cultivar
-  `, [day, isTest]);
+  `, [dayStart, dayEnd, isTest]);
 
   if (!rows.length) {
     return successResponse({ success: true, date: day, allocated: [], note: 'No bags opened that day.' });
@@ -1608,10 +1700,11 @@ async function handleAllocate(db, env, params) {
       UPDATE harvest_sacks
       SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
           weights_source = 'allocated', weights_allocated_at = datetime('now')
-      WHERE date(opened_at) = ? AND season = ? AND cultivar = ? AND is_test = ? AND voided_at IS NULL
+      WHERE opened_at >= ? AND opened_at < ? AND season = ? AND cultivar = ?
+        AND is_test = ? AND voided_at IS NULL
         AND (weights_source IS NULL OR weights_source = 'allocated')
     `, [share.tops, share.smalls, share.biomass, share.trim, share.waste,
-        day, r.season, r.cultivar, isTest]);
+        dayStart, dayEnd, r.season, r.cultivar, isTest]);
     done.push({
       season: r.season, cultivar: r.cultivar, sacks: r.n,
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
@@ -1917,19 +2010,21 @@ async function handleCrewSet(ui, db, env, ctx, body) {
  * over-counting structurally impossible instead of relying on discipline.
  */
 async function crewPersonHours(db, isTest, dayIso) {
+  const [dayStart, dayEnd] = pacificDayRange(dayIso);
   const bounds = await queryOne(db, `
     SELECT MIN(occurred_at) AS first_event, MAX(occurred_at) AS last_event
-    FROM harvest_scan_log WHERE date(occurred_at) = ? AND is_test = ?
-  `, [dayIso, isTest]);
+    FROM harvest_scan_log
+    WHERE occurred_at >= ? AND occurred_at < ? AND is_test = ?
+  `, [dayStart, dayEnd, isTest]);
   if (!bounds?.first_event || !bounds?.last_event) return null;
 
   const periods = await query(db, `
     SELECT * FROM harvest_crew_roster
     WHERE is_test = ?
-      AND date(effective_from) <= ?
-      AND (effective_to IS NULL OR date(effective_to) >= ?)
+      AND effective_from < ?
+      AND (effective_to IS NULL OR effective_to >= ?)
     ORDER BY effective_from ASC
-  `, [isTest, dayIso, dayIso]);
+  `, [isTest, dayEnd, dayStart]);
   if (!periods.length) return null;
 
   const winStart = parseSqliteUtc(bounds.first_event).getTime();
@@ -1956,11 +2051,13 @@ async function crewPersonHours(db, isTest, dayIso) {
  * before staffing a fourth. Roster = payroll, this = throughput.
  */
 async function impliedDrivers(db, isTest, dayIso, rosteredAvg) {
+  const [dayStart, dayEnd] = pacificDayRange(dayIso);
   const loads = await query(db, `
     SELECT occurred_at FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND date(occurred_at) = ? AND is_test = ?
+    WHERE event_type = 'barn_load'
+      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
     ORDER BY occurred_at ASC
-  `, [dayIso, isTest]);
+  `, [dayStart, dayEnd, isTest]);
   if (loads.length < 3) return null;   // too few gaps to say anything honest
 
   const t = loads.map(l => parseSqliteUtc(l.occurred_at).getTime());
@@ -2817,9 +2914,20 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .lang a { color: #9fc2ac; text-decoration: none; border: 1px solid #2c4a36;
             padding: 5px 9px; border-radius: 999px; background: #1b3123; }
   @media print { .lang { display: none; } }
+
+  /* Test mode is the default, and switching it off lives in a deploy-time
+     variable. A redeploy that forgets it writes every real scan as test data —
+     which the season's own cleanup step then DELETEs. Nothing on screen used to
+     say so, so the failure would have been invisible until the barn was empty
+     and the ledger was too. Loud, top of every crew screen, both languages. */
+  .testband { background: #7a3a3a; color: #fff; font-weight: 800; font-size: 0.9rem;
+              letter-spacing: 0.14em; text-transform: uppercase; text-align: center;
+              padding: 10px 12px; margin: -24px -20px 18px; }
+  @media print { .testband { display: none; } }
 </style>
 </head>
 <body>
+${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
 <div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}">${ui.t('langOther')}</a></div>
 ${bodyHtml}
 </body>
@@ -2840,7 +2948,7 @@ ${bodyHtml}
  * it, and a toggle link that KEEPS the current query string — a bare
  * `?lang=en` would drop `action=` and dump the user on an unknown-action error.
  */
-function makeUi(request) {
+function makeUi(request, env = null) {
   const lang = pickLang(request);
   const crew = pickCrew(request);
   const url = new URL(request.url);
@@ -2852,6 +2960,10 @@ function makeUi(request) {
     // undefined is not a value SQLite will take.
     crew: crew ?? null,
     toggle: url.pathname + url.search,
+    // Carried on the ui rather than threaded through renderPage's 28 callers.
+    // Every crew screen has to be able to say it, because the ONE thing a
+    // silent test mode looks like is a system working perfectly.
+    isTest: env ? isTestMode(env) : false,
     t: (key, vars) => translate(lang, key, vars),
   };
 }
@@ -3073,7 +3185,8 @@ ${graceNote}
 }
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
-                                  crossedCrew = null, station = null, bay = null }) {
+                                  crossedCrew = null, station = null, bay = null,
+                                  switched = null }) {
   // Four outcomes, and the person at the door should be able to tell them
   // apart: attributed to the open lot (silent), to a lot that just closed (say
   // so — it is a correction), to the OTHER crew's lot (say so — only they can
@@ -3084,10 +3197,20 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grac
   const crossNote = crossedCrew
     ? `<p class="note">${ui.t('crossedCrew', { crew: crossedCrew })}</p>`
     : '';
+  // Said out loud, like every other correction the cascade makes. The person at
+  // the door is the only one who can tell a trailer loaded before the switch
+  // from one loaded after it, so they are told which lot it went to.
+  const switchNote = switched
+    ? `<p class="note">${ui.t('cultivarSwitched', {
+        prev: escapeHtml(switched.from || '?'),
+        now: escapeHtml(switched.to || '?'),
+      })}</p>`
+    : '';
   return `
 <h1>${ui.t('loggedLoad', { bins, zone })}</h1>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}${bay ? ` · ${ui.t('hungInBay', { n: bay })}` : ''}</p>
 ${attribution}
+${switchNote}
 ${crossNote}
 <div class="footer"><a href="${API}?action=barn_intake${station ? `&station=${station}` : ''}">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }

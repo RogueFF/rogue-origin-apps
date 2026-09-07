@@ -468,3 +468,117 @@ test('the season figures do not inherit last season, only the racks do', async (
   assert.equal(d.counts.bins, 0);
   assert.equal(d.racks.find(r => r.bay === 5).state, 'hanging', 'but it is still in the barn');
 });
+
+// ─── the trial-zone cultivar switch ──────────────────────────────────────────
+
+/** An 'enter' row with a cultivar, opened and closed at given times. */
+const sess = (sqlite, o) => {
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew,
+                                  occurred_at, closed_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(o.zone, o.cultivar, SEASON, o.cut ?? 1, o.crew ?? null, o.opened, o.closed ?? null);
+  return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
+};
+/** SQLite UTC text, `mins` minutes ago. */
+const minsAgo = (m) =>
+  new Date(Date.now() - m * 60000).toISOString().replace('T', ' ').slice(0, 19);
+
+test('a trailer loaded before a cultivar switch goes to the cultivar it was cut from', async () => {
+  // THE TRIAL-ZONE BUG. Z10 holds 15 cultivars in one acre. The crew finishes
+  // Lemon and opens Rocket Sauce; the last Lemon trailer is still on the road.
+  // The zone is open, so the load used to attach to Rocket Sauce silently —
+  // ~6 trailers to a lot here, so that is a 15-20% error on both lots, on the
+  // exact comparison the trial zone exists to make.
+  const { sqlite, env, ctx } = freshDb();
+  const lemon = sess(sqlite, { zone: 'Z10', cultivar: 'Lemon', crew: 'A',
+    opened: minsAgo(180), closed: minsAgo(3) });
+  sess(sqlite, { zone: 'Z10', cultivar: 'Rocket Sauce', crew: 'A', opened: minsAgo(2) });
+
+  const res = await post(env, ctx, 'action=barn_log&lang=en', { zone: 'Z10', bins: '18' });
+  const html = await res.text();
+
+  const row = sqlite.prepare(
+    `SELECT attributed_zone_session_id AS s FROM harvest_scan_log WHERE event_type='barn_load'`).get();
+  assert.equal(row.s, lemon, 'the trailer was cut from Lemon');
+  assert.match(html, /Lemon/, 'and the door is told, because only they can judge it');
+});
+
+test('once the grace window closes the open cultivar wins again', async () => {
+  // Past the window the trailer really was loaded after the switch. The rule
+  // has to expire, or every load for the rest of the lot goes to the old one.
+  const { sqlite, env, ctx } = freshDb();
+  sess(sqlite, { zone: 'Z10', cultivar: 'Lemon', crew: 'A',
+    opened: minsAgo(400), closed: minsAgo(90) });
+  const rocket = sess(sqlite, { zone: 'Z10', cultivar: 'Rocket Sauce', crew: 'A', opened: minsAgo(80) });
+
+  await post(env, ctx, 'action=barn_log&lang=en', { zone: 'Z10', bins: '18' });
+  const row = sqlite.prepare(
+    `SELECT attributed_zone_session_id AS s FROM harvest_scan_log WHERE event_type='barn_load'`).get();
+  assert.equal(row.s, rocket);
+});
+
+test('the same cultivar resuming is not a switch', async () => {
+  // A crew stepping out and back into the same cultivar closes and reopens a
+  // session. Treating that as a switch would push every load onto the stale
+  // half of one lot for no reason.
+  const { sqlite, env, ctx } = freshDb();
+  sess(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', crew: 'A',
+    opened: minsAgo(200), closed: minsAgo(3) });
+  const now = sess(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', crew: 'A', opened: minsAgo(2) });
+
+  const html = await (await post(env, ctx, 'action=barn_log&lang=en', { zone: 'Z4', bins: '20' })).text();
+  const row = sqlite.prepare(
+    `SELECT attributed_zone_session_id AS s FROM harvest_scan_log WHERE event_type='barn_load'`).get();
+  assert.equal(row.s, now);
+  assert.doesNotMatch(html, /cultivar in this zone just changed/);
+});
+
+test('the other crew just-closing a different cultivar does not steal the load', async () => {
+  // Both crews can work one zone on different cultivars. Crew B closing Lemon
+  // says nothing about a trailer arriving at Crew A's door, and scoping the
+  // lookback to the session's own crew is what keeps them apart.
+  const { sqlite, env, ctx } = freshDb();
+  sess(sqlite, { zone: 'Z10', cultivar: 'Lemon', crew: 'B',
+    opened: minsAgo(200), closed: minsAgo(3) });
+  const mine = sess(sqlite, { zone: 'Z10', cultivar: 'Rocket Sauce', crew: 'A', opened: minsAgo(150) });
+
+  await post(env, ctx, 'action=barn_log&station=1', { zone: 'Z10', bins: '18' });
+  const row = sqlite.prepare(
+    `SELECT attributed_zone_session_id AS s FROM harvest_scan_log WHERE event_type='barn_load'`).get();
+  assert.equal(row.s, mine, "crew A's own open lot");
+});
+
+// ─── test mode has to be visible ─────────────────────────────────────────────
+
+test('every crew screen says so while test mode is on', async () => {
+  // The one thing a silent test mode looks like is a system working perfectly.
+  // It defaults ON, and the off switch used to live only in a deploy-time
+  // --var, so a redeploy that forgot it would have written a real harvest as
+  // test rows — which the season's cleanup step then deletes.
+  const { env, ctx } = freshDb();
+  for (const qs of ['action=barn_intake&lang=en', 'action=crew&lang=en', 'action=find&lang=en']) {
+    const html = await (await call(env, ctx, qs)).text();
+    assert.match(html, /<div class="testband">/, qs);
+    assert.match(html, /Test mode — none of this counts/, qs);
+  }
+  const es = await (await call(env, ctx, 'action=barn_intake')).text();
+  assert.match(es, /Modo de prueba/, 'the crew reads Spanish');
+});
+
+test('the band is gone once test mode is off', async () => {
+  const { env, ctx } = freshDb();
+  env.HARVEST_TEST_MODE = 'false';
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  // The rendered band, not the phrase — the stylesheet's own comment explains
+  // why the band exists and would match a looser regex.
+  assert.doesNotMatch(html, /<div class="testband">/);
+  assert.doesNotMatch(html, /none of this counts/);
+  assert.doesNotMatch(html, /Modo de prueba/);
+});
+
+test('the flag is committed, so a redeploy cannot change it by omission', () => {
+  const toml = readFileSync(join(REPO, 'workers/wrangler.toml'), 'utf8');
+  assert.match(toml, /^HARVEST_TEST_MODE = "(true|false)"$/m,
+    'it must live in the file, not in a --var someone remembers');
+});
