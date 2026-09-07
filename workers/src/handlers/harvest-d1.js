@@ -18,6 +18,8 @@
  * - GET  ?action=test                                    - Health check (JSON)
  * - GET  ?action=status                                  - Current active zone (JSON)
  * - GET  ?action=logs&zone=&event_type=&limit=            - Raw rows (JSON)
+ * - GET  ?action=harvest_dash                            - Cycle-time dashboard shell (HTML, no data)
+ * - GET  ?action=harvest_metrics&season=                 - Cycle times + event feed (JSON, gated)
  * - GET  ?action=print_codes                             - Printable crew cards + barn door codes (HTML)
  * - GET  ?action=rollup&season=                          - Derived lot ledger (JSON)
  *
@@ -54,6 +56,9 @@ import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
+import { requireAuth } from '../lib/auth.js';
+import { buildMetrics } from '../lib/harvest-metrics.js';
+import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace, suggestedIntakeZone } from '../lib/barn-attribution.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
@@ -190,7 +195,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'find', 'sack_open', 'print_codes',
+  'crew', 'crew_set', 'sack_note', 'find', 'sack_open', 'print_codes', 'harvest_dash',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -232,6 +237,11 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
           return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
+        case 'harvest_dash':
+          // The shell only. It ships zero harvest data and fetches everything
+          // after the operator types the password, the same way the lot board
+          // does — so the public HTML never carries the season's numbers.
+          return dashPage();
         case 'print_codes':
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui), 200);
         case 'sack_print':
@@ -271,7 +281,9 @@ export async function handleHarvestD1(request, env, ctx) {
     case 'sacks':
       return await getSacks(db, env, params);
     case 'rollup':
-      return await getRollup(db, env, params);
+      return await getRollup(request, db, env, params, body);
+    case 'harvest_metrics':
+      return await getMetrics(request, db, env, params, body);
     case 'provenance':
       return await getProvenance(db, env, params);
     case 'reconcile':
@@ -2093,7 +2105,15 @@ async function getProvenance(db, env, params) {
 // Feeds seasons/2026/harvest.md. Deliberately derived, never authored: the raw
 // rows stay in D1 / farm/harvest-log.md per the wiki's §7a raw-vs-derived split.
 
-async function getRollup(db, env, params) {
+/**
+ * The lot ledger as data.
+ *
+ * Split out from the response so the dashboard can build on the SAME numbers
+ * rather than aggregating lots a second way. Two aggregations over one table
+ * eventually disagree, and nothing tells you which one is right — the sack-tag
+ * CSS duplicated across two renderers is the same trap one layer down.
+ */
+export async function computeRollup(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   const season = parseInt(params.season, 10) || getSeason();
 
@@ -2141,7 +2161,7 @@ async function getRollup(db, env, params) {
     if (hours || implied) crewByDay.push({ date: d, person_hours: hours, driver_utilisation: implied });
   }
 
-  return successResponse({
+  return {
     success: true,
     season,
     is_test: !!isTest,
@@ -2151,7 +2171,19 @@ async function getRollup(db, env, params) {
     plants_per_acre: { value: PLANTS_PER_ACRE, derivation: `43,560 sq ft/ac ÷ (${PLANT_SPACING_FT.inRow} ft × ${PLANT_SPACING_FT.bed} ft)` },
     totals: rollupTotals(rows),
     lots: rows,
-  });
+  };
+}
+
+/**
+ * The ledger over the wire. GATED, unlike every other read here: it carries
+ * per-lot yield and acreage for the whole season, which is the farm's numbers
+ * rather than a crew screen. It was open until 2026-09-04 only because nothing
+ * had ever fetched it — putting a password in front of the dashboard while
+ * leaving the same data served openly beside it would have been decoration.
+ */
+async function getRollup(request, db, env, params, body) {
+  requireAuth(request, body, env, 'harvest-rollup');
+  return successResponse(await computeRollup(db, env, params));
 }
 
 /**
@@ -2326,6 +2358,70 @@ function summarizeConstants() {
     out[k] = { value: c.value, label: c.label, pending: c.value === null, unblocks: c.unblocks, how: c.how };
   }
   return out;
+}
+
+/**
+ * Cycle times and the event feed behind the dashboard.
+ *
+ * Gated for the same reason the ledger is: it carries the season's bin counts,
+ * crew rates and every timestamp of the harvest.
+ *
+ * The lot-shaped half comes from computeRollup so the dashboard and the ledger
+ * can never drift; this only adds what the ledger does not carry — the raw
+ * event times. `spans_days` is stamped here rather than in the metrics module
+ * because the Pacific-day rule lives with the other timestamp handling.
+ */
+async function getMetrics(request, db, env, params, body) {
+  requireAuth(request, body, env, 'harvest-metrics');
+
+  const isTest = isTestMode(env) ? 1 : 0;
+  const season = parseInt(params.season, 10) || getSeason();
+  const roll = await computeRollup(db, env, { season });
+
+  const [rawSessions, loads, sacks] = await Promise.all([
+    query(db, `
+      SELECT id, zone, cultivar, cut_number, crew, occurred_at, closed_at, headcount
+      FROM harvest_scan_log
+      WHERE event_type = 'enter' AND season = ? AND is_test = ?
+      ORDER BY occurred_at ASC, id ASC`, [season, isTest]),
+    query(db, `
+      SELECT id, zone, bins, crew, occurred_at, attributed_zone_session_id AS session_id
+      FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND season = ? AND is_test = ?
+      ORDER BY occurred_at ASC, id ASC`, [season, isTest]),
+    query(db, `
+      SELECT sack_id, serial, zone, cultivar, cut_number, bay,
+             zone_session_id AS session_id, printed_at, opened_at
+      FROM harvest_sacks
+      WHERE season = ? AND is_test = ? AND voided_at IS NULL
+      ORDER BY printed_at ASC`, [season, isTest]),
+  ]);
+
+  const sessions = rawSessions.map(s => ({
+    ...s,
+    spans_days: !!(s.closed_at &&
+      pacificDay(parseSqliteUtc(s.occurred_at)) !== pacificDay(parseSqliteUtc(s.closed_at))),
+  }));
+
+  const metrics = buildMetrics({
+    lots: roll.lots,
+    sessions,
+    loads,
+    sacks,
+    dryWindow: { min: DRY_DAYS_MIN, typical: DRY_DAYS_TYPICAL, max: DRY_DAYS_MAX },
+    bottomBarnLastBay: BOTTOM_BARN_LAST_BAY,
+  });
+
+  return successResponse({
+    success: true,
+    season,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    constants: roll.constants,
+    totals: roll.totals,
+    lots: roll.lots,
+    ...metrics,
+  });
 }
 
 /**
