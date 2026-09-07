@@ -3631,12 +3631,23 @@ const TAG_LANG = 'en';
  * CLIPS rather than wrapping.
  */
 function labelInner(s) {
+  // A specimen that walks away from the printer is otherwise indistinguishable
+  // from a real tag — the bag number is real by design (Koa, 2026-09-07), so
+  // the number cannot carry the warning and something else has to.
+  //
+  // Both languages, because it will be handed to people on both sides of the
+  // barn, and one word each so it reads across a room. Solid black rather than
+  // an outline: this has to survive being glanced at, not studied.
+  const exampleBar = s.example
+    ? `<div class="exbar">EJEMPLO &middot; EXAMPLE</div>`
+    : '';
   // Serial only, not the whole id. '#1' beside 'Sour Lifter (SLIFT)' is what a
   // person actually needs, and it removes the width pressure that used to push
   // a long id under the QR. The full id still travels in the QR, and stays
   // reconstructable by eye: code + serial + the year off the harvest date.
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
   return `
+    ${exampleBar}
     <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
@@ -3806,6 +3817,7 @@ function exampleTagSacks() {
   // always plausible against the day it is being looked at.
   const cut = new Date(Date.now() - DRY_DAYS_TYPICAL * 86400000).toISOString().slice(0, 10);
   return Object.entries(DEMO_SACKS).map(([id, d]) => ({
+    example: true,
     sack_id: id, qr_id: id, serial: d.serial,
     cultivar_code: d.code, cultivar: d.cultivar, zone: d.zone,
     cut_number: d.cut, harvest_date: cut, bay: d.bay,
@@ -3819,13 +3831,13 @@ function specimenSacks() {
   return [
     // The one to scan: its QR opens the demo sack page, so the printed tag and
     // the screen it leads to can both be judged from one sheet.
-    { sack_id: DEMO_SACK_ID, qr_id: DEMO_SACK_ID, serial: 142, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
+    { example: true, sack_id: DEMO_SACK_ID, qr_id: DEMO_SACK_ID, serial: 142, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
     // Longest name in the roster, so the name font drops to its smallest step.
-    { sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
+    { example: true, sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
     // The realistic worst case, and both squeezes at once: an 8-character
     // prefix (the longest planted this year) with a 3-digit serial, under a
     // 20-character name. This is the pairing that overlapped the QR.
-    { sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today, bay: 12 },
+    { example: true, sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today, bay: 12 },
   ];
 }
 
@@ -3842,11 +3854,11 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 
   const labels = sacks.map(s => oversize
     ? `<div class="page">
-         <div class="label">${labelInner(s)}
+         <div class="label${s.example ? ' ex' : ''}">${labelInner(s)}
          </div>
          <div class="cutline"><span>real 4&Prime; × 2&Prime; tag ends here</span></div>
        </div>`
-    : `<div class="label">${labelInner(s)}
+    : `<div class="label${s.example ? ' ex' : ''}">${labelInner(s)}
   </div>`).join('');
 
   const backLink = `<a href="${API}?action=sack_print">${ui.t('changeLot')}</a>`;
@@ -3865,6 +3877,17 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
     /* A tag is one physical label. Even if something above it shifts the flow,
        it must move whole rather than split across the perforation. */
     break-inside: avoid; page-break-inside: avoid;
+    position: relative;
+  }
+  /* Example tags only. Absolutely positioned so the flex row above is untouched
+     — the name/code/number/meta stack keeps the widths it was tuned for, and
+     only the bottom padding grows to make room. */
+  .label.ex { padding-bottom: 0.30in; }
+  .exbar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0.22in;
+    background: #000; color: #fff;
+    font-size: 10pt; font-weight: 800; letter-spacing: 0.10em;
+    display: flex; align-items: center; justify-content: center;
   }
   .txt { min-width: 0; flex: 1; }
   .cutline { border-top: 1pt dashed #999; text-align: center; }

@@ -711,3 +711,36 @@ test('a tag cannot be split across the perforation', async () => {
   const html = await (await call(env, ctx, 'action=sack_label&examples=1&lang=en')).text();
   assert.match(html, /page-break-inside:\s*avoid/);
 });
+
+test('every non-real tag is marked as an example on the tag itself', async () => {
+  // The bag number is real by design, so it cannot carry the warning. A
+  // specimen that walks away from the printer would otherwise be
+  // indistinguishable from a bag that came off a rack.
+  const { env, ctx } = freshDb();
+  for (const qs of ['action=sack_label&examples=1&lang=en',
+                    'action=sack_label&calibrate=1&lang=en']) {
+    const html = await (await call(env, ctx, qs)).text();
+    const labels = html.match(/<div class="label[^"]*"/g) || [];
+    const bars = html.match(/class="exbar"/g) || [];
+    assert.ok(labels.length > 0, qs);
+    assert.equal(bars.length, labels.length, `every tag needs the band: ${qs}`);
+    assert.match(html, /EJEMPLO/, 'Spanish first — the crew reads it');
+    assert.match(html, /EXAMPLE/);
+  }
+});
+
+test('a real tag carries no example band', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
+                               bay, printed_at, is_test)
+    VALUES ('26-SLIFT-4', ?, 4, 'Z4', 'Sour Lifter', 1, 7, ?, 1)
+  `).run(SEASON, ago(2));
+  const html = await (await call(env, ctx, 'action=sack_label&ids=26-SLIFT-4&preview=1&lang=en')).text();
+  assert.match(html, /26-SLIFT-4|#4/);
+  // The rendered element and the label's modifier class — the .exbar rule
+  // itself ships in every sheet's stylesheet whether or not a tag uses it.
+  assert.doesNotMatch(html, /class="exbar"/);
+  assert.doesNotMatch(html, /class="label ex"/);
+  assert.doesNotMatch(html, /EJEMPLO/);
+});
