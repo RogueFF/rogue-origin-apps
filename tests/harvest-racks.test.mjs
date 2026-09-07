@@ -410,3 +410,61 @@ test('the demo fixture shows every state the board can be in', async () => {
   assert.equal(nine.lots.length, 2);
   assert.deepEqual(nine.lots.map(l => l.zone).sort(), ['Z11', 'Z9']);
 });
+
+// ─── the season boundary ─────────────────────────────────────────────────────
+
+/** Through the gated endpoint, which is where the two-season query lives. */
+const metrics = (env, ctx) =>
+  call(env, ctx, `action=harvest_metrics&season=${SEASON}`, { headers: { authorization: PW } })
+    .then(r => r.json()).then(j => j.data ?? j);
+
+test('a bay filled last season is still hanging in this one', async () => {
+  // Every other figure on the dashboard is one season's bookkeeping. The rack
+  // board is not — it answers a physical question about the barn right now, and
+  // the answer does not change at midnight on 31 December. Cutting runs to
+  // about November and takedowns trail it, so a season filter would empty the
+  // whole barn on 1 January with material still on the racks.
+  //
+  // The row is dated nine days ago but STAMPED with last season, which is what
+  // a December fill looks like from 2 January — and it is the season column,
+  // not the timestamp, that the query would have excluded.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 30, 5, ?, 1)`).run(SEASON - 1, ago(9));
+
+  const b = (await metrics(env, ctx)).racks.find(r => r.bay === 5);
+  assert.equal(b.state, 'hanging');
+  assert.equal(b.bins, 30);
+});
+
+test('a tag this season closes a fill hung in the last one', async () => {
+  // The other half. If the load crossed the boundary but the tag did not, the
+  // bay would stay "hanging" for good and age past overdue while standing empty.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 30, 5, ?, 1)`).run(SEASON - 1, ago(14));
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, bay, printed_at, is_test)
+    VALUES ('X-1', ?, 1, 'Z4', 'Sour Lifter', 1, 5, ?, 1)`).run(SEASON, ago(3));
+
+  const b = (await metrics(env, ctx)).racks.find(r => r.bay === 5);
+  assert.equal(b.state, 'coming_down');
+  assert.ok(Math.abs(b.days - 11) < 0.1, `eleven days on the rack, got ${b.days}`);
+});
+
+test('the season figures do not inherit last season, only the racks do', async () => {
+  // The rack queries were kept separate rather than widening the ones above:
+  // cadence, crew rates and the feed are all season figures and would be wrong
+  // if last year's rows leaked into them.
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
+    VALUES ('barn_load', 'Z4', ?, 30, 5, ?, 1)`).run(SEASON - 1, ago(9));
+
+  const d = await metrics(env, ctx);
+  assert.equal(d.counts.loads, 0, 'last season is not this trailer count');
+  assert.equal(d.counts.bins, 0);
+  assert.equal(d.racks.find(r => r.bay === 5).state, 'hanging', 'but it is still in the barn');
+});

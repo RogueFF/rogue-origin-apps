@@ -44,11 +44,13 @@ function median(xs) {
  * @param {Array}  input.sacks     harvest_sacks rows (unvoided)
  * @param {object} input.dryWindow { min, typical, max } days on the rack
  * @param {number} input.bottomBarnLastBay  bays above this number are the top barn
+ * @param {Array}  [input.rackLoads]  loads for the rack board; defaults to `loads`
+ * @param {Array}  [input.rackSacks]  sacks for the rack board; defaults to `sacks`
  * @param {number} [input.bayCount]  how many bays exist; all of them are reported
  * @param {number} [input.nowMs]
  */
 export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBarnLastBay,
-                               bayCount = 12, nowMs = Date.now() }) {
+                               rackLoads, rackSacks, bayCount = 12, nowMs = Date.now() }) {
   const sessionById = new Map(sessions.map(s => [s.id, s]));
   const lotOfSession = new Map();
   for (const lot of lots) for (const id of lot.session_ids || []) lotOfSession.set(id, lot);
@@ -263,14 +265,26 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
   // `coming_down` is therefore open-ended ON PURPOSE. We learn when takedown
   // STARTED and never when it finished — only that the bay was refilled. The
   // card says so; a fourth state claiming completion would be invented.
+  //
+  // SEASON. Every other figure here is a season's bookkeeping, so `loads` and
+  // `sacks` are filtered to one year. The racks are not bookkeeping — they are
+  // a physical question about the barn this minute, and the answer does not
+  // change at midnight on New Year's Eve. Cutting runs to about November and
+  // takedowns trail it, so a bay filled in December would read EMPTY on 1 Jan
+  // with material still hanging in it. These two lists therefore span the
+  // current season and the one before, and default to the season-scoped lists
+  // when a caller does not separate them.
+  const rl = rackLoads || loads;
+  const rs = rackSacks || sacks;
+
   const loadsByBay = new Map();
-  for (const l of loads) {
+  for (const l of rl) {
     if (!l.bay) continue;
     if (!loadsByBay.has(l.bay)) loadsByBay.set(l.bay, []);
     loadsByBay.get(l.bay).push(l);
   }
   const tagsByBay = new Map();
-  for (const s2 of sacks) {
+  for (const s2 of rs) {
     if (!s2.bay || !s2.printed_at) continue;
     if (!tagsByBay.has(s2.bay)) tagsByBay.set(s2.bay, []);
     tagsByBay.get(s2.bay).push(parseTs(s2.printed_at).getTime());
