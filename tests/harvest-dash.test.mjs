@@ -323,3 +323,41 @@ test('buildMetrics needs no database, so the shapes can be pinned directly', () 
   assert.equal(out.counts.bins, 0);
   assert.equal(out.order_latency.median_days, null);
 });
+
+// --- reachable from the board -------------------------------------------------
+
+test('the lot board links to the dashboard, and the link is absolute', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
+
+  assert.match(html, /href="\/api\/harvest\?action=harvest_dash"/,
+    'the board should offer a way through to the cycle times');
+
+  // The board is served from /api/harvest?action=board_page, where a bare
+  // `?action=harvest_dash` happens to resolve correctly — which is exactly the
+  // assumption that silently lost every cutter count and every trailer logged
+  // from a scanned QR code until 2026-09-04. Resolve it the way a browser does.
+  const hrefs = [...html.matchAll(/href="([^"]*action=harvest_dash[^"]*)"/g)].map(m => m[1]);
+  assert.ok(hrefs.length >= 1);
+  for (const href of hrefs) {
+    const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
+    assert.equal(resolved.pathname, '/api/harvest', `${href} resolves to ${resolved.pathname}`);
+    assert.equal(resolved.searchParams.get('action'), 'harvest_dash');
+  }
+});
+
+test('the board still ships no lot data of its own', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
+  // Adding a link must not have turned the shell into something that carries
+  // cards. It is a public URL and the lots carry Total THC.
+  //
+  // Checked by looking for a LOT ID rather than for the string "Total THC":
+  // the page's own JavaScript names that field, so matching on the label finds
+  // the code that renders a value, not a value.
+  assert.doesNotMatch(html, /LOT-\d{4}-/, 'no lot may be baked into the public shell');
+  // The board builds its action at runtime (`API + "?action=" + action`), so
+  // there is no literal to match — what matters is that it still goes and gets
+  // the lots rather than having them baked in.
+  assert.match(html, /API \+ "\?action=" \+ action/, 'it still fetches its own data');
+});
