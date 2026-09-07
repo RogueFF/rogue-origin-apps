@@ -87,6 +87,15 @@ one tap. Previous day, **named** on the form so it is confirmed, not assumed.
       reads as empty rather than missing.
 - [x] "On the racks right now" card on the dashboard, same two-barn grid.
 
+## The board is not season-scoped
+
+Every other dashboard figure is one season's bookkeeping. The rack board is a
+physical question about the barn right now, and the answer does not change at
+midnight on 31 December — cutting runs to about November and takedowns trail it,
+so a bay filled in December would have read empty on 1 January. Its loads and
+sacks come from their own two-season queries; the season-scoped ones are left
+alone so cadence, crew rates and the feed do not inherit last year.
+
 ## Then
 
 - [x] Tests: the capture cascade, the down rule, the three states.
