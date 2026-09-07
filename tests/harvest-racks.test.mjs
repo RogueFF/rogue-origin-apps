@@ -688,3 +688,26 @@ test('each example names its own zone, not the other one', async () => {
     new Request('https://x/s/26-SLIFT-142?lang=en'), env, ctx)).text();
   assert.match(sl, /the real Z4/);
 });
+
+test('the sheet banner never reaches the label roll', async () => {
+  // It is instructions for whoever opened the page. Printed, it costs a label
+  // and pushes the first tag across the page boundary — which is how a Sour
+  // Lifter tag came off a BIXOLON SRP-770III with the name on one label and
+  // the QR on the next.
+  const { env, ctx } = freshDb();
+  for (const qs of ['action=sack_label&examples=1&lang=en',
+                    'action=sack_label&calibrate=1&lang=en']) {
+    const html = await (await call(env, ctx, qs)).text();
+    assert.match(html, /class="banner"/, qs);
+    const printBlock = html.match(/@media print \{([\s\S]*?)\n  \}/);
+    assert.ok(printBlock, `no print block: ${qs}`);
+    assert.match(printBlock[1], /\.banner\s*\{\s*display:\s*none|\.toolbar,\s*\.banner\s*\{\s*display:\s*none/,
+      `banner still prints: ${qs}`);
+  }
+});
+
+test('a tag cannot be split across the perforation', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=sack_label&examples=1&lang=en')).text();
+  assert.match(html, /page-break-inside:\s*avoid/);
+});
