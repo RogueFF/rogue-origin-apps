@@ -428,6 +428,9 @@ details.tech > *:not(summary){margin-top:10px}
 
 /* bottom bar (mobile) */
 .bottombar{display:none}
+/* the top bar must never push the page sideways: drop the date first, then move the tabs to their own row */
+@media (max-width:1400px){.brandline .eyebrow{display:none} .search{flex-basis:160px}}
+@media (max-width:1240px){.topbar{flex-wrap:wrap;row-gap:6px} .topbar .tabs{order:9;flex:1 0 100%;justify-content:center} .topbar .tabs .tab{flex:1 1 0;justify-content:center}}
 @media (max-width:1180px){.lanes{grid-template-columns:1fr 1fr} .lane:nth-child(3){grid-column:1/-1;border-top:3px solid var(--c)} .tag-wrap{grid-template-columns:1fr} .hist{grid-template-columns:1fr} .nextwrap .icards{grid-template-columns:1fr 1fr}}
 @media (max-width:860px){
   :root{--actbar:0px}
