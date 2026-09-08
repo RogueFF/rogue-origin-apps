@@ -28,7 +28,7 @@ import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
 import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan,
-  handleCrewScan, handleBarnScan } from './handlers/harvest-d1.js';
+  handleCrewScan, handleBarnScan, handleDayEndScan } from './handlers/harvest-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { formatError } from './lib/errors.js';
@@ -168,7 +168,7 @@ export default {
         response = await handleIrrigationD1(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
         response = await handleHarvestD1(request, env, ctx);
-      } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/')) {
+      } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/') || path === '/fin') {
         // The three crew QR targets. Short on purpose: these are printed on
         // laminated signs and barn walls for a whole season, and a shorter URL
         // means a lower-version QR with bigger modules — what survives dust,
@@ -192,6 +192,8 @@ export default {
           response = await handleZoneScan(request, env, ctx);
         } else if (path.startsWith('/c/')) {
           response = await handleCrewScan(request, env, ctx);
+        } else if (path === '/fin') {
+          response = await handleDayEndScan(request, env, ctx);
         } else {
           response = await handleBarnScan(request, env, ctx);
         }
