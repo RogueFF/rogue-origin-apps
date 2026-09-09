@@ -114,8 +114,19 @@ const LOT = {
 const SESSIONS = [{ id: 1, zone: 'Z4', cultivar: 'Sour Lifter', cut_number: 1,
                     crew: 'A', occurred_at: ago(20), closed_at: ago(20, 22), headcount: 6 }];
 
+/**
+ * The same instant `ago()` measures back from.
+ *
+ * `ago(n)` pins a UTC hour, so it is exactly n days before *now* only when the
+ * suite runs at that hour. Left to the wall clock these assertions drifted by
+ * up to a day and passed or failed on the time of day they were run. The pure
+ * metrics take an explicit `nowMs`, so they get one.
+ */
+const NOW = (() => { const d = new Date(); d.setUTCHours(18, 0, 0, 0); return d.getTime(); })();
+
 const build = (loads, sacks, lots = [LOT], sessions = SESSIONS) => buildMetrics({
   lots, sessions, loads, sacks, dryWindow: DRY, bottomBarnLastBay: 8, bayCount: 12,
+  nowMs: NOW,
 });
 const bay = (d, n) => d.racks.find(r => r.bay === n);
 

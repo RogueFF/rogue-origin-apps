@@ -1295,6 +1295,7 @@ async function handleSackAlloc(db, env, ctx, body) {
   if (!isTestMode(env)) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
+        db,
         season, cultivar, zone: lot.zone, delta: qty,
         note: `[Harvest] ${qty} tag${qty === 1 ? '' : 's'} printed — ${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''} (${lot.zone} cut ${lot.cut_number})`,
       });
@@ -1344,6 +1345,7 @@ async function handleSackVoid(db, env, ctx, body) {
   if (!isTestMode(env) && sack.shopify_added_at) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
+        db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
         note: `[Harvest] ${sackId} voided — tag retired with no sack`,
       });
@@ -1468,6 +1470,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
   if (!isTestMode(env)) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
+        db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
         note: `[Harvest] ${sackId} opened — ${tops} lb tops / ${smalls} lb smalls (${sack.zone} cut ${sack.cut_number})`,
       });
@@ -1792,6 +1795,7 @@ async function handleSackOpen(ui, db, env, ctx, body) {
   if (!isTestMode(env)) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
+        db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
         note: `[Harvest] ${sackId} opened (${sack.zone} cut ${sack.cut_number})`,
       });
