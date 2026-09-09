@@ -3441,6 +3441,21 @@ ${headcountScript(ui)}`;
 
 function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null,
                             lastFill = null) {
+  // A full trailer, pre-filled, so the ordinary load is one tap on Submit
+  // instead of a typed number. Read off the constant rather than written here,
+  // because that constant carries "recalibrate once 2026 trailers run" and the
+  // form has to follow it when it moves.
+  //
+  // NAMED as pre-filled, for the same reason the carried-over bay is named: a
+  // number that is already in the box reads as a reading. Trailers run 18-22
+  // (see lib/barn-attribution.js), and the short ones are structural — the last
+  // load of a day, of a zone, and of every cultivar in a trial zone. Those are
+  // also the smallest lots, where accepting 22 on a half load is a ~9% error on
+  // the exact comparison a trial zone exists to make.
+  //
+  // No autofocus now: the common case needs no keyboard at all. Tapping the
+  // field selects it, so a partial is typed over rather than edited around.
+  const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
   // Within the grace window the just-closed zone is the better default — the
   // trailer at the door left that zone before the crew moved.
   const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
@@ -3502,8 +3517,9 @@ ${graceNote}
   ${stationField}
   <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required>${options}</select>
-  <label for="bins">${ui.t('binsOnLoad')}</label>
-  <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required autofocus>
+  <label for="bins">${ui.t('binsOnLoad')} <span class="hint">${ui.t('binsPrefilled', { n: FULL_TRAILER })}</span></label>
+  <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required
+         value="${FULL_TRAILER}" onfocus="this.select()">
   <label for="bay">${ui.t('bayHung')} <span class="hint">${bayHint}</span></label>
   <select id="bay" name="bay">
     <option value="">${ui.t('bayUnknown')}</option>

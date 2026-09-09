@@ -818,3 +818,40 @@ test('with no clipped sessions the ceiling is absent, not zero', () => {
   assert.equal(a.bins_per_cutter_hour, 5);
   assert.equal(a.bins_per_cutter_hour_ceiling, null, 'nothing to caveat');
 });
+
+// ─── the pre-filled bin count ────────────────────────────────────────────────
+
+test('the bins field arrives pre-filled with a full trailer, and says so', async () => {
+  // The ordinary load becomes one tap on Submit. Named as pre-filled, because a
+  // number already in the box reads as a reading — and the short trailers are
+  // structural (last load of a day, of a zone, of every cultivar in a trial
+  // zone), which is exactly where lots are smallest.
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  assert.match(html, /id="bins"[^>]*value="22"/);
+  assert.match(html, /Pre-filled 22/);
+  assert.doesNotMatch(html, /id="bins"[^>]*autofocus/,
+    'the common case needs no keyboard');
+
+  const es = await (await call(env, ctx, 'action=barn_intake')).text();
+  assert.match(es, /cámbialo si la traila viene incompleta/);
+});
+
+test('a partial load still overrides the default', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await post(env, ctx, 'action=barn_log&lang=en', { zone: 'Z4', bins: '11' });
+  assert.equal(sqlite.prepare(
+    `SELECT bins FROM harvest_scan_log WHERE event_type='barn_load'`).get().bins, 11);
+});
+
+test('the pre-fill follows the constant rather than a number typed in the form', async () => {
+  // binsPerTrailer carries "recalibrate once 2026 trailers run". When it moves,
+  // the form has to move with it or the default quietly disagrees with the
+  // figure every other calculation uses.
+  const { env, ctx } = freshDb();
+  const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
+  const src = readFileSync(join(REPO, 'workers/src/handlers/harvest-d1.js'), 'utf8');
+  const declared = src.match(/binsPerTrailer:\s*\{\s*value:\s*(\d+)/)[1];
+  assert.match(html, new RegExp(`id="bins"[^>]*value="${declared}"`),
+    `form must pre-fill the declared ${declared}`);
+});
