@@ -347,6 +347,23 @@ test('the lot board links to the dashboard, and the link is absolute', async () 
   }
 });
 
+test('the board links to the takedown screen, absolutely', async () => {
+  // The daily action the barn actually runs on: pick the lot coming down, pick
+  // the bay, print a tag per sack. Resolved the way a browser would, because a
+  // relative `?action=` on a page served from /api/harvest happens to work and
+  // is exactly the assumption that silently lost every scan on 2026-09-04.
+  const { env, ctx } = freshDb();
+  const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
+
+  const hrefs = [...html.matchAll(/href="([^"]*action=sack_print[^"]*)"/g)].map(m => m[1]);
+  assert.ok(hrefs.length >= 1, 'the board needs a way to reach the takedown screen');
+  for (const href of hrefs) {
+    const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
+    assert.equal(resolved.pathname, '/api/harvest');
+    assert.equal(resolved.searchParams.get('action'), 'sack_print');
+  }
+});
+
 test('the dashboard links back to the board, absolutely', async () => {
   const { env, ctx } = freshDb();
   const html = await (await fetchApi(env, ctx, 'action=harvest_dash')).text();
