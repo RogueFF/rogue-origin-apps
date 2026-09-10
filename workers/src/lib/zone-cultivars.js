@@ -67,7 +67,7 @@ export const ZONE_CULTIVARS = {
     "Orange Fritter",
     "Strawberry Fritter",
     "Strawberry Sauce",
-    "Purple Snow",
+    "Purple Snowman",
     "Sauciere",
     "Animal Muffins",
     "Strawberry Doughnuts",
@@ -114,7 +114,7 @@ export const ZONE_CULTIVAR_ROWS = {
   // 54 rows. wiki/farm/zones/r1.md, which also states the acres this reproduces.
   'R1': {
     'Orange Fritter': 4, 'Strawberry Fritter': 5, 'Strawberry Sauce': 6,
-    'Purple Snow': 5, 'Sauciere': 5, 'Animal Muffins': 14,
+    'Purple Snowman': 5, 'Sauciere': 5, 'Animal Muffins': 14,
     'Strawberry Doughnuts': 15,
   },
   // ~48 rows: 22 north Lifter, the balance south Sour Lifter.

@@ -937,3 +937,23 @@ test('a cultivar missing from a split zone reads unknown, never whole-zone', asy
   assert.equal(zf.acresFor('Z8', share), null);
   assert.equal(zf.plantCountFor('Z8', share), null);
 });
+
+test('the row table and the cultivar list name the same cultivars', async () => {
+  // A rename that lands in one place and not the other is silent: cultivarShare
+  // stops finding the cultivar, the area falls back to "unknown", and nothing
+  // says why. That is exactly the shape of the Purple Snow -> Purple Snowman
+  // rename (2026-09-09), which had to touch both lists and the cultivars table
+  // together because cultivarCode resolves by name.
+  const zc = await import(mod('workers/src/lib/zone-cultivars.js'));
+  for (const [zone, rows] of Object.entries(zc.ZONE_CULTIVAR_ROWS)) {
+    const listed = new Set(zc.ZONE_CULTIVARS[zone] || []);
+    for (const cultivar of Object.keys(rows)) {
+      assert.ok(listed.has(cultivar),
+        `${zone}: "${cultivar}" has rows but is not in ZONE_CULTIVARS`);
+    }
+    for (const cultivar of listed) {
+      assert.ok(cultivar in rows,
+        `${zone}: "${cultivar}" is planted but has no row count`);
+    }
+  }
+});
