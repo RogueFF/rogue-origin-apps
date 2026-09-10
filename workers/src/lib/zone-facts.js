@@ -52,7 +52,20 @@ export const PLANTS_PER_ACRE = Math.round(43560 / (PLANT_SPACING_FT.inRow * PLAN
 
 export function zoneFacts(zone) { return ZONE_FACTS[zone] || null; }
 
-export function plantCountFor(zone) {
+export function plantCountFor(zone, share = 1) {
   const f = ZONE_FACTS[zone];
-  return f ? Math.round(f.acres * PLANTS_PER_ACRE) : null;
+  if (!f) return null;
+  if (share === null) return null;
+  return Math.round(f.acres * share * PLANTS_PER_ACRE);
+}
+
+/**
+ * Acres a lot actually occupies: the zone, scaled by the cultivar's share of
+ * its rows. Null when the split is unrecorded — see cultivarShare. Reporting
+ * the whole zone for one band of a trial block is the bug this replaces.
+ */
+export function acresFor(zone, share = 1) {
+  const f = ZONE_FACTS[zone];
+  if (!f || share === null) return null;
+  return +(f.acres * share).toFixed(3);
 }

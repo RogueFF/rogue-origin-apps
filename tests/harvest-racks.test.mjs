@@ -341,9 +341,13 @@ test('a bay outside 1-12 is refused, not clamped', async () => {
 
 test('the form defaults to the last bay filled, silently on the same day', async () => {
   const { sqlite, env, ctx } = freshDb();
+  // Minutes ago, not a pinned UTC hour. `ago(0, 15)` is today at 15:00 UTC,
+  // which is TOMORROW in Pacific terms when the suite runs late in the UTC day
+  // — so this read as a stale default and failed on the clock rather than on
+  // the code.
   sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, season, bins, bay, occurred_at, is_test)
-    VALUES ('barn_load', 'Z4', ?, 20, 7, ?, 1)`).run(SEASON, ago(0, 15));
+    VALUES ('barn_load', 'Z4', ?, 20, 7, ?, 1)`).run(SEASON, minsAgo(1));
 
   const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
   assert.match(html, /<option value="7" selected/);
@@ -865,4 +869,71 @@ test('the pre-fill follows the constant rather than a number typed in the form',
   const declared = src.match(/binsPerTrailer:\s*\{\s*value:\s*(\d+)/)[1];
   assert.match(html, new RegExp(`id="bins"[^>]*value="${declared}"`),
     `form must pre-fill the declared ${declared}`);
+});
+
+// ─── a lot's area is its own bands, not the whole zone ───────────────────────
+
+test('a trial-zone lot reports its own rows, not the whole zone', async () => {
+  // THE BUG KOA FOUND ON A PRINTED TAG. Rainbow GMO Quik is 6 of Z8's 37 rows.
+  // Reporting the zone put 0.468 ac / ~906 plants on the tag when the truth is
+  // 0.076 / ~147 — 6x over, on the denominator of every per-acre and per-plant
+  // figure, in one of the three blocks that exist to compare cultivars.
+  const { sqlite, env, ctx } = freshDb();
+  const id = sess(sqlite, { zone: 'Z8', cultivar: 'Rainbow GMO Quik',
+    opened: minsAgo(60 * 24 * 11), closed: minsAgo(60 * 24 * 11 - 240) });
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
+                               zone_session_id, bay, printed_at, is_test)
+    VALUES ('26-RAINGQ-1', ?, 1, 'Z8', 'Rainbow GMO Quik', 1, ?, 9, ?, 1)
+  `).run(SEASON, id, minsAgo(60));
+
+  const html = await (await handleSackScan(
+    new Request('https://x/s/26-RAINGQ-1?lang=en'), env, ctx)).text();
+
+  assert.match(html, /0\.076 ac/, 'six rows of Z8, not all of it');
+  assert.doesNotMatch(html, /0\.468 ac/, 'the whole zone must not appear');
+  assert.match(html, /147/, 'plants scale with the area');
+  assert.match(html, /6 of 37 rows in Z8/, 'and it says where the number came from');
+});
+
+test('a single-cultivar zone still reports the whole zone', async () => {
+  // Z4 is one cultivar, so there the zone really is the lot. This is the
+  // regression guard on the fix.
+  const { sqlite, env, ctx } = freshDb();
+  const id = sess(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter',
+    opened: minsAgo(60 * 24 * 11), closed: minsAgo(60 * 24 * 11 - 240) });
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
+                               zone_session_id, bay, printed_at, is_test)
+    VALUES ('26-SLIFT-9', ?, 9, 'Z4', 'Sour Lifter', 1, ?, 3, ?, 1)
+  `).run(SEASON, id, minsAgo(60));
+
+  const html = await (await handleSackScan(
+    new Request('https://x/s/26-SLIFT-9?lang=en'), env, ctx)).text();
+  assert.match(html, /1\.045 ac/);
+});
+
+test('every recorded row split adds back up to its zone', async () => {
+  // The arithmetic guard. If a cultivar is added to a zone page and not here,
+  // or a count is mistyped, the parts stop summing and this catches it.
+  const zc = await import(mod('workers/src/lib/zone-cultivars.js'));
+  const zf = await import(mod('workers/src/lib/zone-facts.js'));
+  for (const zone of Object.keys(zc.ZONE_CULTIVAR_ROWS)) {
+    const parts = Object.keys(zc.ZONE_CULTIVAR_ROWS[zone])
+      .reduce((t, c) => t + zf.acresFor(zone, zc.cultivarShare(zone, c)), 0);
+    const whole = zf.zoneFacts(zone).acres;
+    assert.ok(Math.abs(parts - whole) < 0.01,
+      `${zone}: parts ${parts.toFixed(3)} vs zone ${whole}`);
+  }
+});
+
+test('a cultivar missing from a split zone reads unknown, never whole-zone', async () => {
+  // The failure mode this must never regress into: something planted later,
+  // not yet in the row table, silently claiming the entire block.
+  const zc = await import(mod('workers/src/lib/zone-cultivars.js'));
+  const zf = await import(mod('workers/src/lib/zone-facts.js'));
+  const share = zc.cultivarShare('Z8', 'Something Planted Later');
+  assert.equal(share, null);
+  assert.equal(zf.acresFor('Z8', share), null);
+  assert.equal(zf.plantCountFor('Z8', share), null);
 });
