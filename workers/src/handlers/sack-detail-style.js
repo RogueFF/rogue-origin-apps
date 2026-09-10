@@ -192,10 +192,15 @@ export const SACK_DETAIL_STYLE = `
      .sd .tiles.loc .tv and .sd .tile .tv tie on specificity. */
   .sd-location { margin-top: 24px; }
   .sd .tiles.loc { grid-template-columns: repeat(2, 1fr); margin-top: 0; }
-  .sd .tiles.loc .tv { font-size: 30px; }
+  .sd .tiles.loc .tv { font-size: 30px; overflow-wrap: normal; word-break: normal; }
   .sd .batch select { display: block; width: 100%; box-sizing: border-box; min-height: 48px; margin: 0 0 12px;
     padding: 0 12px; background: #fff; color: #243d32; border: 1px solid #b4c0a9; border-radius: 8px; font-size: 16px; }
   @media (max-width: 700px) {
-    .sd .tiles.loc .tv { font-size: 22px; }
+    /* Side by side leaves ~124px a tile on a phone, and "Supermarket" split
+       mid-word there (seen live, 2026-09-10). Stacked, each gets the full width. */
+    .sd .tiles.loc { grid-template-columns: 1fr; row-gap: 16px; }
+    .sd .tiles.loc .tile { border-right: 0; }
+    .sd .tiles.loc .tile + .tile { border-top: 1px solid #cbd3c2; padding-top: 16px; }
+    .sd .tiles.loc .tv { font-size: 26px; }
   }
 `;
