@@ -45,7 +45,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
 ];
 
 function freshDb() {

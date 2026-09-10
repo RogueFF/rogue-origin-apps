@@ -36,7 +36,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
 ];
 
 function freshDb() {
@@ -165,8 +165,10 @@ test('the picker groups bays by barn', async () => {
   const html = await pickerHtml(env, ctx);
   assert.match(html, /Bottom barn \(1-8\)/);
   assert.match(html, /Top barn \(9-12\)/);
-  // 12 bays, no more and no fewer.
-  assert.equal((html.match(/<option value="\d+"/g) || []).length, 12);
+  // 12 bays, no more and no fewer — counted inside the bay picker, because the
+  // storage picker on the same form lists the same twelve.
+  const baySelect = html.match(/<select id="bay"[\s\S]*?<\/select>/)[0];
+  assert.equal((baySelect.match(/<option value="\d+"/g) || []).length, 12);
 });
 
 test('the picker is Spanish for the crew', async () => {

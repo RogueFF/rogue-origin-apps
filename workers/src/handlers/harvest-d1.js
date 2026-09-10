@@ -198,7 +198,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'crew', 'crew_set', 'sack_note', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -263,6 +263,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleCrewSet(ui, db, env, ctx, body);
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
+        case 'sack_store':
+          return await handleSackStore(ui, db, env, ctx, body);
         case 'sack_open':
           return await handleSackOpen(ui, db, env, ctx, body);
         case 'find':
@@ -472,6 +474,45 @@ async function getLastBay(db, isTest) {
     WHERE bay IS NOT NULL AND is_test = ? ORDER BY id DESC LIMIT 1
   `, [isTest]);
   return row ? row.bay : null;
+}
+
+/**
+ * Where a sack is kept between takedown and opening: one of the bays, or the
+ * Supermarket below the barns (Koa, 2026-09-10).
+ *
+ * ONE TEXT COLUMN, TWO SHAPES, ONE DOOR IN. Bays are stored as bare digits so a
+ * later CAST(storage AS INTEGER) still works; the Supermarket is stored with
+ * exactly that casing. Every write comes through here, so "supermarket" off a
+ * phone keyboard and "Supermarket" off the picker can never become two buckets
+ * in anything that groups on it.
+ *
+ * Refused rather than coerced, for the reason parseBay gives: a location read
+ * off the scan page is taken as fact by whoever goes looking for the sack.
+ */
+const SUPERMARKET = 'Supermarket';
+
+function parseStorage(raw, ui = null) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const s = String(raw).trim();
+  if (s.toLowerCase() === SUPERMARKET.toLowerCase()) return SUPERMARKET;
+  if (/^\d+$/.test(s) && barnForBay(parseInt(s, 10))) return String(parseInt(s, 10));
+  throw createError('VALIDATION_ERROR', ui
+    ? ui.t('storageInvalid', { min: BAY_MIN, max: BAY_MAX })
+    : `Storage must be a bay from ${BAY_MIN} to ${BAY_MAX}, or the ${SUPERMARKET}.`);
+}
+
+/** The one way a stored location is read back out. Null in, null out. */
+function storageLabel(ui, storage) {
+  if (storage === null || storage === undefined || storage === '') return null;
+  return storage === SUPERMARKET ? SUPERMARKET : ui.t('bayN', { n: storage });
+}
+
+async function getLastStorage(db, isTest) {
+  const row = await queryOne(db, `
+    SELECT storage FROM harvest_sacks
+    WHERE storage IS NOT NULL AND is_test = ? ORDER BY id DESC LIMIT 1
+  `, [isTest]);
+  return row ? row.storage : null;
 }
 
 /**
@@ -1039,8 +1080,9 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
 
 async function handleSackPrintForm(ui, db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const [lots, lastBay] = await Promise.all([getRecentLots(db, isTest), getLastBay(db, isTest)]);
-  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay));
+  const [lots, lastBay, lastStorage] = await Promise.all([
+    getRecentLots(db, isTest), getLastBay(db, isTest), getLastStorage(db, isTest)]);
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage));
 }
 
 /**
@@ -1207,9 +1249,10 @@ async function handleSackSession(ui, db, env, input) {
   const isTest = isTestMode(env) ? 1 : 0;
   const stats = await getLotTagStats(db, sessionId, isTest);
   const bay = parseBay(input.bay, ui);
+  const storage = parseStorage(input.storage, ui);
 
   return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, bay }));
+    sackSessionBody(ui, { lot, cultivar, stats, bay, storage }));
 }
 
 async function requireLot(db, sessionId) {
@@ -1254,6 +1297,10 @@ async function handleSackAlloc(db, env, ctx, body) {
   // prints on the tag, so a wrong one is visible on the first label rather than
   // discovered in analysis — which is the only defence a location field gets.
   const bay = parseBay(body.bay);
+  // Where the sacks go once they are down. Same once-per-session shape as the
+  // bay, and validated before a serial is spent for the same reason.
+  const storage = parseStorage(body.storage);
+  const storedAt = storage ? sqliteUtc(new Date()) : null;
 
   // MAX+1 per (season, cultivar): each cultivar counts from 1. The
   // UNIQUE(season, cultivar_code, serial) index means two simultaneous
@@ -1281,10 +1328,10 @@ async function handleSackAlloc(db, env, ctx, body) {
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, storage, stored_at, is_test)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [sackId, season, serial, code, supersackSku(code, season),
-               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, isTest],
+               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest],
     });
   }
   await transaction(db, statements);
@@ -1535,7 +1582,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  */
 const DEMO_SACKS = {
   '26-SLIFT-142': {
-    serial: 142, code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut: 1, bay: 7, lotSacks: 14,
+    serial: 142, code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut: 1, bay: 7, storage: 'Supermarket', lotSacks: 14,
     parts: { tops: 21.4, smalls: 11.9, biomass: 2.1, trim: 1.2, waste: 0.4 },
     notes: [
       { note: 'Bottom of the rack was still damp — held back a day.', at: '16:05:00' },
@@ -1543,7 +1590,7 @@ const DEMO_SACKS = {
     ],
   },
   '26-LIFT-87': {
-    serial: 87, code: 'LIFT', cultivar: 'Lifter', zone: 'Z19', cut: 1, bay: 11, lotSacks: 9,
+    serial: 87, code: 'LIFT', cultivar: 'Lifter', zone: 'Z19', cut: 1, bay: 11, storage: '3', lotSacks: 9,
     parts: { tops: 18.2, smalls: 14.6, biomass: 2.6, trim: 1.3, waste: 0.3 },
     notes: [
       { note: 'Top bay, dried fast — came down two days early.', at: '15:40:00' },
@@ -1618,6 +1665,8 @@ function demoSackView(opened, voided, id = DEMO_SACK_ID) {
       cultivar: d.cultivar, zone: d.zone, cut_number: d.cut,
       harvest_date: cut,
       bay: d.bay,
+      storage: d.storage ?? null,
+      stored_at: d.storage ? bagged + ' 14:30:00' : null,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
       // The five parts sum to the 37 lb that went into the sack, because that
@@ -1639,6 +1688,7 @@ function demoSackView(opened, voided, id = DEMO_SACK_ID) {
     areaBasis: areaBasisFor(d.zone, d.cultivar),
     growDays,
     lotSacks: d.lotSacks,
+    hangBays: [d.bay],
   };
 }
 
@@ -1659,6 +1709,27 @@ async function getSackView(db, sackId) {
       `, [sack.zone_session_id, sack.is_test])
     : null;
 
+  // Every bay this sack's LOT was hung into at the barn door — across ALL of
+  // the lot's sessions, not just the one the sack hangs off. Sacks hang off the
+  // lot's primary session, but a trailer is attributed to whichever session was
+  // open when it arrived: a crew that leaves and comes back inside the grace
+  // window, or a second crew in the zone, is a second session of the same lot.
+  // Keyed on the primary alone, this listed only some of the bays and read as
+  // complete.
+  const hang = sack.zone_session_id
+    ? await query(db, `
+        SELECT DISTINCT b.bay FROM harvest_scan_log p
+        JOIN harvest_scan_log e
+          ON e.event_type = 'enter' AND e.season = p.season AND e.zone = p.zone
+         AND e.cultivar IS p.cultivar AND e.cut_number IS p.cut_number AND e.is_test = p.is_test
+        JOIN harvest_scan_log b
+          ON b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id
+         AND b.bay IS NOT NULL AND b.is_test = p.is_test
+        WHERE p.id = ?
+        ORDER BY b.bay
+      `, [sack.zone_session_id])
+    : [];
+
   const growDays = (facts?.plantDate && sack.harvest_date)
     ? Math.round((new Date(sack.harvest_date + 'T00:00:00Z') - new Date(facts.plantDate + 'T00:00:00Z')) / 86400000)
     : null;
@@ -1677,6 +1748,7 @@ async function getSackView(db, sackId) {
     areaBasis: areaBasisFor(sack.zone, sack.cultivar),
     growDays,
     lotSacks: lot?.sacks ?? null,
+    hangBays: hang.map(r => r.bay),
   };
 }
 
@@ -2035,6 +2107,47 @@ async function handleSackNote(ui, db, env, ctx, body) {
 
   const updated = await getSackView(db, sackId);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('noteSaved')));
+}
+
+/**
+ * Set or change where a sack is kept.
+ *
+ * Refused for opened and voided sacks HERE, not only by hiding the form: an
+ * opened sack is not in storage any more, and a voided number never had a sack
+ * behind it. The form is hidden for both; this is what holds when someone posts
+ * anyway.
+ */
+async function handleSackStore(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const storage = parseStorage(body.storage, ui);
+
+  const view = await getSackView(db, sackId);
+  if (!view) {
+    const demo = demoKey(sackId);
+    if (demo) {
+      const msg = ui.lang === 'es'
+        ? 'La ubicación no se guardó — es la bolsa de ejemplo.'
+        : 'The location was not saved — it is the example sack.';
+      return renderPage(ui, `${ui.t('sack')} ${demo}`,
+        demoBanner(ui, null, msg, demo) + sackDetailBody(ui, demoSackView(false, false, demo)));
+    }
+    throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
+  }
+  if (view.sack.voided_at) throw createError('VALIDATION_ERROR', ui.t('storeVoided'));
+  if (view.sack.opened_at) throw createError('VALIDATION_ERROR', ui.t('storeOpened'));
+
+  // Only a real move restamps stored_at, so saving the same place twice does
+  // not quietly reset "since" to today.
+  await execute(db, `
+    UPDATE harvest_sacks
+    SET storage = ?, stored_at = CASE WHEN ? IS NULL THEN NULL ELSE ? END
+    WHERE sack_id = ? AND opened_at IS NULL AND voided_at IS NULL AND storage IS NOT ?
+  `, [storage, storage, sqliteUtc(new Date()), sackId, storage]);
+
+  const updated = await getSackView(db, sackId);
+  const where = storageLabel(ui, storage);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`,
+    sackDetailBody(ui, updated, where ? ui.t('storageSaved', { where }) : ui.t('storageCleared')));
 }
 
 /** e.g. 26-SL-1. Unpadded on purpose (Koa): "1, 2, 3", not "0001". */
@@ -3647,7 +3760,18 @@ function bayOptions(ui, selected) {
        + group('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX);
 }
 
-function sackPrintFormBody(ui, lots, lastBay = null) {
+/**
+ * Storage picker: not yet, the Supermarket, then the bays by barn. "Not yet" is
+ * a real answer — sacks get stacked before anyone decides where they live, and
+ * a guessed location is worse than an empty one.
+ */
+function storageOptions(ui, selected) {
+  return `<option value=""${selected ? '' : ' selected'}>${ui.t('storageNotYet')}</option>`
+    + `<option value="${SUPERMARKET}"${selected === SUPERMARKET ? ' selected' : ''}>${SUPERMARKET}</option>`
+    + bayOptions(ui, selected);
+}
+
+function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
   if (!lots.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
@@ -3701,6 +3825,8 @@ function sackPrintFormBody(ui, lots, lastBay = null) {
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
   <label for="bay">${ui.t('bay')} <span class="hint">${lastBay ? ui.t('bayHintLast', { n: lastBay }) : ui.t('bayHint')}</span></label>
   <select id="bay" name="bay" required>${bayOptions(ui, lastBay)}</select>
+  <label for="storage">${ui.t('storageField')} <span class="hint">${lastStorage ? ui.t('storageHintLast', { where: escapeHtml(storageLabel(ui, lastStorage)) }) : ui.t('storageHint')}</span></label>
+  <select id="storage" name="storage">${storageOptions(ui, lastStorage)}</select>
   <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
 
@@ -3741,7 +3867,7 @@ function sackPrintFormBody(ui, lots, lastBay = null) {
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null }) {
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -3749,11 +3875,16 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
   const bayLine = bay
     ? `<div class="lot-meta">${ui.t('bayN', { n: bay })} · ${ui.t(barn === 'bottom' ? 'bottomBarn' : 'topBarn')}</div>`
     : `<div class="lot-meta">${ui.t('noBaySet')}</div>`;
+  // Beside the bay for the same reason: it rides every sack printed from here.
+  const storageLine = `<div class="lot-meta">${storage
+    ? ui.t('storedInWhere', { where: escapeHtml(storageLabel(ui, storage)) })
+    : ui.t('storageNotSet')}</div>`;
   return `
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
   ${bayLine}
+  ${storageLine}
 </div>
 
 <button id="printBtn" class="bigbtn">${ui.t('printTag')}</button>
@@ -3832,7 +3963,7 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null }) {
     fetch('${API}?action=sack_alloc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay} })
+      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)} })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -4399,7 +4530,7 @@ ${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
 }
 
 function sackDetailBody(ui, view, flash) {
-  const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks, areaBasis } = view;
+  const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks, areaBasis, hangBays = [] } = view;
   const opened = !!sack.opened_at;
   const voided = !!sack.voided_at;
   const DASH = '—';
@@ -4441,6 +4572,38 @@ function sackDetailBody(ui, view, flash) {
   <div class="tile"><span class="tl">${ui.t('kSinceCut')}</span><strong class="tv">${dShort(sinceCut)}</strong><span class="ts">${sack.harvest_date ? fmtDate(sack.harvest_date) : DASH}</span></div>
   <div class="tile"><span class="tl">${ui.t('kInLot')}</span><strong class="tv">${lotSacks != null ? Number(lotSacks).toLocaleString('en-US') : DASH}</strong><span class="ts">${lotSacks === 1 ? ui.t('kSack') : ui.t('kSacks')}</span></div>
 </div>`;
+
+  // ── Location: where it dried, where it is now ──
+  // Its own panel at tile size. The drying bay already rode the journey as a
+  // hint, and Koa — holding the page — could not tell it was there (2026-09-10).
+  const driedBarn = barnForBay(sack.bay);
+  const otherHang = hangBays.filter(b => b !== sack.bay);
+  // The lot's other bays only when they add something; a lot hung in the one
+  // bay this sack came out of says nothing new.
+  const driedSub = otherHang.length
+    ? ui.t(hangBays.length === 1 ? 'lotHungInOne' : 'lotHungIn', { list: hangBays.join(', ') })
+    : (driedBarn ? ui.t(driedBarn === 'bottom' ? 'bottomBarn' : 'topBarn') : ui.t('noBaySet'));
+  const storedWhere = storageLabel(ui, sack.storage);
+  const storedSub = storedWhere
+    ? (sack.stored_at ? ui.t('storedSince', { d: fmtDate(String(sack.stored_at).slice(0, 10)) }) : '')
+    : ui.t('storageNone');
+  const canMove = !opened && !voided;
+  const location = `
+<section class="sd-panel sd-location" aria-labelledby="sack-location">
+<h2 id="sack-location">${ui.t('secLocation')}</h2>
+<div class="tiles loc">
+  <div class="tile"><span class="tl">${ui.t('locDried')}</span><strong class="tv">${sack.bay ? escapeHtml(ui.t('bayN', { n: sack.bay })) : DASH}</strong><span class="ts">${driedSub}</span></div>
+  <div class="tile"><span class="tl">${ui.t('locStored')}</span><strong class="tv">${storedWhere ? escapeHtml(storedWhere) : DASH}</strong><span class="ts">${storedSub}</span></div>
+</div>
+${canMove ? `<details class="batch">
+  <summary>${ui.t('storeChange')}</summary>
+  <form method="POST" action="/api/harvest?action=sack_store&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+    <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+    <select name="storage" aria-label="${ui.t('locStored')}">${storageOptions(ui, sack.storage)}</select>
+    <button class="btn" type="submit">${ui.t('storeSave')}</button>
+  </form>
+</details>` : ''}
+</section>`;
 
   // ── Weights ──
   // No weight entry here on purpose. Nobody weighs a bag's output on its own —
@@ -4596,6 +4759,7 @@ function sackDetailBody(ui, view, flash) {
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
 ${tiles}
+${location}
 
 <div class="sd-columns">
 <section class="sd-panel" aria-labelledby="sack-weights">

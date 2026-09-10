@@ -188,4 +188,14 @@ export const SACK_DETAIL_STYLE = `
     .sd .tile .ts { font-size: 12px; }
     .sd .wtop .tv { font-size: 42px; }
   }
+  /* Location: where it dried, where it is now. After every .tile rule, because
+     .sd .tiles.loc .tv and .sd .tile .tv tie on specificity. */
+  .sd-location { margin-top: 24px; }
+  .sd .tiles.loc { grid-template-columns: repeat(2, 1fr); margin-top: 0; }
+  .sd .tiles.loc .tv { font-size: 30px; }
+  .sd .batch select { display: block; width: 100%; box-sizing: border-box; min-height: 48px; margin: 0 0 12px;
+    padding: 0 12px; background: #fff; color: #243d32; border: 1px solid #b4c0a9; border-radius: 8px; font-size: 16px; }
+  @media (max-width: 700px) {
+    .sd .tiles.loc .tv { font-size: 22px; }
+  }
 `;

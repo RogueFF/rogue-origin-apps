@@ -1,0 +1,24 @@
+-- Where a supersack is kept between takedown and opening.
+--
+-- Koa, 2026-09-10: "can we add what bay it was hung/dried in, and what bay it's
+-- stored in" — "its the same bays 1-12 along with a supermarket down below
+-- (can be called Supermarket)". The drying bay was already on the sack
+-- (harvest_sacks.bay, 0028). Where the sack went afterwards was recorded
+-- nowhere.
+--
+-- ON THE SACK, NOT THE LOT. Sacks off one rack are stacked in more than one
+-- place, and they move after that; a lot-level column could only ever be right
+-- for the first bag.
+--
+-- ONE TEXT COLUMN, TWO SHAPES: bare digits for a bay ('4', so a later
+-- CAST(storage AS INTEGER) still works) or exactly 'Supermarket'. Validated in
+-- the worker, not with a CHECK — a CHECK would bake BAY_MAX = 12 into the
+-- schema, and the next bay added would need a table rebuild on a live season.
+--
+-- NULLABLE ON PURPOSE. "Not decided yet" is a real state at takedown, and a
+-- guessed location read off a scan page is worse than an empty one.
+--
+-- stored_at is when it was last put THERE — restamped only when the location
+-- actually changes, so "since" on the scan page means what it says.
+ALTER TABLE harvest_sacks ADD COLUMN storage TEXT;
+ALTER TABLE harvest_sacks ADD COLUMN stored_at TEXT;
