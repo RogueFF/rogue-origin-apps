@@ -2962,7 +2962,7 @@ async function getMetrics(request, db, env, params, body) {
   // above, because cadence, crew rates and the feed are all season figures and
   // would be wrong if last year's rows leaked into them.
   const prev = season - 1;
-  const [rawSessions, loads, sacks, rackLoads, rackSacks] = await Promise.all([
+  const [rawSessions, loads, sacks, rackLoads, rackSacks, unopenedSacks] = await Promise.all([
     query(db, `
       SELECT id, zone, cultivar, cut_number, crew, occurred_at, closed_at, headcount
       FROM harvest_scan_log
@@ -2989,6 +2989,15 @@ async function getMetrics(request, db, env, params, body) {
       FROM harvest_sacks
       WHERE bay IS NOT NULL AND season IN (?, ?) AND is_test = ? AND voided_at IS NULL
       ORDER BY printed_at ASC`, [prev, season, isTest]),
+    // Where the tagged sacks are kept. NOT bay-filtered — a sack can be stored
+    // with no drying bay recorded — and over the same two seasons as the racks,
+    // because a sack stored in December is still in the building in January.
+    // Rows with no storage come too, so the board can count them.
+    query(db, `
+      SELECT sack_id, season, zone, cultivar, cut_number, storage, stored_at
+      FROM harvest_sacks
+      WHERE season IN (?, ?) AND is_test = ? AND voided_at IS NULL AND opened_at IS NULL`,
+      [prev, season, isTest]),
   ]);
 
   const sessions = rawSessions.map(s => ({
@@ -3005,6 +3014,7 @@ async function getMetrics(request, db, env, params, body) {
     dryWindow: { min: DRY_DAYS_MIN, typical: DRY_DAYS_TYPICAL, max: DRY_DAYS_MAX },
     rackLoads,
     rackSacks,
+    unopenedSacks,
     bottomBarnLastBay: BOTTOM_BARN_LAST_BAY,
     bayCount: BAY_MAX,
   });

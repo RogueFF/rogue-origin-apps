@@ -142,6 +142,13 @@ export function dashPage() {
   .rack.overdue .st { color:var(--clay); }
   .rack.coming .st  { color:var(--sky); }
   .rack.vacant .st  { color:var(--muted); }
+  /* Storage: tagged sacks sitting in a bay or the Supermarket. Its own lane,
+     because a bay holding bags is not empty and must never be faded like one. */
+  .rack.stored::before { background:var(--plum); }
+  .rack.stored .st  { color:var(--plum); }
+  .rack .stash { margin-top:9px; padding-top:7px; border-top:1px dashed var(--line2); }
+  .rack .stash .st  { color:var(--plum); }
+  .racks.market { grid-template-columns:1fr; }
   .rack ul { list-style:none; margin:7px 0 0; padding:0; }
   .rack li { font-size:.76rem; color:var(--ink2); display:flex; justify-content:space-between;
              gap:8px; padding:1px 0; }
@@ -495,6 +502,7 @@ export function dashPage() {
   // 5 ── what is hanging where, right now
   function cardRacks(d) {
     var racks = d.racks || [];
+    var st = d.storage || { total: 0, in_bays: 0, unrecorded: 0, supermarket: { sacks: 0, lots: [] } };
     var hung = 0, binsUp = 0, oldest = null;
     for (var k = 0; k < racks.length; k++) {
       if (racks[k].state !== 'hanging') continue;
@@ -503,13 +511,25 @@ export function dashPage() {
       if (oldest === null || racks[k].days > oldest) oldest = racks[k].days;
     }
 
+    function sacksWord(n) { return n === 1 ? 'sack' : 'sacks'; }
+    function storedList(lots) {
+      return '<ul>' + lots.map(function (l) {
+        var name = esc(l.zone) + ' · ' + esc(l.cultivar || '—') + (l.cut_number ? ' c' + l.cut_number : '') +
+          (l.season && l.season !== d.season ? ' (' + esc(String(l.season)) + ')' : '');
+        return '<li><b>' + name + '</b><span>' + l.sacks + ' ' + sacksWord(l.sacks) + '</span></li>';
+      }).join('') + '</ul>';
+    }
+
     var bottom = [], top = [];
     for (var i = 0; i < racks.length; i++) {
       var r = racks[i];
       // The colour lane says the state AND, while hanging, whether it is ready.
       // Coming down gets its own lane rather than a readiness colour: the
       // question has already been answered for that bay.
-      var cls = r.state === 'empty' ? 'vacant'
+      var kept = r.stored_sacks || 0;
+      // A bay with nothing hanging but bags stacked in it is STORED, not vacant:
+      // fading it would say empty about a bay that is full of sacks.
+      var cls = r.state === 'empty' ? (kept ? 'stored' : 'vacant')
         : r.state === 'coming_down' ? 'coming' : r.level;
       var word = r.state === 'empty' ? 'empty'
         : r.state === 'coming_down' ? 'coming down' : 'hanging';
@@ -522,18 +542,42 @@ export function dashPage() {
       }).join('');
 
       var body = r.state === 'empty'
-        ? '<div class="age">—</div><div class="st">empty</div>'
+        ? (kept
+            ? '<div class="age">' + kept + '<small>' + sacksWord(kept) + '</small></div>' +
+              '<div class="st">stored</div>' + storedList(r.stored_lots)
+            : '<div class="age">—</div><div class="st">empty</div>')
         : '<div class="age">' + r.days + '<small>d</small></div>' +
-          '<div class="st">' + word + '</div>' + '<ul>' + lots + '</ul>';
+          '<div class="st">' + word + '</div>' + '<ul>' + lots + '</ul>' +
+          (kept ? '<div class="stash"><div class="st">+ ' + kept + ' ' + sacksWord(kept) + ' stored</div>' +
+            storedList(r.stored_lots) + '</div>' : '');
 
       var cell = '<div class="rack ' + cls + '"><div class="n"><span class="bn">Bay ' + r.bay + '</span>' +
         (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + '</div>';
       (r.barn === 'top' ? top : bottom).push(cell);
     }
 
+    var sm = st.supermarket;
+    var market = '<div class="baygroup"><h3>Supermarket · below the barns</h3><div class="racks market">' +
+      '<div class="rack ' + (sm.sacks ? 'stored' : 'vacant') + '"><div class="n"><span class="bn">Supermarket</span></div>' +
+      (sm.sacks
+        ? '<div class="age">' + sm.sacks + '<small>' + sacksWord(sm.sacks) + '</small></div>' +
+          '<div class="st">stored</div>' + storedList(sm.lots)
+        : '<div class="age">—</div><div class="st">no sacks recorded here</div>') +
+      '</div></div></div>' +
+      (st.total || st.unrecorded
+        ? '<p class="caveat">' +
+          (st.unrecorded
+            ? '<b>' + st.unrecorded + ' unopened ' + sacksWord(st.unrecorded) + '</b> from this season and last ' +
+              (st.unrecorded === 1 ? 'has' : 'have') + ' no storage recorded — scan the tag and set it. '
+            : '') +
+          'A sack counts as stored until it is <b>opened</b>: opening is the only exit the system records, ' +
+          'so one that leaves the farm unopened still shows here.</p>'
+        : '');
+
     return '<section class="card"><h2>On the racks right now</h2>' +
-      '<p class="lede">What is hanging in which bay, and how long it has been up there. ' +
-      'The bay is recorded at the barn door when the trailer is logged.</p>' +
+      '<p class="lede">What is hanging in which bay, how long it has been up there, and where the ' +
+      'tagged sacks are stored. The bay is recorded at the barn door when the trailer is logged; ' +
+      'storage when the rack comes down, or later by scanning the tag.</p>' +
       '<div class="strip" style="margin:0 0 16px">' +
       '<div class="tile"><div class="k">Bays hanging</div><div class="v">' + hung + '</div>' +
       '<div class="n">of ' + racks.length + '</div></div>' +
@@ -541,19 +585,23 @@ export function dashPage() {
       '<div class="n">still drying</div></div>' +
       '<div class="tile"><div class="k">Longest up</div><div class="v">' +
       (oldest == null ? '—' : oldest + ' d') + '</div><div class="n">' +
-      (oldest == null ? 'nothing hanging' : 'ready at ' + d.dry_window.min + ' d') + '</div></div></div>' +
-      (hung || racks.some(function (r) { return r.state !== 'empty'; })
+      (oldest == null ? 'nothing hanging' : 'ready at ' + d.dry_window.min + ' d') + '</div></div>' +
+      '<div class="tile"><div class="k">Sacks in storage</div><div class="v">' + st.total + '</div>' +
+      '<div class="n">' + st.supermarket.sacks + ' in the Supermarket</div></div></div>' +
+      (hung || st.total || racks.some(function (r) { return r.state !== 'empty'; })
         ? '<div class="baygroup"><h3>Bottom barn · bays 1–8</h3><div class="racks">' + bottom.join('') + '</div></div>' +
           '<div class="baygroup"><h3>Top barn · bays 9–12</h3><div class="racks">' + top.join('') + '</div></div>'
         : '<p class="lede">No bay has been recorded at intake yet. Every bay below reads empty because ' +
           'nothing has been logged, not because the barn is.</p>' +
           '<div class="baygroup"><h3>Bottom barn · bays 1–8</h3><div class="racks">' + bottom.join('') + '</div></div>' +
           '<div class="baygroup"><h3>Top barn · bays 9–12</h3><div class="racks">' + top.join('') + '</div></div>') +
+      market +
       '<div class="legend"><span><i style="background:var(--straw)"></i>hanging, under ' +
       d.dry_window.min + ' d</span>' +
       '<span><i style="background:var(--leaf)"></i>hanging, in the window</span>' +
       '<span><i style="background:var(--clay)"></i>hanging, past ' + d.dry_window.max + ' d</span>' +
-      '<span><i style="background:var(--sky)"></i>coming down</span></div>' +
+      '<span><i style="background:var(--sky)"></i>coming down</span>' +
+      '<span><i style="background:var(--plum)"></i>sacks in storage</span></div>' +
       '<p class="caveat">A bay is <b>coming down</b> from the first sack tagged out of it, and stays that ' +
       'way until a fresh load is hung there. Nothing records the moment a bay is emptied — the takedown ' +
       'screen picks a bay and writes it on the sack, and that is all — so the board can say when takedown ' +

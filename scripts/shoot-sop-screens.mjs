@@ -11,6 +11,13 @@
  * Writes into the wiki repo. The one shot that needs state (the end-of-day
  * close) creates a single is_test session, takes the picture, and deletes it —
  * scan_log rows only, so no bag serial is ever consumed.
+ *
+ * SHOTS THAT WRITE ARE OPT-IN (2026-09-10). Pointed at production, /z/Z4 OPENS
+ * a zone session and /fin CLOSES the crew's open ones. That was harmless in
+ * test mode; with the season live they are real records. Both are skipped
+ * unless --allow-writes is passed, and --only= narrows a run to named shots:
+ *
+ *   node scripts/shoot-sop-screens.mjs en --only=sack-scan
  */
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -21,9 +28,11 @@ const OUT = 'C:/Users/Koasm/Documents/RogueFamilyFarms/wiki/operations/images';
 
 const SHOTS = [
   { file: 'crew-card',   url: '/c/A',  note: 'crew card, scanned once per phone' },
-  { file: 'zone-scan',   url: '/z/Z4', note: 'zone sign' },
+  { file: 'zone-scan',   url: '/z/Z4', note: 'zone sign', writes: true },
   { file: 'barn-intake', url: '/b/1',  note: 'barn door 1' },
-  { file: 'sack-scan',   url: '/s/26-SLIFT-142?opened=1', note: 'a tag scanned' },
+  // Cropped to the Location panel: the page grew past 844px when the redesign
+  // landed, and the plain cap cut "Stored in" off mid-tile (2026-09-10).
+  { file: 'sack-scan',   url: '/s/26-SLIFT-142?opened=1', note: 'a tag scanned', until: '.sd-location' },
 ];
 
 // Both languages. The crew screens carry a real English toggle, so an English
@@ -36,7 +45,14 @@ const SHOTS = [
 // session — in front of the second pass's /fin, so the English shot closed
 // that instead and read 0.0 hours. Same trap as the ordering above, one level
 // up: every screenshot of this system is also a use of it.
-const LANG = (process.argv[2] || 'es') === 'en' ? 'en' : 'es';
+const ARGS = process.argv.slice(2);
+const LANG = ARGS.includes('en') ? 'en' : 'es';
+const ALLOW_WRITES = ARGS.includes('--allow-writes');
+const ONLY = (ARGS.find(a => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
+const wanted = (file) => !ONLY.length || ONLY.includes(file);
+const skipWrite = (file) => {
+  console.log(`  skipped ${file} — it writes to production; pass --allow-writes`);
+};
 
 /**
  * Clipped to the content, not the handset.
@@ -45,16 +61,24 @@ const LANG = (process.argv[2] || 'es') === 'en' ? 'en' : 'es';
  * empty dark green — which on a printed sheet is a third of a page of nothing,
  * and in an embedded page is bytes for no picture.
  */
-const shoot = async (page, path) => {
-  const h = await page.evaluate(() => {
+const shoot = async (page, path, until = null) => {
+  const h = await page.evaluate((sel) => {
+    // With `until`, the crop ends under that element — a panel that must be
+    // whole in the picture — instead of at the handset's height.
+    if (sel) {
+      const el = document.querySelector(sel);
+      if (!el) throw new Error(`shot crop target ${sel} not on the page`);
+      return Math.ceil(el.getBoundingClientRect().bottom + 14);
+    }
     let bottom = 0;
     for (const el of document.body.querySelectorAll('*')) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) bottom = Math.max(bottom, r.bottom);
     }
     return Math.ceil(bottom + 14);
-  });
-  await page.screenshot({ path, clip: { x: 0, y: 0, width: 390, height: Math.min(h, 844) } });
+  }, until);
+  // A named target sets its own height; the 844 cap is for whole-page shots.
+  await page.screenshot({ path, clip: { x: 0, y: 0, width: 390, height: until ? h : Math.min(h, 844) }, fullPage: !!until });
 };
 
 const run = async () => {
@@ -75,18 +99,26 @@ const run = async () => {
   const q = (u) => u + (u.includes('?') ? '&' : '?') + 'lang=' + LANG;
 
   // /fin first — see the note on LANG above.
-  await page.goto(q(BASE + '/fin'), { waitUntil: 'networkidle' });
-  await shoot(page, join(OUT, `sop-day-end-${LANG}.png`));
-  console.log(`  sop-day-end-${LANG}.png  <- /fin`);
+  if (wanted('day-end')) {
+    if (!ALLOW_WRITES) skipWrite('day-end');
+    else {
+      await page.goto(q(BASE + '/fin'), { waitUntil: 'networkidle' });
+      await shoot(page, join(OUT, `sop-day-end-${LANG}.png`));
+      console.log(`  sop-day-end-${LANG}.png  <- /fin`);
+    }
+  }
 
   for (const s2 of SHOTS) {
+    if (!wanted(s2.file)) continue;
+    if (s2.writes && !ALLOW_WRITES) { skipWrite(s2.file); continue; }
     await page.goto(q(BASE + s2.url), { waitUntil: 'networkidle' });
-    await shoot(page, join(OUT, `sop-${s2.file}-${LANG}.png`));
+    await shoot(page, join(OUT, `sop-${s2.file}-${LANG}.png`), s2.until || null);
     console.log(`  sop-${s2.file}-${LANG}.png  <- ${s2.url}`);
   }
   await ctx.close();
 
   // The tag prints the same in either language, so it is shot once.
+  if (!wanted('tag')) { await browser.close(); return; }
   const wide = await browser.newContext({ viewport: { width: 900, height: 700 }, deviceScaleFactor: 2 });
   const wp = await wide.newPage();
   await wp.goto(BASE + '/api/harvest?action=sack_label&examples=1&lang=es', { waitUntil: 'networkidle' });
