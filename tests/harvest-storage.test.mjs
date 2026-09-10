@@ -82,11 +82,11 @@ function freshDb() {
 }
 
 /** A zone session. Two with the same zone, cultivar and cut are one lot. */
-function seedSession(sqlite, { zone = 'Z4', cultivar = 'Sour Lifter', cut = 1 } = {}) {
+function seedSession(sqlite, { zone = 'Z4', cultivar = 'Sour Lifter', cut = 1, crew = null } = {}) {
   sqlite.prepare(`
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, is_test)
-    VALUES ('enter', ?, ?, ?, ?, datetime('now','-12 days'), datetime('now','-11 days'), 1)
-  `).run(zone, cultivar, SEASON, cut);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, occurred_at, closed_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, datetime('now','-12 days'), datetime('now','-11 days'), 1)
+  `).run(zone, cultivar, SEASON, cut, crew);
   return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
 }
 
@@ -185,6 +185,20 @@ test('the takedown picker asks where the sacks go, and remembers the last answer
   assert.doesNotMatch(sel, /<option value="" selected>/);
 });
 
+test('a storage default from another day is not pre-selected, and says so', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, bay: 9, storage: 'Supermarket' });
+  // Two UTC days back is always a different Pacific day, whatever the clock.
+  sqlite.prepare("UPDATE harvest_sacks SET printed_at = datetime('now', '-2 days')").run();
+
+  const html = await pickerHtml(env, ctx);
+  const sel = html.match(/<select id="storage"[\s\S]*?<\/select>/)[0];
+  assert.match(sel, /<option value="" selected>Not yet</);
+  assert.doesNotMatch(sel, /<option value="Supermarket" selected>/);
+  assert.match(html, /Last was Supermarket, on another day/);
+});
+
 test('the takedown session shows the storage and posts it with every print', async () => {
   const { sqlite, env, ctx } = freshDb();
   const lot = seedSession(sqlite);
@@ -239,8 +253,11 @@ test('the scan page is Spanish for the crew', async () => {
 
 test('the lot\'s hang bays come from every session of the lot, not only the primary', async () => {
   const { sqlite, env, ctx } = freshDb();
-  const primary = seedSession(sqlite);
-  const sibling = seedSession(sqlite);                 // same zone, cultivar, cut: the crew came back
+  // Two crews in one zone on the same cut are ONE lot (lotKey has no crew in
+  // it), so both crews' trailers belong on the page. A join that also matched
+  // crew would drop crew B's bay and still look complete.
+  const primary = seedSession(sqlite, { crew: 'A' });
+  const sibling = seedSession(sqlite, { crew: 'B' });
   const otherCut = seedSession(sqlite, { cut: 2 });    // a different lot entirely
   seedLoad(sqlite, primary, 9);
   seedLoad(sqlite, sibling, 5);

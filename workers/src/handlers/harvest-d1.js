@@ -507,12 +507,23 @@ function storageLabel(ui, storage) {
   return storage === SUPERMARKET ? SUPERMARKET : ui.t('bayN', { n: storage });
 }
 
+/**
+ * The last storage used, and whether it was used TODAY (Pacific).
+ *
+ * Only a same-day answer is pre-selected. Yesterday's rack going to the
+ * Supermarket says nothing about where today's goes, and a carried-over place
+ * arrives on the form looking like a decision nobody made — the same trap the
+ * intake bay names with bayStale. A stale one is named in the hint instead,
+ * and the picker starts at "Not yet".
+ */
 async function getLastStorage(db, isTest) {
   const row = await queryOne(db, `
-    SELECT storage FROM harvest_sacks
+    SELECT storage, printed_at FROM harvest_sacks
     WHERE storage IS NOT NULL AND is_test = ? ORDER BY id DESC LIMIT 1
   `, [isTest]);
-  return row ? row.storage : null;
+  if (!row) return null;
+  const today = !!row.printed_at && pacificDay(parseSqliteUtc(row.printed_at)) === pacificToday();
+  return { storage: row.storage, today };
 }
 
 /**
@@ -3825,8 +3836,10 @@ function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
   <label for="bay">${ui.t('bay')} <span class="hint">${lastBay ? ui.t('bayHintLast', { n: lastBay }) : ui.t('bayHint')}</span></label>
   <select id="bay" name="bay" required>${bayOptions(ui, lastBay)}</select>
-  <label for="storage">${ui.t('storageField')} <span class="hint">${lastStorage ? ui.t('storageHintLast', { where: escapeHtml(storageLabel(ui, lastStorage)) }) : ui.t('storageHint')}</span></label>
-  <select id="storage" name="storage">${storageOptions(ui, lastStorage)}</select>
+  <label for="storage">${ui.t('storageField')} <span class="hint">${!lastStorage ? ui.t('storageHint')
+    : ui.t(lastStorage.today ? 'storageHintLast' : 'storageHintStale',
+        { where: escapeHtml(storageLabel(ui, lastStorage.storage)) })}</span></label>
+  <select id="storage" name="storage">${storageOptions(ui, lastStorage?.today ? lastStorage.storage : null)}</select>
   <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
 
