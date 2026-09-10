@@ -29,7 +29,7 @@ const MIGRATIONS = [
   '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
-  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql',
+  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
 ];
 
 const sqlite = new DatabaseSync(':memory:');
@@ -85,13 +85,14 @@ const insLoad = (zone, bins, crew, when, sessionId, bay) => sqlite.prepare(`
 `).run(zone, SEASON, bins, crew, when, sessionId, bay ?? null);
 
 let serial = 0;
-const insSack = (zone, cultivar, cut, sessionId, bay, printedAt, openedAt) => {
+const insSack = (zone, cultivar, cut, sessionId, bay, printedAt, openedAt, storage = null) => {
   serial += 1;
   sqlite.prepare(`
     INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number,
-                               zone_session_id, bay, printed_at, opened_at, is_test)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `).run(`26-SL-${serial}`, SEASON, serial, zone, cultivar, cut, sessionId, bay, printedAt, openedAt || null);
+                               zone_session_id, bay, printed_at, opened_at, storage, stored_at, is_test)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(`26-SL-${serial}`, SEASON, serial, zone, cultivar, cut, sessionId, bay, printedAt, openedAt || null,
+         storage, storage ? printedAt : null);
 };
 
 /** One zone worked for a stretch, with trailers arriving at a believable pace. */
@@ -134,20 +135,24 @@ insLoad('Z3', 17, 'A', at(4, 23, 30), null);
 // three verdicts the takedown picker can give — otherwise the chart's own
 // warning bands would never have a bar in them and the first real green or
 // overdue lot would be the first time anyone saw what one looks like.
+// `store` is where the sacks went. Chosen so the board draws every storage
+// shape: the Supermarket, a bay holding ONLY sacks (7, 12), a bay hanging a
+// fresh fill that also holds sacks (6), and one lot with nothing recorded.
 const takedowns = [
-  { i: 0, zone: 'Z1',  cv: 'Sour Lifter', bay: 1,  day: 10, n: 6, opened: 3 },  // 10.8 d
-  { i: 1, zone: 'Z9',  cv: 'Sour Lifter', bay: 9,  day: 10, n: 5, opened: 2 },  // 10.8 d
-  { i: 2, zone: 'Z2',  cv: 'Sour Lifter', bay: 2,  day: 12, n: 7, opened: 2 },  // 11.8 d
-  { i: 3, zone: 'Z11', cv: 'Sour Lifter', bay: 9,  day: 12, n: 5, opened: 0 },  // 11.8 d
-  { i: 4, zone: 'Z3',  cv: 'Sour Lifter', bay: 3,  day: 7,  n: 4, opened: 0 },  //  5.8 d — too green
-  { i: 5, zone: 'Z12', cv: 'Sour Lifter', bay: 10, day: 25, n: 6, opened: 1 },  // 23.8 d — overdue
-  { i: 6, zone: 'Z19', cv: 'Lifter',      bay: 4,  day: 13, n: 8, opened: 1 },  // 10.8 d
+  { i: 0, zone: 'Z1',  cv: 'Sour Lifter', bay: 1,  day: 10, n: 6, opened: 3, store: 'Supermarket' },  // 10.8 d
+  { i: 1, zone: 'Z9',  cv: 'Sour Lifter', bay: 9,  day: 10, n: 5, opened: 2, store: '12' },           // 10.8 d
+  { i: 2, zone: 'Z2',  cv: 'Sour Lifter', bay: 2,  day: 12, n: 7, opened: 2, store: 'Supermarket' },  // 11.8 d
+  { i: 3, zone: 'Z11', cv: 'Sour Lifter', bay: 9,  day: 12, n: 5, opened: 0, store: '7' },            // 11.8 d
+  { i: 4, zone: 'Z3',  cv: 'Sour Lifter', bay: 3,  day: 7,  n: 4, opened: 0, store: null },           //  5.8 d — too green
+  { i: 5, zone: 'Z12', cv: 'Sour Lifter', bay: 10, day: 25, n: 6, opened: 1, store: '6' },            // 23.8 d — overdue
+  { i: 6, zone: 'Z19', cv: 'Lifter',      bay: 4,  day: 13, n: 8, opened: 1, store: 'Supermarket' },  // 10.8 d
 ];
 for (const t of takedowns) {
   for (let k = 0; k < t.n; k++) {
     insSack(t.zone, t.cv, 1, s[t.i], t.bay,
       at(t.day, 18, k * 9),
-      k < t.opened ? at(t.day + 9 + k * 4, 19, 20) : null);
+      k < t.opened ? at(t.day + 9 + k * 4, 19, 20) : null,
+      t.store);
   }
 }
 

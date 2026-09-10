@@ -408,9 +408,26 @@ test('the demo fixture shows every state the board can be in', async () => {
   // hanging since day 0, and not as still coming down.
   const one = r.find(x => x.bay === 1);
   assert.equal(one.state, 'hanging');
-  assert.ok(one.days < 5, `bay 1 should be a young refill, got ${one.days}`);
+  // Checked by WHEN IT WAS HUNG, not by its age. The fixture's dates are fixed,
+  // so every age in it grows with the day it is regenerated: "under 5 days"
+  // passed on 2026-09-06 and failed on 09-10 with nothing wrong. What the fill
+  // model has to get right is which load started the fill — the day-33 refill,
+  // not the day-0 original — and that does not move with the clock.
+  const z1 = DEMO_METRICS.lots.find(l => l.zone === 'Z1');
+  const sinceOriginal = (new Date(one.hung_at) - new Date(z1.cut_date + 'T00:00:00Z')) / 86400000;
+  assert.ok(sinceOriginal > 30,
+    `bay 1 should be the day-33 refill, but it was hung ${sinceOriginal.toFixed(1)} d after Z1's cut`);
   assert.equal(one.lots.length, 1);
   assert.equal(one.lots[0].zone, 'Z21');
+
+  // Storage is drawn too — the Supermarket, a bay holding only sacks, a hanging
+  // bay that also holds sacks, and sacks with nothing recorded. Otherwise a
+  // regeneration could flatten it and the purple lane would never be seen.
+  const kept = DEMO_METRICS.storage;
+  assert.ok(kept && kept.supermarket.sacks > 0, 'the Supermarket holds sacks');
+  assert.ok(r.some(x => x.state === 'empty' && x.stored_sacks > 0), 'a bay holding only sacks');
+  assert.ok(r.some(x => x.state !== 'empty' && x.stored_sacks > 0), 'a hanging bay that also holds sacks');
+  assert.ok(kept.unrecorded > 0, 'and unopened sacks with no storage recorded');
 
   // Nothing in the fixture may be dated ahead of the clock. The window is 34
   // days long — the last sack is opened nine days after a takedown that is
@@ -956,4 +973,54 @@ test('the row table and the cultivar list name the same cultivars', async () => 
         `${zone}: "${cultivar}" is planted but has no row count`);
     }
   }
+});
+
+// ─── storage: where the tagged sacks are kept ────────────────────────────────
+
+const U = (o) => ({ sack_id: o.id, season: o.season ?? SEASON, zone: o.zone ?? 'Z4',
+  cultivar: o.cultivar ?? 'Sour Lifter', cut_number: o.cut ?? 1, storage: o.storage ?? null, stored_at: null });
+const BASE = { lots: [LOT], sessions: SESSIONS, loads: [], sacks: [], dryWindow: DRY,
+  bottomBarnLastBay: 8, bayCount: 12, nowMs: NOW };
+
+test('stored sacks land on their bay and in the Supermarket, grouped by lot', () => {
+  const d = buildMetrics({ ...BASE, unopenedSacks: [
+    U({ id: 'a', storage: '7' }), U({ id: 'b', storage: '7' }),
+    U({ id: 'c', storage: '7', zone: 'Z8', cultivar: 'Rainbow GMO Quik' }),
+    U({ id: 'd', storage: 'Supermarket' }),
+    U({ id: 'e', storage: null }),
+  ] });
+  const seven = bay(d, 7);
+  // Nothing hanging in 7 — drying and storage are separate facts about a bay.
+  assert.equal(seven.state, 'empty');
+  assert.equal(seven.stored_sacks, 3);
+  assert.deepEqual(seven.stored_lots.map(l => [l.zone, l.cultivar, l.sacks]),
+    [['Z4', 'Sour Lifter', 2], ['Z8', 'Rainbow GMO Quik', 1]]);
+  assert.ok(d.racks.filter(r => r.bay !== 7).every(r => r.stored_sacks === 0));
+  assert.equal(d.storage.supermarket.sacks, 1);
+  assert.equal(d.storage.in_bays, 3);
+  assert.equal(d.storage.total, 4);
+  assert.equal(d.storage.unrecorded, 1);
+});
+
+test('a bay can be hanging a trailer and holding sacks at the same time', () => {
+  const d = buildMetrics({ ...BASE,
+    loads: [L({ id: 1, zone: 'Z4', bay: 5, bins: 22, at: ago(3), session: 1 })],
+    unopenedSacks: [U({ id: 'a', storage: '5' }), U({ id: 'b', storage: '5' })] });
+  const five = bay(d, 5);
+  assert.equal(five.state, 'hanging', 'the stored sacks must not change the drying state');
+  assert.equal(five.bins, 22);
+  assert.equal(five.stored_sacks, 2);
+});
+
+test('the same lot from two seasons is two rows, not one', () => {
+  const d = buildMetrics({ ...BASE, unopenedSacks: [
+    U({ id: 'a', storage: 'Supermarket' }), U({ id: 'b', storage: 'Supermarket', season: SEASON - 1 }),
+  ] });
+  assert.equal(d.storage.supermarket.lots.length, 2);
+});
+
+test('with no storage input the board still builds, and says nothing is stored', () => {
+  const d = build([], []);
+  assert.deepEqual(d.storage, { supermarket: { sacks: 0, lots: [] }, in_bays: 0, total: 0, unrecorded: 0 });
+  assert.ok(d.racks.every(r => r.stored_sacks === 0 && r.stored_lots.length === 0));
 });

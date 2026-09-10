@@ -404,3 +404,39 @@ test('the board still ships no lot data of its own', async () => {
   // the lots rather than having them baked in.
   assert.match(html, /API \+ "\?action=" \+ action/, 'it still fetches its own data');
 });
+
+// --- storage on the rack board -------------------------------------------------
+
+test('storage counts unopened, unvoided sacks from this season and last', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const T0 = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const ins = sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, storage,
+                               printed_at, opened_at, voided_at, is_test)
+    VALUES (?, ?, ?, 'Z4', 'Sour Lifter', 1, ?, ?, ?, ?, 1)`);
+  ins.run('st-1', SEASON,     1, 'Supermarket', T0, null, null);
+  ins.run('st-2', SEASON - 1, 2, 'Supermarket', T0, null, null);  // last season, still in the building
+  ins.run('st-3', SEASON - 2, 3, 'Supermarket', T0, null, null);  // outside the two-season window
+  ins.run('st-4', SEASON,     4, 'Supermarket', T0, T0,   null);  // opened: no longer stored
+  ins.run('st-5', SEASON,     5, 'Supermarket', T0, null, T0);    // voided: never was a sack
+  ins.run('st-6', SEASON,     6, '3',           T0, null, null);  // no drying bay, still stored
+  ins.run('st-7', SEASON,     7, null,          T0, null, null);  // nothing recorded
+
+  const d = await metrics(env, ctx);
+  assert.equal(d.storage.supermarket.sacks, 2);
+  assert.equal(d.racks.find(r => r.bay === 3).stored_sacks, 1,
+    'a stored sack with no drying bay must still land on its storage bay');
+  assert.equal(d.storage.total, 3);
+  assert.equal(d.storage.unrecorded, 1);
+});
+
+test('the rack board page draws storage: a Supermarket card, a tile and a legend key', async () => {
+  const { env, ctx } = freshDb();
+  const html = await call(env, ctx, 'action=harvest_dash').then(r => r.text());
+  assert.match(html, /Sacks in storage/);
+  assert.match(html, /Supermarket · below the barns/);
+  assert.match(html, /\.rack\.stored::before \{ background:var\(--plum\); \}/);
+  assert.match(html, /background:var\(--plum\)"><\/i>sacks in storage/);
+  // A bay holding sacks must never be faded like an empty one.
+  assert.match(html, /r\.state === 'empty' \? \(kept \? 'stored' : 'vacant'\)/);
+});

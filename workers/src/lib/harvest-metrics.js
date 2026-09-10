@@ -46,11 +46,13 @@ function median(xs) {
  * @param {number} input.bottomBarnLastBay  bays above this number are the top barn
  * @param {Array}  [input.rackLoads]  loads for the rack board; defaults to `loads`
  * @param {Array}  [input.rackSacks]  sacks for the rack board; defaults to `sacks`
+ * @param {Array}  [input.unopenedSacks]  unvoided, unopened sacks with their storage
  * @param {number} [input.bayCount]  how many bays exist; all of them are reported
  * @param {number} [input.nowMs]
  */
 export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBarnLastBay,
-                               rackLoads, rackSacks, bayCount = 12, nowMs = Date.now() }) {
+                               rackLoads, rackSacks, unopenedSacks = [], bayCount = 12,
+                               nowMs = Date.now() }) {
   const sessionById = new Map(sessions.map(s => [s.id, s]));
   const lotOfSession = new Map();
   for (const lot of lots) for (const id of lot.session_ids || []) lotOfSession.set(id, lot);
@@ -313,6 +315,34 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     tagsByBay.get(s2.bay).push(parseTs(s2.printed_at).getTime());
   }
 
+  // ── Storage: where the tagged, unopened sacks are sitting ───────────────
+  //
+  // A different question from the fills above and kept apart from them on
+  // purpose: a bay can be hanging a fresh trailer and holding last week's bags
+  // at the same time, and neither fact should overwrite the other.
+  //
+  // A sack counts as stored until it is OPENED — opening is the only exit the
+  // system records, so a sack that leaves the farm unopened still counts. The
+  // board says so rather than pretending to know.
+  const storedByPlace = new Map();   // '1'..'12' | 'Supermarket' -> Map(lot key -> lot)
+  let unrecorded = 0;
+  for (const u of unopenedSacks) {
+    if (u.storage === null || u.storage === undefined || u.storage === '') { unrecorded++; continue; }
+    const place = String(u.storage);
+    if (!storedByPlace.has(place)) storedByPlace.set(place, new Map());
+    const byLot = storedByPlace.get(place);
+    const key = `${u.season ?? ''}|${u.zone}|${u.cultivar || ''}|${u.cut_number ?? ''}`;
+    if (!byLot.has(key)) {
+      byLot.set(key, { season: u.season ?? null, zone: u.zone, cultivar: u.cultivar || null,
+                       cut_number: u.cut_number ?? null, sacks: 0 });
+    }
+    byLot.get(key).sacks++;
+  }
+  const storedAt = (place) => {
+    const lotsHere = [...(storedByPlace.get(place)?.values() || [])].sort((a, b) => b.sacks - a.sacks);
+    return { sacks: lotsHere.reduce((t, l) => t + l.sacks, 0), lots: lotsHere };
+  };
+
   const racks = [];
   for (let bay = 1; bay <= bayCount; bay++) {
     // Every bay is reported, including the ones nothing has been near. A bay
@@ -330,7 +360,12 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
       level: null,
       first_tag_at: null,
       sacks_out: 0,
+      stored_sacks: 0,
+      stored_lots: [],
     };
+    const kept = storedAt(String(bay));
+    cell.stored_sacks = kept.sacks;
+    cell.stored_lots = kept.lots;
 
     const bayLoads = (loadsByBay.get(bay) || [])
       .slice()
@@ -388,6 +423,12 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     racks.push(cell);
   }
 
+  const supermarket = storedAt('Supermarket');
+  const inBays = racks.reduce((t, c) => t + c.stored_sacks, 0);
+  let storedTotal = 0;
+  for (const byLot of storedByPlace.values()) for (const l of byLot.values()) storedTotal += l.sacks;
+  const storage = { supermarket, in_bays: inBays, total: storedTotal, unrecorded };
+
   // ── The feed — what Koa asked for first: the timestamps themselves ──────
   const feed = [];
   for (const s of sessions) {
@@ -421,6 +462,7 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     crew,
     bays,
     racks,
+    storage,
     feed: feed.slice(0, 200),
     feed_total: feed.length,
     counts: {
