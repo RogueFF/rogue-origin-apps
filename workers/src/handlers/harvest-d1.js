@@ -48,8 +48,9 @@ import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
-import { cultivarsFor, isMultiCultivar, isHarvestTracked } from '../lib/zone-cultivars.js';
-import { zoneFacts, plantCountFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
+import { cultivarsFor, isMultiCultivar, isHarvestTracked,
+  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
+import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeForZone } from '../lib/supersack-inventory.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
@@ -1631,8 +1632,9 @@ function demoSackView(opened, voided, id = DEMO_SACK_ID) {
     notes: d.notes.map(n => ({ note: n.note, created_at: bagged + ' ' + n.at })),
     plantDate: facts.plantDate || null,
     plantDateApprox: !!facts.multiDay,
-    acres: facts.acres ?? null,
-    plants: plantCountFor(d.zone),
+    acres: acresFor(d.zone, cultivarShare(d.zone, d.cultivar)),
+    plants: plantCountFor(d.zone, cultivarShare(d.zone, d.cultivar)),
+    areaBasis: areaBasisFor(d.zone, d.cultivar),
     growDays,
     lotSacks: d.lotSacks,
   };
@@ -1663,8 +1665,14 @@ async function getSackView(db, sackId) {
     sack, notes,
     plantDate: facts?.plantDate || null,
     plantDateApprox: !!facts?.multiDay,
-    acres: facts?.acres ?? null,
-    plants: plantCountFor(sack.zone),
+    // The lot's OWN ground, not the whole zone. A trial block is planted in
+    // bands, and reporting the zone for one band made a Rainbow GMO Quik tag
+    // read 0.468 ac / ~906 plants when its six rows are 0.076 / ~147 — 6x over,
+    // on the denominator of every per-acre and per-plant figure, in the blocks
+    // that exist to compare cultivars. (Koa, off a printed tag, 2026-09-09.)
+    acres: acresFor(sack.zone, cultivarShare(sack.zone, sack.cultivar)),
+    plants: plantCountFor(sack.zone, cultivarShare(sack.zone, sack.cultivar)),
+    areaBasis: areaBasisFor(sack.zone, sack.cultivar),
     growDays,
     lotSacks: lot?.sacks ?? null,
   };
@@ -2602,8 +2610,9 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
   const facts = zoneFacts(l.zone);
   const cutDate = String(l.occurred_at).substring(0, 10);
   const plantDate = facts?.plantDate || null;
-  const acres = facts?.acres ?? null;
-  const plants = plantCountFor(l.zone);
+  const share = cultivarShare(l.zone, l.cultivar);
+  const acres = acresFor(l.zone, share);
+  const plants = plantCountFor(l.zone, share);
 
   const growDays = plantDate
     ? Math.round((new Date(cutDate + 'T00:00:00Z') - new Date(plantDate + 'T00:00:00Z')) / 86400000)
@@ -2725,6 +2734,7 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
     grow_days: growDays,
     acres,
     plants,
+    area_basis: areaBasisFor(l.zone, l.cultivar),
     // PEAK concurrent cutters, never a sum: one crew that left and came back is
     // still that one crew, while two crews in the zone at once really do add up.
     headcount: peakHeadcount(sessions),
@@ -3441,6 +3451,22 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <div id="hcstat" class="hcstat"></div>
 <div class="footer"><a href="${API}?action=status">${ui.t('viewStatus')}</a></div>
 ${headcountScript(ui)}`;
+}
+
+/**
+ * Where a lot's acreage came from, in words.
+ *
+ * The figure is a share of a zone, so it has to say so: "6 of 37 rows" is
+ * checkable against the tape and the zone page, and an unrecorded cultivar
+ * reads as unknown rather than quietly whole-zone.
+ */
+function areaBasisFor(zone, cultivar) {
+  const m = ZONE_CULTIVAR_ROWS[zone];
+  if (!m) return isMultiCultivar(zone) ? `${zone} row split not recorded` : null;
+  const rows = m[cultivar];
+  const total = zoneRowTotal(zone);
+  if (!rows || !total) return `${cultivar || 'this cultivar'} is not in the recorded ${zone} row split`;
+  return `${rows} of ${total} rows in ${zone}`;
 }
 
 function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null,
@@ -4370,7 +4396,7 @@ ${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
 }
 
 function sackDetailBody(ui, view, flash) {
-  const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks } = view;
+  const { sack, notes, plantDate, plantDateApprox, acres, plants, growDays, lotSacks, areaBasis } = view;
   const opened = !!sack.opened_at;
   const voided = !!sack.voided_at;
   const DASH = '—';
@@ -4545,10 +4571,15 @@ function sackDetailBody(ui, view, flash) {
     journey = `<ol class="journey">${rows.join('')}</ol>`;
   }
 
+  // The basis rides with the number. It is a SHARE of a zone, so "6 of 37 rows"
+  // is what makes it checkable against the tape and the zone page — and what
+  // makes an unrecorded cultivar read as unknown instead of whole-zone.
+  const basisNote = areaBasis
+    ? `<div class="lotmeta"><span class="hint">${escapeHtml(areaBasis)}</span></div>` : '';
   const areaRow = acres
     ? `<div class="kv"><span>${ui.t('area')}</span><strong>${plants
         ? ui.t('areaVal', { ac: acres.toFixed(3), plants: plants.toLocaleString('en-US') })
-        : `${acres.toFixed(3)} ac`}</strong></div>`
+        : `${acres.toFixed(3)} ac`}</strong></div>${basisNote}`
     : '';
 
   const noteList = notes.length
