@@ -45,6 +45,8 @@
  */
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
+import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
+import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
@@ -3267,6 +3269,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
               padding: 11px 12px; margin: -24px -20px 18px; }
   body.testmode .lang { top: 50px; }
   @media print { .testband { display: none; } }
+  ${SACK_DETAIL_STYLE}
 </style>
 </head>
 <body${ui.isTest ? ' class="testmode"' : ''}>
@@ -4424,6 +4427,7 @@ function sackDetailBody(ui, view, flash) {
   const serial = sack.serial ?? String(sack.sack_id || '').split('-').pop();
   const head = `
 <div class="sd-head">
+  <div class="sd-eyebrow">${ui.lang === 'es' ? 'Registro de cosecha' : 'Harvest record'}</div>
   <div class="sd-state"><span class="badge ${state[0]}">${state[1]}</span></div>
   <h1>${escapeHtml(sack.cultivar || ui.t('sack'))}${sack.cultivar_code ? ` <span class="code">(${escapeHtml(sack.cultivar_code)})</span>` : ''}</h1>
   <p class="serial">#${escapeHtml(String(serial))}</p>
@@ -4507,7 +4511,7 @@ function sackDetailBody(ui, view, flash) {
       : `${lb(total)} lb`;
     const wasteShown = parts.some(p => p.derived);
     weights = `<div class="card">
-  <div class="wtop"><strong class="tv">${lb(total)} lb</strong><span class="hint">${ui.t('wTotal')}</span>${srcBadge}</div>
+  <div class="wtop"><strong class="tv">${lb(tops !== null && smalls !== null ? flower : total)} lb</strong><span class="hint">${tops !== null && smalls !== null ? `${ui.t('wTops')} + ${ui.t('wSmalls')}` : ui.t('wTotal')}</span>${srcBadge}</div>
   <div class="wbar" role="img" aria-label="${parts.map(p => `${p.label} ${lb(p.v)} lb`).join(' · ')}">
     ${parts.map(p => `<div class="seg ${p.cls}" style="flex-basis:${pct(p.v).toFixed(2)}%"></div>`).join('')}${overTick}
   </div>
@@ -4515,7 +4519,7 @@ function sackDetailBody(ui, view, flash) {
   <div class="legend">
     ${parts.map(p => {
       const sh = share(p.v);
-      return `<span><i class="sw ${p.cls}"></i>${p.label} <strong>${lb(p.v)} lb</strong>${sh !== null ? ` · ${sh}%` : ''}</span>`;
+      return `<span class="weight-row"><span><i class="sw ${p.cls}"></i>${p.label}</span><strong>${lb(p.v)} lb</strong><span class="weight-share">${sh !== null ? `${sh}%` : '—'}</span></span>`;
     }).join('')}
   </div>
   <p class="hint" style="margin:12px 0 0">${recovered !== null ? `${ui.t('wRecovered', { pct: recovered, fill })}<br>` : ''}${wasteShown ? `${ui.t('wWasteNote', { fill })}<br>` : ''}${srcLine} · ${openedLine}</p>
@@ -4588,18 +4592,26 @@ function sackDetailBody(ui, view, flash) {
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
   return `<div class="sd">
+<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}">${ui.t('langOther')}</a></span></div>
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
 ${tiles}
 
-<h2>${ui.t('secWeights')}</h2>
+<div class="sd-columns">
+<section class="sd-panel" aria-labelledby="sack-weights">
+<h2 id="sack-weights">${ui.t('secWeights')}</h2>
 ${weights}
+</section>
 
-<h2>${ui.t('secOrigin')}</h2>
+<section class="sd-panel" aria-labelledby="sack-origin">
+<h2 id="sack-origin">${ui.t('secOrigin')}</h2>
 ${journey}
 ${areaRow}
+</section>
+</div>
 
-<h2>${ui.t('secNotes')}</h2>
+<section class="sd-panel sd-notes" aria-labelledby="sack-notes">
+<h2 id="sack-notes">${ui.t('secNotes')}</h2>
 ${noteList}
 <details class="batch">
   <summary>${ui.t('addNote')}</summary>
@@ -4610,6 +4622,7 @@ ${noteList}
   </form>
 </details>
 
+</section>
 <div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
 </div>`;
 }
