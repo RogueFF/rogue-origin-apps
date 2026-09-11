@@ -73,7 +73,11 @@ Never the root `npm run deploy` — the root config ships a bindingless assets w
 Twilio console → the toll-free number → Messaging → "A message comes in":
 
 - Webhook, **HTTP POST**
-- `https://rogue-origin-api.roguefamilyfarms.workers.dev/sms/inbound`
+- exactly `https://rogue-origin-api.roguefamilyfarms.workers.dev/sms/inbound`
+
+Type the URL exactly as written. A trailing slash is tolerated since the latest fix,
+but anything else Twilio signs a different string than the worker verifies, and every
+inbound POST 403s.
 
 **Toll-free verification must be approved before carriers deliver anything.** Until
 then outbound texts are accepted by Twilio and silently dropped by the carriers —
@@ -100,34 +104,32 @@ curl -s "https://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?actio
 
 ---
 
-## Rehearsal, and the test-mode flag
+## Rehearsal
 
-`is_test` is `1` on every row **unless** `HARVEST_TEST_MODE === "false"`.
+> **Do not touch `HARVEST_TEST_MODE`.** It is `"false"` because the live 2026 harvest
+> is being tracked right now; flipping it to `"true"` would turn real zone scans into
+> test rows (`workers/wrangler.toml` carries the history). `is_test` on `harvest_hourly`
+> rows simply follows the same flag as everything else — there is no hourly-only switch.
 
-> **`workers/wrangler.toml` currently commits `HARVEST_TEST_MODE = "false"`** (flipped
-> for the real harvest capture). So a rehearsal done today writes **live** rows that
-> the `is_test = 1` cleanup below will not touch.
+Rehearse against production instead, then delete exactly what you wrote:
 
-To rehearse against test rows, flip it and put it back:
+1. Pick a **non-harvest day, or a barn that is not running.** Register a rehearsal
+   phone on that barn (`foreman_set`), text `EMPEZAR`, wait for the next top of hour,
+   answer the prompt, then check `?action=hourly&date=<date>`.
+2. Delete the rehearsal rows by date and barn — never by `is_test`:
 
-1. Edit `[vars]` in `workers/wrangler.toml` to `HARVEST_TEST_MODE = "true"`, commit, and
-   `npx wrangler deploy` from `workers/`.
-2. Rehearse: text `EMPEZAR` from a registered phone, wait for the next top of hour,
-   answer the prompt, then check `?action=hourly`.
-3. Flip back to `"false"`, commit, deploy — **before the first real cut.** Every crew
-   screen shows a red band while this is `"true"`, so the state is visible on a phone.
-
-Cleaning up rehearsal data (mirrors the `harvest_scan_log` / `harvest_sacks` cleanup
-in `migrations/0009` and `0010`):
-
-```sql
-DELETE FROM harvest_hourly WHERE is_test = 1;
-DELETE FROM harvest_sms_inbox;
-UPDATE harvest_foremen SET active = 0, active_since = NULL;
+```bash
+cd workers
+npx wrangler d1 execute rogue-origin-db --remote \
+  --command="DELETE FROM harvest_hourly WHERE harvest_date = '<date>' AND barn = '<barn>';"
+npx wrangler d1 execute rogue-origin-db --remote \
+  --command="DELETE FROM harvest_sms_inbox WHERE received_at < '<date> 23:59:59' AND from_phone = '<phone>';"
+npx wrangler d1 execute rogue-origin-db --remote \
+  --command="UPDATE harvest_foremen SET active = 0, active_since = NULL WHERE phone = '<phone>';"
 ```
 
-`harvest_sms_inbox` is a Twilio-redelivery dedupe ledger and `harvest_foremen` is the
-roster — neither carries `is_test`, so clear them explicitly rather than by flag.
+`harvest_sms_inbox` is the Twilio-redelivery dedupe ledger and `harvest_foremen` is the
+roster; neither carries `is_test`, so both are cleared by phone.
 
 ---
 
@@ -143,6 +145,11 @@ barn's rack total: `Ok, paramos. Hoy Granero Arriba: 27 racks. Gracias.`
   `EMPEZAR`, so re-starting the day does not inherit the previous run's misses), or
 - the Pacific clock hour is **20 or later** — and the 20:00 tick still asks for the
   19:00 hour first, so nothing is dropped at the end of the day.
+
+**After 8 PM the bot asks for no new hours. Open rows still age to `missing` and reach
+Telegram** — an evening alert is the log catching up, not a prompt that went out late.
+(An hour still open at the auto-stop can draw its one `Recordatorio` text on a later
+tick; the nudge pass follows the rows, not the clock.)
 
 **The hourly cycle** runs off the every-5-minute cron, driven by row state, so a late
 or doubled tick never texts twice:
@@ -284,8 +291,7 @@ by unit tests.
 | `Error temporal. Manda los numeros de nuevo.` | The parse call itself failed — network fault or the 20 s timeout, not a reply the model could not read. Look for `[hourly] parse call failed for <phone>: …`. |
 | `[hourly-tick] <phone>: <error>` or `[hourly-tick] <barn> <hour>: <error>` | One barn's send or write failed; the other barn and the other rows continued. Usually a bad phone number or a Twilio error (the message names the status and the recipient). |
 | `[hourly-tick] no foreman registered for barn <barn> — <hour> left open` | An open row on a barn with no roster entry at all. Register a foreman; the row stays open until someone can be texted about it. |
-| A foreman keeps getting `No entendi` | Read the row: `SELECT hour_start, raw_reply, status FROM harvest_hourly WHERE harvest_date = '<date>' AND barn = '<barn>' ORDER BY hour_start`. `raw_reply` is his text verbatim, and it is what the parse actually saw. |
-| A backfill hour is nudged seconds after it was sent, with no 15-minute grace | Expected when the backfill's **first** reply failed to parse: the row exists with both `asked_at` and `answered_at` null (the bot never prompted for it, and nothing was written), so the tick reads it as infinitely overdue — nudge on the next tick, `missing` 15 minutes later. A backfill that parsed takes its grace from `answered_at`. |
+| Foreman gets `No entendi` | Check `raw_reply` on the row — his text verbatim, and what the parse actually saw: `SELECT hour_start, raw_reply, status FROM harvest_hourly WHERE harvest_date = '<date>' AND barn = '<barn>' ORDER BY hour_start`. The row keeps its grace period from that reply. |
 | A freshly activated foreman gets no prompt on the next tick | By design. An hour that ended **before** he texted `EMPEZAR` is never asked about — he was not working it. The first ask appears on a tick in a clock hour after the activation hour. |
 | No texts arrive at all, but the log looks clean | Toll-free verification is not approved yet, or the three `TWILIO_*` secrets are unset (look for `[sms] not configured`). |
 
