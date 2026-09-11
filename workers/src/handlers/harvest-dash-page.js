@@ -400,9 +400,18 @@ export function dashPage() {
   // 0 ── hourly crew log (SMS bot)
   function cardHourly(h) {
     var barns = ['upper', 'bottom'];
+    // Texts sitting in the inbox that Capataz has not picked up. A queue depth,
+    // not a count for the date being viewed — the inbox has no harvest_date,
+    // and what this line reports is "the relay is behind", which is a
+    // right-now fact. Steady non-zero means the relay is down; the tick's own
+    // watchdog says so on Telegram after 3 minutes.
+    var pending = (h.pending_sms > 0)
+      ? '<p class="lede">' + esc(String(h.pending_sms)) + (h.pending_sms === 1 ? ' text' : ' texts') + ' waiting for Capataz</p>'
+      : '';
     var any = barns.some(function (b) { return h.barns[b].rows.length; });
     if (!any) {
-      return '<section class="card"><h2>Hourly crew log</h2><p class="lede">No hourly texts yet today (' + esc(h.date) + ').</p></section>';
+      return '<section class="card"><h2>Hourly crew log</h2>' + pending +
+        '<p class="lede">No hourly texts yet today (' + esc(h.date) + ').</p></section>';
     }
     var head = '<tr><th>Hour</th><th>Cut</th><th>WS field</th><th>Drv</th><th>Hang</th><th>WS barn</th><th>Racks</th><th>Notes</th></tr>';
     var blocks = barns.map(function (b) {
@@ -422,7 +431,7 @@ export function dashPage() {
           ? '<div style="overflow-x:auto"><table>' + head + rows + '</table></div>'
           : '<p class="lede">No texts yet.</p>');
     }).join('');
-    return '<section class="card"><h2>Hourly crew log</h2>' + rosterLine(h) + blocks + '</section>';
+    return '<section class="card"><h2>Hourly crew log</h2>' + pending + rosterLine(h) + blocks + '</section>';
   }
 
   /**
