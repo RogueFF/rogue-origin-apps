@@ -368,6 +368,19 @@ block, and the first draft of this plan did not compile because of it.
   nudge clock is `answered_at` instead — `tickDecision` reads
   `asked_at ?? answered_at`, or a null `asked_at` would count as infinitely
   overdue and the next tick would nudge a row filled in seconds earlier.
+- **A reply that fails to parse still stamps `answered_at` and `raw_reply`.**
+  The counts stay untouched and the foreman is told to resend, but the row now
+  has a real clock — otherwise a backfill whose first reply failed to parse has
+  neither timestamp, reads as infinitely overdue, and gets nudged and flagged
+  "Sin respuesta" despite the foreman having answered. `raw_reply` keeps the
+  text that defeated the parser.
+- **After 8 PM the bot stops texting.** The open-row pass still applies every
+  status transition — `pending` → `nudged` → `missing`, and a missing hour
+  still reaches Telegram — but the SMS reminder is suppressed, so an open row
+  ages onto the dashboard without lighting up a phone at night. The one
+  deliberate exception is the tick that crosses 8 PM itself: it still sends the
+  19:00 prompt and the "Paramos por hoy" sign-off before the auto-stop takes
+  the foreman off the roster, after which nothing is asked at all.
 - **An hour that has not ended yet is never created.** A bare hour below 6 is
   read as PM, so "5: ..." sent at 10 AM means 17:00; the reply is "Esa hora
   todavia no termina." and no row is written. `openRow` is also bounded by the

@@ -26,7 +26,7 @@ import { pacificDay, pacificParts, justEndedHour, sqliteUtc } from '../lib/pacif
 import {
   BARN_LABELS, FIELD_ES, validateCounts, missingFields, classifyInbound,
   promptText, reminderText, helpText, confirmText, askMissingText, notUnderstoodText,
-  temporaryErrorText, futureHourText, normalizeNotes, tickDecision, shouldAutoStop,
+  temporaryErrorText, futureHourText, normalizeNotes, tickDecision, shouldAutoStop, STOP_HOUR,
 } from '../lib/harvest-hourly.js';
 import { parseReply } from '../lib/harvest-hourly-parse.js';
 
@@ -224,10 +224,15 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
     // A network fault or the 20 s timeout — the foreman's text was fine, so
     // telling him "no entendi" would send him rewriting a correct message.
     console.error(`[hourly] parse call failed for ${from}: ${e.message}`);
+    await stampUnparsed(db, { row, rawText, from, now });
     say(temporaryErrorText());
     return;
   }
-  if (!parsed) { say(notUnderstoodText()); return; }
+  if (!parsed) {
+    await stampUnparsed(db, { row, rawText, from, now });
+    say(notUnderstoodText());
+    return;
+  }
 
   // A model-detected hour ("las 9") retargets only when the text had no prefix.
   if (!hour && parsed.hour_override && /^\d{2}:00$/.test(parsed.hour_override) && parsed.hour_override !== row.hour_start) {
@@ -285,6 +290,18 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
   } else {
     say(why + (invalid.length ? 'Se mantiene el valor anterior. ' : '') + confirmText(fresh));
   }
+}
+
+/**
+ * A reply the parser could not read still happened, and the row has to show
+ * it. A backfill row has no asked_at, so without this stamp both of its clocks
+ * are null, tickDecision reads that as infinitely overdue, and the next tick
+ * nudges — then Telegrams "Sin respuesta" — about a text the foreman did send.
+ * The counts are left alone; raw_reply keeps the text that defeated the parse.
+ */
+function stampUnparsed(db, { row, rawText, from, now }) {
+  return execute(db, `UPDATE harvest_hourly SET raw_reply = ?, reported_by = ?, answered_at = ? WHERE id = ?`,
+    [rawText, from, sqliteUtc(now), row.id]);
 }
 
 /**
@@ -360,7 +377,12 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
           `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
         if (!changes) continue;
         acted++;
-        await sendSms(env, { to: f.phone, body: reminderText(row.barn, row.hour_start) });
+        // No reminders at night. The row still ages through nudged to missing
+        // so the hour lands on the dashboard and in Telegram — it just does
+        // not light up the foreman's phone while he is off the clock.
+        if (hourNow < STOP_HOUR) {
+          await sendSms(env, { to: f.phone, body: reminderText(row.barn, row.hour_start) });
+        }
       } else if (d.type === 'missing') {
         const { changes } = await execute(db,
           `UPDATE harvest_hourly SET status = 'missing' WHERE id = ? AND status = 'nudged'`, [row.id]);
