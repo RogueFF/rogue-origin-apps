@@ -149,13 +149,25 @@ const NO_NEWS = new Set([
 export function normalizeNotes(text) {
   const t = String(text ?? '').trim();
   if (!t) return null;
-  const bare = t.replace(/[.!]+$/, '').trim().toLowerCase();
+  // Trailing punctuation is noise on a phone keyboard: "sin novedad,", "nada;"
+  // and "ok." are all the same non-note. Only the tail is stripped, so a note
+  // that merely ends in a comma still survives as itself.
+  const bare = t.replace(/[.!,;]+$/, '').trim().toLowerCase();
   return NO_NEWS.has(bare) ? null : t;
 }
 
 export function notUnderstoodText() {
   return 'No entendi. Manda los numeros en orden: cortadores, waterspiders campo, choferes, ' +
     'colgadores, waterspiders granero, racks. Ejemplo: 4 2 3 8 1 12 sin novedad';
+}
+
+/**
+ * The reply when the parse call itself failed — a network error or the 20 s
+ * timeout, not a reply the model could not read. Worth its own wording:
+ * "no entendi" would tell the foreman to rephrase a text that was fine.
+ */
+export function temporaryErrorText() {
+  return 'Error temporal. Manda los numeros de nuevo.';
 }
 
 /**

@@ -12,9 +12,9 @@
  * - POST /api/harvest?action=foreman_set           {phone,name,barn,active} [password]
  * - POST /api/harvest?action=hourly_simulate       {from, body} -> replies  [password]
  * - GET  /api/harvest?action=hourly_test           health
- * - cron: runHarvestHourlyTick(env) from the isFiveMinCron branch
- *   (the every-5-minute schedule; written out because the cron string's own
- *   slash-star spelling would close this comment)
+ * - cron: runHarvestHourlyTick(env) from the five-minute branch (isFiveMinCron
+ *   in index.js). Spelled out in words: the cron string's own slash-star form
+ *   would close this comment block.
  */
 import { query, queryOne, execute } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
@@ -24,9 +24,9 @@ import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
 import { pacificDay, pacificParts, justEndedHour, sqliteUtc } from '../lib/pacific.js';
 import {
-  COUNT_FIELDS, BARN_LABELS, validateCounts, missingFields, classifyInbound,
+  BARN_LABELS, FIELD_ES, validateCounts, missingFields, classifyInbound,
   promptText, reminderText, helpText, confirmText, askMissingText, notUnderstoodText,
-  normalizeNotes, tickDecision, shouldAutoStop,
+  temporaryErrorText, normalizeNotes, tickDecision, shouldAutoStop,
 } from '../lib/harvest-hourly.js';
 import { parseReply } from '../lib/harvest-hourly-parse.js';
 
@@ -36,6 +36,10 @@ const isTestMode = (env) => env.HARVEST_TEST_MODE !== 'false';
 // The season is the harvest date's own year, not the wall-clock year: a row
 // written just after midnight UTC still belongs to the Pacific day it reports.
 const seasonOf = (day) => Number(day.slice(0, 4));
+// One definition of "racks today", shared by the PARAR reply and the day read:
+// every row for the barn, whatever its status. Two places computing this
+// differently is how a foreman's total stops matching the dashboard's.
+const sumRacks = (rows) => rows.reduce((s, r) => s + (r.racks || 0), 0);
 
 // ─── HTTP: /api/harvest?action=hourly* ─────────────────────────────────
 
@@ -70,6 +74,16 @@ export async function handleHarvestHourly(request, env, ctx) {
   }
 }
 
+/**
+ * Strictly true. A JSON body may send `active` as a boolean or as a string,
+ * and every non-empty string is truthy — `Boolean('false')` and `Boolean('0')`
+ * would both activate a foreman who was being deactivated.
+ */
+function isTrue(v) {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : v;
+  return s === true || s === 1 || s === 'true' || s === '1';
+}
+
 async function setForeman(db, body) {
   const phone = String(body.phone || '').trim();
   const name = String(body.name || '').trim();
@@ -77,13 +91,19 @@ async function setForeman(db, body) {
   if (!/^\+1\d{10}$/.test(phone)) throw createError('VALIDATION_ERROR', 'phone must be E.164, e.g. +15415551234');
   if (!name) throw createError('VALIDATION_ERROR', 'name is required');
   if (!BARN_LABELS[barn]) throw createError('VALIDATION_ERROR', 'barn must be upper or bottom');
-  const active = body.active ? 1 : 0;
+  const active = isTrue(body.active) ? 1 : 0;
   await execute(db, `
     INSERT INTO harvest_foremen (phone, name, barn, active, active_since)
     VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)
     ON CONFLICT(phone) DO UPDATE SET name = excluded.name, barn = excluded.barn, active = excluded.active,
       active_since = CASE WHEN excluded.active = 1 AND harvest_foremen.active = 0 THEN datetime('now') ELSE harvest_foremen.active_since END
   `, [phone, name, barn, active, active]);
+  // One active foreman per barn, on this path too — the same rule EMPEZAR
+  // enforces. Two active phones would mean two prompts for one hour and two
+  // half-answers racing for one row.
+  if (active) {
+    await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE barn = ? AND phone <> ?`, [barn, phone]);
+  }
   return { foreman: await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [phone]) };
 }
 
@@ -152,14 +172,15 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
     say('Listo. Te pregunto cada hora en punto. PARAR para terminar el dia.');
   } else if (c.kind === 'stop') {
     await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ?`, [from]);
-    const day = pacificDay(now);
-    const tot = await queryOne(db, `SELECT COALESCE(SUM(racks), 0) AS racks FROM harvest_hourly
-      WHERE harvest_date = ? AND barn = ? AND is_test = ?`, [day, foreman.barn, isTest]);
-    say(`Ok, paramos. Hoy ${BARN_LABELS[foreman.barn]}: ${tot.racks} racks. Gracias.`);
+    const rows = await query(db, `SELECT racks FROM harvest_hourly
+      WHERE harvest_date = ? AND barn = ? AND is_test = ?`, [pacificDay(now), foreman.barn, isTest]);
+    say(`Ok, paramos. Hoy ${BARN_LABELS[foreman.barn]}: ${sumRacks(rows)} racks. Gracias.`);
   } else if (c.kind === 'help') {
     say(helpText(foreman.barn));
   } else {
-    await answer(db, env, { foreman, hour: c.hour, text: c.text, from, isTest, now, say });
+    // c.text is the parse input (hour prefix stripped); text is what the
+    // foreman actually sent, and that is what raw_reply has to preserve.
+    await answer(db, env, { foreman, hour: c.hour, text: c.text, rawText: text, from, isTest, now, say });
   }
 
   if (deliver) {
@@ -168,65 +189,119 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   return replies;
 }
 
-async function answer(db, env, { foreman, hour, text, from, isTest, now, say }) {
+async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now, say }) {
   const day = pacificDay(now);
   const barn = foreman.barn;
 
   let row;
   if (hour) {
-    row = await getOrCreateRow(db, { day, hour, barn, isTest, season: seasonOf(day) });
+    // A named hour is a backfill: the bot never asked for it, so asked_at stays
+    // null rather than claiming a prompt that was never sent.
+    row = await getOrCreateRow(db, { day, hour, barn, isTest, season: seasonOf(day), now, asked: false });
   } else {
-    if (!foreman.active) { say('Escribe EMPEZAR para comenzar el dia.'); return; }
-    row = await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
-      AND status IN ('pending', 'nudged') ORDER BY hour_start DESC LIMIT 1`, [day, barn, isTest]);
+    row = await openRow(db, { day, barn, isTest });
     if (!row) {
+      // An open row is answerable even after the auto-stop — that is how the
+      // reply to the 19:00 prompt still lands. Only with nothing open does an
+      // inactive foreman get told to start the day.
+      if (!foreman.active) { say('Escribe EMPEZAR para comenzar el dia.'); return; }
       const je = justEndedHour(now);
       if (!je) { say('Todavia no hay hora que reportar.'); return; }
-      row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: seasonOf(je.harvest_date) });
+      row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: seasonOf(je.harvest_date), now, asked: true });
     }
   }
 
-  const parsed = await parseReply(text, { barn, hour_start: row.hour_start, missing: missingFields(row) }, env);
+  let parsed;
+  try {
+    parsed = await parseReply(text, { barn, hour_start: row.hour_start, missing: missingFields(row) }, env);
+  } catch (e) {
+    // A network fault or the 20 s timeout — the foreman's text was fine, so
+    // telling him "no entendi" would send him rewriting a correct message.
+    console.error(`[hourly] parse call failed for ${from}: ${e.message}`);
+    say(temporaryErrorText());
+    return;
+  }
   if (!parsed) { say(notUnderstoodText()); return; }
 
   // A model-detected hour ("las 9") retargets only when the text had no prefix.
   if (!hour && parsed.hour_override && /^\d{2}:00$/.test(parsed.hour_override) && parsed.hour_override !== row.hour_start) {
-    row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: seasonOf(day) });
+    row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: seasonOf(day), now, asked: false });
   }
 
   const { values, invalid } = validateCounts(parsed);
-  const merged = { ...row };
-  for (const f of COUNT_FIELDS) if (values[f] !== null) merged[f] = values[f];
   // "Sin novedad" is not a note — normalizeNotes drops it, so a day summary is
   // not padded with six copies of "nothing to report".
   const note = normalizeNotes(parsed.notes);
-  if (note) merged.notes = row.notes ? `${row.notes}; ${note}` : note;
 
-  const still = missingFields(merged);
-  const status = still.length ? (row.status === 'missing' ? 'nudged' : row.status === 'complete' ? 'complete' : row.status) : 'complete';
+  // Additive, in SQL rather than read-modify-write: two texts seconds apart
+  // both read the same row, and a full-row UPDATE from the second would erase
+  // what the first wrote. COALESCE lets each write land only the fields it
+  // actually carries, so the counts merge instead of racing. Notes append for
+  // the same reason — the latest reply must not drop an earlier one.
   await execute(db, `
-    UPDATE harvest_hourly SET cutters = ?, cutter_water_spiders = ?, drivers = ?, hangers = ?, hanging_water_spiders = ?,
-      racks = ?, notes = ?, raw_reply = ?, reported_by = ?, answered_at = ?, status = ?
+    UPDATE harvest_hourly SET
+      cutters = COALESCE(?, cutters),
+      cutter_water_spiders = COALESCE(?, cutter_water_spiders),
+      drivers = COALESCE(?, drivers),
+      hangers = COALESCE(?, hangers),
+      hanging_water_spiders = COALESCE(?, hanging_water_spiders),
+      racks = COALESCE(?, racks),
+      notes = CASE WHEN ? IS NULL THEN notes WHEN notes IS NULL THEN ? ELSE notes || '; ' || ? END,
+      raw_reply = ?, reported_by = ?, answered_at = ?
     WHERE id = ?
-  `, [merged.cutters, merged.cutter_water_spiders, merged.drivers, merged.hangers, merged.hanging_water_spiders,
-      merged.racks, merged.notes ?? null, text, from, sqliteUtc(now), status, row.id]);
+  `, [values.cutters, values.cutter_water_spiders, values.drivers, values.hangers,
+      values.hanging_water_spiders, values.racks, note, note, note,
+      rawText, from, sqliteUtc(now), row.id]);
 
+  // Re-read rather than reason about what the row now holds: the write above
+  // merged against whatever was on disk, which may include a concurrent reply.
+  const fresh = await queryOne(db, `SELECT * FROM harvest_hourly WHERE id = ?`, [row.id]);
+  const still = missingFields(fresh);
+
+  // A partial answer on a row already flagged missing goes back to nudged —
+  // and must restamp nudged_at, or the stale one makes the next tick flip it
+  // straight back to missing and alert Telegram a second time.
+  const status = still.length ? (fresh.status === 'missing' ? 'nudged' : fresh.status) : 'complete';
+  const nudgedAt = still.length && fresh.status === 'missing' ? sqliteUtc(now) : null;
+  // `status <> 'complete'` for the same reason the counts use COALESCE: a reply
+  // racing this one may have completed the row between the re-read and here,
+  // and writing 'nudged' over it would un-finish a finished hour and earn it a
+  // spurious reminder plus a Telegram alert. A row never goes backwards.
+  await execute(db, `UPDATE harvest_hourly SET status = ?, nudged_at = COALESCE(?, nudged_at)
+    WHERE id = ? AND status <> 'complete'`, [status, nudgedAt, row.id]);
+
+  // Out of range is worth saying even when the row came out complete: the old
+  // value survived (COALESCE kept it) and the foreman should know his did not.
+  const why = invalid.length ? `Numero fuera de rango: ${invalid.map(f => FIELD_ES[f]).join(', ')}. ` : '';
   if (still.length) {
-    const why = invalid.length ? `Numero fuera de rango: ${invalid.join(', ')}. ` : '';
-    say(why + askMissingText({ ...merged, hour_start: row.hour_start }));
+    say(why + askMissingText(fresh));
   } else {
-    say(confirmText({ ...merged, hour_start: row.hour_start, barn }));
+    say(why + (invalid.length ? 'Se mantiene el valor anterior. ' : '') + confirmText(fresh));
   }
 }
 
-async function getOrCreateRow(db, { day, hour, barn, isTest, season }) {
-  const existing = await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
+/** The newest hour still awaiting an answer today, or null. */
+function openRow(db, { day, barn, isTest }) {
+  return queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
+    AND status IN ('pending', 'nudged') ORDER BY hour_start DESC LIMIT 1`, [day, barn, isTest]);
+}
+
+/**
+ * @param asked true when the bot is the one asking for this hour (asked_at is
+ *   the prompt's clock); false for a backfill the foreman volunteered, where
+ *   there is no prompt to timestamp.
+ */
+async function getOrCreateRow(db, { day, hour, barn, isTest, season, now, asked }) {
+  const find = () => queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
     [day, hour, barn, isTest]);
+  const existing = await find();
   if (existing) return existing;
-  await execute(db, `INSERT INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
-    VALUES (?, ?, ?, ?, 'pending', datetime('now'), ?)`, [season, day, hour, barn, isTest]);
-  return await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
-    [day, hour, barn, isTest]);
+  // OR IGNORE: an inbound text can race the tick's own INSERT for the same
+  // barn-hour. The loser must not throw — it re-reads the winner's row, which
+  // is the row it wanted either way.
+  await execute(db, `INSERT OR IGNORE INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
+    VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [season, day, hour, barn, asked ? sqliteUtc(now) : null, isTest]);
+  return await find();
 }
 
 // ─── CRON: every 5 minutes ─────────────────────────────────────────────
@@ -247,37 +322,63 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
     // foreman is isolated; the write still lands before the send, so a failed
     // text leaves a row that the next tick can move forward.
     try {
+      // (a) Every open row, not only the just-ended hour. A nudge that falls
+      // due after the clock has rolled past its hour would otherwise strand
+      // its row at 'pending' for the rest of the day.
+      const open = await query(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
+        AND status IN ('pending', 'nudged') ORDER BY hour_start`, [day, f.barn, isTest]);
+
+      for (const row of open) {
+        const d = tickDecision(row, now, { activeSince: f.active_since });
+        if (!d) continue;
+        // Every send is gated on its own guarded write winning. A doubled or
+        // retried tick loses the WHERE-clause race, writes nothing, and so
+        // sends nothing — the row state is what makes a text at-most-once.
+        if (d.type === 'nudge') {
+          const { changes } = await execute(db,
+            `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
+          if (!changes) continue;
+          acted++;
+          await sendSms(env, { to: f.phone, body: reminderText(f.barn, row.hour_start) });
+        } else if (d.type === 'missing') {
+          const { changes } = await execute(db,
+            `UPDATE harvest_hourly SET status = 'missing' WHERE id = ? AND status = 'nudged'`, [row.id]);
+          if (!changes) continue;
+          acted++;
+          await sendTelegramMessage(env, {
+            chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
+            text: `⏰ Sin respuesta: ${BARN_LABELS[f.barn]} ${row.hour_start} (${f.name})`,
+          });
+        }
+      }
+
+      // (b) The just-ended hour, when it has no row at all. A row that exists
+      // was already handled above, or is finished and needs nothing.
+      if (je) {
+        const exists = await queryOne(db, `SELECT id FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
+          [je.harvest_date, je.hour_start, f.barn, isTest]);
+        if (!exists && tickDecision(null, now, { activeSince: f.active_since })) {
+          const { changes } = await execute(db, `INSERT OR IGNORE INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [seasonOf(je.harvest_date), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
+          if (changes) {
+            acted++;
+            await sendSms(env, { to: f.phone, body: promptText(f.barn, je.hour_start) });
+          }
+        }
+      }
+
+      // (c) Auto-stop last on purpose: at 20:00 the 19:00 hour still gets its
+      // prompt above before this tick says "Paramos por hoy". active_since
+      // scopes the three-missed rule to the current run, so a foreman who
+      // texts EMPEZAR again is not stopped by the run before it.
       const recent = await query(db, `SELECT status, asked_at FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
         AND status IN ('complete', 'missing') ORDER BY hour_start DESC LIMIT 3`, [day, f.barn, isTest]);
-      // active_since scopes the three-missed rule to the current run, so a
-      // foreman who texts EMPEZAR again is not stopped by the run before it.
       if (shouldAutoStop({ hourNow, recent, activeSince: f.active_since })) {
-        await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ?`, [f.phone]);
-        await sendSms(env, { to: f.phone, body: 'Paramos por hoy. Escribe EMPEZAR manana.' });
-        acted++;
-        continue;
-      }
-      if (!je) continue;
-
-      const row = await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
-        [je.harvest_date, je.hour_start, f.barn, isTest]);
-      const d = tickDecision(row, now, { activeSince: f.active_since });
-      if (!d) continue;
-      acted++;
-
-      if (d.type === 'ask') {
-        await execute(db, `INSERT OR IGNORE INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
-          VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [seasonOf(je.harvest_date), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
-        await sendSms(env, { to: f.phone, body: promptText(f.barn, je.hour_start) });
-      } else if (d.type === 'nudge') {
-        await execute(db, `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
-        await sendSms(env, { to: f.phone, body: reminderText(f.barn, je.hour_start) });
-      } else if (d.type === 'missing') {
-        await execute(db, `UPDATE harvest_hourly SET status = 'missing' WHERE id = ? AND status = 'nudged'`, [row.id]);
-        await sendTelegramMessage(env, {
-          chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
-          text: `⏰ Sin respuesta: ${BARN_LABELS[f.barn]} ${je.hour_start} (${f.name})`,
-        });
+        const { changes } = await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ? AND active = 1`, [f.phone]);
+        if (changes) {
+          acted++;
+          await sendSms(env, { to: f.phone, body: 'Paramos por hoy. Escribe EMPEZAR manana.' });
+        }
       }
     } catch (e) {
       console.error(`[hourly-tick] ${f.phone}: ${e.message}`);
@@ -297,17 +398,20 @@ async function readDay(db, env, date) {
   for (const barn of Object.keys(BARN_LABELS)) {
     const mine = rows.filter(r => r.barn === barn);
     const done = mine.filter(r => r.status === 'complete');
+    // Crew rates need whole hours to divide by, so person-hours and the
+    // racks-per-hanger-hour ratio stay over complete rows only. Racks do not:
+    // a rack hung is a rack hung even if the crew counts never came in.
     const sum = (f) => done.reduce((s, r) => s + (r[f] || 0), 0);
     const personHours = ['cutters', 'cutter_water_spiders', 'drivers', 'hangers', 'hanging_water_spiders'].reduce((s, f) => s + sum(f), 0);
     const hangerHours = sum('hangers');
     barns[barn] = {
       label: BARN_LABELS[barn],
       rows: mine,
-      total_racks: sum('racks'),
+      total_racks: sumRacks(mine),
       person_hours: personHours,
       racks_per_hanger_hour: hangerHours ? Math.round((sum('racks') / hangerHours) * 100) / 100 : null,
       missing_hours: mine.filter(r => r.status === 'missing').map(r => r.hour_start),
-      latest: mine.filter(r => r.status === 'complete').slice(-1)[0] || null,
+      latest: done[done.length - 1] || null,
     };
   }
   return { date, is_test: isTest, roster, barns };

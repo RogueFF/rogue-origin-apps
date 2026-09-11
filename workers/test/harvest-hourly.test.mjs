@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   COUNT_FIELDS, BARN_LABELS, validateCounts, missingFields, classifyInbound,
   hourEnd, hourRange, promptText, reminderText, helpText, confirmText, askMissingText,
-  notUnderstoodText, normalizeNotes, tickDecision, shouldAutoStop,
+  notUnderstoodText, temporaryErrorText, normalizeNotes, tickDecision, shouldAutoStop,
 } from '../src/lib/harvest-hourly.js';
 
 const COMPLETE_ROW = { barn: 'bottom', hour_start: '09:00', cutters: 4, cutter_water_spiders: 2,
@@ -100,12 +100,13 @@ test('every outbound text is GSM-safe ASCII, and the per-hour ones fit one segme
     confirmText: confirmText(COMPLETE_ROW),
     askMissingText: askMissingText({ ...COMPLETE_ROW, racks: null }),
     notUnderstoodText: notUnderstoodText(),
+    temporaryErrorText: temporaryErrorText(),
   };
   for (const [name, t] of Object.entries(texts)) {
     assert.match(t, /^[\x20-\x7E]+$/, `${name} has a non-GSM character: ${JSON.stringify(t)}`);
   }
   // helpText is allowed two segments — it is only ever sent when asked for.
-  for (const name of ['reminderText', 'notUnderstoodText']) {
+  for (const name of ['reminderText', 'notUnderstoodText', 'temporaryErrorText']) {
     assert.ok(texts[name].length <= 160, `${name} too long: ${texts[name].length}`);
   }
 });
@@ -176,6 +177,11 @@ test('normalizeNotes: a real note survives, no-news phrases and blanks become nu
   assert.equal(normalizeNotes('sin novedad'), null);
   assert.equal(normalizeNotes('Sin Novedades.'), null);
   assert.equal(normalizeNotes('NADA!'), null);
+  // Trailing punctuation of any kind is stripped before the no-news match.
+  assert.equal(normalizeNotes('sin novedad,'), null);
+  assert.equal(normalizeNotes('nada;'), null);
+  assert.equal(normalizeNotes('ok...'), null);
+  assert.equal(normalizeNotes('todo bien !'), null);
   assert.equal(normalizeNotes('todo bien'), null);
   assert.equal(normalizeNotes('ok'), null);
   assert.equal(normalizeNotes('nothing'), null);
