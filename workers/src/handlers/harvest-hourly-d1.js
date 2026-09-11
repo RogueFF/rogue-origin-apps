@@ -335,6 +335,10 @@ async function getOrCreateRow(db, { day, hour, barn, isTest, season, now, asked 
 
 // ─── CRON: every 5 minutes ─────────────────────────────────────────────
 
+// Strip the characters Telegram's Markdown parser chokes on, so a foreman
+// name is never the reason an alert 400s.
+const tgSafe = (s) => String(s).replace(/[_*\[\]`]/g, '');
+
 export async function runHarvestHourlyTick(env, now = new Date()) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
@@ -390,7 +394,9 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
         acted++;
         await sendTelegramMessage(env, {
           chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
-          text: `⏰ Sin respuesta: ${BARN_LABELS[row.barn]} ${row.hour_start} (${f.name})`,
+          // sendTelegramMessage defaults to Markdown: an unescaped _ * [ ] ` in a
+          // foreman's name makes Telegram 400 and the alert is lost.
+          text: `⏰ Sin respuesta: ${BARN_LABELS[row.barn]} ${row.hour_start} (${tgSafe(f.name)})`,
         });
       }
     } catch (e) {
