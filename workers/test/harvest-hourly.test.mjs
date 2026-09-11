@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   COUNT_FIELDS, BARN_LABELS, validateCounts, missingFields, classifyInbound,
   hourEnd, hourRange, promptText, reminderText, helpText, confirmText, askMissingText,
-  notUnderstoodText, tickDecision, shouldAutoStop,
+  notUnderstoodText, normalizeNotes, tickDecision, shouldAutoStop,
 } from '../src/lib/harvest-hourly.js';
 
 const COMPLETE_ROW = { barn: 'bottom', hour_start: '09:00', cutters: 4, cutter_water_spiders: 2,
@@ -168,4 +168,23 @@ test('shouldAutoStop: 8 PM or three finalized hours all missing', () => {
     recent: [miss('2026-10-15 19:00:00'), miss('2026-10-15 18:00:00'), miss('2026-10-15 17:00:00')],
     activeSince: '2026-10-15 20:00:00',
   }), false);
+});
+
+test('normalizeNotes: a real note survives, no-news phrases and blanks become null', () => {
+  assert.equal(normalizeNotes('se rompio un rack'), 'se rompio un rack');
+  assert.equal(normalizeNotes('  falto un chofer  '), 'falto un chofer');
+  assert.equal(normalizeNotes('sin novedad'), null);
+  assert.equal(normalizeNotes('Sin Novedades.'), null);
+  assert.equal(normalizeNotes('NADA!'), null);
+  assert.equal(normalizeNotes('todo bien'), null);
+  assert.equal(normalizeNotes('ok'), null);
+  assert.equal(normalizeNotes('nothing'), null);
+  assert.equal(normalizeNotes('none'), null);
+  assert.equal(normalizeNotes('no notes'), null);
+  assert.equal(normalizeNotes('   '), null);
+  assert.equal(normalizeNotes(null), null);
+  assert.equal(normalizeNotes(undefined), null);
+  // Only a whole-string match is no-news: these carry real information.
+  assert.equal(normalizeNotes('nada de agua en el granero'), 'nada de agua en el granero');
+  assert.equal(normalizeNotes('todo bien menos el rack 3'), 'todo bien menos el rack 3');
 });

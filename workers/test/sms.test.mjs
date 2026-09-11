@@ -24,6 +24,11 @@ test('verifyTwilioSignature accepts the right header and rejects a wrong or miss
   assert.equal(await verifyTwilioSignature(TOKEN, URL, { ...PARAMS, Body: 'tampered' }, good), false);
 });
 
+test('twilioSignature handles a non-ASCII body the same way node:crypto does', async () => {
+  const params = { ...PARAMS, Body: 'se rompió un rack 🙂' };
+  assert.equal(await twilioSignature(TOKEN, URL, params), oracle(TOKEN, URL, params));
+});
+
 test('sendSms returns false and does not fetch when secrets are unset', async () => {
   let called = false;
   const ok = await sendSms({}, { to: '+15415550100', body: 'hi' }, async () => { called = true; });
@@ -40,4 +45,17 @@ test('sendSms posts Basic-auth form data to the Twilio Messages endpoint', async
   assert.equal(seen.url, 'https://api.twilio.com/2010-04-01/Accounts/ACxxx/Messages.json');
   assert.equal(seen.init.headers.Authorization, 'Basic ' + Buffer.from('ACxxx:tok').toString('base64'));
   assert.equal(String(seen.init.body), 'From=%2B15415550100&To=%2B15415550199&Body=hola');
+});
+
+test('sendSms throws on a Twilio error, naming the status and the recipient', async () => {
+  const env = { TWILIO_ACCOUNT_SID: 'ACxxx', TWILIO_AUTH_TOKEN: 'tok', TWILIO_FROM_NUMBER: '+15415550100' };
+  const fakeFetch = async () => ({ ok: false, status: 400, text: async () => 'not a mobile number' });
+  await assert.rejects(
+    () => sendSms(env, { to: '+15415550199', body: 'hola' }, fakeFetch),
+    (e) => {
+      assert.match(e.message, /400/);
+      assert.match(e.message, /\+15415550199/);
+      assert.match(e.message, /not a mobile number/);
+      return true;
+    });
 });
