@@ -171,6 +171,16 @@ export function temporaryErrorText() {
 }
 
 /**
+ * The reply when the foreman names an hour that has not finished yet — a bare
+ * "5:" at 10 AM is read as 17:00 (the barn is never open at 5 AM). Creating
+ * that row would give the day a future hour that swallows every later
+ * un-prefixed answer and gets flagged missing hours before it exists.
+ */
+export function futureHourText() {
+  return 'Esa hora todavia no termina.';
+}
+
+/**
  * Milliseconds since a SQLite UTC timestamp, or Infinity when it is missing or
  * unparseable. Infinity means "overdue": a row whose clock we cannot read must
  * still move forward, and the write that moves it stamps a fresh timestamp.
@@ -206,7 +216,11 @@ export function tickDecision(row, now, { activeSince } = {}) {
     return { type: 'ask' };
   }
   const t = now.getTime();
-  if (row.status === 'pending' && msSince(row.asked_at, t) >= NUDGE_AFTER_MS) return { type: 'nudge' };
+  // A backfill row has no asked_at — the bot never prompted for that hour, the
+  // foreman volunteered it. Its clock is answered_at, the write that created
+  // its counts; without this the null reads as Infinity and the very next tick
+  // nudges a row the foreman filled in seconds ago.
+  if (row.status === 'pending' && msSince(row.asked_at ?? row.answered_at, t) >= NUDGE_AFTER_MS) return { type: 'nudge' };
   if (row.status === 'nudged' && msSince(row.nudged_at, t) >= MISSING_AFTER_MS) return { type: 'missing' };
   return null;
 }

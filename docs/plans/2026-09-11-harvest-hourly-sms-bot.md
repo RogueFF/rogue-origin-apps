@@ -364,11 +364,22 @@ block, and the first draft of this plan did not compile because of it.
   `person_hours` and `racks_per_hanger_hour` stay over complete rows only —
   a rate needs a whole hour to divide by, a rack count does not.
 - **Backfill rows carry `asked_at NULL`.** An hour the foreman volunteered
-  ("9am: ...") was never prompted, so there is no prompt clock to stamp.
-- **The tick processes every open row**, not just the just-ended hour, so a
-  nudge that falls due after the clock rolls past its hour does not strand its
-  row at `pending`. Each send is gated on its guarded write winning, which is
-  what makes a doubled tick send nothing.
+  ("9am: ...") was never prompted, so there is no prompt clock to stamp. Their
+  nudge clock is `answered_at` instead — `tickDecision` reads
+  `asked_at ?? answered_at`, or a null `asked_at` would count as infinitely
+  overdue and the next tick would nudge a row filled in seconds earlier.
+- **An hour that has not ended yet is never created.** A bare hour below 6 is
+  read as PM, so "5: ..." sent at 10 AM means 17:00; the reply is "Esa hora
+  todavia no termina." and no row is written. `openRow` is also bounded by the
+  last ended hour, so a stray future row can never swallow later answers.
+- **The tick's open-row pass is driven by the rows, not the roster**, and
+  covers every open hour rather than only the just-ended one. An open row
+  belongs to the barn whether or not anyone is on shift — otherwise the 19:00
+  row the 20:00 tick asks for would strand forever behind that same tick's
+  auto-stop (and likewise behind a PARAR). Each row is matched to its barn's
+  current-or-last foreman. The ask and the auto-stop stay on the active
+  roster. Each send is gated on its guarded write winning, which is what makes
+  a doubled tick send nothing.
 - **Auto-stop runs after the ask**, so the 20:00 tick still prompts for the
   19:00 hour before it says "Paramos por hoy".
 - **An inactive foreman can still answer an open row** — that is how the reply
