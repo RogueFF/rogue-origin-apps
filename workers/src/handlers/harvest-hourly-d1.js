@@ -646,17 +646,25 @@ async function capatazWatchdog(db, env, now) {
   if (!stalled && !unanswered) return released;
 
   // At most one of these every 30 minutes: the tick runs every 5, and a relay
-  // that is down is down for a while. A missing or unreadable timestamp falls
-  // through to sending — an alert too many beats a silent outage.
-  const last = await queryOne(db, `SELECT value FROM system_config WHERE key = ?`, [CAPATAZ_ALERT_KEY]);
-  if (last?.value && t - parseSqliteUtc(last.value).getTime() < CAPATAZ_ALERT_EVERY_MS) return released;
-  // Claimed before the send, not after: sendTelegramMessage can be slow or
-  // throw, and a doubled tick must not get past this on the retry.
-  await execute(db, `
+  // that is down is down for a while.
+  //
+  // The upsert IS the rate limit, not a write that follows a read of one. Read
+  // first, two ticks running together both see the old timestamp, both decide
+  // to send, and Koa gets the alert twice; here the second one's UPDATE matches
+  // no row and it sends nothing. Claiming before the send matters for the same
+  // reason — sendTelegramMessage can be slow or throw, and a retry must not get
+  // past this.
+  //
+  // The GLOB arm keeps the old behaviour for a value that is not a timestamp at
+  // all: a plain `value < cutoff` would read garbage as "recent" and mute the
+  // alert forever. An alert too many beats a silent outage.
+  const claim = await execute(db, `
     INSERT INTO system_config (key, value, value_type, category, description, updated_at)
     VALUES (?, ?, 'string', 'harvest', 'Last Capataz relay staleness alert (SQLite UTC)', datetime('now'))
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
-  `, [CAPATAZ_ALERT_KEY, sqliteUtc(now)]);
+      WHERE system_config.value < ? OR system_config.value NOT GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] *'
+  `, [CAPATAZ_ALERT_KEY, sqliteUtc(now), sqliteUtc(new Date(t - CAPATAZ_ALERT_EVERY_MS))]);
+  if (!claim.changes) return released;
 
   const parts = [];
   if (stalled) parts.push(`${waiting} pendientes, el mas viejo ${Math.floor(oldestMs / 60000)} min`);
@@ -792,7 +800,13 @@ async function readDay(db, env, date) {
   // Queue depth, not a count for this date: the inbox has no harvest_date, and
   // what the dashboard card is reporting is "texts Capataz has not picked up",
   // which is a right-now number whatever day is being read.
-  const pending = await queryOne(db, `SELECT COUNT(*) AS n FROM harvest_sms_inbox WHERE kind = 'chat' AND processed = 0`);
+  //
+  // Same foreman filter as pollSms and the watchdog, or the three disagree: an
+  // orphaned row the poll will never hand out and the watchdog deliberately
+  // ignores would still be counted here, and the card would show a queue that
+  // never drains while everything else says the relay is healthy.
+  const pending = await queryOne(db, `SELECT COUNT(*) AS n FROM harvest_sms_inbox
+    WHERE kind = 'chat' AND processed = 0 AND from_phone IN (SELECT phone FROM harvest_foremen)`);
 
   const barns = {};
   for (const barn of Object.keys(BARN_LABELS)) {
