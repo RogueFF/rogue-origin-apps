@@ -3,9 +3,11 @@
  *
  * Same approach as harvest-d1.js: let Intl carry the DST rules rather than an
  * offset that is right for half of harvest and wrong for the other half — the
- * season runs across the November change. Duplicated here (four lines) rather
- * than exported from the 4,800-line handler, so the pure libs stay importable
- * in tests without dragging Shopify and R2 code along.
+ * season runs across the November change. Three of these (pacificDay, sqliteUtc,
+ * parseSqliteUtc) plus HARVEST_TZ duplicate private copies in harvest-d1.js,
+ * rather than being exported from that 4,800-line handler, so the pure libs stay
+ * importable in tests without dragging Shopify and R2 code along. pacificParts
+ * and justEndedHour are new here.
  */
 export const HARVEST_TZ = 'America/Los_Angeles';
 
