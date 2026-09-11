@@ -155,6 +155,11 @@ export function dashPage() {
   .rack li b { font-weight:700; color:var(--ink); }
   .rack li span { font-family:var(--mono); font-size:.72rem; color:var(--muted); white-space:nowrap; }
 
+  /* Plain tables (the hourly crew log). The class-qualified rules below win on
+     specificity, so the event feed keeps its own padding. */
+  td, th { padding:2px 8px; text-align:left; }
+  .muted { opacity:.6; }
+
   table.feed { width:100%; border-collapse:collapse; font-size:.88rem; }
   table.feed th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em;
                   color:var(--muted); border-bottom:1px solid var(--line2); padding:0 10px 7px 0; }
@@ -240,9 +245,23 @@ export function dashPage() {
       .then(function (j) {
         try { sessionStorage.setItem('rf_dash_pw', pw); } catch (e) {}
         render(j, false);
+        loadHourly(pw);
       })
       .catch(function (e) { $('err').textContent = e.message; })
       .then(function () { $('go').disabled = false; });
+  }
+
+  // Its own fetch, after the page is already drawn: the hourly log is a second
+  // source and a slow or missing one must not hold up — or blank — the rest of
+  // the dashboard. A failure leaves the slot empty rather than an error.
+  function loadHourly(pw) {
+    return fetch(API + '?action=hourly', { headers: { authorization: pw } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (h) {
+        var host = $('hourly'); if (!host) return;
+        host.innerHTML = h ? cardHourly(h) : '';
+      })
+      .catch(function () {});
   }
 
   $('go').addEventListener('click', function () { load($('pw').value); });
@@ -350,7 +369,7 @@ export function dashPage() {
       return;
     }
 
-    $('cards').innerHTML = [
+    $('cards').innerHTML = ['<div id="hourly"></div>',
       cardRacks(d), cardDry(d), cardCadence(d), cardCrew(d), cardAfterTag(d), cardFeed(d)
     ].join('');
   }
@@ -361,6 +380,37 @@ export function dashPage() {
     var m = s.length >> 1;
     var v = s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
     return Math.round(v * 10) / 10;
+  }
+
+  // 0 ── hourly crew log (SMS bot)
+  function cardHourly(h) {
+    var barns = ['upper', 'bottom'];
+    var any = barns.some(function (b) { return h.barns[b].rows.length; });
+    if (!any) {
+      return '<section class="card"><h2>Hourly crew log</h2><p class="lede">No hourly texts yet today (' + esc(h.date) + ').</p></section>';
+    }
+    var head = '<tr><th>Hour</th><th>Cut</th><th>WS field</th><th>Drv</th><th>Hang</th><th>WS barn</th><th>Racks</th><th>Notes</th></tr>';
+    var blocks = barns.map(function (b) {
+      var x = h.barns[b];
+      var rows = x.rows.map(function (r) {
+        var st = r.status === 'complete' ? '' : ' <span class="muted">(' + esc(r.status) + ')</span>';
+        return '<tr><td>' + esc(r.hour_start) + st + '</td><td>' + num(r.cutters) + '</td><td>' + num(r.cutter_water_spiders) +
+          '</td><td>' + num(r.drivers) + '</td><td>' + num(r.hangers) + '</td><td>' + num(r.hanging_water_spiders) +
+          '</td><td>' + num(r.racks) + '</td><td>' + esc(r.notes || '') + '</td></tr>';
+      }).join('');
+      var mismatch = '';
+      if (h.roster && x.latest) {
+        var diff = ['drivers', 'cutter_water_spiders', 'hangers', 'hanging_water_spiders'].filter(function (f) {
+          return h.roster[f] != null && x.latest[f] != null && h.roster[f] !== x.latest[f];
+        });
+        if (diff.length) mismatch = '<p class="lede">Roster differs on: ' + esc(diff.join(', ')) + '</p>';
+      }
+      return '<h3>' + esc(x.label) + ' — ' + x.total_racks + ' racks · ' + x.person_hours + ' person-hrs · ' +
+        (x.racks_per_hanger_hour == null ? '—' : x.racks_per_hanger_hour) + ' racks/hanger-hr' +
+        (x.missing_hours.length ? ' · missing ' + esc(x.missing_hours.join(', ')) : '') + '</h3>' +
+        mismatch + '<div style="overflow-x:auto"><table>' + head + rows + '</table></div>';
+    }).join('');
+    return '<section class="card"><h2>Hourly crew log</h2>' + blocks + '</section>';
   }
 
   // 1 ── dry days
