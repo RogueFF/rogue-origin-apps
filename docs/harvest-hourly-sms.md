@@ -111,7 +111,9 @@ curl -s "https://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?actio
 > test rows (`workers/wrangler.toml` carries the history). `is_test` on `harvest_hourly`
 > rows simply follows the same flag as everything else — there is no hourly-only switch.
 
-Rehearse against production instead, then delete exactly what you wrote:
+Rehearse against production instead, then delete exactly what you wrote.
+`hourly_simulate` runs against whatever worker you call it on — on production it writes
+real rows and flips real foremen; use it locally.
 
 1. Pick a **non-harvest day, or a barn that is not running.** Register a rehearsal
    phone on that barn (`foreman_set`), text `EMPEZAR`, wait for the next top of hour,
@@ -126,10 +128,15 @@ npx wrangler d1 execute rogue-origin-db --remote \
   --command="DELETE FROM harvest_sms_inbox WHERE received_at < '<date> 23:59:59' AND from_phone = '<phone>';"
 npx wrangler d1 execute rogue-origin-db --remote \
   --command="UPDATE harvest_foremen SET active = 0, active_since = NULL WHERE phone = '<phone>';"
+npx wrangler d1 execute rogue-origin-db --remote \
+  --command="DELETE FROM harvest_foremen WHERE phone = '<phone>';"
 ```
 
 `harvest_sms_inbox` is the Twilio-redelivery dedupe ledger and `harvest_foremen` is the
 roster; neither carries `is_test`, so both are cleared by phone.
+
+Deleting the rehearsal roster row is not the end of it: the barn's **real** foreman has
+to text `EMPEZAR` again, because the rehearsal `EMPEZAR` deactivated them.
 
 ---
 
@@ -146,10 +153,10 @@ barn's rack total: `Ok, paramos. Hoy Granero Arriba: 27 racks. Gracias.`
 - the Pacific clock hour is **20 or later** — and the 20:00 tick still asks for the
   19:00 hour first, so nothing is dropped at the end of the day.
 
-**After 8 PM the bot asks for no new hours. Open rows still age to `missing` and reach
-Telegram** — an evening alert is the log catching up, not a prompt that went out late.
-(An hour still open at the auto-stop can draw its one `Recordatorio` text on a later
-tick; the nudge pass follows the rows, not the clock.)
+**After 8 PM the bot sends no reminders and asks for no new hours.** The 20:00 tick is
+the one exception: it still sends the 19:00 prompt and then the `Paramos por hoy`
+sign-off, back to back. Open rows still age to `missing` and reach Telegram, so an
+evening alert is the log catching up.
 
 **The hourly cycle** runs off the every-5-minute cron, driven by row state, so a late
 or doubled tick never texts twice:
@@ -157,7 +164,7 @@ or doubled tick never texts twice:
 | When | What |
 |---|---|
 | Top of the hour | Prompt: `12:00 Granero Arriba. Responde en un mensaje: cortadores, waterspiders campo, choferes, colgadores, waterspiders granero, racks, notas.` |
-| +15 min, no answer | Nudge: `Recordatorio Granero Arriba: faltan los numeros de 11-12. Ejemplo: 4 2 3 8 1 12 sin novedad` |
+| +15 min, no answer (before 8 PM) | Nudge: `Recordatorio Granero Arriba: faltan los numeros de 11-12. Ejemplo: 4 2 3 8 1 12 sin novedad` |
 | +30 min, still nothing | Row flagged `missing`, and Telegram gets `⏰ Sin respuesta: Granero Arriba 11:00 (Juan)` |
 
 **Answering.** Six numbers in order — cutters, field waterspiders, drivers, hangers,
@@ -293,6 +300,7 @@ by unit tests.
 | `[hourly-tick] no foreman registered for barn <barn> — <hour> left open` | An open row on a barn with no roster entry at all. Register a foreman; the row stays open until someone can be texted about it. |
 | Foreman gets `No entendi` | Check `raw_reply` on the row — his text verbatim, and what the parse actually saw: `SELECT hour_start, raw_reply, status FROM harvest_hourly WHERE harvest_date = '<date>' AND barn = '<barn>' ORDER BY hour_start`. The row keeps its grace period from that reply. |
 | A freshly activated foreman gets no prompt on the next tick | By design. An hour that ended **before** he texted `EMPEZAR` is never asked about — he was not working it. The first ask appears on a tick in a clock hour after the activation hour. |
+| Foreman texted `STOP` (English) | Twilio's carrier-level opt-out unsubscribed the number; every send to them fails with Twilio error 21610 (`[hourly-tick] +1…: Twilio 400…`). Recovery: they text `START` or `UNSTOP` to the bot number, then `EMPEZAR`. Tell foremen to use `PARAR`, never STOP. |
 | No texts arrive at all, but the log looks clean | Toll-free verification is not approved yet, or the three `TWILIO_*` secrets are unset (look for `[sms] not configured`). |
 
 ---

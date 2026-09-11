@@ -323,8 +323,8 @@ only its five names and nothing else was shadowed.
 
 ```
 $ npm test
-ℹ tests 40
-ℹ pass 40
+ℹ tests 41
+ℹ pass 41
 ℹ fail 0
 ```
 
@@ -352,4 +352,4 @@ $ npm test
 | Tick pass 3 (doubled tick) | PASS — no-op |
 | Dispatch fall-through (4 non-hourly actions) | PASS — all reach `handleHarvestD1` |
 | `GET /` health check | PASS — `endpoints` unchanged |
-| `npm test` | PASS — 40/40 |
+| `npm test` | PASS — 41/41 (41 after the Task 6 round-two test) |
