@@ -451,8 +451,28 @@ rows; the wording and the conversational manners are the persona's. `gsmSafe` on
 
 ### The watchdog
 
-Pass (d) of the every-5-minute tick asks two questions, both joined to
-`harvest_foremen` so a deleted foreman cannot make the relay look stalled:
+Pass (d) of the every-5-minute tick reclaims stranded rows, then asks two questions.
+
+Before it counts anything it hands back the rows a dying worker stranded. **Every
+inbound text is inserted `processed=1` — claimed by the worker — and released to
+`processed=0` only once `processInbound` has decided it is chat**; that is what stops
+the relay answering an `EMPEZAR` the worker is also answering, which would text the
+foreman twice. A worker that dies in between leaves a row claimed by nobody, invisible
+to both clauses below (`delivered_at` is NULL, `processed` is 1) and stuck forever. So
+the tick first runs:
+
+```sql
+UPDATE harvest_sms_inbox SET processed = 0
+ WHERE kind = 'chat' AND processed = 1 AND delivered_at IS NULL AND received_at < <now − 2 min>
+```
+
+Two minutes is well past any real classification and well short of the 3-minute
+staleness alert, so a released text still gets answered before anyone is told anything
+is wrong. It logs `released N chat text(s) stranded by an interrupted worker` when it
+finds any.
+
+Then the two questions, both joined to `harvest_foremen` so a deleted foreman cannot
+make the relay look stalled:
 
 - **Stale** — `kind='chat' AND processed=0`, and the oldest has been waiting **over 3
   minutes**. Nobody is polling: the relay is down or cannot reach the worker.
@@ -492,6 +512,7 @@ npx wrangler d1 execute rogue-origin-db --remote \
 | Capataz asks for confirmation, sends two texts, or uses accents | Persona drift. Fix `prompts/persona.md` and reset `data/sessions.json` to `{}` — resumed sessions keep the old prompt. Never fix this in the worker. |
 | `pending_sms` climbs steadily on the dashboard | Same cause as the stale alert. One or two is normal in-flight traffic. |
 | `[hourly-tick] <phone>: <error>` or `[hourly-tick] <barn> <hour>: <error>` | One barn's send or write failed; the other barn and the other rows continued. Usually a bad phone number or a Twilio error (the message names the status and the recipient). |
+| `[capataz-watchdog] released N chat text(s) stranded by an interrupted worker` | A worker died between claiming an inbound text and releasing it to the relay (see "claimed at insert" below). The tick handed them back; the relay answers them late. One or two after a deploy is normal — a steady stream means the worker is crashing mid-request, so check `wrangler tail`. |
 | `[capataz-watchdog] <error>` | The watchdog itself faulted; the tick's prompts and nudges still ran (it is wrapped). Usually a missing 0033 column — check `PRAGMA table_info(harvest_sms_inbox)`. |
 | Dashboard 500s right after a deploy | 0033 was not applied to remote D1 first. The `hourly` read selects `harvest_sms_inbox.kind`. Apply it, no redeploy needed. |
 | `[hourly-tick] no foreman registered for barn <barn> — <hour> left open` | An open row on a barn with no roster entry at all. Register a foreman; the row stays open until someone can be texted about it. |

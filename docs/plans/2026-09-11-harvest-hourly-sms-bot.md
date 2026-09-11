@@ -363,6 +363,18 @@ block, and the first draft of this plan did not compile because of it.
   rule below still holds; the write core moved verbatim from `answer()` into
   `applyHourlyReport`. Plan: `docs/plans/2026-09-11-capataz-v2.md`. The two
   notes that no longer apply are marked (v1 only) below.
+- **v2: an inbound row is claimed by the worker at insert, and released to the
+  relay only once it is known to be chat.** `harvest_sms_inbox` rows go in
+  `processed=1` and `processInbound` sets `processed=0` on the one path that
+  ends in "this is chat". Inserted unclaimed, a row would be pollable for the
+  three round-trips it takes to classify it, and the relay would answer an
+  `EMPEZAR` the worker is also answering — two texts to one foreman for one
+  message. The cost is a row stranded at `processed=1` when a worker dies
+  mid-classification, which neither watchdog clause can see (`delivered_at` is
+  null, `processed` is 1); tick pass (d) releases any such row older than two
+  minutes before it counts anything, so the text is answered late rather than
+  never. A lost text would be worse than a late one, and a doubled one worse
+  than both.
 
 - **Notes append with `; `.** A later reply never erases an earlier note — the
   UPDATE concatenates in SQL rather than read-modify-write, so two texts seconds

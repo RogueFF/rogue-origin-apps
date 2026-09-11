@@ -580,7 +580,32 @@ const tgSafe = (s) => String(s).replace(/[_*\[\]`]/g, '');
 const CAPATAZ_ALERT_KEY = 'capataz_stale_alert_at';
 const CAPATAZ_STALE_MS = 3 * 60 * 1000;         // queued, nobody has polled it
 const CAPATAZ_UNANSWERED_MS = 5 * 60 * 1000;    // polled, no reply ever sent
+const CAPATAZ_STRAND_MS = 2 * 60 * 1000;        // claimed at insert, never released
 const CAPATAZ_ALERT_EVERY_MS = 30 * 60 * 1000;
+
+/**
+ * Un-strand chat rows a dying worker left claimed.
+ *
+ * processInbound inserts every row processed=1 and releases it to the relay
+ * only once it has decided the text is chat — that is what stops the relay
+ * answering an EMPEZAR the worker is also answering. A worker that dies in
+ * between leaves a row claimed by nobody: `delivered_at IS NULL` says the relay
+ * never took it, and with processed=1 neither watchdog clause can see it. It
+ * would sit there forever.
+ *
+ * Two minutes is well past any real classification (three queries) and well
+ * short of the 3-minute staleness alert, so a released row still gets answered
+ * before Koa is told anything is wrong. A text that was actually a command gets
+ * handed to the relay, which tells the foreman to write EMPEZAR — a late answer
+ * he can act on, rather than silence.
+ */
+async function releaseStrandedChat(db, now) {
+  const { changes } = await execute(db, `UPDATE harvest_sms_inbox SET processed = 0
+    WHERE kind = 'chat' AND processed = 1 AND delivered_at IS NULL AND received_at < ?`,
+    [sqliteUtc(new Date(now.getTime() - CAPATAZ_STRAND_MS))]);
+  if (changes) console.warn(`[capataz-watchdog] released ${changes} chat text(s) stranded by an interrupted worker`);
+  return changes;
+}
 
 /**
  * Is the relay draining the inbox? Two distinct failures, one alert.
@@ -602,6 +627,10 @@ const CAPATAZ_ALERT_EVERY_MS = 30 * 60 * 1000;
  */
 async function capatazWatchdog(db, env, now) {
   const t = now.getTime();
+  // First, so a row this tick rescues is counted as queued rather than alerted
+  // about on the next one — and so the relay gets it back as soon as possible.
+  const released = await releaseStrandedChat(db, now);
+
   const stale = await queryOne(db, `SELECT COUNT(*) AS n, MIN(i.received_at) AS oldest
     FROM harvest_sms_inbox i JOIN harvest_foremen f ON f.phone = i.from_phone
     WHERE i.kind = 'chat' AND i.processed = 0`);
@@ -614,13 +643,13 @@ async function capatazWatchdog(db, env, now) {
   const unanswered = mute?.n || 0;
   const oldestMs = stale?.oldest ? t - parseSqliteUtc(stale.oldest).getTime() : 0;
   const stalled = waiting > 0 && oldestMs >= CAPATAZ_STALE_MS;
-  if (!stalled && !unanswered) return 0;
+  if (!stalled && !unanswered) return released;
 
   // At most one of these every 30 minutes: the tick runs every 5, and a relay
   // that is down is down for a while. A missing or unreadable timestamp falls
   // through to sending — an alert too many beats a silent outage.
   const last = await queryOne(db, `SELECT value FROM system_config WHERE key = ?`, [CAPATAZ_ALERT_KEY]);
-  if (last?.value && t - parseSqliteUtc(last.value).getTime() < CAPATAZ_ALERT_EVERY_MS) return 0;
+  if (last?.value && t - parseSqliteUtc(last.value).getTime() < CAPATAZ_ALERT_EVERY_MS) return released;
   // Claimed before the send, not after: sendTelegramMessage can be slow or
   // throw, and a doubled tick must not get past this on the retry.
   await execute(db, `
@@ -636,7 +665,7 @@ async function capatazWatchdog(db, env, now) {
     chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
     text: `⚠️ Capataz no esta drenando SMS (${parts.join(', ')})`,
   });
-  return 1;
+  return released + 1;
 }
 
 export async function runHarvestHourlyTick(env, now = new Date()) {
