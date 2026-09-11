@@ -26,7 +26,7 @@ import { pacificDay, pacificParts, justEndedHour, sqliteUtc } from '../lib/pacif
 import {
   BARN_LABELS, FIELD_ES, validateCounts, missingFields, classifyInbound,
   promptText, reminderText, helpText, confirmText, askMissingText, notUnderstoodText,
-  temporaryErrorText, normalizeNotes, tickDecision, shouldAutoStop,
+  temporaryErrorText, futureHourText, normalizeNotes, tickDecision, shouldAutoStop,
 } from '../lib/harvest-hourly.js';
 import { parseReply } from '../lib/harvest-hourly-parse.js';
 
@@ -192,20 +192,26 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
 async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now, say }) {
   const day = pacificDay(now);
   const barn = foreman.barn;
+  const je = justEndedHour(now);
+  // A bare hour below 6 is read as PM, so "5: 4 2 3 8 1 12" sent at 10 AM
+  // means 17:00 — an hour that has not happened. Creating that row would give
+  // the day a future hour that swallows every later un-prefixed answer and
+  // gets nudged and flagged missing hours before the crew reaches it.
+  const isFuture = (h) => !je || h > je.hour_start;
 
   let row;
   if (hour) {
-    // A named hour is a backfill: the bot never asked for it, so asked_at stays
-    // null rather than claiming a prompt that was never sent.
+    if (isFuture(hour)) { say(futureHourText()); return; }
+    // A named past hour is a backfill: the bot never asked for it, so asked_at
+    // stays null rather than claiming a prompt that was never sent.
     row = await getOrCreateRow(db, { day, hour, barn, isTest, season: seasonOf(day), now, asked: false });
   } else {
-    row = await openRow(db, { day, barn, isTest });
+    row = je ? await openRow(db, { day, barn, isTest, maxHour: je.hour_start }) : null;
     if (!row) {
       // An open row is answerable even after the auto-stop — that is how the
       // reply to the 19:00 prompt still lands. Only with nothing open does an
       // inactive foreman get told to start the day.
       if (!foreman.active) { say('Escribe EMPEZAR para comenzar el dia.'); return; }
-      const je = justEndedHour(now);
       if (!je) { say('Todavia no hay hora que reportar.'); return; }
       row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: seasonOf(je.harvest_date), now, asked: true });
     }
@@ -225,6 +231,7 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
 
   // A model-detected hour ("las 9") retargets only when the text had no prefix.
   if (!hour && parsed.hour_override && /^\d{2}:00$/.test(parsed.hour_override) && parsed.hour_override !== row.hour_start) {
+    if (isFuture(parsed.hour_override)) { say(futureHourText()); return; }
     row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: seasonOf(day), now, asked: false });
   }
 
@@ -280,10 +287,15 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
   }
 }
 
-/** The newest hour still awaiting an answer today, or null. */
-function openRow(db, { day, barn, isTest }) {
+/**
+ * The newest finished hour still awaiting an answer today, or null.
+ * `maxHour` is the last hour that has actually ended: a stray future row left
+ * by an earlier bug would otherwise sort first and swallow every answer.
+ */
+function openRow(db, { day, barn, isTest, maxHour }) {
   return queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
-    AND status IN ('pending', 'nudged') ORDER BY hour_start DESC LIMIT 1`, [day, barn, isTest]);
+    AND status IN ('pending', 'nudged') AND hour_start <= ? ORDER BY hour_start DESC LIMIT 1`,
+    [day, barn, isTest, maxHour]);
 }
 
 /**
@@ -309,49 +321,68 @@ async function getOrCreateRow(db, { day, hour, barn, isTest, season, now, asked 
 export async function runHarvestHourlyTick(env, now = new Date()) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
-  const foremen = await query(db, `SELECT * FROM harvest_foremen WHERE active = 1`);
-  if (!foremen.length) return { acted: 0 };
-
   const { hour: hourNow } = pacificParts(now);
   const je = justEndedHour(now);
   const day = pacificDay(now);
   let acted = 0;
 
-  for (const f of foremen) {
-    // One barn's bad phone number must not stop the other barn's hour. Each
-    // foreman is isolated; the write still lands before the send, so a failed
-    // text leaves a row that the next tick can move forward.
+  // ── (a) Every open row today, driven by the rows rather than by the roster.
+  // An open row is the barn's business whether or not anyone is on shift: the
+  // 20:00 tick asks for 19:00 and then auto-stops, and a foreman-driven pass
+  // would never come back for that row — it would never nudge, never go
+  // missing, never reach Telegram, never show in missing_hours. Same story
+  // after PARAR with a nudged row still open.
+  const open = await query(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND is_test = ?
+    AND status IN ('pending', 'nudged') ORDER BY barn, hour_start`, [day, isTest]);
+
+  // Whoever is on the barn now, else whoever was on it last — one lookup per
+  // barn, not per row.
+  const contacts = new Map();
+  for (const row of open) {
+    // Per row, not per barn: one bad phone number must not abandon the rest.
     try {
-      // (a) Every open row, not only the just-ended hour. A nudge that falls
-      // due after the clock has rolled past its hour would otherwise strand
-      // its row at 'pending' for the rest of the day.
-      const open = await query(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
-        AND status IN ('pending', 'nudged') ORDER BY hour_start`, [day, f.barn, isTest]);
-
-      for (const row of open) {
-        const d = tickDecision(row, now, { activeSince: f.active_since });
-        if (!d) continue;
-        // Every send is gated on its own guarded write winning. A doubled or
-        // retried tick loses the WHERE-clause race, writes nothing, and so
-        // sends nothing — the row state is what makes a text at-most-once.
-        if (d.type === 'nudge') {
-          const { changes } = await execute(db,
-            `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
-          if (!changes) continue;
-          acted++;
-          await sendSms(env, { to: f.phone, body: reminderText(f.barn, row.hour_start) });
-        } else if (d.type === 'missing') {
-          const { changes } = await execute(db,
-            `UPDATE harvest_hourly SET status = 'missing' WHERE id = ? AND status = 'nudged'`, [row.id]);
-          if (!changes) continue;
-          acted++;
-          await sendTelegramMessage(env, {
-            chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
-            text: `⏰ Sin respuesta: ${BARN_LABELS[f.barn]} ${row.hour_start} (${f.name})`,
-          });
-        }
+      if (!contacts.has(row.barn)) {
+        contacts.set(row.barn, await queryOne(db, `SELECT phone, name, active_since FROM harvest_foremen
+          WHERE barn = ? ORDER BY active DESC, active_since DESC LIMIT 1`, [row.barn]));
       }
+      const f = contacts.get(row.barn);
+      if (!f) {
+        console.warn(`[hourly-tick] no foreman registered for barn ${row.barn} — ${row.hour_start} left open`);
+        continue;
+      }
+      const d = tickDecision(row, now, { activeSince: f.active_since });
+      if (!d) continue;
+      // Every send is gated on its own guarded write winning. A doubled or
+      // retried tick loses the WHERE-clause race, writes nothing, and so
+      // sends nothing — the row state is what makes a text at-most-once.
+      if (d.type === 'nudge') {
+        const { changes } = await execute(db,
+          `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
+        if (!changes) continue;
+        acted++;
+        await sendSms(env, { to: f.phone, body: reminderText(row.barn, row.hour_start) });
+      } else if (d.type === 'missing') {
+        const { changes } = await execute(db,
+          `UPDATE harvest_hourly SET status = 'missing' WHERE id = ? AND status = 'nudged'`, [row.id]);
+        if (!changes) continue;
+        acted++;
+        await sendTelegramMessage(env, {
+          chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
+          text: `⏰ Sin respuesta: ${BARN_LABELS[row.barn]} ${row.hour_start} (${f.name})`,
+        });
+      }
+    } catch (e) {
+      console.error(`[hourly-tick] ${row.barn} ${row.hour_start}: ${e.message}`);
+    }
+  }
 
+  // ── (b) ask and (c) auto-stop stay on the active roster: only a foreman who
+  // is on shift gets asked for a new hour or told the day is over.
+  const foremen = await query(db, `SELECT * FROM harvest_foremen WHERE active = 1`);
+
+  for (const f of foremen) {
+    // One barn's bad phone number must not stop the other barn's hour.
+    try {
       // (b) The just-ended hour, when it has no row at all. A row that exists
       // was already handled above, or is finished and needs nothing.
       if (je) {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   COUNT_FIELDS, BARN_LABELS, validateCounts, missingFields, classifyInbound,
   hourEnd, hourRange, promptText, reminderText, helpText, confirmText, askMissingText,
-  notUnderstoodText, temporaryErrorText, normalizeNotes, tickDecision, shouldAutoStop,
+  notUnderstoodText, temporaryErrorText, futureHourText, normalizeNotes, tickDecision, shouldAutoStop,
 } from '../src/lib/harvest-hourly.js';
 
 const COMPLETE_ROW = { barn: 'bottom', hour_start: '09:00', cutters: 4, cutter_water_spiders: 2,
@@ -101,12 +101,13 @@ test('every outbound text is GSM-safe ASCII, and the per-hour ones fit one segme
     askMissingText: askMissingText({ ...COMPLETE_ROW, racks: null }),
     notUnderstoodText: notUnderstoodText(),
     temporaryErrorText: temporaryErrorText(),
+    futureHourText: futureHourText(),
   };
   for (const [name, t] of Object.entries(texts)) {
     assert.match(t, /^[\x20-\x7E]+$/, `${name} has a non-GSM character: ${JSON.stringify(t)}`);
   }
   // helpText is allowed two segments — it is only ever sent when asked for.
-  for (const name of ['reminderText', 'notUnderstoodText', 'temporaryErrorText']) {
+  for (const name of ['reminderText', 'notUnderstoodText', 'temporaryErrorText', 'futureHourText']) {
     assert.ok(texts[name].length <= 160, `${name} too long: ${texts[name].length}`);
   }
 });
@@ -138,6 +139,17 @@ test('tickDecision: ask when no row, nudge after 15 min, missing after 15 more, 
   assert.deepEqual(tickDecision({ status: 'pending', asked_at: 'garbage' }, t0), { type: 'nudge' });
   assert.deepEqual(tickDecision({ status: 'nudged', nudged_at: null }, t0), { type: 'missing' });
   assert.deepEqual(tickDecision({ status: 'nudged', nudged_at: 'garbage' }, t0), { type: 'missing' });
+});
+
+test('tickDecision: a backfill row is timed from answered_at, not from its missing asked_at', () => {
+  // The foreman volunteered "9am: 4 2 3" at 21:02 UTC — no prompt was ever
+  // sent for that hour, so asked_at is null and answered_at is its clock.
+  const backfill = { status: 'pending', asked_at: null, answered_at: '2026-10-15 21:02:00' };
+  assert.equal(tickDecision(backfill, new Date('2026-10-15T21:05:00Z')), null);
+  assert.deepEqual(tickDecision(backfill, new Date('2026-10-15T21:17:00Z')), { type: 'nudge' });
+  // With neither timestamp the row still moves forward rather than freezing.
+  assert.deepEqual(tickDecision({ status: 'pending', asked_at: null, answered_at: null },
+    new Date('2026-10-15T21:05:00Z')), { type: 'nudge' });
 });
 
 test('tickDecision: with no row, only ask about hours that ended after EMPEZAR', () => {
