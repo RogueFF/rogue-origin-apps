@@ -179,11 +179,15 @@ export default {
         response = await handleSupersackD1(request, env, ctx);
       } else if (path.startsWith('/api/irrigation')) {
         response = await handleIrrigationD1(request, env, ctx);
-      } else if (path === '/sms/inbound') {
+      } else if (path === '/sms/inbound' || path === '/sms/inbound/') {
         // Twilio webhook for the harvest hourly log. Not under /api so the
         // client-log and CORS assumptions for browser callers don't apply.
+        // Both spellings: a trailing slash typed into the Twilio console would
+        // otherwise 404 every inbound text with nothing to show for it.
         response = await handleSmsInbound(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
+        // Query string only: a body-only `action` falls through to the old
+        // handler. Every known caller uses ?action=.
         response = HOURLY_ACTIONS.has(url.searchParams.get('action'))
           ? await handleHarvestHourly(request, env, ctx)
           : await handleHarvestD1(request, env, ctx);
