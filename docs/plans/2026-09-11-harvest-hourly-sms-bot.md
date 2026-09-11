@@ -355,6 +355,15 @@ block, and the first draft of this plan did not compile because of it.
 
 **Behavior notes** (decided during review; the code is the record, this is the index):
 
+- **v2: chat texts are queued for the Capataz relay; the worker never calls a
+  model.** `harvest-hourly-parse.js` is deleted. EMPEZAR / PARAR / AYUDA are
+  still answered inline and deterministically — the day never starts or stops
+  on a model — and everything else waits in `harvest_sms_inbox` for the relay
+  on FERN, which understands it and writes back through `hourly_set`. Every
+  rule below still holds; the write core moved verbatim from `answer()` into
+  `applyHourlyReport`. Plan: `docs/plans/2026-09-11-capataz-v2.md`. The two
+  notes that no longer apply are marked (v1 only) below.
+
 - **Notes append with `; `.** A later reply never erases an earlier note — the
   UPDATE concatenates in SQL rather than read-modify-write, so two texts seconds
   apart merge instead of the second overwriting the first. The six counts merge
@@ -368,7 +377,7 @@ block, and the first draft of this plan did not compile because of it.
   nudge clock is `answered_at` instead — `tickDecision` reads
   `asked_at ?? answered_at`, or a null `asked_at` would count as infinitely
   overdue and the next tick would nudge a row filled in seconds earlier.
-- **A reply that fails to parse still stamps `answered_at` and `raw_reply`.**
+- **(v1 only) A reply that fails to parse still stamps `answered_at` and `raw_reply`.**
   The counts stay untouched and the foreman is told to resend, but the row now
   has a real clock — otherwise a backfill whose first reply failed to parse has
   neither timestamp, reads as infinitely overdue, and gets nudged and flagged

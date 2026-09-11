@@ -29,7 +29,7 @@ import { createError } from '../lib/errors.js';
 import { requireAuth, requireBearer } from '../lib/auth.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
-import { pacificDay, pacificParts, justEndedHour, sqliteUtc } from '../lib/pacific.js';
+import { pacificDay, pacificParts, justEndedHour, sqliteUtc, parseSqliteUtc } from '../lib/pacific.js';
 import {
   BARN_LABELS, COUNT_FIELDS, FIELD_ES, validateCounts, missingFields, classifyInbound,
   promptText, reminderText, helpText, confirmText, askMissingText, futureHourText,
@@ -512,6 +512,71 @@ async function setHourly(db, env, body) {
 // name is never the reason an alert 400s.
 const tgSafe = (s) => String(s).replace(/[_*\[\]`]/g, '');
 
+// The Capataz relay is a process on another machine, and the failure it has
+// that the worker does not is simply being down: texts queue up and the foreman
+// is answered by nobody. Nothing is lost — but somebody has to be told.
+const CAPATAZ_ALERT_KEY = 'capataz_stale_alert_at';
+const CAPATAZ_STALE_MS = 3 * 60 * 1000;         // queued, nobody has polled it
+const CAPATAZ_UNANSWERED_MS = 5 * 60 * 1000;    // polled, no reply ever sent
+const CAPATAZ_ALERT_EVERY_MS = 30 * 60 * 1000;
+
+/**
+ * Is the relay draining the inbox? Two distinct failures, one alert.
+ *
+ * Both queries join harvest_foremen. A row whose sender has since been deleted
+ * from the roster is one pollSms will never hand out and nobody will ever
+ * answer: counted, it would pin the alert on forever and train Koa to ignore
+ * it. The staleness population is exactly those un-polled rows, so the join
+ * belongs there most of all.
+ *
+ * "Delivered but never answered" is asked as delivered_at IS NOT NULL AND
+ * replied_at IS NULL — never as processed = 1 AND replied_at IS NULL, which
+ * would also catch every 'ignored' row (processed by the worker, never replied
+ * to by design) and alert forever.
+ *
+ * Either condition alone fires: a relay that polls and then dies mid-session
+ * leaves nothing queued and everything unanswered, which is the failure the
+ * staleness count cannot see.
+ */
+async function capatazWatchdog(db, env, now) {
+  const t = now.getTime();
+  const stale = await queryOne(db, `SELECT COUNT(*) AS n, MIN(i.received_at) AS oldest
+    FROM harvest_sms_inbox i JOIN harvest_foremen f ON f.phone = i.from_phone
+    WHERE i.kind = 'chat' AND i.processed = 0`);
+  const mute = await queryOne(db, `SELECT COUNT(*) AS n
+    FROM harvest_sms_inbox i JOIN harvest_foremen f ON f.phone = i.from_phone
+    WHERE i.kind = 'chat' AND i.delivered_at IS NOT NULL AND i.replied_at IS NULL
+      AND i.delivered_at < ?`, [sqliteUtc(new Date(t - CAPATAZ_UNANSWERED_MS))]);
+
+  const waiting = stale?.n || 0;
+  const unanswered = mute?.n || 0;
+  const oldestMs = stale?.oldest ? t - parseSqliteUtc(stale.oldest).getTime() : 0;
+  const stalled = waiting > 0 && oldestMs >= CAPATAZ_STALE_MS;
+  if (!stalled && !unanswered) return 0;
+
+  // At most one of these every 30 minutes: the tick runs every 5, and a relay
+  // that is down is down for a while. A missing or unreadable timestamp falls
+  // through to sending — an alert too many beats a silent outage.
+  const last = await queryOne(db, `SELECT value FROM system_config WHERE key = ?`, [CAPATAZ_ALERT_KEY]);
+  if (last?.value && t - parseSqliteUtc(last.value).getTime() < CAPATAZ_ALERT_EVERY_MS) return 0;
+  // Claimed before the send, not after: sendTelegramMessage can be slow or
+  // throw, and a doubled tick must not get past this on the retry.
+  await execute(db, `
+    INSERT INTO system_config (key, value, value_type, category, description, updated_at)
+    VALUES (?, ?, 'string', 'harvest', 'Last Capataz relay staleness alert (SQLite UTC)', datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `, [CAPATAZ_ALERT_KEY, sqliteUtc(now)]);
+
+  const parts = [];
+  if (stalled) parts.push(`${waiting} pendientes, el mas viejo ${Math.floor(oldestMs / 60000)} min`);
+  if (unanswered) parts.push(`${unanswered} sin respuesta`);
+  await sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_HARVEST_HOURLY_CHAT_ID || env.TELEGRAM_TEST_CHAT_ID,
+    text: `⚠️ Capataz no esta drenando SMS (${parts.join(', ')})`,
+  });
+  return 1;
+}
+
 export async function runHarvestHourlyTick(env, now = new Date()) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
@@ -615,6 +680,14 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
     } catch (e) {
       console.error(`[hourly-tick] ${f.phone}: ${e.message}`);
     }
+  }
+
+  // ── (d) Is the Capataz relay alive? Its own failure mode, not the barn's:
+  // wrapped so a watchdog fault never costs the tick its prompts and nudges.
+  try {
+    acted += await capatazWatchdog(db, env, now);
+  } catch (e) {
+    console.error(`[capataz-watchdog] ${e.message}`);
   }
   return { acted };
 }
