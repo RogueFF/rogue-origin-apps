@@ -1,9 +1,13 @@
 /**
  * Harvest hourly crew log — SMS bot handler (D1).
  *
- * One Spanish text per barn per hour to its foreman; one free-form reply,
- * parsed by Claude, stored as one harvest_hourly row per barn-hour.
- * Design: wiki/operations/plans/2026-09-11-harvest-hourly-sms-bot-design.md
+ * One Spanish text per barn per hour to its foreman; the reply is understood by
+ * the Capataz relay on FERN and written back through hourly_set, as one
+ * harvest_hourly row per barn-hour. The worker keeps the clock, the rows and
+ * the Twilio credentials, and never calls a model itself: EMPEZAR / PARAR /
+ * AYUDA are answered inline, everything else is queued in harvest_sms_inbox for
+ * the relay to drain.
+ * Design: wiki/operations/plans/2026-09-11-harvest-hourly-sms-bot-design.md (v2)
  *
  * Endpoints (dispatched from index.js):
  * - POST /sms/inbound                              Twilio webhook (signature-verified)
@@ -12,6 +16,9 @@
  * - POST /api/harvest?action=foreman_set           {phone,name,barn,active} [password]
  * - POST /api/harvest?action=hourly_simulate       {from, body} -> replies  [password]
  * - GET  /api/harvest?action=hourly_test           health
+ * - GET  /api/harvest?action=sms_poll&limit=N      queued chat texts + context  [sms key]
+ * - POST /api/harvest?action=sms_send              {to, text}                   [sms key]
+ * - POST /api/harvest?action=hourly_set            {phone, hour_start?, counts} [sms key]
  * - cron: runHarvestHourlyTick(env) from the five-minute branch (isFiveMinCron
  *   in index.js). Spelled out in words: the cron string's own slash-star form
  *   would close this comment block.
@@ -19,18 +26,33 @@
 import { query, queryOne, execute } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { requireAuth } from '../lib/auth.js';
+import { requireAuth, requireBearer } from '../lib/auth.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
 import { pacificDay, pacificParts, justEndedHour, sqliteUtc } from '../lib/pacific.js';
 import {
-  BARN_LABELS, FIELD_ES, validateCounts, missingFields, classifyInbound,
-  promptText, reminderText, helpText, confirmText, askMissingText, notUnderstoodText,
-  temporaryErrorText, futureHourText, normalizeNotes, tickDecision, shouldAutoStop, STOP_HOUR,
+  BARN_LABELS, COUNT_FIELDS, FIELD_ES, validateCounts, missingFields, classifyInbound,
+  promptText, reminderText, helpText, confirmText, askMissingText, futureHourText,
+  normalizeNotes, tickDecision, shouldAutoStop, STOP_HOUR,
+  gsmSafe, smsSegments, buildPollContext,
 } from '../lib/harvest-hourly.js';
-import { parseReply } from '../lib/harvest-hourly-parse.js';
 
-export const HOURLY_ACTIONS = new Set(['hourly', 'foremen', 'foreman_set', 'hourly_simulate', 'hourly_test']);
+export const HOURLY_ACTIONS = new Set([
+  'hourly', 'foremen', 'foreman_set', 'hourly_simulate', 'hourly_test',
+  'sms_poll', 'sms_send', 'hourly_set',
+]);
+
+// The relay's own bearer, not the farm password: a key sitting on a bot host
+// must not also unlock orders. One secret for all three host endpoints.
+const SMS_KEY = 'HARVEST_SMS_KEY';
+
+const POLL_LIMIT_DEFAULT = 20;
+const POLL_LIMIT_MAX = 100;
+// Three 160-character GSM-7 segments. A reply this long is a relay bug, not a
+// message to a foreman standing in a barn — refusing it is cheaper than paying
+// for it. (smsSegments counts the true concatenated cost, which is 153 per
+// segment past the first; this cap is deliberately the rounder plan number.)
+const MAX_SMS_CHARS = 480;
 
 const isTestMode = (env) => env.HARVEST_TEST_MODE !== 'false';
 // The season is the harvest date's own year, not the wall-clock year: a row
@@ -64,11 +86,21 @@ export async function handleHarvestHourly(request, env, ctx) {
     case 'hourly_simulate': {
       requireAuth(request, body, env, 'harvest-hourly-simulate');
       if (!body.from || !body.body) throw createError('VALIDATION_ERROR', 'from and body are required');
-      const replies = await processInbound(env, {
+      // Same shape as the real path: { replies } for a command, { queued } for
+      // a chat text the relay will answer.
+      return successResponse(await processInbound(env, {
         from: String(body.from), text: String(body.body), sid: `SIM-${Date.now()}`, deliver: false,
-      });
-      return successResponse({ replies });
+      }));
     }
+    case 'sms_poll':
+      requireBearer(request, body, env, SMS_KEY, 'harvest-sms-poll');
+      return successResponse(await pollSms(db, env, params.limit));
+    case 'sms_send':
+      requireBearer(request, body, env, SMS_KEY, 'harvest-sms-send');
+      return successResponse(await sendToForeman(db, env, body));
+    case 'hourly_set':
+      requireBearer(request, body, env, SMS_KEY, 'harvest-hourly-set');
+      return successResponse(await setHourly(db, env, body));
     default:
       throw createError('NOT_FOUND', `Unknown hourly action: ${action}`);
   }
@@ -141,23 +173,31 @@ export async function handleSmsInbound(request, env, ctx) {
 // ─── CORE: one inbound text ────────────────────────────────────────────
 
 /**
- * @returns string[] the texts sent (or, with deliver=false, that would be sent)
+ * @returns {{ replies: string[], queued: boolean, message_sid: string|null }}
+ *   `replies` are the texts sent (or, with deliver=false, that would be sent);
+ *   `queued` is true when the text was left in the inbox for the Capataz relay,
+ *   which is what answers everything that is not a command.
  */
 export async function processInbound(env, { from, text, sid, deliver, now = new Date() }) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
+  const out = (replies = [], queued = false) => ({ replies, queued, message_sid: sid || null });
 
   // Dedupe on Twilio's message id: a redelivery must not write twice.
   if (sid) {
     const { changes } = await execute(db,
       `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body) VALUES (?, ?, ?)`, [sid, from, text]);
-    if (changes === 0) return [];
+    if (changes === 0) return out();
   }
 
   const foreman = await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [from]);
   if (!foreman) {
     console.log(`[sms] ignored text from unregistered ${from}: ${text.slice(0, 80)}`);
-    return [];
+    // Closed out here, not left queued: the relay must never be handed a number
+    // it cannot attribute, and an unanswerable row would sit in the queue
+    // forever tripping the tick's staleness watchdog.
+    await markInbox(db, { sid, kind: 'ignored', now });
+    return out();
   }
 
   const replies = [];
@@ -178,21 +218,61 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   } else if (c.kind === 'help') {
     say(helpText(foreman.barn));
   } else {
-    // c.text is the parse input (hour prefix stripped); text is what the
-    // foreman actually sent, and that is what raw_reply has to preserve.
-    await answer(db, env, { foreman, hour: c.hour, text: c.text, rawText: text, from, isTest, now, say });
+    // v2: a chat text is not understood here. The day never starts or stops on
+    // a model, but everything else belongs to the Capataz relay — the row stays
+    // kind='chat', processed=0, and sms_poll hands it over with its context.
+    if (!sid) console.warn(`[sms] chat text from ${from} has no MessageSid — nothing to queue`);
+    return out([], !!sid);
   }
+
+  await markInbox(db, { sid, kind: 'command', now, replied: true });
 
   if (deliver) {
     for (const t of replies) await sendSms(env, { to: from, body: t });
   }
-  return replies;
+  return out(replies);
 }
 
-async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now, say }) {
+/**
+ * Close an inbox row the worker itself dealt with, so the relay never sees it.
+ *
+ * For the W3 watchdog: `replied_at` stays NULL on an 'ignored' row, because no
+ * reply was sent and recording one would be a lie. So "the relay took a text
+ * and never answered" has to be asked as delivered_at IS NOT NULL AND
+ * replied_at IS NULL — never as processed=1 AND replied_at IS NULL, which
+ * would count every ignored row forever. (And the staleness clause's
+ * population, processed=0, includes the rows pollSms deliberately leaves
+ * behind when a phone has no foreman: a deleted foreman would otherwise make
+ * Capataz look permanently stalled.)
+ */
+function markInbox(db, { sid, kind, now, replied = false }) {
+  if (!sid) return Promise.resolve({ changes: 0 });
+  return execute(db, `UPDATE harvest_sms_inbox SET kind = ?, processed = 1, replied_at = ? WHERE message_sid = ?`,
+    [kind, replied ? sqliteUtc(now) : null, sid]);
+}
+
+/**
+ * The write core of an hourly report: pick the hour, merge the counts, settle
+ * the status, and produce the Spanish line to text back.
+ *
+ * v1 called this from the inbound path with the output of an inline Anthropic
+ * parse; v2 calls it only from hourly_set, where the Capataz relay supplies the
+ * numbers through the farm-bridge tool. Every rule below is unchanged — which
+ * is the point of it being one function: the worker's idea of an hour must not
+ * differ depending on who is writing it.
+ *
+ * @param hour 'HH:00' when an hour was named, else null (target the open hour)
+ * @param values the six counts as given, unvalidated — validateCounts range-checks
+ * @returns {{ row, missing, invalid, reply, refused }} `refused` is
+ *   'future_hour' | 'not_started' | 'no_hour_yet' with a null row when no hour
+ *   could be targeted at all. `reply` is always the text to send back.
+ */
+export async function applyHourlyReport(db, env, { foreman, hour, values: given, notes, rawText, now = new Date() }) {
+  const isTest = isTestMode(env) ? 1 : 0;
   const day = pacificDay(now);
   const barn = foreman.barn;
   const je = justEndedHour(now);
+  const refuse = (reason, reply) => ({ row: null, missing: [], invalid: [], reply, refused: reason });
   // A bare hour below 6 is read as PM, so "5: 4 2 3 8 1 12" sent at 10 AM
   // means 17:00 — an hour that has not happened. Creating that row would give
   // the day a future hour that swallows every later un-prefixed answer and
@@ -201,7 +281,7 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
 
   let row;
   if (hour) {
-    if (isFuture(hour)) { say(futureHourText()); return; }
+    if (isFuture(hour)) return refuse('future_hour', futureHourText());
     // A named past hour is a backfill: the bot never asked for it, so asked_at
     // stays null rather than claiming a prompt that was never sent.
     row = await getOrCreateRow(db, { day, hour, barn, isTest, season: seasonOf(day), now, asked: false });
@@ -210,46 +290,28 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
     if (!row) {
       // An open row is answerable even after the auto-stop — that is how the
       // reply to the 19:00 prompt still lands. Only with nothing open does an
-      // inactive foreman get told to start the day.
-      if (!foreman.active) { say('Escribe EMPEZAR para comenzar el dia.'); return; }
-      if (!je) { say('Todavia no hay hora que reportar.'); return; }
+      // inactive foreman get told to start the day. This check comes first on
+      // purpose: during the 00:xx hour an inactive foreman should be told to
+      // text EMPEZAR, not that there is no hour yet.
+      if (!foreman.active) return refuse('not_started', 'Escribe EMPEZAR para comenzar el dia.');
+      if (!je) return refuse('no_hour_yet', 'Todavia no hay hora que reportar.');
       row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: seasonOf(je.harvest_date), now, asked: true });
     }
   }
 
-  let parsed;
-  try {
-    parsed = await parseReply(text, { barn, hour_start: row.hour_start, missing: missingFields(row) }, env);
-  } catch (e) {
-    // A network fault or the 20 s timeout — the foreman's text was fine, so
-    // telling him "no entendi" would send him rewriting a correct message.
-    console.error(`[hourly] parse call failed for ${from}: ${e.message}`);
-    await stampUnparsed(db, { row, rawText, from, now });
-    say(temporaryErrorText());
-    return;
-  }
-  if (!parsed) {
-    await stampUnparsed(db, { row, rawText, from, now });
-    say(notUnderstoodText());
-    return;
-  }
-
-  // A model-detected hour ("las 9") retargets only when the text had no prefix.
-  if (!hour && parsed.hour_override && /^\d{2}:00$/.test(parsed.hour_override) && parsed.hour_override !== row.hour_start) {
-    if (isFuture(parsed.hour_override)) { say(futureHourText()); return; }
-    row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: seasonOf(day), now, asked: false });
-  }
-
-  const { values, invalid } = validateCounts(parsed);
+  const { values, invalid } = validateCounts(given || {});
   // "Sin novedad" is not a note — normalizeNotes drops it, so a day summary is
   // not padded with six copies of "nothing to report".
-  const note = normalizeNotes(parsed.notes);
+  const note = normalizeNotes(notes);
 
   // Additive, in SQL rather than read-modify-write: two texts seconds apart
   // both read the same row, and a full-row UPDATE from the second would erase
   // what the first wrote. COALESCE lets each write land only the fields it
   // actually carries, so the counts merge instead of racing. Notes append for
   // the same reason — the latest reply must not drop an earlier one.
+  // raw_reply is COALESCEd rather than overwritten because raw_text is optional
+  // on hourly_set: a tool call made without it must not erase the foreman's
+  // words that an earlier call did carry.
   await execute(db, `
     UPDATE harvest_hourly SET
       cutters = COALESCE(?, cutters),
@@ -259,11 +321,11 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
       hanging_water_spiders = COALESCE(?, hanging_water_spiders),
       racks = COALESCE(?, racks),
       notes = CASE WHEN ? IS NULL THEN notes WHEN notes IS NULL THEN ? ELSE notes || '; ' || ? END,
-      raw_reply = ?, reported_by = ?, answered_at = ?
+      raw_reply = COALESCE(?, raw_reply), reported_by = ?, answered_at = ?
     WHERE id = ?
   `, [values.cutters, values.cutter_water_spiders, values.drivers, values.hangers,
       values.hanging_water_spiders, values.racks, note, note, note,
-      rawText, from, sqliteUtc(now), row.id]);
+      rawText || null, foreman.phone, sqliteUtc(now), row.id]);
 
   // Re-read rather than reason about what the row now holds: the write above
   // merged against whatever was on disk, which may include a concurrent reply.
@@ -279,29 +341,19 @@ async function answer(db, env, { foreman, hour, text, rawText, from, isTest, now
   // racing this one may have completed the row between the re-read and here,
   // and writing 'nudged' over it would un-finish a finished hour and earn it a
   // spurious reminder plus a Telegram alert. A row never goes backwards.
-  await execute(db, `UPDATE harvest_hourly SET status = ?, nudged_at = COALESCE(?, nudged_at)
+  const wrote = await execute(db, `UPDATE harvest_hourly SET status = ?, nudged_at = COALESCE(?, nudged_at)
     WHERE id = ? AND status <> 'complete'`, [status, nudgedAt, row.id]);
 
   // Out of range is worth saying even when the row came out complete: the old
   // value survived (COALESCE kept it) and the foreman should know his did not.
   const why = invalid.length ? `Numero fuera de rango: ${invalid.map(f => FIELD_ES[f]).join(', ')}. ` : '';
-  if (still.length) {
-    say(why + askMissingText(fresh));
-  } else {
-    say(why + (invalid.length ? 'Se mantiene el valor anterior. ' : '') + confirmText(fresh));
-  }
-}
-
-/**
- * A reply the parser could not read still happened, and the row has to show
- * it. A backfill row has no asked_at, so without this stamp both of its clocks
- * are null, tickDecision reads that as infinitely overdue, and the next tick
- * nudges — then Telegrams "Sin respuesta" — about a text the foreman did send.
- * The counts are left alone; raw_reply keeps the text that defeated the parse.
- */
-function stampUnparsed(db, { row, rawText, from, now }) {
-  return execute(db, `UPDATE harvest_hourly SET raw_reply = ?, reported_by = ?, answered_at = ? WHERE id = ?`,
-    [rawText, from, sqliteUtc(now), row.id]);
+  const reply = still.length
+    ? why + askMissingText(fresh)
+    : why + (invalid.length ? 'Se mantiene el valor anterior. ' : '') + confirmText(fresh);
+  // Report the status the row actually carries: when the guarded write above
+  // found no rows it is because a racing reply had already completed the hour,
+  // and telling the relay 'nudged' would have it chase numbers that are in.
+  return { row: { ...fresh, status: wrote.changes ? status : fresh.status }, missing: still, invalid, reply, refused: null };
 }
 
 /**
@@ -331,6 +383,127 @@ async function getOrCreateRow(db, { day, hour, barn, isTest, season, now, asked 
   await execute(db, `INSERT OR IGNORE INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
     VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [season, day, hour, barn, asked ? sqliteUtc(now) : null, isTest]);
   return await find();
+}
+
+// ─── HOST ENDPOINTS: the Capataz relay on FERN ─────────────────────────
+
+/**
+ * Hand the relay the chat texts nobody has answered yet, each with everything
+ * needed to answer it. Rows are claimed as they go out — two overlapping polls
+ * (or a retry after a dropped response) must not give one text to two sessions,
+ * which would answer the foreman twice.
+ */
+async function pollSms(db, env, limitRaw) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const limit = Math.min(Math.max(Number(limitRaw) || POLL_LIMIT_DEFAULT, 1), POLL_LIMIT_MAX);
+  const now = new Date();
+  const day = pacificDay(now);
+  const pending = await query(db, `SELECT message_sid, from_phone, body, received_at FROM harvest_sms_inbox
+    WHERE kind = 'chat' AND processed = 0 ORDER BY received_at LIMIT ?`, [limit]);
+
+  const foremen = new Map();      // phone -> row | null
+  const dayRows = new Map();      // barn  -> today's harvest_hourly rows
+  const messages = [];
+
+  for (const m of pending) {
+    if (!foremen.has(m.from_phone)) {
+      foremen.set(m.from_phone, await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [m.from_phone]));
+    }
+    const foreman = foremen.get(m.from_phone);
+    // processInbound already closes out unregistered senders, so this should be
+    // unreachable — but never hand the relay a number it cannot attribute.
+    if (!foreman) {
+      console.warn(`[sms-poll] no foreman for ${m.from_phone} — leaving ${m.message_sid} queued`);
+      continue;
+    }
+
+    const { changes } = await execute(db, `UPDATE harvest_sms_inbox SET processed = 1, delivered_at = ?
+      WHERE message_sid = ? AND processed = 0`, [sqliteUtc(now), m.message_sid]);
+    if (!changes) continue;
+
+    if (!dayRows.has(foreman.barn)) {
+      dayRows.set(foreman.barn, await query(db, `SELECT * FROM harvest_hourly
+        WHERE harvest_date = ? AND barn = ? AND is_test = ? ORDER BY hour_start`, [day, foreman.barn, isTest]));
+    }
+    messages.push({
+      message_sid: m.message_sid,
+      from_phone: m.from_phone,
+      body: m.body,
+      received_at: m.received_at,
+      context: buildPollContext(dayRows.get(foreman.barn), foreman, now),
+    });
+  }
+  return { messages };
+}
+
+/**
+ * The relay's only way to reach a phone: Twilio's credentials stay on the
+ * worker. Registered numbers only, and gsmSafe on the way out — the text was
+ * written by a model, and one accent turns a one-segment confirmation into a
+ * three-segment UCS-2 message.
+ */
+async function sendToForeman(db, env, body) {
+  const to = String(body.to || '').trim();
+  if (!to) throw createError('VALIDATION_ERROR', 'to is required');
+  const foreman = await queryOne(db, `SELECT phone FROM harvest_foremen WHERE phone = ?`, [to]);
+  if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${to}`);
+
+  const text = gsmSafe(body.text);
+  if (!text) throw createError('VALIDATION_ERROR', 'text is required');
+  if (text.length > MAX_SMS_CHARS) {
+    throw createError('VALIDATION_ERROR',
+      `text is ${text.length} characters (${smsSegments(text)} segments); the limit is ${MAX_SMS_CHARS}`);
+  }
+
+  const sent = await sendSms(env, { to, body: text });
+  // Best-effort marker for the tick watchdog: this phone's delivered texts are
+  // no longer "taken by the relay and never answered". Which row it was is not
+  // worth tracking — the watchdog only counts.
+  await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
+    WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
+  return { sent, text, segments: smsSegments(text) };
+}
+
+/** The six counts plus the fields the relay's model should see — no ids, no raw text. */
+const publicRow = (r) => ({
+  harvest_date: r.harvest_date, hour_start: r.hour_start, barn: r.barn, status: r.status,
+  ...Object.fromEntries(COUNT_FIELDS.map(f => [f, r[f] ?? null])),
+  notes: r.notes ?? null,
+});
+
+/**
+ * The farm-bridge tool's endpoint: the relay has understood a foreman's text
+ * and is writing the numbers. Refusals come back 200 with ok:false and a ready
+ * Spanish reply — a refused hour is a normal conversational outcome, not an
+ * HTTP fault, and the model has to relay the wording either way.
+ */
+async function setHourly(db, env, body) {
+  const phone = String(body.phone || '').trim();
+  if (!phone) throw createError('VALIDATION_ERROR', 'phone is required');
+  const foreman = await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [phone]);
+  if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${phone}`);
+
+  const rawHour = body.hour_start === undefined || body.hour_start === null ? '' : String(body.hour_start).trim();
+  if (rawHour && !/^\d{2}:00$/.test(rawHour)) {
+    throw createError('VALIDATION_ERROR', 'hour_start must be HH:00, e.g. 09:00');
+  }
+
+  const given = {};
+  for (const f of COUNT_FIELDS) if (body[f] !== undefined && body[f] !== null) given[f] = body[f];
+  const notes = body.notes;
+  // An empty call would still target (or create) the hour's row and stamp
+  // answered_at, which quietly cancels that hour's nudge without a single
+  // number having been reported. Nothing to write is a caller bug, not a report.
+  if (!Object.keys(given).length && !String(notes ?? '').trim()) {
+    throw createError('VALIDATION_ERROR', 'at least one count or notes is required');
+  }
+
+  const r = await applyHourlyReport(db, env, {
+    foreman, hour: rawHour || null, values: given, notes, rawText: body.raw_text ?? null,
+  });
+  return r.refused
+    ? { ok: false, reason: r.refused, reply: r.reply }
+    : { ok: true, row: publicRow(r.row), missing: r.missing, invalid: r.invalid, reply: r.reply };
 }
 
 // ─── CRON: every 5 minutes ─────────────────────────────────────────────
@@ -452,6 +625,10 @@ async function readDay(db, env, date) {
   const isTest = isTestMode(env) ? 1 : 0;
   const rows = await query(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND is_test = ? ORDER BY barn, hour_start`, [date, isTest]);
   const roster = await queryOne(db, `SELECT * FROM harvest_crew_roster WHERE effective_to IS NULL AND is_test = ? ORDER BY effective_from DESC LIMIT 1`, [isTest]);
+  // Queue depth, not a count for this date: the inbox has no harvest_date, and
+  // what the dashboard card is reporting is "texts Capataz has not picked up",
+  // which is a right-now number whatever day is being read.
+  const pending = await queryOne(db, `SELECT COUNT(*) AS n FROM harvest_sms_inbox WHERE kind = 'chat' AND processed = 0`);
 
   const barns = {};
   for (const barn of Object.keys(BARN_LABELS)) {
@@ -473,5 +650,5 @@ async function readDay(db, env, date) {
       latest: done[done.length - 1] || null,
     };
   }
-  return { date, is_test: isTest, roster, barns };
+  return { date, is_test: isTest, roster, barns, pending_sms: pending?.n || 0 };
 }

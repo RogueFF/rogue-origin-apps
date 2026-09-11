@@ -156,20 +156,6 @@ export function normalizeNotes(text) {
   return NO_NEWS.has(bare) ? null : t;
 }
 
-export function notUnderstoodText() {
-  return 'No entendi. Manda los numeros en orden: cortadores, waterspiders campo, choferes, ' +
-    'colgadores, waterspiders granero, racks. Ejemplo: 4 2 3 8 1 12 sin novedad';
-}
-
-/**
- * The reply when the parse call itself failed — a network error or the 20 s
- * timeout, not a reply the model could not read. Worth its own wording:
- * "no entendi" would tell the foreman to rephrase a text that was fine.
- */
-export function temporaryErrorText() {
-  return 'Error temporal. Manda los numeros de nuevo.';
-}
-
 /**
  * The reply when the foreman names an hour that has not finished yet — a bare
  * "5:" at 10 AM is read as 17:00 (the barn is never open at 5 AM). Creating
@@ -178,6 +164,100 @@ export function temporaryErrorText() {
  */
 export function futureHourText() {
   return 'Esa hora todavia no termina.';
+}
+
+// ─── SMS wire format ───────────────────────────────────────────────────
+
+/**
+ * The last line of defense on anything leaving through sms_send. The Capataz
+ * relay already strips its own replies, but the model writes them and a model
+ * can emit an accent or an emoji at any time; a single non-GSM character flips
+ * the whole message to UCS-2 and 70-character segments, which is how a
+ * one-segment confirmation silently becomes three.
+ *
+ * Order matters twice over. Decompose and drop the combining marks FIRST, so
+ * "é" becomes "e" rather than being deleted whole by the printable-ASCII sweep
+ * after it. (That sweep is also what handles emoji and smart quotes. "ñ" needs
+ * no rule of its own — NFD decomposes it like every other tilded letter.) And
+ * fold whitespace BEFORE that sweep, because a newline is itself outside
+ * printable ASCII: swept first, a two-line reply comes out with its words
+ * glued together. The second pass mops up the holes the sweep leaves behind.
+ */
+export function gsmSafe(text) {
+  return String(text ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .replace(/[¿¡]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * How many SMS a GSM-7 message costs. A message that fits in 160 is one; past
+ * that every segment gives up 7 characters to the concatenation header, so the
+ * whole message is re-counted at 153 — 161 characters cost two segments, not
+ * one and a bit. Precondition: `text` is already gsmSafe (UCS-2 would be 70/67).
+ */
+export function smsSegments(text) {
+  const n = String(text ?? '').length;
+  return n <= 160 ? 1 : Math.ceil(n / 153);
+}
+
+// ─── Relay poll context ────────────────────────────────────────────────
+
+/**
+ * Everything the Capataz relay needs to answer one text, shaped from rows the
+ * handler already fetched. Pure so the shape is testable: the relay's whole
+ * understanding of the barn is this object, and a wrong `open_row` here puts a
+ * foreman's numbers on the wrong hour.
+ *
+ * @param rows today's harvest_hourly rows for this foreman's barn (any order)
+ * @param foreman the harvest_foremen row
+ * @param now Date
+ */
+export function buildPollContext(rows, foreman, now) {
+  const p = pacificParts(now);
+  const je = justEndedHour(now);
+  const sorted = [...(rows || [])].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
+
+  // The same rule as the handler's openRow: newest unanswered hour, bounded by
+  // the last hour that actually ended, so a stray future row cannot pose as the
+  // hour being asked about.
+  const open = je
+    ? sorted.filter(r => (r.status === 'pending' || r.status === 'nudged') && r.hour_start <= je.hour_start).pop() || null
+    : null;
+
+  return {
+    foreman: {
+      name: foreman.name,
+      barn: foreman.barn,
+      barn_label: BARN_LABELS[foreman.barn],
+      active: !!foreman.active,
+      active_since: foreman.active_since ?? null,
+    },
+    open_row: open && {
+      hour_start: open.hour_start,
+      hour_range: hourRange(open.hour_start),
+      status: open.status,
+      missing: missingFields(open),
+      values: Object.fromEntries(COUNT_FIELDS.map(f => [f, open[f] ?? null])),
+      notes: open.notes ?? null,
+    },
+    just_ended_hour: je ? je.hour_start : null,
+    today: {
+      date: p.day,
+      // Racks today, the one definition: every row for the barn whatever its
+      // status. The foreman asking "cuantos racks llevamos" must get the same
+      // number the PARAR reply and the dashboard give him.
+      total_racks: sorted.reduce((s, r) => s + (r.racks || 0), 0),
+      complete_hours: sorted.filter(r => r.status === 'complete').length,
+      missing_hours: sorted.filter(r => r.status === 'missing').map(r => r.hour_start),
+      rows: sorted.map(r => ({ hour_start: r.hour_start, status: r.status, racks: r.racks ?? null })),
+    },
+    now_pacific: `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`,
+  };
 }
 
 /**
