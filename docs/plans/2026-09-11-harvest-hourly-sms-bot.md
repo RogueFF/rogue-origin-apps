@@ -470,7 +470,7 @@ export function shouldAutoStop({ hourNow, recentStatuses }) {
 **Step 4: Run tests**
 
 Run: `npm test`
-Expected: all passing (6 + 5 + 12 = 23). If `promptText` is over 160 characters, shorten the wording, not the field list.
+Expected: all passing (22 = 6 + 5 + 11). If `promptText` is over 160 characters, shorten the wording, not the field list.
 
 **Step 5: Commit**
 
@@ -823,7 +823,9 @@ import { parseReply } from '../lib/harvest-hourly-parse.js';
 export const HOURLY_ACTIONS = new Set(['hourly', 'foremen', 'foreman_set', 'hourly_simulate', 'hourly_test']);
 
 const isTestMode = (env) => env.HARVEST_TEST_MODE !== 'false';
-const season = () => new Date().getUTCFullYear();
+// The season is the harvest date's own year, not the wall-clock year: a row
+// written just after midnight UTC still belongs to the Pacific day it reports.
+const seasonOf = (day) => Number(day.slice(0, 4));
 
 // ─── HTTP: /api/harvest?action=hourly* ─────────────────────────────────
 
@@ -930,6 +932,9 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
 
   if (c.kind === 'start') {
     await execute(db, `UPDATE harvest_foremen SET active = 1, active_since = ? WHERE phone = ?`, [sqliteUtc(now), from]);
+    // One active foreman per barn — the last EMPEZAR wins, so a handover does
+    // not leave two phones being texted for the same hour.
+    await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE barn = ? AND phone <> ?`, [foreman.barn, from]);
     say('Listo. Te pregunto cada hora en punto. PARAR para terminar el dia.');
   } else if (c.kind === 'stop') {
     await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ?`, [from]);
@@ -955,7 +960,7 @@ async function answer(db, env, { foreman, hour, text, from, isTest, now, say }) 
 
   let row;
   if (hour) {
-    row = await getOrCreateRow(db, { day, hour, barn, isTest, season: season() });
+    row = await getOrCreateRow(db, { day, hour, barn, isTest, season: seasonOf(day) });
   } else {
     if (!foreman.active) { say('Escribe EMPEZAR para comenzar el dia.'); return; }
     row = await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
@@ -963,7 +968,7 @@ async function answer(db, env, { foreman, hour, text, from, isTest, now, say }) 
     if (!row) {
       const je = justEndedHour(now);
       if (!je) { say('Todavia no hay hora que reportar.'); return; }
-      row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: season() });
+      row = await getOrCreateRow(db, { day: je.harvest_date, hour: je.hour_start, barn, isTest, season: seasonOf(je.harvest_date) });
     }
   }
 
@@ -972,7 +977,7 @@ async function answer(db, env, { foreman, hour, text, from, isTest, now, say }) 
 
   // A model-detected hour ("las 9") retargets only when the text had no prefix.
   if (!hour && parsed.hour_override && /^\d{2}:00$/.test(parsed.hour_override) && parsed.hour_override !== row.hour_start) {
-    row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: season() });
+    row = await getOrCreateRow(db, { day, hour: parsed.hour_override, barn, isTest, season: seasonOf(day) });
   }
 
   const { values, invalid } = validateCounts(parsed);
@@ -1021,9 +1026,11 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
   let acted = 0;
 
   for (const f of foremen) {
-    const recent = await query(db, `SELECT status FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
+    const recent = await query(db, `SELECT status, asked_at FROM harvest_hourly WHERE harvest_date = ? AND barn = ? AND is_test = ?
       AND status IN ('complete', 'missing') ORDER BY hour_start DESC LIMIT 3`, [day, f.barn, isTest]);
-    if (shouldAutoStop({ hourNow, recentStatuses: recent.map(r => r.status) })) {
+    // active_since scopes the three-missed rule to the current run, so a
+    // foreman who texts EMPEZAR again is not stopped by the run before it.
+    if (shouldAutoStop({ hourNow, recent, activeSince: f.active_since })) {
       await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ?`, [f.phone]);
       await sendSms(env, { to: f.phone, body: 'Paramos por hoy. Escribe EMPEZAR manana.' });
       acted++;
@@ -1033,13 +1040,13 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
 
     const row = await queryOne(db, `SELECT * FROM harvest_hourly WHERE harvest_date = ? AND hour_start = ? AND barn = ? AND is_test = ?`,
       [je.harvest_date, je.hour_start, f.barn, isTest]);
-    const d = tickDecision(row, now);
+    const d = tickDecision(row, now, { activeSince: f.active_since });
     if (!d) continue;
     acted++;
 
     if (d.type === 'ask') {
       await execute(db, `INSERT OR IGNORE INTO harvest_hourly (season, harvest_date, hour_start, barn, status, asked_at, is_test)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [season(), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
+        VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [seasonOf(je.harvest_date), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
       await sendSms(env, { to: f.phone, body: promptText(f.barn, je.hour_start) });
     } else if (d.type === 'nudge') {
       await execute(db, `UPDATE harvest_hourly SET status = 'nudged', nudged_at = ? WHERE id = ? AND status = 'pending'`, [sqliteUtc(now), row.id]);
@@ -1184,7 +1191,7 @@ Expected: `replies: ["Ok 9-10 Arriba: C4 WSc2 Ch3 Col8 WSg1 R12. Nota: se rompio
 ```bash
 curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"10am: cuatro cortadores, 2 ws, 3 choferes"}'
 ```
-Expected: `replies: ["Falta: colgadores, waterspiders granero, racks. Cuantos de 10-11?"]`.
+Expected: `replies: ["Falta: colgadores, waterspiders granero, racks. Cuantos de 10 a 11?"]`.
 
 ```bash
 curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"10am: 8 1 15"}'
