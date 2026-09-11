@@ -109,8 +109,11 @@ export function dashPage() {
   .bay .l { font-size:.74rem; color:var(--muted); }
   .bay.empty { opacity:.42; }
   .baygroup + .baygroup { margin-top:14px; }
-  .baygroup h3 { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em;
+  /* The page's one sub-heading look. .subhead is the same thing outside a
+     .baygroup — the hourly card's per-barn headings use it. */
+  .baygroup h3, h3.subhead { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em;
                  color:var(--muted); margin:0 0 8px; }
+  h3.subhead { margin:18px 0 8px; }
 
   /* The rack board. Bigger than the .bay cells above on purpose: this is the
      card that answers a question someone is asking while standing up, and the
@@ -256,12 +259,21 @@ export function dashPage() {
   // the dashboard. A failure leaves the slot empty rather than an error.
   function loadHourly(pw) {
     return fetch(API + '?action=hourly', { headers: { authorization: pw } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Hourly log unavailable (' + r.status + ').');
+        return r.json();
+      })
       .then(function (h) {
         var host = $('hourly'); if (!host) return;
-        host.innerHTML = h ? cardHourly(h) : '';
+        host.innerHTML = cardHourly(h);
       })
-      .catch(function () {});
+      // A blank slot would read as "nobody texted today", which is a different
+      // fact from "the log did not load". Say which one it is.
+      .catch(function (e) {
+        var host = $('hourly'); if (!host) return;
+        host.innerHTML = '<section class="card"><h2>Hourly crew log</h2><p class="lede">' +
+          esc(e.message) + '</p></section>';
+      });
   }
 
   $('go').addEventListener('click', function () { load($('pw').value); });
@@ -362,7 +374,10 @@ export function dashPage() {
     }).join('');
 
     if (!c.sessions && !c.loads && !c.sacks) {
-      $('cards').innerHTML = '<div class="card empty"><h2>No harvest recorded yet</h2>' +
+      // The hourly slot lives on this branch too: on a day-one morning the
+      // foremen can be texting before the first zone scan of the season.
+      $('cards').innerHTML = '<div id="hourly"></div>' +
+        '<div class="card empty"><h2>No harvest recorded yet</h2>' +
         '<p>The first zone scan of the season fills this page. Nothing here is waiting on you.</p>' +
         '<div class="row" style="justify-content:center"><button class="ghost" id="d2">See a worked example</button></div></div>';
       var b = $('d2'); if (b) b.addEventListener('click', function () { render(DEMO, true); });
@@ -394,23 +409,38 @@ export function dashPage() {
       var x = h.barns[b];
       var rows = x.rows.map(function (r) {
         var st = r.status === 'complete' ? '' : ' <span class="muted">(' + esc(r.status) + ')</span>';
-        return '<tr><td>' + esc(r.hour_start) + st + '</td><td>' + num(r.cutters) + '</td><td>' + num(r.cutter_water_spiders) +
-          '</td><td>' + num(r.drivers) + '</td><td>' + num(r.hangers) + '</td><td>' + num(r.hanging_water_spiders) +
-          '</td><td>' + num(r.racks) + '</td><td>' + esc(r.notes || '') + '</td></tr>';
+        // esc() around num() as well: these are INTEGER columns, but a value
+        // put there by hand is still a string on the way to innerHTML.
+        return '<tr><td>' + esc(r.hour_start) + st + '</td><td>' + esc(num(r.cutters)) + '</td><td>' + esc(num(r.cutter_water_spiders)) +
+          '</td><td>' + esc(num(r.drivers)) + '</td><td>' + esc(num(r.hangers)) + '</td><td>' + esc(num(r.hanging_water_spiders)) +
+          '</td><td>' + esc(num(r.racks)) + '</td><td>' + esc(r.notes || '') + '</td></tr>';
       }).join('');
-      var mismatch = '';
-      if (h.roster && x.latest) {
-        var diff = ['drivers', 'cutter_water_spiders', 'hangers', 'hanging_water_spiders'].filter(function (f) {
-          return h.roster[f] != null && x.latest[f] != null && h.roster[f] !== x.latest[f];
-        });
-        if (diff.length) mismatch = '<p class="lede">Roster differs on: ' + esc(diff.join(', ')) + '</p>';
-      }
-      return '<h3>' + esc(x.label) + ' — ' + x.total_racks + ' racks · ' + x.person_hours + ' person-hrs · ' +
-        (x.racks_per_hanger_hour == null ? '—' : x.racks_per_hanger_hour) + ' racks/hanger-hr' +
+      return '<h3 class="subhead">' + esc(x.label) + ' — ' + esc(num(x.total_racks)) + ' racks · ' + esc(num(x.person_hours)) + ' person-hrs · ' +
+        (x.racks_per_hanger_hour == null ? '—' : esc(x.racks_per_hanger_hour)) + ' racks/hanger-hr' +
         (x.missing_hours.length ? ' · missing ' + esc(x.missing_hours.join(', ')) : '') + '</h3>' +
-        mismatch + '<div style="overflow-x:auto"><table>' + head + rows + '</table></div>';
+        (x.rows.length
+          ? '<div style="overflow-x:auto"><table>' + head + rows + '</table></div>'
+          : '<p class="lede">No texts yet.</p>');
     }).join('');
-    return '<section class="card"><h2>Hourly crew log</h2>' + blocks + '</section>';
+    return '<section class="card"><h2>Hourly crew log</h2>' + rosterLine(h) + blocks + '</section>';
+  }
+
+  /**
+   * One farm-wide roster line, not one per barn. harvest_crew_roster has no
+   * barn column, so the roster is the whole farm's headcount — compared
+   * against a single barn's hour it would differ every hour of every two-barn
+   * day. Both barns have to have reported before the sum means anything.
+   */
+  function rosterLine(h) {
+    if (!h.roster) return '';
+    var latest = ['upper', 'bottom'].map(function (b) { return h.barns[b].latest; });
+    if (!latest.every(function (l) { return l; })) return '';
+    var diff = ['drivers', 'cutter_water_spiders', 'hangers', 'hanging_water_spiders'].filter(function (f) {
+      if (h.roster[f] == null) return false;
+      if (latest.some(function (l) { return l[f] == null; })) return false;
+      return h.roster[f] !== latest.reduce(function (s, l) { return s + l[f]; }, 0);
+    });
+    return diff.length ? '<p class="lede">Roster differs on: ' + esc(diff.join(', ')) + '</p>' : '';
   }
 
   // 1 ── dry days
