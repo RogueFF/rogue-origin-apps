@@ -599,7 +599,7 @@ export async function verifyTwilioSignature(authToken, url, params, header) {
 **Step 4: Run tests**
 
 Run: `npm test`
-Expected: 27 passing.
+Expected: 29 passing.
 
 **Step 5: Commit**
 
@@ -767,7 +767,7 @@ export async function parseReply(text, ctx, env, fetchImpl = fetch) {
 **Step 4: Run tests**
 
 Run: `npm test`
-Expected: 32 passing.
+Expected: 34 passing.
 
 **Step 5: Commit**
 
