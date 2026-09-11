@@ -11,7 +11,13 @@ const enc = (s) => new TextEncoder().encode(s);
 
 export async function sendSms(env, { to, body }, fetchImpl = fetch) {
   const sid = env.TWILIO_ACCOUNT_SID, token = env.TWILIO_AUTH_TOKEN, from = env.TWILIO_FROM_NUMBER;
-  if (!sid || !token || !from || !to) {
+  // Two different faults, two different log lines: a missing recipient is a bug
+  // in the caller, missing secrets are a deploy that is not finished.
+  if (!to) {
+    console.log(`[sms] no recipient — message would be: ${body}`);
+    return false;
+  }
+  if (!sid || !token || !from) {
     console.log(`[sms] not configured — to ${to}: ${body}`);
     return false;
   }

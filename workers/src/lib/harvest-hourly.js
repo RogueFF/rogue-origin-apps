@@ -136,6 +136,23 @@ export function askMissingText(row) {
   return `Falta: ${names}. Cuantos de ${hourRange(row.hour_start).replace('-', ' a ')}?`;
 }
 
+/**
+ * "Sin novedad" is how the crew says "nothing to report". Stored as a note it
+ * would put noise in every confirmation text and every day summary, so it
+ * normalizes to null — the same as an empty reply.
+ */
+const NO_NEWS = new Set([
+  'sin novedad', 'sin novedades', 'nada', 'todo bien', 'ok', 'nothing', 'none', 'no notes',
+]);
+
+/** The note the foreman actually meant to leave, or null. */
+export function normalizeNotes(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return null;
+  const bare = t.replace(/[.!]+$/, '').trim().toLowerCase();
+  return NO_NEWS.has(bare) ? null : t;
+}
+
 export function notUnderstoodText() {
   return 'No entendi. Manda los numeros en orden: cortadores, waterspiders campo, choferes, ' +
     'colgadores, waterspiders granero, racks. Ejemplo: 4 2 3 8 1 12 sin novedad';
