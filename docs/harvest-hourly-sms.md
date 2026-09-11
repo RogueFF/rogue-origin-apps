@@ -302,7 +302,7 @@ All three take `Authorization: Bearer $HARVEST_SMS_KEY`. A wrong or missing key 
 | Endpoint | Contract |
 |---|---|
 | `GET ?action=sms_poll&limit=N` | Queued chat texts, oldest first (default 20, capped 100). Each carries a `context` object: the foreman, the open row and what is still missing on it, `just_ended_hour`, today's totals and rows, `now_pacific`. **Rows are claimed as they go out** (`processed=1, delivered_at`), so two overlapping polls cannot hand one text to two sessions and answer the foreman twice. A row whose sender is not a registered foreman is skipped and left queued. |
-| `POST ?action=sms_send {to,text}` | Registered foreman phones only (`404` otherwise). The text is run through `gsmSafe` — NFD, combining marks dropped, `¿¡` removed, whitespace folded, then everything still outside printable ASCII stripped — and refused over 480 characters. Returns `{sent, text, segments}`; `sent:false` means Twilio is unconfigured (local dev). Also stamps `replied_at` on that phone's delivered rows. |
+| `POST ?action=sms_send {to,text}` | Registered foreman phones only (`404` otherwise). The text is run through `gsmSafe` — NFD, combining marks dropped, `¿¡` removed, whitespace folded, everything still outside printable ASCII stripped, and the nine GSM-7 extension characters (`` [ \ ] ^ ` { | } ~ ``) folded into the basic table — and refused over **3 segments (459 characters)** — concatenated GSM-7 gives up 7 characters per segment to the header, so the cap is 459, not 480. Returns `{sent, text, segments}`; `sent:false` means Twilio is unconfigured (local dev). Also stamps `replied_at` on that phone's delivered rows. |
 | `POST ?action=hourly_set {phone, hour_start?, …six counts…, notes?, raw_text?}` | The `log_hourly_crew` tool's endpoint. Returns `{ok:true, row, missing, invalid, reply}` or `{ok:false, reason, reply}` — **200 either way**. `hour_start` is `HH:00` or omitted (target the open hour). A call carrying no counts and no notes is a `400`: it would stamp `answered_at` and silently cancel that hour's nudge without a single number having been reported. |
 
 ---
@@ -413,7 +413,7 @@ curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_set" \
 > Git Bash mangles accented characters on the way in, which makes `gsmSafe` look
 > broken (`Cuántos` arriving as `Cuntos`) when it is the console, not the code.
 
-**5. `npm test`** (from `workers/`) — 46 passing, 0 failing. `node --test`, no D1
+**5. `npm test`** (from `workers/`) — 55 passing, 0 failing. `node --test`, no D1
 harness: `harvest-hourly-d1.js` is covered end to end through `hourly_simulate` and
 `curl`, not by unit tests. The pure helpers (`gsmSafe`, `smsSegments`,
 `buildPollContext`, the message text, the tick decisions) are.

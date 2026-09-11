@@ -15,6 +15,8 @@
  * - GET  /api/harvest?action=foremen               registry                 [password]
  * - POST /api/harvest?action=foreman_set           {phone,name,barn,active} [password]
  * - POST /api/harvest?action=hourly_simulate       {from, body} -> replies  [password]
+ *   (commands always; a chat text only while HARVEST_TEST_MODE is true, or the
+ *   simulated text joins the real queue and the live relay answers a real phone)
  * - GET  /api/harvest?action=hourly_test           health
  * - GET  /api/harvest?action=sms_poll&limit=N      queued chat texts + context  [sms key]
  * - POST /api/harvest?action=sms_send              {to, text}                   [sms key]
@@ -48,11 +50,10 @@ const SMS_KEY = 'HARVEST_SMS_KEY';
 
 const POLL_LIMIT_DEFAULT = 20;
 const POLL_LIMIT_MAX = 100;
-// Three 160-character GSM-7 segments. A reply this long is a relay bug, not a
-// message to a foreman standing in a barn — refusing it is cheaper than paying
-// for it. (smsSegments counts the true concatenated cost, which is 153 per
-// segment past the first; this cap is deliberately the rounder plan number.)
-const MAX_SMS_CHARS = 480;
+// Three GSM-7 segments — 459 characters once concatenated, not 480: past the
+// first segment every one of them gives up 7 characters to the header. A reply
+// this long is a relay bug, not a message to a foreman standing in a barn.
+const MAX_SMS_SEGMENTS = 3;
 
 const isTestMode = (env) => env.HARVEST_TEST_MODE !== 'false';
 // The season is the harvest date's own year, not the wall-clock year: a row
@@ -86,6 +87,14 @@ export async function handleHarvestHourly(request, env, ctx) {
     case 'hourly_simulate': {
       requireAuth(request, body, env, 'harvest-hourly-simulate');
       if (!body.from || !body.body) throw createError('VALIDATION_ERROR', 'from and body are required');
+      // A simulated chat text on production goes into the real queue, and the
+      // live relay answers it with a real SMS to a real foreman. Commands are
+      // safe (the worker answers them inline and nothing leaves the process
+      // unless deliver=true), so only the queueing path is gated.
+      if (classifyInbound(String(body.body)).kind === 'answer' && !isTestMode(env)) {
+        throw createError('VALIDATION_ERROR',
+          'simulate only queues chat texts while HARVEST_TEST_MODE is true');
+      }
       // Same shape as the real path: { replies } for a command, { queued } for
       // a chat text the relay will answer.
       return successResponse(await processInbound(env, {
@@ -184,9 +193,18 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   const out = (replies = [], queued = false) => ({ replies, queued, message_sid: sid || null });
 
   // Dedupe on Twilio's message id: a redelivery must not write twice.
+  //
+  // Inserted processed=1 — CLAIMED BY THE WORKER — and released to the relay
+  // only once this function has decided the text is chat. Inserted at 0, the
+  // row would be pollable for the three round-trips it takes to classify it,
+  // and the relay would answer an EMPEZAR the worker is also answering: the
+  // foreman gets two texts. The narrow cost is that a worker that dies between
+  // here and the release leaves a chat row claimed and unanswerable; a lost
+  // text beats a doubled one, and the row keeps the foreman's words either way.
   if (sid) {
     const { changes } = await execute(db,
-      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body) VALUES (?, ?, ?)`, [sid, from, text]);
+      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body, processed) VALUES (?, ?, ?, 1)`,
+      [sid, from, text]);
     if (changes === 0) return out();
   }
 
@@ -219,10 +237,15 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
     say(helpText(foreman.barn));
   } else {
     // v2: a chat text is not understood here. The day never starts or stops on
-    // a model, but everything else belongs to the Capataz relay — the row stays
-    // kind='chat', processed=0, and sms_poll hands it over with its context.
-    if (!sid) console.warn(`[sms] chat text from ${from} has no MessageSid — nothing to queue`);
-    return out([], !!sid);
+    // a model, but everything else belongs to the Capataz relay. Release the
+    // row it has been holding claimed since the INSERT — this is the only place
+    // processed goes back to 0, and after it the text is the relay's.
+    if (!sid) {
+      console.warn(`[sms] chat text from ${from} has no MessageSid — nothing to queue`);
+      return out([], false);
+    }
+    await execute(db, `UPDATE harvest_sms_inbox SET kind = 'chat', processed = 0 WHERE message_sid = ?`, [sid]);
+    return out([], true);
   }
 
   await markInbox(db, { sid, kind: 'command', now, replied: true });
@@ -350,10 +373,14 @@ export async function applyHourlyReport(db, env, { foreman, hour, values: given,
   const reply = still.length
     ? why + askMissingText(fresh)
     : why + (invalid.length ? 'Se mantiene el valor anterior. ' : '') + confirmText(fresh);
-  // Report the status the row actually carries: when the guarded write above
-  // found no rows it is because a racing reply had already completed the hour,
-  // and telling the relay 'nudged' would have it chase numbers that are in.
-  return { row: { ...fresh, status: wrote.changes ? status : fresh.status }, missing: still, invalid, reply, refused: null };
+  // Report the row as it actually stands. When the guarded write found nothing
+  // it is because a reply racing this one completed the hour between the
+  // re-read and here — so read it once more rather than hand the relay a
+  // 'nudged' row and have it chase numbers that are already in.
+  const settled = wrote.changes
+    ? { ...fresh, status }
+    : (await queryOne(db, `SELECT * FROM harvest_hourly WHERE id = ?`, [row.id])) || fresh;
+  return { row: settled, missing: still, invalid, reply, refused: null };
 }
 
 /**
@@ -398,40 +425,63 @@ async function pollSms(db, env, limitRaw) {
   const limit = Math.min(Math.max(Number(limitRaw) || POLL_LIMIT_DEFAULT, 1), POLL_LIMIT_MAX);
   const now = new Date();
   const day = pacificDay(now);
+  // The foreman filter is in the SQL, not the loop: an orphaned row (its sender
+  // deleted from the roster) is one nobody can ever answer, and left in the
+  // window it would consume a slot on every poll forever and starve the real
+  // texts behind it.
   const pending = await query(db, `SELECT message_sid, from_phone, body, received_at FROM harvest_sms_inbox
-    WHERE kind = 'chat' AND processed = 0 ORDER BY received_at LIMIT ?`, [limit]);
+    WHERE kind = 'chat' AND processed = 0 AND from_phone IN (SELECT phone FROM harvest_foremen)
+    ORDER BY received_at LIMIT ?`, [limit]);
 
   const foremen = new Map();      // phone -> row | null
   const dayRows = new Map();      // barn  -> today's harvest_hourly rows
   const messages = [];
 
   for (const m of pending) {
-    if (!foremen.has(m.from_phone)) {
-      foremen.set(m.from_phone, await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [m.from_phone]));
-    }
-    const foreman = foremen.get(m.from_phone);
-    // processInbound already closes out unregistered senders, so this should be
-    // unreachable — but never hand the relay a number it cannot attribute.
-    if (!foreman) {
-      console.warn(`[sms-poll] no foreman for ${m.from_phone} — leaving ${m.message_sid} queued`);
-      continue;
-    }
+    // Per row: one text whose context cannot be built must not cost the relay
+    // the rest of the batch, and must not stay claimed — it is released below
+    // so the next poll retries it rather than losing it.
+    let claimed = false;
+    try {
+      if (!foremen.has(m.from_phone)) {
+        foremen.set(m.from_phone, await queryOne(db, `SELECT * FROM harvest_foremen WHERE phone = ?`, [m.from_phone]));
+      }
+      const foreman = foremen.get(m.from_phone);
+      // Unreachable now that the SELECT filters on the roster, and it stays
+      // here anyway: never hand the relay a number it cannot attribute.
+      if (!foreman) {
+        console.warn(`[sms-poll] no foreman for ${m.from_phone} — leaving ${m.message_sid} queued`);
+        continue;
+      }
 
-    const { changes } = await execute(db, `UPDATE harvest_sms_inbox SET processed = 1, delivered_at = ?
-      WHERE message_sid = ? AND processed = 0`, [sqliteUtc(now), m.message_sid]);
-    if (!changes) continue;
+      // Claim the row before returning it: two overlapping polls (or a retry
+      // after a dropped response) must not hand one text to two sessions.
+      const { changes } = await execute(db, `UPDATE harvest_sms_inbox SET processed = 1, delivered_at = ?
+        WHERE message_sid = ? AND processed = 0`, [sqliteUtc(now), m.message_sid]);
+      if (!changes) continue;
+      claimed = true;
 
-    if (!dayRows.has(foreman.barn)) {
-      dayRows.set(foreman.barn, await query(db, `SELECT * FROM harvest_hourly
-        WHERE harvest_date = ? AND barn = ? AND is_test = ? ORDER BY hour_start`, [day, foreman.barn, isTest]));
+      if (!dayRows.has(foreman.barn)) {
+        dayRows.set(foreman.barn, await query(db, `SELECT * FROM harvest_hourly
+          WHERE harvest_date = ? AND barn = ? AND is_test = ? ORDER BY hour_start`, [day, foreman.barn, isTest]));
+      }
+      messages.push({
+        message_sid: m.message_sid,
+        from_phone: m.from_phone,
+        body: m.body,
+        received_at: m.received_at,
+        context: buildPollContext(dayRows.get(foreman.barn), foreman, now),
+      });
+    } catch (e) {
+      console.error(`[sms-poll] ${m.message_sid}: ${e.message}`);
+      if (claimed) {
+        // Put it back. A row claimed and then dropped on the floor is a text
+        // the foreman sent that nobody will ever answer, and the watchdog's
+        // "delivered, never replied" clause would blame the relay for it.
+        await execute(db, `UPDATE harvest_sms_inbox SET processed = 0, delivered_at = NULL WHERE message_sid = ?`,
+          [m.message_sid]).catch(() => {});
+      }
     }
-    messages.push({
-      message_sid: m.message_sid,
-      from_phone: m.from_phone,
-      body: m.body,
-      received_at: m.received_at,
-      context: buildPollContext(dayRows.get(foreman.barn), foreman, now),
-    });
   }
   return { messages };
 }
@@ -450,9 +500,10 @@ async function sendToForeman(db, env, body) {
 
   const text = gsmSafe(body.text);
   if (!text) throw createError('VALIDATION_ERROR', 'text is required');
-  if (text.length > MAX_SMS_CHARS) {
+  const segments = smsSegments(text);
+  if (segments > MAX_SMS_SEGMENTS) {
     throw createError('VALIDATION_ERROR',
-      `text is ${text.length} characters (${smsSegments(text)} segments); the limit is ${MAX_SMS_CHARS}`);
+      `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
   }
 
   const sent = await sendSms(env, { to, body: text });
@@ -488,13 +539,24 @@ async function setHourly(db, env, body) {
     throw createError('VALIDATION_ERROR', 'hour_start must be HH:00, e.g. 09:00');
   }
 
+  // '' is the model's way of saying "not given" — treated as absent, or
+  // validateCounts would call it invalid and the foreman would be told his
+  // cortadores were out of range when he never mentioned them.
   const given = {};
-  for (const f of COUNT_FIELDS) if (body[f] !== undefined && body[f] !== null) given[f] = body[f];
+  for (const f of COUNT_FIELDS) {
+    const v = body[f];
+    if (v !== undefined && v !== null && v !== '') given[f] = v;
+  }
   const notes = body.notes;
   // An empty call would still target (or create) the hour's row and stamp
   // answered_at, which quietly cancels that hour's nudge without a single
-  // number having been reported. Nothing to write is a caller bug, not a report.
-  if (!Object.keys(given).length && !String(notes ?? '').trim()) {
+  // number having been reported. Nothing to act on is a caller bug, not a
+  // report. A count that is present but out of range IS something to act on:
+  // it earns the "Numero fuera de rango" reply, which is how the foreman finds
+  // out his number did not stick.
+  const probe = validateCounts(given);
+  const usable = COUNT_FIELDS.some(f => probe.values[f] !== null) || probe.invalid.length > 0;
+  if (!usable && !String(notes ?? '').trim()) {
     throw createError('VALIDATION_ERROR', 'at least one count or notes is required');
   }
 

@@ -43,6 +43,38 @@ test('gsmSafe: whitespace collapses to single spaces and the ends are trimmed', 
   assert.equal(gsmSafe('  Ok   9-10\nArriba\t: R12  '), 'Ok 9-10 Arriba : R12');
 });
 
+// The GSM-7 BASIC table, minus the non-ASCII letters gsmSafe strips anyway.
+// Everything outside this costs two septets (the extension table) or forces
+// UCS-2, and either one makes smsSegments' plain length math wrong.
+const GSM7_BASIC = ' !"#$%&\'()*+,-./0123456789:;<=>?@'
+  + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+
+test('gsmSafe: the nine GSM-7 extension characters fold into the basic table', () => {
+  assert.equal(gsmSafe('`x`'), "'x'");
+  assert.equal(gsmSafe('a[b]c'), 'a(b)c');
+  assert.equal(gsmSafe('a{b}c'), 'a(b)c');
+  assert.equal(gsmSafe('a\\b|c'), 'a/b/c');
+  assert.equal(gsmSafe('a~b'), 'a-b');
+  assert.equal(gsmSafe('a^b'), 'ab');
+  // Dropping the caret must not leave a double space behind.
+  assert.equal(gsmSafe('a ^ b'), 'a b');
+});
+
+test('gsmSafe: every output character is in the GSM-7 basic table', () => {
+  const inputs = [
+    'Ok 9-10 Arriba: C4 WSc2 Ch3 Col8 WSg1 R12. Nota: se rompio un rack',
+    '¿Cuántos racks? ¡Listo! ñÑ áéíóú 👍 don’t — ok',
+    'a[b]{c}\\d|e~f^g`h',
+    'Falta: colgadores, waterspiders granero, racks. Cuantos de 9 a 10?',
+  ];
+  for (const raw of inputs) {
+    for (const ch of gsmSafe(raw)) {
+      assert.ok(GSM7_BASIC.includes(ch),
+        `gsmSafe(${JSON.stringify(raw)}) leaked ${JSON.stringify(ch)} (U+${ch.codePointAt(0).toString(16)})`);
+    }
+  }
+});
+
 test('gsmSafe: non-strings become an empty string rather than "null"', () => {
   assert.equal(gsmSafe(null), '');
   assert.equal(gsmSafe(undefined), '');

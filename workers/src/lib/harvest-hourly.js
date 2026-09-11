@@ -175,13 +175,20 @@ export function futureHourText() {
  * the whole message to UCS-2 and 70-character segments, which is how a
  * one-segment confirmation silently becomes three.
  *
+ * The output is the GSM-7 **basic** table only, which is what makes
+ * smsSegments' plain length math true. Printable ASCII is not enough: nine of
+ * its characters (`[ \ ] ^ ` { | } ~`) live in GSM's extension table and cost
+ * two septets each, so a reply full of them would be counted short and split
+ * by the carrier anyway. Each is folded to its nearest basic equivalent.
+ *
  * Order matters twice over. Decompose and drop the combining marks FIRST, so
  * "é" becomes "e" rather than being deleted whole by the printable-ASCII sweep
  * after it. (That sweep is also what handles emoji and smart quotes. "ñ" needs
  * no rule of its own — NFD decomposes it like every other tilded letter.) And
  * fold whitespace BEFORE that sweep, because a newline is itself outside
  * printable ASCII: swept first, a two-line reply comes out with its words
- * glued together. The second pass mops up the holes the sweep leaves behind.
+ * glued together. The last pass mops up the holes the sweep and the dropped
+ * caret leave behind.
  */
 export function gsmSafe(text) {
   return String(text ?? '')
@@ -190,6 +197,13 @@ export function gsmSafe(text) {
     .replace(/[¿¡]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/[^\x20-\x7E]/g, '')
+    // The nine GSM-7 extension characters, folded into the basic table.
+    .replace(/`/g, "'")
+    .replace(/[[{]/g, '(')
+    .replace(/[\]}]/g, ')')
+    .replace(/[\\|]/g, '/')
+    .replace(/~/g, '-')
+    .replace(/\^/g, '')
     .replace(/ {2,}/g, ' ')
     .trim();
 }
@@ -198,7 +212,9 @@ export function gsmSafe(text) {
  * How many SMS a GSM-7 message costs. A message that fits in 160 is one; past
  * that every segment gives up 7 characters to the concatenation header, so the
  * whole message is re-counted at 153 — 161 characters cost two segments, not
- * one and a bit. Precondition: `text` is already gsmSafe (UCS-2 would be 70/67).
+ * one and a bit. Plain length math, which is only correct because gsmSafe has
+ * already reduced the text to the basic table: an extension character would
+ * cost two septets and a UCS-2 one would make the segments 70/67.
  */
 export function smsSegments(text) {
   const n = String(text ?? '').length;
