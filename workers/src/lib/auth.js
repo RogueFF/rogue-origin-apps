@@ -106,3 +106,34 @@ export function requireAuth(request, body, env, label = 'unknown') {
   const password = extractPassword(request, body);
   validatePassword(password, env, label);
 }
+
+/**
+ * Require a named shared secret instead of the farm password (throws on
+ * failure). For machine callers — the Capataz relay on FERN and the farm-bridge
+ * MCP worker hold `HARVEST_SMS_KEY`, which is not the password a human types
+ * into the dashboard: a key that leaks off a bot host must not also unlock
+ * orders.
+ *
+ * Same extraction as requireAuth (Authorization: Bearer, or body.password) and
+ * the same constant-time compare. An unset secret is a deploy that is not
+ * finished, not a caller error — it throws INTERNAL_ERROR, never a silent pass.
+ *
+ * @param {string} envKey - name of the env var holding the expected secret
+ * @param {string} label - For logging
+ */
+export function requireBearer(request, body, env, envKey, label = 'unknown') {
+  const expected = env[envKey];
+  if (!expected) {
+    console.error(`[AUTH] ${envKey} not configured for ${label}`);
+    throw createError('INTERNAL_ERROR', `${envKey} not configured`);
+  }
+  const given = extractPassword(request, body);
+  if (!given) {
+    throw createError('UNAUTHORIZED', 'Bearer token required');
+  }
+  if (!constantTimeEqual(given, expected)) {
+    console.warn(`[AUTH] Failed ${envKey} attempt for ${label}`);
+    throw createError('UNAUTHORIZED', 'Invalid bearer token');
+  }
+  return true;
+}
