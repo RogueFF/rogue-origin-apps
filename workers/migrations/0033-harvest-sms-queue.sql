@@ -2,7 +2,9 @@
 -- riego-whatsapp-mailbox's wa_inbox. Commands (EMPEZAR/PARAR/AYUDA) are still
 -- answered inline by the worker and land here already processed; chat texts
 -- wait for the relay. Design: wiki/operations/plans/2026-09-11-harvest-hourly-sms-bot-design.md (v2)
-ALTER TABLE harvest_sms_inbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat';       -- 'command' | 'chat'
+-- kind: 'command' (EMPEZAR/PARAR/AYUDA, answered inline), 'chat' (the relay's),
+-- 'ignored' (an unregistered sender — closed out, never handed to the relay).
+ALTER TABLE harvest_sms_inbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'chat';
 ALTER TABLE harvest_sms_inbox ADD COLUMN processed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE harvest_sms_inbox ADD COLUMN delivered_at TEXT;
 ALTER TABLE harvest_sms_inbox ADD COLUMN replied_at TEXT;
