@@ -34,6 +34,19 @@ name = "rogue-origin-api"
 # - TELEGRAM_TEST_CHAT_ID        (Telegram TEST chat id for harvest-tracking scans —
 #                                  same bot as TELEGRAM_BOT_TOKEN, separate test group.
 #                                  See wiki/operations/plans/2026-07-06-seed-to-sale-harvest-tracking.md)
+# - TWILIO_ACCOUNT_SID           (harvest hourly SMS bot — Twilio account SID)
+# - TWILIO_AUTH_TOKEN            (Twilio auth token; also verifies inbound /sms/inbound
+#                                  signatures. Unset = inbound is unauthenticated.)
+# - TWILIO_FROM_NUMBER           (the toll-free sender, E.164 e.g. +18885551234.
+#                                  Toll-free verification must be approved or carriers drop it.)
+# - TELEGRAM_HARVEST_HOURLY_CHAT_ID  (OPTIONAL — missed-hour alerts; falls back to TELEGRAM_TEST_CHAT_ID)
+# - TWILIO_WEBHOOK_URL           (OPTIONAL var — only behind a custom domain or proxy.
+#                                  Twilio signs the URL it was configured with; leave
+#                                  unset on *.workers.dev or every signature fails.)
+# - HARVEST_HOURLY_MODEL         (OPTIONAL var — overrides the reply-parse model,
+#                                  default claude-opus-5. Must accept output_config.effort
+#                                  and fallbacks: Sonnet 5 does, Haiku 4.5 does not.)
+#                                  Runbook: docs/harvest-hourly-sms.md
 
 # D1 Database
 [[d1_databases]]
