@@ -13,6 +13,7 @@
  * - /api/media - Media upload/serve (R2) — used by SOP Manager
  * - /api/irrigation - Irrigation crew reports (D1)
  * - /api/harvest - Harvest zone-entry & barn-intake tracking (D1) [TEST]
+ * - /sms/inbound - Twilio webhook for the harvest hourly crew log (D1)
  */
 
 import { handleProductionD1 } from './handlers/production-d1.js';
@@ -29,6 +30,7 @@ import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
 import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan,
   handleCrewScan, handleBarnScan, handleDayEndScan } from './handlers/harvest-d1.js';
+import { handleHarvestHourly, handleSmsInbound, HOURLY_ACTIONS } from './handlers/harvest-hourly-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { formatError } from './lib/errors.js';
@@ -120,6 +122,17 @@ export default {
       } catch (e) {
         console.error(`[Cron] Wholesale cron failed: ${e.message}`);
       }
+
+      // Harvest hourly SMS log: ask / nudge / flag, driven by row state so a
+      // late or doubled tick never texts twice. No top-of-hour cron on purpose:
+      // the dispatcher above reads "0 * * * *" as the daily job.
+      try {
+        const { runHarvestHourlyTick } = await import('./handlers/harvest-hourly-d1.js');
+        const { acted } = await runHarvestHourlyTick(env);
+        if (acted) console.log(`[Cron] Harvest hourly: ${acted} action(s)`);
+      } catch (e) {
+        console.error(`[Cron] Harvest hourly tick failed: ${e.message}`);
+      }
     }
   },
 
@@ -166,8 +179,18 @@ export default {
         response = await handleSupersackD1(request, env, ctx);
       } else if (path.startsWith('/api/irrigation')) {
         response = await handleIrrigationD1(request, env, ctx);
+      } else if (path === '/sms/inbound' || path === '/sms/inbound/') {
+        // Twilio webhook for the harvest hourly log. Not under /api so the
+        // client-log and CORS assumptions for browser callers don't apply.
+        // Both spellings: a trailing slash typed into the Twilio console would
+        // otherwise 404 every inbound text with nothing to show for it.
+        response = await handleSmsInbound(request, env, ctx);
       } else if (path.startsWith('/api/harvest')) {
-        response = await handleHarvestD1(request, env, ctx);
+        // Query string only: a body-only `action` falls through to the old
+        // handler. Every known caller uses ?action=.
+        response = HOURLY_ACTIONS.has(url.searchParams.get('action'))
+          ? await handleHarvestHourly(request, env, ctx)
+          : await handleHarvestD1(request, env, ctx);
       } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/') || path === '/fin') {
         // The three crew QR targets. Short on purpose: these are printed on
         // laminated signs and barn walls for a whole season, and a shorter URL
