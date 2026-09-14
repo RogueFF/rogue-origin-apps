@@ -1,0 +1,697 @@
+# Harvest Hourly SMS Bot Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** One Spanish text per barn per hour to its foreman, one free-form reply parsed into cutters / field waterspiders / drivers / hangers / barn waterspiders / racks / notes, stored as one D1 row per barn-hour, echoed back to confirm.
+
+**Architecture:** Everything lives in the existing `rogue-origin-api` Cloudflare Worker (`workers/`). Twilio posts inbound texts to `/sms/inbound`; the existing every-5-minute cron drives a row-state machine (`pending` → `nudged` → `missing` / `complete`) in a new `harvest_hourly` table; replies are parsed by one Claude Messages call with a JSON schema; the harvest dashboard gets an hourly panel. Pure logic (hour labeling, command classification, validation, state decisions, message text) lives in `src/lib/` so it is unit-tested with `node --test` and the D1 handler stays thin.
+
+**Tech Stack:** Cloudflare Workers (plain JS, no npm runtime deps), D1 (SQLite), Twilio Messages REST API (raw `fetch`), Anthropic Messages API (raw `fetch`, `claude-opus-5`, structured output, server-side fallback), `node --test` (Node 24).
+
+**Design record:** `C:\Users\Koasm\Documents\RogueFamilyFarms\wiki\operations\plans\2026-09-11-harvest-hourly-sms-bot-design.md` — read it first; every decision below is justified there.
+
+**Worktree:** `C:\Users\Koasm\Desktop\Dev\rogue-origin-apps-harvest-hourly` on branch `feat/harvest-hourly-sms`. All paths below are relative to `workers/` inside it unless stated. `orders-auth.js` is gitignored and was already copied in; if a build complains it is missing, copy it from the main clone.
+
+**Run tests with:** `npm test` (from `workers/`). Baseline before Task 1: 6 passing.
+
+**Conventions you must follow (from the codebase):**
+- Errors: `throw createError('VALIDATION_ERROR' | 'UNAUTHORIZED' | 'NOT_FOUND', message)` from `src/lib/errors.js`.
+- JSON responses: `successResponse(data)` from `src/lib/response.js`.
+- D1: `query(db, sql, params)`, `queryOne(...)`, `execute(...)` from `src/lib/db.js`. Timestamps are stored as SQLite UTC text `YYYY-MM-DD HH:MM:SS`.
+- Password gate: `requireAuth(request, body, env, 'label')` from `src/lib/auth.js` (farm password as `Authorization: Bearer <pw>` or `body.password`).
+- Test rows: `is_test` is `1` unless `env.HARVEST_TEST_MODE === 'false'`.
+- Telegram: `sendTelegramMessage(env, { chatId, text })` from `src/lib/telegram.js` returns `false` when unconfigured.
+- Commit after every task. Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+
+---
+
+### Task 1: Migration — three tables
+
+**Files:**
+- Create: `migrations/0032-harvest-hourly.sql`
+
+**Step 1: Write the migration**
+
+```sql
+-- Harvest hourly crew log — one row per barn per hour, reported by the barn
+-- foreman over SMS. Design: wiki/operations/plans/2026-09-11-harvest-hourly-sms-bot-design.md
+--
+-- The row IS the state machine: it is inserted when the prompt goes out
+-- (pending), moves to nudged after one reminder, and ends complete or missing.
+-- Every cron tick decides what to do from status + timestamps, so a late or
+-- doubled tick never sends twice.
+--
+-- barn is stored directly. harvest_scan_log derives barn from bay to keep two
+-- columns from disagreeing; there is no bay here, so the rule is not broken.
+
+CREATE TABLE IF NOT EXISTS harvest_hourly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  season INTEGER NOT NULL,
+  harvest_date TEXT NOT NULL,                  -- Pacific civil date YYYY-MM-DD
+  hour_start TEXT NOT NULL,                    -- 'HH:00' Pacific, the hour being reported
+  barn TEXT NOT NULL CHECK (barn IN ('upper', 'bottom')),
+  cutters INTEGER,
+  cutter_water_spiders INTEGER,                -- field side
+  drivers INTEGER,
+  hangers INTEGER,
+  hanging_water_spiders INTEGER,               -- barn side
+  racks INTEGER,
+  notes TEXT,
+  raw_reply TEXT,                              -- latest inbound text, verbatim
+  reported_by TEXT,                            -- E.164 phone
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'nudged', 'complete', 'missing')),
+  asked_at TEXT,
+  nudged_at TEXT,
+  answered_at TEXT,
+  is_test INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (harvest_date, hour_start, barn, is_test)
+);
+
+CREATE INDEX IF NOT EXISTS idx_harvest_hourly_day
+  ON harvest_hourly(harvest_date, barn, is_test);
+
+-- Who gets texted. EMPEZAR sets active=1, PARAR (or the auto-stop) clears it.
+CREATE TABLE IF NOT EXISTS harvest_foremen (
+  phone TEXT PRIMARY KEY,                      -- E.164, e.g. +15415551234
+  name TEXT NOT NULL,
+  barn TEXT NOT NULL CHECK (barn IN ('upper', 'bottom')),
+  active INTEGER NOT NULL DEFAULT 0,
+  active_since TEXT,
+  lang TEXT NOT NULL DEFAULT 'es',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Twilio retries deliveries; the MessageSid makes a redelivery a no-op.
+CREATE TABLE IF NOT EXISTS harvest_sms_inbox (
+  message_sid TEXT PRIMARY KEY,
+  from_phone TEXT NOT NULL,
+  body TEXT,
+  received_at TEXT DEFAULT (datetime('now'))
+);
+```
+
+**Step 2: Apply it to the local D1 and confirm the tables exist**
+
+Run (from `workers/`):
+```bash
+npx wrangler d1 execute rogue-origin-db --local --file=migrations/0032-harvest-hourly.sql
+npx wrangler d1 execute rogue-origin-db --local --command="SELECT name FROM sqlite_master WHERE name LIKE 'harvest_%' ORDER BY name"
+```
+Expected: the second command lists `harvest_foremen`, `harvest_hourly`, `harvest_sms_inbox` (plus the existing harvest tables if the local DB has them).
+
+**Step 3: Commit**
+
+```bash
+git add migrations/0032-harvest-hourly.sql
+git commit -m "feat(harvest): hourly crew log tables (harvest_hourly, harvest_foremen, harvest_sms_inbox)"
+```
+
+---
+
+### Task 2: Pacific time helpers
+
+The existing helpers in `harvest-d1.js` are not exported. Rather than reach into a 4,800-line file, put four tiny functions in their own lib. Do not modify `harvest-d1.js`.
+
+**Files:**
+- Create: `src/lib/pacific.js`
+- Test: `test/pacific.test.mjs`
+
+**Step 1: Write the failing tests**
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { pacificDay, pacificParts, justEndedHour, sqliteUtc, parseSqliteUtc } from '../src/lib/pacific.js';
+
+test('pacificDay: 2am UTC is still the previous Pacific day', () => {
+  assert.equal(pacificDay(new Date('2026-10-15T02:00:00Z')), '2026-10-14');
+});
+
+test('pacificParts across the November DST change', () => {
+  // 2026-11-01 09:30 UTC = 02:30 PDT? No: clocks fell back at 2am, so it is 01:30 PST.
+  assert.deepEqual(pacificParts(new Date('2026-11-01T09:30:00Z')), { day: '2026-11-01', hour: 1, minute: 30 });
+  // PDT in October: 17:07 UTC = 10:07 PDT
+  assert.deepEqual(pacificParts(new Date('2026-10-15T17:07:00Z')), { day: '2026-10-15', hour: 10, minute: 7 });
+  // PST in November: 17:07 UTC = 09:07 PST
+  assert.deepEqual(pacificParts(new Date('2026-11-15T17:07:00Z')), { day: '2026-11-15', hour: 9, minute: 7 });
+});
+
+test('justEndedHour: at 10:07 the hour that just ended is 09:00', () => {
+  assert.deepEqual(justEndedHour(new Date('2026-10-15T17:07:00Z')), { harvest_date: '2026-10-15', hour_start: '09:00' });
+});
+
+test('justEndedHour: at 00:xx nothing ended today', () => {
+  assert.equal(justEndedHour(new Date('2026-10-15T07:20:00Z')), null); // 00:20 PDT
+});
+
+test('sqliteUtc round-trips through parseSqliteUtc', () => {
+  const d = new Date('2026-10-15T17:07:09Z');
+  assert.equal(sqliteUtc(d), '2026-10-15 17:07:09');
+  assert.equal(parseSqliteUtc('2026-10-15 17:07:09').getTime(), d.getTime());
+});
+```
+
+**Step 2: Run to verify they fail**
+
+Run: `npm test`
+Expected: FAIL — `Cannot find module '../src/lib/pacific.js'`.
+
+**Step 3: Implement**
+
+```js
+/**
+ * Pacific-time helpers for the harvest hourly log.
+ *
+ * Same approach as harvest-d1.js: let Intl carry the DST rules rather than an
+ * offset that is right for half of harvest and wrong for the other half — the
+ * season runs across the November change. Duplicated here (four lines) rather
+ * than exported from the 4,800-line handler, so the pure libs stay importable
+ * in tests without dragging Shopify and R2 code along.
+ */
+export const HARVEST_TZ = 'America/Los_Angeles';
+
+/** The civil date in Pacific, 'YYYY-MM-DD'. */
+export function pacificDay(date) {
+  return date.toLocaleDateString('en-CA', { timeZone: HARVEST_TZ });
+}
+
+/** { day, hour, minute } of the Pacific wall clock at the given instant. */
+export function pacificParts(date) {
+  // 'sv-SE' formats as "YYYY-MM-DD HH:MM:SS"
+  const s = date.toLocaleString('sv-SE', { timeZone: HARVEST_TZ });
+  return { day: s.slice(0, 10), hour: Number(s.slice(11, 13)), minute: Number(s.slice(14, 16)) };
+}
+
+/**
+ * The hour that just ended, as the barn labels it. At 10:07 Pacific that is
+ * { harvest_date: today, hour_start: '09:00' }. Null during the 00:xx hour —
+ * the hour that ended belongs to yesterday and nobody is hanging at midnight.
+ */
+export function justEndedHour(date) {
+  const p = pacificParts(date);
+  if (p.hour === 0) return null;
+  return { harvest_date: p.day, hour_start: String(p.hour - 1).padStart(2, '0') + ':00' };
+}
+
+/** SQLite's own timestamp text, "YYYY-MM-DD HH:MM:SS", always UTC. */
+export function sqliteUtc(d) {
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}
+
+export function parseSqliteUtc(ts) {
+  return new Date(ts.replace(' ', 'T') + 'Z');
+}
+```
+
+**Step 4: Run tests**
+
+Run: `npm test`
+Expected: all passing, 0 failing.
+
+**Step 5: Commit**
+
+```bash
+git add src/lib/pacific.js test/pacific.test.mjs
+git commit -m "feat(harvest): Pacific hour helpers for the hourly log"
+```
+
+---
+
+### Task 3: Pure hourly logic — constants, validation, commands, message text, state decisions
+
+**Files:**
+- Create: `src/lib/harvest-hourly.js`
+- Test: `test/harvest-hourly.test.mjs`
+
+**Step 1: Write the failing tests**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/harvest-hourly.js, workers/test/harvest-hourly.test.mjs).
+```
+
+**Step 2: Run to verify they fail**
+
+Run: `npm test`
+Expected: FAIL — module not found.
+
+**Step 3: Implement**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/harvest-hourly.js, workers/test/harvest-hourly.test.mjs).
+```
+
+**Step 4: Run tests**
+
+Run: `npm test`
+Expected: all passing, 0 failing. If `promptText` is over 160 characters, shorten the wording, not the field list.
+
+**Step 5: Commit**
+
+```bash
+git add src/lib/harvest-hourly.js test/harvest-hourly.test.mjs
+git commit -m "feat(harvest): pure hourly-log logic — validation, commands, texts, tick decisions"
+```
+
+---
+
+### Task 4: Twilio send and signature verification
+
+**Files:**
+- Create: `src/lib/sms.js`
+- Test: `test/sms.test.mjs`
+
+**Step 1: Write the failing tests**
+
+The signature test uses Node's own `crypto` as an independent oracle for the WebCrypto implementation.
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/sms.js, workers/test/sms.test.mjs).
+```
+
+**Step 2: Run to verify they fail**
+
+Run: `npm test`
+Expected: FAIL — module not found.
+
+**Step 3: Implement**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/sms.js, workers/test/sms.test.mjs).
+```
+
+**Step 4: Run tests**
+
+Run: `npm test`
+Expected: all passing, 0 failing.
+
+**Step 5: Commit**
+
+```bash
+git add src/lib/sms.js test/sms.test.mjs
+git commit -m "feat(harvest): Twilio send + webhook signature verification"
+```
+
+---
+
+### Task 5: Reply parsing with Claude (structured output)
+
+**Files:**
+- Create: `src/lib/harvest-hourly-parse.js`
+- Test: `test/harvest-hourly-parse.test.mjs`
+
+Model per the design: `claude-opus-5`, `output_config.effort: 'low'`, JSON-schema structured output, server-side refusal fallback. Raw `fetch` like `production/chat.js` — the worker has no npm SDK dependency; keep it that way. `env.HARVEST_HOURLY_MODEL` overrides the model without a code change.
+
+**Step 1: Write the failing tests**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/harvest-hourly-parse.js, workers/test/harvest-hourly-parse.test.mjs).
+```
+
+**Step 2: Run to verify they fail**
+
+Run: `npm test`
+Expected: FAIL — module not found.
+
+**Step 3: Implement**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/lib/harvest-hourly-parse.js, workers/test/harvest-hourly-parse.test.mjs).
+```
+
+**Step 4: Run tests**
+
+Run: `npm test`
+Expected: all passing, 0 failing.
+
+**Step 5: Commit**
+
+```bash
+git add src/lib/harvest-hourly-parse.js test/harvest-hourly-parse.test.mjs
+git commit -m "feat(harvest): parse foreman SMS replies with Claude structured output"
+```
+
+---
+
+### Task 6: The D1 handler — inbound, tick, read, admin, simulate
+
+This is the only file that touches D1 and the network. Keep it thin: every rule is already in the libs.
+
+**Files:**
+- Create: `src/handlers/harvest-hourly-d1.js`
+
+No unit test for this file (there is no D1 test harness in the repo). It is exercised end to end in Task 7 through `hourly_simulate` on `wrangler dev`.
+
+**Step 1: Write the handler**
+
+```
+See the committed files — the canonical version lives in the repo (workers/src/handlers/harvest-hourly-d1.js).
+```
+
+The handler's own header comment names the cron branch as "five-minute" rather
+than spelling the cron string: that string's slash-star form closes a JSDoc
+block, and the first draft of this plan did not compile because of it.
+
+**Behavior notes** (decided during review; the code is the record, this is the index):
+
+- **v2: chat texts are queued for the Capataz relay; the worker never calls a
+  model.** `harvest-hourly-parse.js` is deleted. EMPEZAR / PARAR / AYUDA are
+  still answered inline and deterministically — the day never starts or stops
+  on a model — and everything else waits in `harvest_sms_inbox` for the relay
+  on FERN, which understands it and writes back through `hourly_set`. Every
+  rule below still holds; the write core moved verbatim from `answer()` into
+  `applyHourlyReport`. Plan: `docs/plans/2026-09-11-capataz-v2.md`. The two
+  notes that no longer apply are marked (v1 only) below.
+- **v2: an inbound row is claimed by the worker at insert, and released to the
+  relay only once it is known to be chat.** `harvest_sms_inbox` rows go in
+  `processed=1` and `processInbound` sets `processed=0` on the one path that
+  ends in "this is chat". Inserted unclaimed, a row would be pollable for the
+  three round-trips it takes to classify it, and the relay would answer an
+  `EMPEZAR` the worker is also answering — two texts to one foreman for one
+  message. The cost is a row stranded at `processed=1` when a worker dies
+  mid-classification, which neither watchdog clause can see (`delivered_at` is
+  null, `processed` is 1); tick pass (d) releases any such row older than two
+  minutes before it counts anything, so the text is answered late rather than
+  never. A lost text would be worse than a late one, and a doubled one worse
+  than both.
+
+- **Notes append with `; `.** A later reply never erases an earlier note — the
+  UPDATE concatenates in SQL rather than read-modify-write, so two texts seconds
+  apart merge instead of the second overwriting the first. The six counts merge
+  the same way (`COALESCE(?, col)`): a reply lands only the fields it carries.
+- **Racks today = `SUM(COALESCE(racks, 0))` over every row for the barn, any
+  status.** One definition, shared by the PARAR reply and `readDay.total_racks`.
+  `person_hours` and `racks_per_hanger_hour` stay over complete rows only —
+  a rate needs a whole hour to divide by, a rack count does not.
+- **Backfill rows carry `asked_at NULL`.** An hour the foreman volunteered
+  ("9am: ...") was never prompted, so there is no prompt clock to stamp. Their
+  nudge clock is `answered_at` instead — `tickDecision` reads
+  `asked_at ?? answered_at`, or a null `asked_at` would count as infinitely
+  overdue and the next tick would nudge a row filled in seconds earlier.
+- **(v1 only) A reply that fails to parse still stamps `answered_at` and `raw_reply`.**
+  The counts stay untouched and the foreman is told to resend, but the row now
+  has a real clock — otherwise a backfill whose first reply failed to parse has
+  neither timestamp, reads as infinitely overdue, and gets nudged and flagged
+  "Sin respuesta" despite the foreman having answered. `raw_reply` keeps the
+  text that defeated the parser.
+- **After 8 PM the bot stops texting.** The open-row pass still applies every
+  status transition — `pending` → `nudged` → `missing`, and a missing hour
+  still reaches Telegram — but the SMS reminder is suppressed, so an open row
+  ages onto the dashboard without lighting up a phone at night. The one
+  deliberate exception is the tick that crosses 8 PM itself: it still sends the
+  19:00 prompt and the "Paramos por hoy" sign-off before the auto-stop takes
+  the foreman off the roster, after which nothing is asked at all.
+- **An hour that has not ended yet is never created.** A bare hour below 6 is
+  read as PM, so "5: ..." sent at 10 AM means 17:00; the reply is "Esa hora
+  todavia no termina." and no row is written. `openRow` is also bounded by the
+  last ended hour, so a stray future row can never swallow later answers.
+- **The tick's open-row pass is driven by the rows, not the roster**, and
+  covers every open hour rather than only the just-ended one. An open row
+  belongs to the barn whether or not anyone is on shift — otherwise the 19:00
+  row the 20:00 tick asks for would strand forever behind that same tick's
+  auto-stop (and likewise behind a PARAR). Each row is matched to its barn's
+  current-or-last foreman. The ask and the auto-stop stay on the active
+  roster. Each send is gated on its guarded write winning, which is what makes
+  a doubled tick send nothing.
+- **Auto-stop runs after the ask**, so the 20:00 tick still prompts for the
+  19:00 hour before it says "Paramos por hoy".
+- **An inactive foreman can still answer an open row** — that is how the reply
+  to the 19:00 prompt lands after the auto-stop. Only with nothing open does he
+  get told to text EMPEZAR.
+
+**Step 2: Syntax check**
+
+Run: `node --check src/handlers/harvest-hourly-d1.js`
+Expected: no output (exit 0).
+
+**Step 3: Commit**
+
+```bash
+git add src/handlers/harvest-hourly-d1.js
+git commit -m "feat(harvest): hourly SMS handler — inbound, tick, read, foreman admin, simulate"
+```
+
+---
+
+### Task 7: Wire it into index.js and smoke-test on wrangler dev
+
+**Files:**
+- Modify: `src/index.js` — imports (top), the `isFiveMinCron` block, the `/api/harvest` route, a new `/sms/inbound` route, the health-check endpoint list.
+
+**Step 1: Add the import** next to the other handler imports:
+
+```js
+import { handleHarvestHourly, handleSmsInbound, HOURLY_ACTIONS } from './handlers/harvest-hourly-d1.js';
+```
+
+**Step 2: Add the tick to the every-5-minutes block**, after the wholesale cron `try/catch` inside `if (isFiveMinCron) { ... }`:
+
+```js
+      // Harvest hourly SMS log: ask / nudge / flag, driven by row state so a
+      // late or doubled tick never texts twice. No top-of-hour cron on purpose:
+      // the dispatcher above reads "0 * * * *" as the daily job.
+      try {
+        const { runHarvestHourlyTick } = await import('./handlers/harvest-hourly-d1.js');
+        const { acted } = await runHarvestHourlyTick(env);
+        if (acted) console.log(`[Cron] Harvest hourly: ${acted} action(s)`);
+      } catch (e) {
+        console.error(`[Cron] Harvest hourly tick failed: ${e.message}`);
+      }
+```
+
+**Step 3: Route.** Replace
+
+```js
+      } else if (path.startsWith('/api/harvest')) {
+        response = await handleHarvestD1(request, env, ctx);
+```
+with
+```js
+      } else if (path === '/sms/inbound') {
+        // Twilio webhook for the harvest hourly log. Not under /api so the
+        // client-log and CORS assumptions for browser callers don't apply.
+        response = await handleSmsInbound(request, env, ctx);
+      } else if (path.startsWith('/api/harvest')) {
+        response = HOURLY_ACTIONS.has(url.searchParams.get('action'))
+          ? await handleHarvestHourly(request, env, ctx)
+          : await handleHarvestD1(request, env, ctx);
+```
+
+Also add `'/sms/inbound'` is NOT needed in the health-check `endpoints` list (that list is `/api/*` only). Leave it.
+
+**Step 4: Local secrets.** Create `workers/.dev.vars` (confirm it is ignored first: `git check-ignore -q .dev.vars && echo ignored`; if not, add `.dev.vars` to `.gitignore` and commit that alone). Contents:
+
+```
+ORDERS_PASSWORD=devpass
+ANTHROPIC_API_KEY=<your real key, needed for the parse step>
+HARVEST_TEST_MODE=true
+```
+Leave the Twilio secrets unset: `sendSms` then logs the text instead of sending, which is exactly what the smoke test reads.
+
+**Step 5: Start the dev server** (Browser pane, not Bash): `preview_start` with a `.claude/launch.json` entry `{ "name": "api", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 8787 }` created in the worktree root if missing. Apply the migration locally if Task 1 Step 2 was run in another checkout: `npx wrangler d1 execute rogue-origin-db --local --file=migrations/0032-harvest-hourly.sql`.
+
+**Step 6: Smoke script.** Run each and compare (`-H "Authorization: Bearer devpass"` on every call):
+
+```bash
+curl -s "http://localhost:8787/api/harvest?action=hourly_test"
+```
+Expected: `{"success":true,"message":"Harvest hourly API operational"}`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=foreman_set" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"phone":"+15415550101","name":"Test Arriba","barn":"upper"}'
+```
+Expected: `foreman` object with `active: 0`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"4 2 3 8 1 12"}'
+```
+Expected: `replies: ["Escribe EMPEZAR para comenzar el dia."]`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"empezar"}'
+```
+Expected: `replies: ["Listo. Te pregunto cada hora en punto. PARAR para terminar el dia."]`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"9am: 4 2 3 8 1 12 se rompio un rack"}'
+```
+Expected: `replies: ["Ok 9-10 Arriba: C4 WSc2 Ch3 Col8 WSg1 R12. Nota: se rompio un rack"]` (this one calls Claude for real).
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"10am: cuatro cortadores, 2 ws, 3 choferes"}'
+```
+Expected: `replies: ["Falta: colgadores, waterspiders granero, racks. Cuantos de 10 a 11?"]`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"10am: 8 1 15"}'
+```
+Expected: `replies: ["Ok 10-11 Arriba: C4 WSc2 Ch3 Col8 WSg1 R15"]` — the three bare numbers filled the three missing fields in order.
+
+```bash
+curl -s "http://localhost:8787/api/harvest?action=hourly" -H "Authorization: Bearer devpass"
+```
+Expected: `barns.upper.rows` has two complete rows (09:00, 10:00), `total_racks: 27`, `person_hours: 36`, `racks_per_hanger_hour: 1.69`.
+
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550101","body":"parar"}'
+```
+Expected: `replies: ["Ok, paramos. Hoy Granero Arriba: 27 racks. Gracias."]`.
+
+Unregistered number:
+```bash
+curl -s -X POST "http://localhost:8787/api/harvest?action=hourly_simulate" -H "Authorization: Bearer devpass" -H "Content-Type: application/json" -d '{"from":"+15415550999","body":"hola"}'
+```
+Expected: `replies: []`.
+
+**Step 7: Tick smoke.** Trigger the cron locally: `curl -s "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"` (wrangler dev exposes scheduled handlers on `/__scheduled` when started with `--test-scheduled`; add that flag to `runtimeArgs` for this step: `["run","dev","--","--test-scheduled"]`). With the test foreman set active (`foreman_set` with `"active": true`) and the clock past the top of an hour, the dev server log shows `[sms] not configured — to +15415550101: <prompt>` and `hourly` shows a `pending` row for the just-ended hour. Reset with `parar` afterwards.
+
+**Step 8: Run the unit tests once more, then commit**
+
+```bash
+npm test
+git add src/index.js
+git commit -m "feat(harvest): route /sms/inbound, hourly actions, and the 5-min hourly tick"
+```
+(Do not commit `.dev.vars` or `.claude/launch.json` unless `launch.json` is already tracked in the repo — check with `git ls-files .claude`.)
+
+---
+
+### Task 8: Dashboard panel
+
+**Files:**
+- Modify: `src/handlers/harvest-dash-page.js` — `load()` around line 232, `render()` around line 355, and a new `cardHourly()` next to the other `card*` functions.
+
+The dashboard fetches everything after the password is typed. Add a second fetch for `?action=hourly` and one card.
+
+**Step 1: In `load(pw)`**, after `render(j, false);` inside the `.then(function (j) { ... })`, add:
+
+```js
+        loadHourly(pw);
+```
+and add this function after `load`:
+
+```js
+  function loadHourly(pw) {
+    return fetch(API + '?action=hourly', { headers: { authorization: pw } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (h) {
+        var host = $('hourly'); if (!host) return;
+        host.innerHTML = h ? cardHourly(h) : '';
+      })
+      .catch(function () {});
+  }
+```
+
+**Step 2: In `render()`**, change the final cards line to leave a slot for the hourly card first:
+
+```js
+    $('cards').innerHTML = ['<div id="hourly"></div>',
+      cardRacks(d), cardDry(d), cardCadence(d), cardCrew(d), cardAfterTag(d), cardFeed(d)
+    ].join('');
+```
+
+**Step 3: Add the card** (next to `cardCrew`). One line per hour per barn, a day summary, and the roster beside the latest hourly counts:
+
+```js
+  // 0 ── hourly crew log (SMS bot)
+  function cardHourly(h) {
+    var barns = ['upper', 'bottom'];
+    var any = barns.some(function (b) { return h.barns[b].rows.length; });
+    if (!any) {
+      return '<section class="card"><h2>Hourly crew log</h2><p class="lede">No hourly texts yet today (' + esc(h.date) + ').</p></section>';
+    }
+    var head = '<tr><th>Hour</th><th>Cut</th><th>WS field</th><th>Drv</th><th>Hang</th><th>WS barn</th><th>Racks</th><th>Notes</th></tr>';
+    var blocks = barns.map(function (b) {
+      var x = h.barns[b];
+      var rows = x.rows.map(function (r) {
+        var st = r.status === 'complete' ? '' : ' <span class="muted">(' + esc(r.status) + ')</span>';
+        return '<tr><td>' + esc(r.hour_start) + st + '</td><td>' + num(r.cutters) + '</td><td>' + num(r.cutter_water_spiders) +
+          '</td><td>' + num(r.drivers) + '</td><td>' + num(r.hangers) + '</td><td>' + num(r.hanging_water_spiders) +
+          '</td><td>' + num(r.racks) + '</td><td>' + esc(r.notes || '') + '</td></tr>';
+      }).join('');
+      var mismatch = '';
+      if (h.roster && x.latest) {
+        var diff = ['drivers', 'cutter_water_spiders', 'hangers', 'hanging_water_spiders'].filter(function (f) {
+          return h.roster[f] != null && x.latest[f] != null && h.roster[f] !== x.latest[f];
+        });
+        if (diff.length) mismatch = '<p class="lede">Roster differs on: ' + esc(diff.join(', ')) + '</p>';
+      }
+      return '<h3>' + esc(x.label) + ' — ' + x.total_racks + ' racks · ' + x.person_hours + ' person-hrs · ' +
+        (x.racks_per_hanger_hour == null ? '—' : x.racks_per_hanger_hour) + ' racks/hanger-hr' +
+        (x.missing_hours.length ? ' · missing ' + esc(x.missing_hours.join(', ')) : '') + '</h3>' +
+        mismatch + '<div style="overflow-x:auto"><table>' + head + rows + '</table></div>';
+    }).join('');
+    return '<section class="card"><h2>Hourly crew log</h2>' + blocks + '</section>';
+  }
+```
+
+If the page has no `table` / `th` / `td` / `.muted` styles, add minimal ones to its `<style>` block (borders off, `td { padding: 2px 8px }`, `.muted { opacity: .6 }`). Do not restyle anything else.
+
+**Step 4: Verify in the browser.** With the dev server up and the smoke rows from Task 7 in the local DB, open `http://localhost:8787/api/harvest?action=harvest_dash`, enter `devpass`, and confirm the "Hourly crew log" card shows the 09:00 and 10:00 rows for Granero Arriba with `27 racks`. Take a screenshot for the PR.
+
+**Step 5: Commit**
+
+```bash
+git add src/handlers/harvest-dash-page.js
+git commit -m "feat(harvest): hourly crew log panel on the harvest dashboard"
+```
+
+---
+
+### Task 9: Handler docs and deploy checklist
+
+**Files:**
+- Modify: `src/index.js` header comment — add `/sms/inbound` to the Routes list.
+- Modify: `wrangler.toml` — add the new secrets to the "Required secrets" comment block:
+  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TELEGRAM_HARVEST_HOURLY_CHAT_ID` (optional, falls back to `TELEGRAM_TEST_CHAT_ID`), and the optional vars:
+  - `TWILIO_WEBHOOK_URL` — set only if the worker moves behind a custom domain or a proxy. Twilio signs the URL it was configured with; when that is not the URL the worker sees, `request.url` no longer matches and every inbound signature fails. Leave unset on `*.workers.dev`.
+  - `HARVEST_HOURLY_MODEL` — overrides the parse model. It must be a model that accepts `output_config.effort` and `fallbacks`: Sonnet 5 does, Haiku 4.5 does not. A model that rejects them makes every parse a 400, and every reply comes back "No entendi".
+- Create: `docs/harvest-hourly-sms.md` — the runbook below.
+
+**Step 1: Write the runbook**
+
+```markdown
+# Harvest hourly SMS bot — runbook
+
+Design: RogueFamilyFarms/wiki/operations/plans/2026-09-11-harvest-hourly-sms-bot-design.md
+
+## Deploy (first time)
+1. Check drift: `git rev-list --left-right --count master...origin/master` must be `0 0` on master before merging.
+2. Migration (remote, by hand — wrangler.toml has no migrations_dir):
+   `cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0032-harvest-hourly.sql`
+   If it fails with `D1_RESET_DO`, run each CREATE statement separately with `--command`.
+3. Secrets: `npx wrangler secret put TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (E.164), optionally `TELEGRAM_HARVEST_HOURLY_CHAT_ID`.
+4. Deploy: `cd workers && npx wrangler deploy` (never the root `npm run deploy`).
+5. Twilio console → the toll-free number → Messaging → "A message comes in": Webhook, HTTP POST,
+   `https://rogue-origin-api.roguefamilyfarms.workers.dev/sms/inbound`.
+6. Register foremen (farm password):
+   `curl -X POST "https://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?action=foreman_set" -H "Authorization: Bearer <pw>" -H "Content-Type: application/json" -d '{"phone":"+1...","name":"...","barn":"upper"}'`
+7. Live test while HARVEST_TEST_MODE is still "true": text EMPEZAR from a registered phone, wait for the next top of hour, answer, check `?action=hourly`.
+
+## Daily
+- Foreman texts EMPEZAR at the start, PARAR at the end. Auto-stop after three missed hours or at 8 PM Pacific.
+- Missed hours arrive in the Telegram harvest chat as `⏰ Sin respuesta: <barn> <hour>`.
+- Backfill: text `9am: 4 2 3 8 1 12`.
+
+## Costs
+- SMS ~$0.0083/segment, 2–4 texts per barn-hour. Model: one Opus 5 low-effort call per reply.
+```
+
+**Step 2: Run the full test suite one last time**
+
+Run: `npm test`
+Expected: all passing, 0 failing.
+
+**Step 3: Commit**
+
+```bash
+git add src/index.js wrangler.toml docs/harvest-hourly-sms.md
+git commit -m "docs(harvest): hourly SMS bot runbook + secret list"
+```
+
+---
+
+### Task 10: Finish the branch
+
+Use `superpowers:finishing-a-development-branch`. Summary for the PR: the design record link, the smoke-test transcript from Task 7, the dashboard screenshot from Task 8, and the three things Koa must do before the first real ping (Twilio number verified, foremen registered, secrets set). Do not deploy from the worktree; merge to `master` first and deploy from the main clone per the runbook.
