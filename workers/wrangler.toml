@@ -34,6 +34,25 @@ name = "rogue-origin-api"
 # - TELEGRAM_TEST_CHAT_ID        (Telegram TEST chat id for harvest-tracking scans —
 #                                  same bot as TELEGRAM_BOT_TOKEN, separate test group.
 #                                  See wiki/operations/plans/2026-07-06-seed-to-sale-harvest-tracking.md)
+# - TWILIO_ACCOUNT_SID           (harvest hourly SMS bot — Twilio account SID)
+# - TWILIO_AUTH_TOKEN            (Twilio auth token; also verifies inbound /sms/inbound
+#                                  signatures. Unset = inbound is unauthenticated.)
+# - TWILIO_FROM_NUMBER           (the toll-free sender, E.164 e.g. +18885551234.
+#                                  Toll-free verification must be approved or carriers drop it.)
+# - HARVEST_SMS_KEY              (harvest hourly SMS bot — the Capataz relay's bearer for
+#                                  sms_poll / sms_send / hourly_set. NOT the farm password:
+#                                  this key lives on the FERN bot host and on the
+#                                  farm-bridge MCP worker. Same value in all three places.)
+# - TELEGRAM_HARVEST_HOURLY_CHAT_ID  (OPTIONAL — missed-hour and Capataz-stale alerts;
+#                                  falls back to TELEGRAM_TEST_CHAT_ID)
+# - TWILIO_WEBHOOK_URL           (OPTIONAL var — only behind a custom domain or proxy.
+#                                  Twilio signs the URL it was configured with; leave
+#                                  unset on *.workers.dev or every signature fails.)
+#                                  Runbook: docs/harvest-hourly-sms.md
+#
+# The hourly bot no longer calls a model: v2 queues chat texts for the Capataz
+# relay, so there is no HARVEST_HOURLY_MODEL and ANTHROPIC_API_KEY above is for
+# production/chat.js and sop-d1.js only.
 
 # D1 Database
 [[d1_databases]]

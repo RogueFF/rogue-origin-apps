@@ -19,7 +19,11 @@ import { createError } from '../lib/errors.js';
 import { extractPassword, constantTimeEqual } from '../lib/auth.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 
-const VALID_CHANNELS = new Set(['telegram', 'whatsapp']);
+// 'sms' joins the two Telegram/WhatsApp channels for Capataz: the farm-bridge
+// log_irrigation tool now passes the channel it was reached on, and anything
+// not in this set falls back to 'telegram' silently — an SMS-borne log would
+// have been filed as a Telegram one with nothing to show it.
+const VALID_CHANNELS = new Set(['telegram', 'whatsapp', 'sms']);
 
 const WRITE_ACTIONS = new Set(['log']);
 
