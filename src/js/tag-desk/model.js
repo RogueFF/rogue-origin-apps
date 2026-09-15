@@ -122,14 +122,15 @@ export const laneOf = v => VENDOR_LANES[v] || 'cart';
  * @param {string} p.today     ISO date
  * @param {object} p.levelsChanged  id → ISO date the levels last changed (desk memory)
  * @param {Array} [p.archived] ids hidden on this desk
+ * @param {object} [p.undone]  order id → true for orders this desk undid (they do not make a card "on order")
  */
-export function buildModel({ cards, cart, orders, requests, today, levelsChanged = {}, archived = [] }) {
+export function buildModel({ cards, cart, orders, requests, today, levelsChanged = {}, archived = [], undone = {} }) {
   const { d1, d2, d3 } = checkDays(today);
   const inCart = {};
   for (const rows of Object.values(cart || {})) for (const r of rows) inCart[r.cardId] = { cartId: r.cartId, qty: r.qty, addedAt: r.addedAt, addedBy: r.addedBy || null, note: r.note || null };
-  const days = {}, qtyHist = {};
+  const days = {}, qtyHist = {}, lastLive = {};
   const norder = (orders || []).map(o => ({ ...o, vendor: String(o.vendor || '').toUpperCase() === 'ULINE' ? 'Uline' : o.vendor }));
-  for (const o of norder) { const day = localDay(o.orderedAt); for (const it of o.items || []) { (days[it.cardId] ||= new Set()).add(day); (qtyHist[it.cardId] ||= []).push([day, it.qty]); } }
+  for (const o of norder) { const day = localDay(o.orderedAt); for (const it of o.items || []) { (days[it.cardId] ||= new Set()).add(day); (qtyHist[it.cardId] ||= []).push([day, it.qty]); if (day && !undone[o.id] && !(lastLive[it.cardId] > day)) lastLive[it.cardId] = day; } }
   const openReq = {}, lastReq = {};
   for (const r of requests || []) { if (r.status === 'open') openReq[r.cardId] = r; if (!lastReq[r.cardId] || r.requestedAt > lastReq[r.cardId].requestedAt) lastReq[r.cardId] = r; }
   const hidden = new Set(archived);
@@ -144,8 +145,8 @@ export function buildModel({ cards, cart, orders, requests, today, levelsChanged
     const stable = !(lc && n >= 2 && lc > ds[n - 2]);
     c.orderDays = ds; c.n = n; c.medianGap = med; c.lastOrderDay = last;
     // On order, as any device can see it: the order history, not a desk's receipts. Lead days plus a grace for late deliveries.
-    const sinceOrder = last ? daysBetween(last, today) : null;
-    c.onOrder = sinceOrder != null && sinceOrder >= 0 && sinceOrder <= leadOf(c) + ON_ORDER_GRACE_DAYS ? { day: last, expected: addDays(last, leadOf(c)) } : null;
+    const live = lastLive[c.id] || null; const sinceOrder = live ? daysBetween(live, today) : null;
+    c.onOrder = sinceOrder != null && sinceOrder >= 0 && sinceOrder <= leadOf(c) + ON_ORDER_GRACE_DAYS ? { day: live, expected: addDays(live, leadOf(c)) } : null;
     c.expected = (n >= 3 && med && stable) ? addDays(last, Math.round(med)) : null;
     c.silent = !!(n >= 2 && med && daysBetween(last, today) > 2.5 * med);
     c.levelsChanged = lc; c.qtyHist = (qtyHist[c.id] || []).slice(-4);

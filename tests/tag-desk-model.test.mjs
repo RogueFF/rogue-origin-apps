@@ -148,6 +148,10 @@ test('a card ordered within its lead time + grace is on order: a re-scan does no
   assert.equal(scanPlan(queued).outcome, 'already');             // the cart still wins
   const slow = buildModel({ cards: [card({ deliveryTime: '2 Weeks' })], cart: {}, orders, requests: [], today: '2026-09-20' }).byId[1];
   assert.equal(scanPlan(slow).outcome, 'on-order');              // the window follows the card's own lead time
+  const undoneId = orders[0].id;
+  const afterUndo = buildModel({ cards: [card()], cart: {}, orders, requests: [], today: '2026-09-08', undone: { [undoneId]: true } }).byId[1];
+  assert.equal(afterUndo.onOrder, null);                         // an order the desk undid is not on its way
+  assert.equal(scanPlan(afterUndo).outcome, 'queued');
 });
 
 test('Uline quick-order paste text is one MODEL QTY per line; cards without a model are named, not pasted', () => {
