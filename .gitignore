@@ -60,11 +60,12 @@ build/
 .env.production.local
 .env.development.local
 
-# Legacy auth files (deprecated)
-auth-config.js
-auth-config.production.js
-auth-config.template.js
-orders-auth.js
+# Legacy auth files (deprecated), root only. Anchored so the live Worker
+# handler workers/src/handlers/orders-auth.js is not ignored.
+/auth-config.js
+/auth-config.production.js
+/auth-config.template.js
+/orders-auth.js
 
 # Playwright
 .playwright-mcp/

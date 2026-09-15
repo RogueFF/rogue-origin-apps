@@ -3,8 +3,8 @@ const { defineConfig, devices } = require('@playwright/test');
 const path = require('path');
 
 /**
- * Playwright configuration for Kanban Tutorial Tests
- * Tests run against local HTML files using file:// protocol
+ * Playwright configuration for the end-to-end specs in tests/*.spec.js.
+ * Pages load from local HTML files over file://; specs that need a server say so.
  *
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -59,8 +59,9 @@ module.exports = defineConfig({
     navigationTimeout: 30000,
   },
 
-  /* Ignore legacy puppeteer-based tests */
-  testIgnore: ['**/page-loading.test.js'],
+  /* Playwright owns *.spec.js only. *.test.mjs files belong to node:test, and
+     tests/scale-gate.test.js is a standalone node script that exits on import. */
+  testMatch: '**/*.spec.js',
 
   /* Configure projects for major browsers */
   projects: [

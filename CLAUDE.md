@@ -107,7 +107,7 @@ rogue-origin-apps/
 │   ├── pages/              HTML applications
 │   ├── js/
 │   │   ├── hub/            Ops Hub modules (index.html)
-│   │   ├── scoreboard/     Scoreboard modules
+│   │   ├── scoreboard-v2/  Scoreboard modules (scoreboard-v3/ adds the pace layer)
 │   │   └── shared/         Shared utilities
 │   ├── css/                Per-page stylesheets
 │   │   └── shared-base.css ⭐ Master CSS variables
@@ -120,7 +120,7 @@ rogue-origin-apps/
 ├── docs/                   Documentation
 │   ├── README.md           Documentation index
 │   └── FEATURES_CHANGELOG.md Feature implementation history
-└── tests/                  Playwright test suite
+└── tests/                  node:test unit tests (*.test.mjs) and Playwright specs (*.spec.js)
 ```
 
 **Key Files:**

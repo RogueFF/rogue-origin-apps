@@ -35,7 +35,7 @@ The production tracking system now uses **Cloudflare D1 (SQLite database)** inst
 
 **If issues occur:**
 - System can be rolled back to Google Sheets in ~2 minutes
-- See rollback instructions in `tests/d1-production-readiness.md`
+- See rollback instructions in `2026-01-25-d1-production-readiness.md`
 
 ## Deployment Info
 
