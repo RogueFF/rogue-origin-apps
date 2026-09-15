@@ -54,14 +54,14 @@ git commit -m "feat: add channel column to harvest_foremen and harvest_sms_inbox
 
 **Files:**
 - Create: `workers/src/lib/whatsapp-mailbox.js`
-- Test: `workers/tests/whatsapp-mailbox.test.mjs`
+- Test: `workers/test/whatsapp-mailbox.test.mjs` (the test directory is `test/`, singular — confirmed via the project's existing files; `npm test` runs `node --test "test/**/*.test.mjs"`)
 
 Read `workers/src/lib/sms.js` first (55 lines) — this file must match its exact contract: `sendWhatsapp` returns `false` (never throws) when unconfigured or no recipient, returns `true` on success, throws `Error` on a real send failure (so the caller — the cron — sees it and logs it, but a missing secret never wedges the cron). The two new secrets are `WA_MAILBOX_URL` (the mailbox worker's base URL, e.g. `https://riego-whatsapp-mailbox.roguefamilyfarms.workers.dev`) and `WA_MAILBOX_KEY` (the mailbox's own `POLL_KEY` value, reused).
 
 **Step 1: Write the failing tests**
 
 ```js
-// workers/tests/whatsapp-mailbox.test.mjs
+// workers/test/whatsapp-mailbox.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sendWhatsapp, pollWhatsappMailbox } from '../src/lib/whatsapp-mailbox.js';
@@ -142,7 +142,7 @@ test('pollWhatsappMailbox throws on a non-2xx response', async () => {
 
 **Step 2: Run to verify failure**
 
-Run: `cd workers && npx tsx --test tests/whatsapp-mailbox.test.mjs` (or whatever exact test runner invocation `npm test` uses for a single file — check `package.json`'s `test` script). Expected: FAIL, module not found.
+Run: `cd workers && node --test test/whatsapp-mailbox.test.mjs`. Expected: FAIL, module not found.
 
 **Step 3: Implement**
 
@@ -215,7 +215,7 @@ export async function pollWhatsappMailbox(env, { limit = 20 } = {}, fetchImpl = 
 **Step 4: Run to verify pass, then commit**
 
 ```bash
-git add workers/src/lib/whatsapp-mailbox.js workers/tests/whatsapp-mailbox.test.mjs
+git add workers/src/lib/whatsapp-mailbox.js workers/test/whatsapp-mailbox.test.mjs
 git commit -m "feat: add whatsapp-mailbox client (send + poll, proxied via riego-whatsapp-mailbox)"
 ```
 
@@ -225,9 +225,11 @@ git commit -m "feat: add whatsapp-mailbox client (send + poll, proxied via riego
 
 **Files:**
 - Modify: `workers/src/handlers/harvest-hourly-d1.js`
-- Test: `workers/tests/harvest-hourly-d1.test.mjs` (or wherever the existing handler tests for this file live — find via `grep -rl sendToForeman workers/tests/`)
+- Create: `workers/test/harvest-hourly-channel.test.mjs`
 
 This is the single channel-aware dispatch point the whole feature hangs off. Read the full current `harvest-hourly-d1.js` (832 lines) before starting — it is dense and every comment in it explains a real race or bug the reviewers already found once; do not simplify away anything you don't fully understand.
+
+**Important — test harness note, checked ahead of time so you don't have to rediscover it:** `setForeman` and `sendToForeman` are currently NOT exported from `harvest-hourly-d1.js` — only `handleHarvestHourly`, `handleSmsInbound`, `processInbound`, `applyHourlyReport`, and `runHarvestHourlyTick` are. `applyHourlyReport` was made `export`ed specifically so it could be unit tested directly against a fake D1 (see `workers/test/harvest-hourly-apply.test.mjs`'s `fakeDb()` helper — canned per-call responses in call order, `.matching(...needles)` to inspect the SQL a call issued). Add `export` to both `setForeman` and `sendToForeman` for the same reason, and test them the same way — do not route these tests through `handleHarvestHourly`'s HTTP-level auth wrapper, that is not how any sibling function in this file is tested. Copy `fakeDb()` verbatim into the new `harvest-hourly-channel.test.mjs` file (there is no shared test-utils module in this codebase to import it from — every test file that needs it currently defines its own copy).
 
 **Step 1: Add the `sendViaChannel` helper**
 
@@ -294,17 +296,18 @@ async function setForeman(db, body) {
 }
 ```
 
-**Step 4: Write/update tests**
+**Step 4: Write tests**
 
-Add tests (find the existing test file covering `setForeman`/tick sends via `grep -rl "setForeman\|sendSms" workers/tests/`) for:
-- `setForeman` with `channel: 'whatsapp'` persists and round-trips; with an invalid channel value throws `VALIDATION_ERROR`; omitted defaults to `'sms'`.
-- A tick send (mock both `sendSms` and `sendWhatsapp`, e.g. via dependency injection or module mocking matching however the existing tests already mock `sendSms` for tick tests — check `grep -rn "mock.*sendSms\|sendSms =" workers/tests/`) to a `channel: 'whatsapp'` foreman calls `sendWhatsapp` and not `sendSms`, and vice versa for `channel: 'sms'`.
+Create `workers/test/harvest-hourly-channel.test.mjs` (copy `fakeDb()` from `harvest-hourly-apply.test.mjs` into it) with:
+- `setForeman` with `channel: 'whatsapp'` in the body — assert the INSERT's bound params include `'whatsapp'` (via `db.matching('INSERT INTO harvest_foremen')`); with an invalid channel value (e.g. `'telegram'`) — assert it throws `VALIDATION_ERROR` before any query runs; channel omitted — assert it defaults to `'sms'`.
+- `processInbound`'s deliver loop for a `channel: 'whatsapp'` foreman texting `EMPEZAR` — mock the global `fetch` (`t.mock.method(globalThis, 'fetch', ...)`, `node:test`'s built-in mocking) to assert the WhatsApp mailbox's `/send` URL was called and Twilio's `api.twilio.com` endpoint was not, for both this case and the mirror `channel: 'sms'` case.
+- `sendToForeman` (now exported) called against a `channel: 'whatsapp'` foreman — same global-`fetch` mock, asserting the mailbox is called.
 
 **Step 5: Run full suite, verify pass, commit**
 
 ```bash
 cd workers && npm test
-git add src/handlers/harvest-hourly-d1.js tests/
+git add src/handlers/harvest-hourly-d1.js test/harvest-hourly-channel.test.mjs
 git commit -m "feat: channel-aware outbound dispatch (sms or whatsapp per foreman)"
 ```
 
@@ -314,7 +317,7 @@ git commit -m "feat: channel-aware outbound dispatch (sms or whatsapp per forema
 
 **Files:**
 - Modify: `workers/src/handlers/harvest-hourly-d1.js`
-- Test: same test file as Task 3, or a new one — match existing convention.
+- Test: `workers/test/harvest-hourly-channel.test.mjs` (created in Task 3 — add to it, same `fakeDb()`/global-`fetch`-mock harness)
 
 **Step 1: Thread a `channel` param through `processInbound`**
 
@@ -420,12 +423,14 @@ This runs before the open-row loop and the ask/auto-stop loop, so an EMPEZAR/PAR
 - One row from a phone registered with `channel='sms'` (not whatsapp) — asserts it is skipped too (a WhatsApp message from an SMS-channel foreman's number is not a case that should exist, but the query's `AND channel = 'whatsapp'` must still gate on it defensively).
 - `pollWhatsappMailbox` throwing — asserts `runHarvestHourlyTick` does not throw and the rest of the tick (open-row loop, ask/auto-stop) still runs (mirrors the existing `capatazWatchdog` try/catch wrapper pattern already in the tick).
 - A chat (non-command) text from a WhatsApp foreman — asserts it lands in the queue (`kind='chat', processed=0`) exactly like a Twilio chat text does, with `channel='whatsapp'`, so `sms_poll` will hand it to the relay.
+- **Ordering**: a foreman texts `EMPEZAR` over WhatsApp in the same batch the tick would otherwise decide to ask for the just-ended hour. Because `drainWhatsappInbound` runs before the ask/auto-stop loop (Step 3 above puts it first, deliberately), the EMPEZAR must land (`active` flips to 1) *before* the ask decision is made, so the same tick both starts the day and sends the hourly prompt — not "starts the day" this tick and "gets asked" only on the next one 5 minutes later. Assert this directly against `runHarvestHourlyTick`'s full fake-DB call sequence, not just `drainWhatsappInbound` in isolation — this ordering is the single most fragile thing in the whole feature.
+- **Two messages from one foreman in one drain batch**: `pollWhatsappMailbox` returns two rows from the same `from_number` in one call (e.g. a foreman sending "4 2 3" then, seconds later, "8 1 12" — on the Twilio path these arrive as two separate webhook POSTs; here they arrive together, in one loop iteration, processed sequentially). Assert both are processed in order without either one's claim-then-release step interfering with the other's (`processInbound`'s dedupe-insert-claimed-then-release protocol was written assuming one row at a time from one HTTP request; confirm the sequential `for` loop in `drainWhatsappInbound` doesn't need to await anything differently for this to hold — it shouldn't, since each iteration fully completes before the next starts, but write the test to prove it rather than assume it).
 
 **Step 5: Run full suite, verify pass, commit**
 
 ```bash
 cd workers && npm test
-git add src/handlers/harvest-hourly-d1.js tests/
+git add src/handlers/harvest-hourly-d1.js test/harvest-hourly-channel.test.mjs
 git commit -m "feat: tick drains the WhatsApp mailbox into the same inbound pipeline"
 ```
 
@@ -436,7 +441,7 @@ git commit -m "feat: tick drains the WhatsApp mailbox into the same inbound pipe
 **Files:**
 - Modify: `workers/src/handlers/harvest-hourly-d1.js` (`sendToForeman`)
 - Modify: `workers/src/lib/harvest-hourly.js` (`buildPollContext`)
-- Tests: extend the existing test files for both.
+- Test: `workers/test/harvest-hourly-channel.test.mjs` for the `sendToForeman` changes (add to it — created in Task 3); `workers/test/harvest-hourly-sms.test.mjs` for the `buildPollContext` change (it already has a `buildPollContext` test block, ~line 127 in the current file — add to that block rather than creating a new one).
 
 `gsmSafe`/`smsSegments`/`MAX_SMS_SEGMENTS` exist only to keep an SMS inside GSM-7 160-char segments — meaningless for WhatsApp, which is UTF-8 and where Meta's own `/send` truncates at 4096 chars. Skipping them for `channel='whatsapp'` restores accented Spanish (é, í, ñ, ¿, ¡) for those foremen. This must land together with Task 7 (the relay's own unconditional accent-stripping) — landing only one side is wasted work, since whichever side still strips wins.
 
@@ -502,7 +507,7 @@ In `workers/src/lib/harvest-hourly.js`, the `foreman` object returned by `buildP
 
 ```bash
 cd workers && npm test
-git add src/handlers/harvest-hourly-d1.js src/lib/harvest-hourly.js tests/
+git add src/handlers/harvest-hourly-d1.js src/lib/harvest-hourly.js test/
 git commit -m "feat: skip GSM sanitization for whatsapp foremen; expose channel to the relay"
 ```
 
@@ -515,7 +520,7 @@ git commit -m "feat: skip GSM sanitization for whatsapp foremen; expose channel 
 **Files:**
 - Modify: `claude_relay/text.py`
 - Modify: `claude_relay/config.py`
-- Test: `tests/test_sms_text.py` (or wherever the existing `sms_safe`/`prepare_sms_reply`/`chunk_reply` tests live — `grep -rl prepare_sms_reply tests/`)
+- Test: `tests/test_sms_text.py` (confirmed the existing `sms_safe`/`prepare_sms_reply`/`chunk_reply` tests live there)
 
 Read the full current `claude_relay/text.py` (275 lines) before starting.
 
@@ -597,7 +602,7 @@ wa_reply_chunk_max=int(sms.get("wa_reply_chunk_max", 4000)),
 
 ```bash
 python -m pytest -q
-git add claude_relay/text.py claude_relay/config.py tests/
+git add claude_relay/text.py claude_relay/config.py tests/test_sms_text.py
 git commit -m "feat: whatsapp-safe reply sanitizer (keeps accents, still strips markdown)"
 ```
 
@@ -609,7 +614,7 @@ git commit -m "feat: whatsapp-safe reply sanitizer (keeps accents, still strips 
 
 **Files:**
 - Modify: `claude_relay/sms.py`
-- Test: wherever `SmsWorker`/`dispatch_sms_message` are currently tested — `grep -rl SmsWorker tests/` or `grep -rl dispatch_sms_message tests/`.
+- Test: `tests/test_sms_dispatch.py` (confirmed the existing `SmsWorker`/`dispatch_sms_message` tests live there).
 
 Read the full current `claude_relay/sms.py` (571 lines) before starting — this task touches `SmsWorker.__init__`, `SmsState.worker_for`, `dispatch_sms_message`, and `SmsWorker._process`.
 
@@ -707,7 +712,7 @@ WHATSAPP_CHUNK_CAP = 2
 
 ```bash
 python -m pytest -q
-git add claude_relay/sms.py tests/
+git add claude_relay/sms.py tests/test_sms_dispatch.py
 git commit -m "feat: relay picks the whatsapp-safe or sms-safe reply path per foreman channel"
 ```
 
@@ -720,7 +725,9 @@ git commit -m "feat: relay picks the whatsapp-safe or sms-safe reply path per fo
 **Files:**
 - Create: `docs/plans/2026-09-15-capataz-whatsapp-smoke.md` (the transcript/record of this test, same shape as the SMS smoke doc)
 
-Since this PC has no real Meta webhook pointed at it and cannot receive real WhatsApp messages, this test **fakes `pollWhatsappMailbox`'s return value** rather than standing up a real mailbox round-trip — that is a legitimate substitute because Task 2's tests already prove `pollWhatsappMailbox`/`sendWhatsapp`'s wire contract against the mailbox's real, documented shape (`workers/tests/whatsapp-mailbox.test.mjs`), so this test only needs to prove the *pipeline* (drain → classify → queue → relay → hourly_set → reply) end to end, which `hourly_simulate` already does that for SMS.
+Since this PC has no real Meta webhook pointed at it and cannot receive real WhatsApp messages, this test **fakes `pollWhatsappMailbox`'s return value** rather than standing up a real mailbox round-trip — that is a legitimate substitute because Task 2's tests already prove `pollWhatsappMailbox`/`sendWhatsapp`'s wire contract against the mailbox's real, documented shape (`workers/test/whatsapp-mailbox.test.mjs`), and Task 4's unit tests already cover the ordering and double-message edge cases against the fake DB — so this test only needs to prove the *pipeline* (drain → classify → queue → relay → hourly_set → reply) end to end against a real relay process, which `hourly_simulate` already does for SMS.
+
+**Deploy-day note worth writing into this doc's own runbook section once the test passes:** WhatsApp's 24-hour messaging window means the worker can only text a foreman who has messaged it within the last 24 hours (Meta rejects an outbound send outside that window — error 131047 — unless it's a pre-approved template, which this feature does not use). A foreman texting `EMPEZAR` every morning re-opens the window before any prompt goes out, so this is a non-issue in normal operation — but a newly-registered foreman who has never texted the number first will get no reply to the tick's first attempted prompt. The runbook must say plainly: **the foreman always sends the first message of the day; the bot never initiates cold.**
 
 **Step 1: Register a test WhatsApp foreman**
 
