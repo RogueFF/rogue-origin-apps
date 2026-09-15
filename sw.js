@@ -1,5 +1,5 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.42 - Ops Hub v3 replaces the dashboard shell
+// Version 3.46 - the Hub runs on the shared shell (src/shell, src/ui)
 //
 // Asset URLs in the HTML are content-hashed (see tools/stamp-modules.mjs), so
 // .css and .js are NOT precached — a request for dashboard.css?h=2dde7146 can
@@ -18,7 +18,7 @@
 // worker is not yet in control when the page's own assets are requested — and
 // precaching bare paths never fixed it, it only looked like it did.
 
-const CACHE_VERSION = 'ro-ops-v3.45';
+const CACHE_VERSION = 'ro-ops-v3.46';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';

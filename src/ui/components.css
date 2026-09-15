@@ -1,0 +1,72 @@
+/*
+ * Shared components. Each is CSS only and knows nothing about the API.
+ * Moved from hub.css unchanged; loads after tokens.css and before any page stylesheet.
+ */
+
+/* ---------- text helpers ---------- */
+.mono { font-family: var(--font-mono); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.muted { color: var(--ink-3); }
+.hidden { display: none !important; }
+
+/* ---------- status dot ---------- */
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 var(--good); }
+.pulse-dot.live { animation: pulse 2.4s ease-out infinite; }
+.pulse-dot.off { background: var(--bad); }
+.pulse-dot.idle { background: var(--ink-3); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(127, 191, 149, 0); } 100% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0); } }
+
+/* ---------- chips ---------- */
+.chips { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.chip {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.chip:hover { color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+/* ---------- buttons ---------- */
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.tb-btn:hover { color: var(--ink); }
+.tb-btn:active { transform: scale(0.98); }
+.tb-btn svg { width: 14px; height: 14px; }
+.tb-btn.primary { background: var(--ro-green); border-color: var(--ro-green); color: #fff; }
+.tb-btn.primary:hover { color: #fff; filter: brightness(1.06); }
+.tb-spacer { flex: 1; }
+.icon-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--ink-3); }
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.icon-btn svg { width: 14px; height: 14px; }
+
+/* ---------- card ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 520px) {
+  .chips { flex-wrap: wrap; }
+}
