@@ -65,6 +65,14 @@ const NOW = new Date('2026-10-15T17:07:00Z');
 const PHONE = '+15415550101';
 
 /**
+ * Three fetch mocks live in this file, the same way two fake DBs do — pick the
+ * cheapest one that can prove the claim, and never install two on one test
+ * (the second t.mock.method just overwrites the first, silently):
+ *
+ *   mockFetch        — URLs only. Which transport was called, nothing more.
+ *   mockFetchCalls   — URLs plus the init, for a claim about the request BODY.
+ *   mockMailboxFetch — adds a canned /poll response, for the drain.
+ *
  * Replace global fetch and record every URL it is handed.
  *
  * sendViaChannel calls sendSms/sendWhatsapp without a fetchImpl, so they fall
@@ -321,6 +329,48 @@ test('sendToForeman refuses 4097 characters over whatsapp', async (t) => {
     },
   );
   assert.equal(calls.length, 0, 'a refused text never reaches the mailbox');
+  assert.equal(db.matching('UPDATE harvest_sms_inbox').length, 0);
+});
+
+/**
+ * Neither branch's "text is required" was covered before this pair, and the
+ * guard is easy to read as redundant: the mailbox answers 400 on a missing
+ * text of its own accord, so deleting this one does not silently POST an empty
+ * message. What it does is turn a caller's 400 into a mailbox round trip and a
+ * thrown 500 — loud, but blaming the wrong side. The guard is about answering
+ * with the right status, not about preventing a send.
+ */
+test('sendToForeman refuses an empty text over whatsapp', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'whatsapp' }]);
+
+  await assert.rejects(
+    () => sendToForeman(db, ENV, { to: PHONE, text: '   ' }),
+    (e) => {
+      assert.equal(e.code, 'VALIDATION_ERROR');
+      assert.match(e.message, /text is required/);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0);
+  assert.equal(db.matching('UPDATE harvest_sms_inbox').length, 0);
+});
+
+test('sendToForeman refuses a missing text over sms', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'sms' }]);
+
+  // No text key at all — gsmSafe reduces it to '' and the guard has to catch
+  // it, or Twilio is billed for a blank message.
+  await assert.rejects(
+    () => sendToForeman(db, ENV, { to: PHONE }),
+    (e) => {
+      assert.equal(e.code, 'VALIDATION_ERROR');
+      assert.match(e.message, /text is required/);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0);
   assert.equal(db.matching('UPDATE harvest_sms_inbox').length, 0);
 });
 

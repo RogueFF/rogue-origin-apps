@@ -538,6 +538,10 @@ export async function sendToForeman(db, env, body) {
   if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${to}`);
 
   let text = String(body.text || '').trim();
+  // A GSM-7 billing unit, so it means nothing over WhatsApp — Meta bills per
+  // conversation, and the relay chunks long text on its own side before it
+  // ever calls. Held at 1 there rather than computed or nulled: the field is
+  // part of this endpoint's response shape and nothing consumes it.
   let segments = 1;
   if (foreman.channel === 'whatsapp') {
     // UTF-8, no per-segment billing — Meta's own /send truncates at 4096.
