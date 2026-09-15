@@ -13,7 +13,7 @@
  * - POST /sms/inbound                              Twilio webhook (signature-verified)
  * - GET  /api/harvest?action=hourly&date=YYYY-MM-DD   rows + day summary   [password]
  * - GET  /api/harvest?action=foremen               registry                 [password]
- * - POST /api/harvest?action=foreman_set           {phone,name,barn,active} [password]
+ * - POST /api/harvest?action=foreman_set           {phone,name,barn,active,channel} [password]
  * - POST /api/harvest?action=hourly_simulate       {from, body} -> replies  [password]
  *   (commands always; a chat text only while HARVEST_TEST_MODE is true, or the
  *   simulated text joins the real queue and the live relay answers a real phone)
@@ -72,9 +72,22 @@ const sumRacks = (rows) => rows.reduce((s, r) => s + (r.racks || 0), 0);
  * forever, which is the failure nothing errors on.
  */
 function sendViaChannel(env, foreman, text) {
-  return foreman.channel === 'whatsapp'
-    ? sendWhatsapp(env, { to: foreman.phone, body: text })
-    : sendSms(env, { to: foreman.phone, body: text });
+  if (foreman.channel === 'whatsapp') return sendWhatsapp(env, { to: foreman.phone, body: text });
+  // The column is NOT NULL DEFAULT 'sms', so reaching here with anything else
+  // means a SELECT that forgot the column or a caller passing the wrong object
+  // shape — and the second one leaves foreman.phone undefined too, so sendSms
+  // logs "no recipient" and the send is lost entirely. Both are silent, and
+  // both happen at sites whose state write has already committed.
+  //
+  // A warn, not a throw: the tick commits the row state before it sends, on
+  // purpose — that ordering is what makes a text at-most-once. A throw here is
+  // caught by the per-row try/catch but cannot undo the committed write, so
+  // the row advances, nothing is delivered, and the next tick sees it as done
+  // and never retries. A degraded-but-delivering SMS beats that.
+  if (foreman.channel !== 'sms') {
+    console.warn(`[send] ${foreman.phone}: channel ${JSON.stringify(foreman.channel)} unrecognized — falling back to SMS`);
+  }
+  return sendSms(env, { to: foreman.phone, body: text });
 }
 
 // ─── HTTP: /api/harvest?action=hourly* ─────────────────────────────────
