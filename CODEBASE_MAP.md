@@ -144,9 +144,9 @@ two Supersack pages, which still define their own styles.
 | Break schedule | `workers/src/handlers/production/shift.js`, `bag-tracking.js` |
 | D1 binding | `workers/wrangler.toml` |
 | D1 schema | `workers/schema.sql`, `workers/config-schema.sql`, `workers/migrations/` |
-| Service worker version | `sw.js` (`CACHE_VERSION`) |
+| Service worker | `src/sw.js` (the build injects its file list) |
 | Valid D1 tables | `workers/src/lib/db.js` (`VALID_TABLES`) |
-| Asset hashes | `tools/stamp-modules.mjs` (run by the pre-commit hook) |
+| Asset hashes | `vite.config.mjs` and `tools/vite-legacy-scripts.mjs` |
 
 ---
 
@@ -181,7 +181,7 @@ two Supersack pages, which still define their own styles.
 
 | Issue | Start Here |
 |-------|------------|
-| Hub not loading | `src/js/hub/main.js` → `api.js`; check `npm run stamp:check` |
+| Hub not loading | `src/js/hub/main.js` → `api.js`; check `npm run build:check` |
 | Scoreboard stuck | `src/js/scoreboard-v2/main.js` → `api.js` |
 | API 500 error | `workers/src/handlers/[feature]-d1.js` |
 | D1 query failing | `workers/src/lib/db.js` |
@@ -232,11 +232,11 @@ Production: 'REDACTED-PRODUCTION-SHEET-ID'
 ├── apps-script/        Google Apps Script backends (production tracking, mail relay)
 ├── docs/               Documentation: design/, guides/, plans/, reports/, technical/
 ├── tests/              node:test unit tests and Playwright specs (see tests/README.md)
-├── tools/              Repo tooling, including stamp-modules.mjs
+├── tools/              Repo tooling: the build plugins and the URL parity check
 ├── scripts/            Import/migration scripts
 ├── assets/             PWA icons and README screenshots
 ├── scale-reader/       OHAUS Defender 5000 reader + install package
-└── sw.js               Service worker
+└── vite.config.mjs     The build: every page an entry, at the URL it already has
 ```
 
 ---

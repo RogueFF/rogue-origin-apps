@@ -137,7 +137,7 @@ export default [
       'tests/**',
       'test-results/**',
       'test-*.js',
-      'sw.js',
+      'dist/**',           // build output
       'src/js/legacy/**',
       'src/js/vendor/**',
       '*.min.js',
