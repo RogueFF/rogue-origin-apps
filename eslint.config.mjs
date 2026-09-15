@@ -203,6 +203,21 @@ export default [
     },
   },
   {
+    // The service worker source: a worker runtime, not a page, and bundled by
+    // vite-plugin-pwa rather than loaded as it is written.
+    files: ['src/sw.js'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        ...workerGlobals,
+        self: 'readonly',
+        clients: 'readonly',
+        skipWaiting: 'readonly',
+        registration: 'readonly',
+      },
+    },
+  },
+  {
     // Cloudflare Workers runtime
     files: ['workers/**/*.js', 'workers/**/*.mjs'],
     languageOptions: {
