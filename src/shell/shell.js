@@ -16,7 +16,6 @@ import { toggleTheme } from '../js/shared/theme.js';
 import { currentApp, railHtml } from './nav.js';
 
 const PT = 'America/Los_Angeles';
-const LOGO = new URL('../assets/ro-logo-horizontal.png', import.meta.url).pathname;
 
 const MENU_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>';
 const SUN_ICON = '<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M19.1 4.9l-1.4 1.4M4.9 19.1l1.4-1.4"/></svg>';
@@ -76,7 +75,7 @@ export function mountShell({ brand = 'Ops Hub', start = [], end = [] } = {}) {
   rail.className = 'rail';
   rail.id = 'rail';
   rail.setAttribute('aria-label', 'Apps');
-  rail.innerHTML = railHtml(currentApp(location.pathname)?.id, { brand, logo: LOGO });
+  rail.innerHTML = railHtml(currentApp(location.pathname)?.id, { brand });
   document.body.insertBefore(rail, main);
 
   const bar = document.createElement('div');
