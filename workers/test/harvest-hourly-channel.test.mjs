@@ -359,8 +359,13 @@ test('the drain feeds a whatsapp foreman EMPEZAR through processInbound', async 
     ...WATCHDOG,
   ]);
 
-  await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
+  const r = await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
 
+  // The drain's own contribution to the tick's count: one answered command.
+  // Nothing else in this tick acts, so this pins the arithmetic — a drain that
+  // counted rows polled rather than rows answered would read 1 here too only
+  // by coincidence, and the unregistered-phone test below pins the other side.
+  assert.equal(r.acted, 1);
   assert.ok(hitPoll(urls), `the mailbox was never polled (urls: ${urls.join(', ')})`);
   // The gate is the tick's very first query: the drain runs before anything else.
   assert.match(db.calls[0].sql, /SELECT phone FROM harvest_foremen WHERE phone = \? AND channel = 'whatsapp'/);
@@ -386,11 +391,12 @@ test('the drain leaves a row from an unregistered phone alone', async (t) => {
     ...WATCHDOG,
   ]);
 
-  await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
+  const r = await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
 
   // Every assertion below is a negative, so pin the positive first: without
   // this the whole test passes on a tick that never polled at all.
   assert.ok(hitPoll(urls), 'the mailbox was polled');
+  assert.equal(r.acted, 0, 'a row that is not ours is not something this tick acted on');
   // Not merely "nothing threw": this mailbox also carries Riego's traffic, and
   // a row claimed into Capataz's inbox would sit there unanswerable forever.
   assert.equal(db.matching('INSERT OR IGNORE INTO harvest_sms_inbox').length, 0,
