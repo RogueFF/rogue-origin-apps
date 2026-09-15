@@ -102,7 +102,7 @@ function initRangeChips() {
   else select('today', false);
 }
 
-function initTheme() {
+function watchTheme() {
   // The shell repaints its theme button; the charts read colours at draw time.
   document.addEventListener('ro:themechange', () => renderCharts());
 }
@@ -255,7 +255,7 @@ function boot() {
   mountShell({ start: [$('topbarStart')], end: [$('topbarEnd')] });
   tickClock();
   setInterval(tickClock, 1000);
-  initTheme();
+  watchTheme();
   initCollapse();
   initTimers();
   $('refreshBtn').addEventListener('click', refreshAll);
