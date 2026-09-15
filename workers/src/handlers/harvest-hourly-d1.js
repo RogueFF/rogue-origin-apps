@@ -31,7 +31,7 @@ import { createError } from '../lib/errors.js';
 import { requireAuth, requireBearer } from '../lib/auth.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
-import { sendWhatsapp } from '../lib/whatsapp-mailbox.js';
+import { sendWhatsapp, pollWhatsappMailbox } from '../lib/whatsapp-mailbox.js';
 import { pacificDay, pacificParts, justEndedHour, sqliteUtc, parseSqliteUtc } from '../lib/pacific.js';
 import {
   BARN_LABELS, COUNT_FIELDS, FIELD_ES, validateCounts, missingFields, classifyInbound,
@@ -224,7 +224,7 @@ export async function handleSmsInbound(request, env, ctx) {
  *   `queued` is true when the text was left in the inbox for the Capataz relay,
  *   which is what answers everything that is not a command.
  */
-export async function processInbound(env, { from, text, sid, deliver, now = new Date() }) {
+export async function processInbound(env, { from, text, sid, deliver, channel = 'sms', now = new Date() }) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
   const out = (replies = [], queued = false) => ({ replies, queued, message_sid: sid || null });
@@ -240,8 +240,8 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   // text beats a doubled one, and the row keeps the foreman's words either way.
   if (sid) {
     const { changes } = await execute(db,
-      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body, processed) VALUES (?, ?, ?, 1)`,
-      [sid, from, text]);
+      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body, processed, channel) VALUES (?, ?, ?, 1, ?)`,
+      [sid, from, text, channel]);
     if (changes === 0) return out();
   }
 
@@ -713,6 +713,55 @@ async function capatazWatchdog(db, env, now) {
   return released + 1;
 }
 
+/**
+ * Drain riego-whatsapp-mailbox's queue and feed each row from a registered
+ * WhatsApp foreman through the same processInbound path the Twilio webhook
+ * uses inline — same command handling, same dedupe-by-message-id, same
+ * chat-queueing for the relay.
+ *
+ * Only rows whose sender is a registered `channel = 'whatsapp'` foreman are
+ * claimed. Everyone else (Riego's own crew sharing this mailbox, or an
+ * unregistered number) is left alone — this worker is not the only consumer
+ * of this mailbox's traffic even though it is currently the only ACTIVE one
+ * (Riego's WhatsApp poller has been off since 2026-07; see the wiki design
+ * doc's v3 section before ever adding a second poller here).
+ *
+ * The mailbox has already marked whatever it hands back as processed on ITS
+ * side — there is no redelivery once /poll responds. Each row is written into
+ * harvest_sms_inbox (dedup on the WhatsApp message id, reusing the
+ * message_sid column) via processInbound's own INSERT OR IGNORE before it is
+ * classified, so a worker that dies mid-batch loses no unwritten row — same
+ * trade processInbound already makes for the Twilio path between claim and
+ * release.
+ */
+async function drainWhatsappInbound(env, now) {
+  const db = env.DB;
+  let messages;
+  try {
+    messages = await pollWhatsappMailbox(env, { limit: POLL_LIMIT_MAX });
+  } catch (e) {
+    console.error(`[whatsapp-drain] poll failed: ${e.message}`);
+    return 0;
+  }
+  let acted = 0;
+  for (const m of messages) {
+    const from = '+' + String(m.from_number || '').replace(/[^\d]/g, '');
+    const text = m.text_body || '';
+    try {
+      const foreman = await queryOne(db,
+        `SELECT phone FROM harvest_foremen WHERE phone = ? AND channel = 'whatsapp'`, [from]);
+      if (!foreman) continue;   // not a Capataz WhatsApp foreman — not ours to answer
+      const r = await processInbound(env, {
+        from, text, sid: m.wa_message_id, deliver: true, channel: 'whatsapp', now,
+      });
+      if (r.replies.length || r.queued) acted++;
+    } catch (e) {
+      console.error(`[whatsapp-drain] ${m.wa_message_id}: ${e.message}`);
+    }
+  }
+  return acted;
+}
+
 export async function runHarvestHourlyTick(env, now = new Date()) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
@@ -720,6 +769,19 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
   const je = justEndedHour(now);
   const day = pacificDay(now);
   let acted = 0;
+
+  // ── WhatsApp inbound is a pull, not a push: Meta's webhook reaches a
+  // separate worker and this one drains it. First, before the open-row loop
+  // and the ask/auto-stop loop, so an EMPEZAR or PARAR received over WhatsApp
+  // takes effect ahead of this same tick's decisions — which is how the Twilio
+  // webhook already behaves relative to the tick. Wrapped for the same reason
+  // capatazWatchdog is: another machine's outage must not cost the barn its
+  // prompts and nudges.
+  try {
+    acted += await drainWhatsappInbound(env, now);
+  } catch (e) {
+    console.error(`[whatsapp-drain] ${e.message}`);
+  }
 
   // ── (a) Every open row today, driven by the rows rather than by the roster.
   // An open row is the barn's business whether or not anyone is on shift: the
