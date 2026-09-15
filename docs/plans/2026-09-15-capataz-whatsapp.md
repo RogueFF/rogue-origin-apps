@@ -387,9 +387,11 @@ Add near `runHarvestHourlyTick`, above it:
  * side — there is no redelivery once /poll responds. Each row is written into
  * harvest_sms_inbox (dedup on the WhatsApp message id, reusing the
  * message_sid column) via processInbound's own INSERT OR IGNORE before it is
- * classified, so a worker that dies mid-batch loses no unwritten row — same
- * trade processInbound already makes for the Twilio path between claim and
- * release.
+ * classified, so the row being processed is persisted before it can fail —
+ * the same trade processInbound already makes for the Twilio path between
+ * claim and release. Note what that does NOT buy: rows still sitting in
+ * `messages` when the worker dies are lost, because the mailbox has already
+ * marked them and there is no redelivery.
  */
 async function drainWhatsappInbound(env, now) {
   const db = env.DB;

@@ -11,6 +11,11 @@ import {
  * and which guard clauses it refuses to write without.
  *
  * Canned entries: an object/array for first()/all(), { changes: N } for run().
+ *
+ * For a test whose subject is call ORDER, use `routedDb` below instead —
+ * positional canning cannot prove position. Its companion set of canned tail
+ * responses is `TICK_ROUTES`; this one's is `WATCHDOG`. Mixing the two gives a
+ * confusing failure rather than a clear one.
  */
 function fakeDb(responses) {
   const calls = [];
@@ -268,8 +273,11 @@ const hitPoll = (urls) => urls.some(u => u.startsWith(MAILBOX_POLL));
  *
  * Three URL shapes in one run. <mailbox>/poll is read with res.json() and must
  * carry { messages }; <mailbox>/send and Twilio are read with res.ok alone.
- * Pass 'fail' as `poll` to make the mailbox answer 500 — pollWhatsappMailbox
- * then reads res.text() and throws, which is the drain's swallow path.
+ * Two failure modes, deliberately distinct because the drain logs them
+ * differently: 'fail' answers 500, which pollWhatsappMailbox throws on before
+ * the mailbox has marked anything (nothing lost); 'garbage' answers 200 with a
+ * body res.json() cannot parse, which throws AFTER the mailbox marked the whole
+ * batch processed (that batch is gone).
  */
 function mockMailboxFetch(t, poll = []) {
   const urls = [];
@@ -278,6 +286,7 @@ function mockMailboxFetch(t, poll = []) {
     urls.push(u);
     if (u.startsWith(MAILBOX_POLL)) {
       if (poll === 'fail') return new Response('mailbox down', { status: 500 });
+      if (poll === 'garbage') return new Response('<html>502 Bad Gateway</html>', { status: 200 });
       return new Response(JSON.stringify({ messages: poll }), { status: 200 });
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -285,10 +294,17 @@ function mockMailboxFetch(t, poll = []) {
   return urls;
 }
 
+/** Replace console.error and record the lines it is handed. */
+function mockError(t) {
+  const lines = [];
+  t.mock.method(console, 'error', (...args) => { lines.push(args.join(' ')); });
+  return lines;
+}
+
 /** One inbound row in the mailbox's own shape. */
 const waRow = (id, text) => ({ wa_message_id: id, from_number: '15415550101', text_body: text });
 
-/** The three canned responses the watchdog costs at the end of every tick. */
+/** The three canned responses the watchdog costs at the end of every tick — `fakeDb` only. */
 const WATCHDOG = [{ changes: 0 }, { n: 0, oldest: null }, { n: 0 }];
 
 /** Index of the first recorded call whose SQL contains `needle`. */
@@ -307,9 +323,14 @@ const idxOf = (db, needle) => db.calls.findIndex(c => c.sql.includes(needle));
  * assertion is what fails. (Measured: with fakeDb the mutation failed on that
  * TypeError; with this it fails on `activated < roster`.)
  *
- * `routes` is [needle, response] pairs, first match wins. An unrouted
- * statement answers [] / null / changes 1 — the same permissive fallbacks
- * fakeDb has, which is why the assertions below name their call sites.
+ * `routes` is [needle, response] pairs, first match wins; its companion set of
+ * tail responses is `TICK_ROUTES` (`fakeDb`'s is `WATCHDOG`). A response may
+ * be a function of the calls recorded so far, which is how a test can make a
+ * query answer differently before and after a write the drain performs. An
+ * unrouted statement answers [] / null / changes 1 — the same permissive
+ * fallbacks fakeDb has, which is why the assertions below name their call
+ * sites, and why "no prompt was sent" is asserted as the absence of the
+ * statement rather than as its result.
  */
 function routedDb(routes) {
   const calls = [];
@@ -324,7 +345,10 @@ function routedDb(routes) {
       return {
         bind(...params) {
           calls.push({ sql: clean, params });
-          const r = answer(clean);
+          const route = answer(clean);
+          // Resolved once, here, so all three accessors agree — and resolved
+          // at bind time, so a route can see every call made before this one.
+          const r = typeof route === 'function' ? route(calls) : route;
           return {
             all: async () => ({ results: Array.isArray(r) ? r : [] }),
             first: async () => r ?? null,
@@ -336,11 +360,16 @@ function routedDb(routes) {
   };
 }
 
-/** The tick's own statements, answered so the drain's ordering is the variable. */
+/** The tick's own statements, answered so the drain's ordering is the variable — `routedDb` only. */
 const TICK_ROUTES = [
   ["status IN ('pending', 'nudged') ORDER BY barn", []],        // (a) no open rows
   ['SELECT id FROM harvest_hourly', null],                      // (b) no row for the just-ended hour
   ["status IN ('complete', 'missing')", []],                    // (c) nothing finalized yet
+  // (d) releaseStrandedChat. Routed explicitly to 0 rather than left to the
+  // `changes ?? 1` fallback: unrouted it reports one row released, which the
+  // watchdog adds to the tick's `acted` and which then shows up as a phantom
+  // count in any test that asserts on it.
+  ["SET processed = 0 WHERE kind = 'chat'", { changes: 0 }],
   ['MIN(i.received_at)', { n: 0, oldest: null }],               // (d) watchdog staleness
   ['i.delivered_at IS NOT NULL', { n: 0 }],                     // (d) watchdog unanswered
 ];
@@ -431,6 +460,7 @@ test('the drain leaves a row from an sms-channel foreman alone', async (t) => {
 
 test('a poll failure costs the tick nothing else', async (t) => {
   const urls = mockMailboxFetch(t, 'fail');
+  const errs = mockError(t);
   const db = fakeDb([
     // (a) one pending hour asked 67 minutes ago, past NUDGE_AFTER_MS.
     [{ id: 7, harvest_date: '2026-10-15', hour_start: '09:00', barn: 'upper',
@@ -451,6 +481,33 @@ test('a poll failure costs the tick nothing else', async (t) => {
   assert.ok(db.matching("SET status = 'nudged'")[0], 'the open-row loop still ran');
   assert.ok(hitMailbox(urls), `the reminder was not sent (urls: ${urls.join(', ')})`);
   assert.equal(r.acted, 1);
+  // A refusal is the harmless half: the mailbox threw before marking anything,
+  // so the same rows come back next tick. The log has to say so, or an operator
+  // cannot tell this apart from the data-losing case below.
+  assert.equal(errs.length, 1, `expected one error line, got ${JSON.stringify(errs)}`);
+  assert.match(errs[0], /poll refused, nothing dequeued/);
+});
+
+/**
+ * The other half of the same catch, and the one that actually loses data: a 200
+ * whose body will not parse (a truncated response, a mailbox deploy mid-flight)
+ * throws only after the mailbox has marked the whole batch processed on its
+ * side. Those messages are gone — there is no redelivery — and the log is the
+ * only place that will ever say so.
+ */
+test('a poll whose body will not parse says the batch was lost', async (t) => {
+  const urls = mockMailboxFetch(t, 'garbage');
+  const errs = mockError(t);
+  const db = fakeDb([[], [], ...WATCHDOG]);
+
+  const r = await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
+
+  assert.ok(hitPoll(urls), 'the poll was attempted');
+  assert.equal(errs.length, 1, `expected one error line, got ${JSON.stringify(errs)}`);
+  assert.match(errs[0], /lost AFTER the mailbox marked the batch/);
+  assert.doesNotMatch(errs[0], /nothing dequeued/, 'this case did lose rows — it must not claim otherwise');
+  assert.equal(r.acted, 0);
+  assert.equal(db.matching('INSERT OR IGNORE INTO harvest_sms_inbox').length, 0);
 });
 
 test('a chat text over whatsapp is queued for the relay, not answered here', async (t) => {
@@ -465,8 +522,11 @@ test('a chat text over whatsapp is queued for the relay, not answered here', asy
     ...WATCHDOG,
   ]);
 
-  await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
+  const r = await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
 
+  // The `|| r.queued` half of the drain's count: a text the worker does not
+  // answer is still something this tick acted on.
+  assert.equal(r.acted, 1);
   const insert = db.matching('INSERT OR IGNORE INTO harvest_sms_inbox')[0];
   assert.deepEqual(insert.params, ['WA-chat', PHONE, '4 2 3 8 1 12 sin novedad', 'whatsapp']);
   const release = db.matching("SET kind = 'chat', processed = 0")[0];
@@ -475,6 +535,48 @@ test('a chat text over whatsapp is queued for the relay, not answered here', asy
   // The worker answers commands and nothing else — sms_poll hands this one to
   // the relay, which is what replies.
   assert.ok(!hitMailbox(urls), 'the worker must not answer a chat text itself');
+  assert.ok(!hitTwilio(urls));
+});
+
+/**
+ * riego-whatsapp-mailbox stores an audio message with text_body NULL — only
+ * media_id and media_mime — and /poll hands the row over like any other. Left
+ * to fall through, '' classifies as 'answer', the row is released
+ * kind = 'chat', processed = 0, and that is exactly the population
+ * capatazWatchdog counts as "the relay is not draining": the sender IS a
+ * registered foreman, so the watchdog's join passes and Koa is paged every 30
+ * minutes about an outage that is not happening. A Spanish-speaking barn crew
+ * sending voice notes is a certainty, not an edge case.
+ */
+test('a voice note from a whatsapp foreman is skipped, not queued as an empty chat', async (t) => {
+  const urls = mockMailboxFetch(t, [
+    { wa_message_id: 'WA-voice', from_number: '15415550101', text_body: null, msg_type: 'audio',
+      media_id: 'MEDIA-1', media_mime: 'audio/ogg' },
+  ]);
+  // routedDb, not fakeDb: removing the guard adds three statements between the
+  // gate and the open-row query, and with positional canning the tick then dies
+  // on a shifted response instead of on the assertion below — red, but red for
+  // the wrong reason and therefore no evidence that the guard is what is
+  // holding. Routed, the guard's removal fails exactly the "no inbox row" line.
+  const db = routedDb([
+    // The gate finds him: he IS one of ours, which is what makes this dangerous.
+    ["AND channel = 'whatsapp'", { phone: PHONE }],
+    // Only ever reached with the guard removed.
+    ['SELECT * FROM harvest_foremen WHERE phone = ?',
+      { phone: PHONE, name: 'Test Arriba', barn: 'upper', active: 1, channel: 'whatsapp' }],
+    ...TICK_ROUTES,
+  ]);
+
+  const r = await runHarvestHourlyTick({ ...ENV, DB: db }, NOW);
+
+  assert.ok(hitPoll(urls), 'the mailbox was polled');
+  assert.equal(db.matching('INSERT OR IGNORE INTO harvest_sms_inbox').length, 0,
+    'no inbox row — an empty one would read as a chat text nobody can answer');
+  assert.equal(db.matching("SET kind = 'chat', processed = 0").length, 0,
+    'nothing may be released into the relay queue, which is the watchdog population');
+  assert.ok(db.calls.every(c => !c.params.includes('WA-voice')));
+  assert.equal(r.acted, 0);
+  assert.ok(!hitMailbox(urls), 'the worker does not answer a voice note');
   assert.ok(!hitTwilio(urls));
 });
 
@@ -511,16 +613,20 @@ test('an EMPEZAR drained this tick lands before the ask/auto-stop roster read', 
     `EMPEZAR must land before the open-row loop (activated ${activated}, open rows ${openRows})`);
   assert.ok(activated < roster,
     `EMPEZAR must land before the ask/auto-stop roster read (activated ${activated}, roster ${roster})`);
-
-  // And the foreman the drain just activated is the one the ask loop reasons
-  // about in this same tick, not five minutes from now.
-  const ask = idxOf(db, 'SELECT id FROM harvest_hourly');
-  assert.ok(ask > roster, `the ask decision was made for the newly active foreman (ask ${ask}, roster ${roster})`);
+  // Deliberately NOT asserted here: that `SELECT id FROM harvest_hourly` comes
+  // after the roster read. It is issued inside the loop over that query's own
+  // results, so it cannot possibly come first for any drain placement — a
+  // tautology dressed as an ordering check. The two comparisons above are the
+  // whole proof.
 });
 
 /**
- * The behavioural companion to the ordering test above: with the drain last,
- * this tick would prompt a foreman who has already said PARAR.
+ * The behavioural companion to the ordering test above, and the case where the
+ * ordering has a consequence a foreman would actually notice: with the drain
+ * last, the roster is read while he is still active and this tick prompts a man
+ * who has already gone home. The roster route below answers from the calls
+ * recorded so far rather than from a fixed [], so the no-prompt assertion is
+ * earned by the ordering instead of granted by the canned data.
  */
 test('a PARAR drained this tick deactivates before the ask loop reads the roster', async (t) => {
   const urls = mockMailboxFetch(t, [waRow('WA-stop', 'PARAR')]);
@@ -528,8 +634,15 @@ test('a PARAR drained this tick deactivates before the ask loop reads the roster
     ["AND channel = 'whatsapp'", { phone: PHONE }],                     // the drain's gate
     ['SELECT * FROM harvest_foremen WHERE phone = ?', { phone: PHONE, name: 'Test Arriba', barn: 'upper', active: 1, channel: 'whatsapp' }],
     ['SELECT racks FROM harvest_hourly', [{ racks: 12 }]],              // today's racks for the goodbye
-    // The roster once the PARAR has landed: nobody on shift, so nobody is asked.
-    ['SELECT * FROM harvest_foremen WHERE active = 1', []],
+    // The roster answered the way the real table would: empty once the PARAR's
+    // deactivation has landed, still carrying him if it has not. Canning []
+    // unconditionally would make the no-prompt assertion below true by
+    // construction; this way it is true only because the drain ran first.
+    // active_since is 06:00 Pacific, so tickDecision would genuinely ask.
+    ['SELECT * FROM harvest_foremen WHERE active = 1', (calls) =>
+      calls.some(c => c.sql.includes('SET active = 0 WHERE phone = ?'))
+        ? []
+        : [{ phone: PHONE, name: 'Test Arriba', barn: 'upper', active: 1, active_since: '2026-10-15 13:00:00', channel: 'whatsapp' }]],
     ...TICK_ROUTES,
   ]);
 
