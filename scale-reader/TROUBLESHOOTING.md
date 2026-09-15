@@ -2,6 +2,10 @@
 
 Common issues and how to fix them.
 
+Hardware: **OHAUS Defender 5000**, connected via RS-232 through an FTDI
+USB-serial adapter. If you haven't done initial setup yet, see
+[SETUP-INSTRUCTIONS.md](SETUP-INSTRUCTIONS.md) instead.
+
 ---
 
 ## 🔍 Quick Diagnostics
@@ -21,8 +25,9 @@ tasklist | find "node"
 powershell -Command "[System.IO.Ports.SerialPort]::GetPortNames()"
 ```
 
-**Expected:** Shows `COM3` (or COM4, COM5, etc.)
-**If empty:** Scale not connected or drivers not installed
+**Expected:** Shows a COM port (e.g. `COM4`)
+**If empty:** FTDI adapter not connected or drivers not installed — see
+Step 1 of SETUP-INSTRUCTIONS.md
 
 ### Can you access the display?
 
@@ -41,26 +46,27 @@ Open: http://localhost:3000
 
 **Fix:**
 ```cmd
-cd C:\RogueOrigin\scale-reader
+cd <path-to-repo>\scale-reader
 npm install
 ```
 
-### Error: "Port COM3 not found"
+### Error: "Port COMx not found" / reader connects to the wrong port
 
-**Cause:** Scale on different port or not connected
+**Cause:** The COM port changed — Windows sometimes renumbers FTDI
+adapters after a reboot or after using a different USB port.
 
 **Fix:**
 1. Find the correct port:
    ```cmd
    powershell -Command "[System.IO.Ports.SerialPort]::GetPortNames()"
    ```
+2. Edit `start-scale-reader.bat` — the COM port is hardcoded on **lines
+   29, 32, and 43** (`COM4` by default). Change all three to match.
+3. Restart the scale reader.
 
-2. Edit `config.js` to match your port:
-   ```javascript
-   comPort: 'COM4',  // Change to your port
-   ```
-
-3. Restart scale reader
+There is no `config.js` for this — the port lives directly in
+`start-scale-reader.bat`. If you're running `node index.js` manually
+instead of the `.bat`, pass the port as an argument: `node index.js COM4`.
 
 ### Error: "Address already in use"
 
@@ -72,13 +78,10 @@ netstat -ano | findstr :3000
 taskkill /PID <process_id> /F
 ```
 
-**Fix Option 2 - Use different port:**
-Edit `config.js`:
-```javascript
-serverPort: 3001,  // Use port 3001 instead
-```
-
-Then access at: http://localhost:3001
+**Fix Option 2 - Use a different port:**
+Edit the `port` value in the `CONFIG` object at the top of `index.js`,
+then restart. (This is a code edit, not a config file — commit it if you
+want it to persist across `git pull`.)
 
 ### Error: "Access is denied" (COM port)
 
@@ -94,57 +97,31 @@ Then access at: http://localhost:3001
 
 ## 📊 Scale Not Reading Weight
 
-### Scale display shows weight but app shows 0.00
+### Scale display shows weight but app shows 0.00 / "NO DATA RECEIVED"
 
-**Cause:** Scale not configured for USB output
+**Cause:** The indicator isn't in the right RS-232 output mode.
 
-**Fix - Configure scale:**
+**Fix - Configure the indicator:**
 
-1. **Enter setup mode:**
-   - Press and hold TARE for 3-5 seconds
-   - Release when you see "UNITS"
+1. Open the indicator's setup menu and navigate to **RS-232** settings.
+2. Set the print mode to **Stable** or **Continuous** (either works —
+   Continuous streams weight constantly, Stable prints on settle).
+3. Set baud rate to **9600**, 8-N-1.
+4. Exit setup and confirm the indicator's display is stable.
+5. Test: place weight on the scale and watch the scale-reader console —
+   you should see `Weight: X.XXX kg` lines.
 
-2. **Navigate to Port settings:**
-   - Press UNITS until display shows "Port"
-   - Press TARE to enter
-
-3. **Set protocol to NCI:**
-   - Press UNITS to cycle through protocols
-   - Stop at "NCI"
-   - Press TARE to confirm
-
-4. **Set baud rate to 9600:**
-   - Press UNITS until display shows "bAud"
-   - Press TARE, then UNITS to select 9600
-   - Press TARE to confirm
-
-5. **Exit setup:**
-   - Press ZERO
-
-6. **Test:**
-   - Place weight on scale
-   - Press HOLD button
-   - Weight should appear in app
+If you're not sure how to reach the RS-232 menu on your indicator model,
+check the OHAUS Defender 5000 manual or ask the manager.
 
 ### App shows "Connected" but still 0.00
 
-**Cause:** Scale needs polling command
+**Cause:** Indicator isn't printing/streaming weight
 
-**Fix:** This should be automatic, but verify:
-
-1. Check logs for "Weight: X.XX kg" messages
-2. If no messages, scale might be in wrong mode
-3. Try pressing HOLD button on scale
-4. Restart scale reader
-
-### Weight updates very slowly
-
-**Cause:** Polling interval too slow
-
-**Fix:** Edit `config.js`:
-```javascript
-pushInterval: 200,  // Faster polling (200ms instead of 500ms)
-```
+**Fix:**
+1. Check the console for `Weight: X.XX kg` messages.
+2. If none appear, re-check the RS-232 print mode above.
+3. Restart the scale reader.
 
 ---
 
@@ -154,7 +131,7 @@ pushInterval: 200,  // Faster polling (200ms instead of 500ms)
 
 **Cause:** Cloud API endpoint not deployed
 
-**Fix:** Contact IT - backend needs deployment
+**Fix:** Contact the manager - backend needs deployment
 
 ### Display works but scoreboard shows stale
 
@@ -209,32 +186,23 @@ pushInterval: 200,  // Faster polling (200ms instead of 500ms)
 
 ### Scale reader doesn't start on boot
 
-**Cause:** Startup script not in right location
+**Cause:** Startup shortcut not registered
 
 **Fix:**
-1. Verify startup folder:
-   ```cmd
-   dir "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
-   ```
-
-2. Should see `start-scale-reader.bat`
-
-3. If missing, copy it:
-   ```cmd
-   copy start-scale-reader.bat "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\"
-   ```
+1. Check the Startup folder (`Win+R` → `shell:startup`)
+2. Should see "Rogue Origin Scale Reader"
+3. If missing, run `install-autostart-bat.bat` again
 
 ### Startup script runs but scale reader fails
 
-**Cause:** Script runs before scale is ready
+**Cause:** Script runs before the scale/adapter is ready, or the COM
+port is wrong (see "Port COMx not found" above)
 
-**Fix:** Edit `start-scale-reader.bat`, add delay:
+**Fix:** Edit `start-scale-reader.bat` and add a delay before the first
+`node index.js COM4` line:
 ```batch
 REM Wait 10 seconds for system to fully boot
 timeout /t 10 /nobreak
-
-REM Then start scale reader
-node index.js
 ```
 
 ---
@@ -244,27 +212,28 @@ node index.js
 ### View current log file
 
 ```cmd
-type C:\RogueOrigin\scale-reader\logs\scale-reader.log
+type logs\scale-reader.log
 ```
+(run from inside the `scale-reader` folder)
 
 ### View last 20 lines (recent activity)
 
 ```cmd
-powershell -Command "Get-Content C:\RogueOrigin\scale-reader\logs\scale-reader.log -Tail 20"
+powershell -Command "Get-Content logs\scale-reader.log -Tail 20"
 ```
 
 ### Common log messages
 
 **Good:**
 ```
-Connected to scale on COM3
+Connected to scale on COM4
 Weight: 1.18 kg (2.6 lb)
 Weight: 2.34 kg (5.2 lb)
 ```
 
 **Bad:**
 ```
-Serial error: Port COM3 not found
+Serial error: Port COM4 not found
 Error: Cannot find module 'express'
 API push failed: 404
 ```
@@ -276,16 +245,13 @@ API push failed: 404
 ### Test serial communication directly
 
 ```cmd
-cd C:\RogueOrigin\scale-reader
 node raw-test.js
 ```
+(run from inside the `scale-reader` folder)
 
-This shows raw data from the scale. You should see:
-```
-Received: "    2.4lb\r\n"
-```
-
-If you see nothing, scale isn't transmitting.
+This sends both the OHAUS `P\r\n` print command and a legacy `W\r\n`
+weight-request command, and prints whatever comes back — useful when
+you're not sure the indicator is transmitting at all.
 
 ### Test API connection
 
@@ -301,15 +267,23 @@ Expected:
 ### Manual scale command test
 
 ```cmd
-cd C:\RogueOrigin\scale-reader
 node test-serial.js
 ```
 
-Follow prompts to test scale communication.
+Follow the console output to see raw and parsed serial data.
 
 ---
 
 ## 🆘 When All Else Fails
+
+### Training / demo mode (no scale needed)
+
+Before assuming hardware is broken, confirm the *software* is healthy by
+running mock mode — it exercises everything except the physical scale:
+```cmd
+node index.js --mock --mock-demo
+```
+See SETUP-INSTRUCTIONS.md's "Training / demo mode" section for details.
 
 ### Complete Reset
 
@@ -318,11 +292,10 @@ Follow prompts to test scale communication.
    taskkill /F /IM node.exe
    ```
 
-2. **Unplug scale, wait 10 seconds, plug back in**
+2. **Unplug the FTDI adapter, wait 10 seconds, plug back in**
 
 3. **Clear installation:**
    ```cmd
-   cd C:\RogueOrigin\scale-reader
    rmdir /s /q node_modules
    del package-lock.json
    ```
@@ -334,7 +307,7 @@ Follow prompts to test scale communication.
 
 5. **Test:**
    ```cmd
-   node index.js
+   start-scale-reader.bat
    ```
 
 ### Check for Windows Updates
@@ -361,7 +334,7 @@ Should be v18 or higher. If lower:
 
 ## 📞 Getting Help
 
-**Before contacting support, gather:**
+**Before contacting the manager, gather:**
 
 1. Error message (exact text)
 2. Log file content (last 50 lines)
@@ -381,9 +354,9 @@ Should be v18 or higher. If lower:
 Run through this to verify everything is working:
 
 - [ ] Node.js installed and working
-- [ ] Scale plugged in, drivers installed
+- [ ] FTDI adapter plugged in, drivers installed
 - [ ] COM port identified correctly
-- [ ] config.js has correct COM port
+- [ ] `start-scale-reader.bat` has the correct COM port (lines 29, 32, 43)
 - [ ] Dependencies installed (node_modules exists)
 - [ ] Scale reader starts without errors
 - [ ] Can access http://localhost:3000

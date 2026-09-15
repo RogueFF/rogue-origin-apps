@@ -208,8 +208,10 @@ Stable or Continuous, baud to 9600.
 
 **"No data received" or connection errors:** the COM port changed.
 Windows sometimes renumbers FTDI adapters after reboots. Check Device
-Manager for the new number and edit lines 29 and 43 of
-`start-scale-reader.bat` to match.
+Manager for the new number and edit lines 29, 32, and 43 of
+`start-scale-reader.bat` to match (29 is the printed status message, 32
+is the initial start, 43 is the restart loop — all three hardcode the
+port, so all three need the update).
 
 **"Port already open" errors:** you have two instances running. Close one
 (check the taskbar for duplicate console windows).
