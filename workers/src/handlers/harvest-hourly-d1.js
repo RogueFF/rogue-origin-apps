@@ -730,9 +730,11 @@ async function capatazWatchdog(db, env, now) {
  * side — there is no redelivery once /poll responds. Each row is written into
  * harvest_sms_inbox (dedup on the WhatsApp message id, reusing the
  * message_sid column) via processInbound's own INSERT OR IGNORE before it is
- * classified, so a worker that dies mid-batch loses no unwritten row — same
- * trade processInbound already makes for the Twilio path between claim and
- * release.
+ * classified, so the row being processed is persisted before it can fail —
+ * the same trade processInbound already makes for the Twilio path between
+ * claim and release. Note what that does NOT buy: rows still sitting in
+ * `messages` when the worker dies are lost, because the mailbox has already
+ * marked them and there is no redelivery.
  */
 async function drainWhatsappInbound(env, now) {
   const db = env.DB;
@@ -740,7 +742,16 @@ async function drainWhatsappInbound(env, now) {
   try {
     messages = await pollWhatsappMailbox(env, { limit: POLL_LIMIT_MAX });
   } catch (e) {
-    console.error(`[whatsapp-drain] poll failed: ${e.message}`);
+    // Two very different failures land here and an operator has to be able to
+    // tell them apart. A non-2xx is thrown before the mailbox marks anything:
+    // nothing was dequeued and the next tick sees the same rows. A body that
+    // fails to parse (a truncated response, a mailbox deploy mid-flight) is
+    // thrown AFTER the mailbox marked the whole batch processed — those
+    // messages are gone, with no redelivery. Only the second one lost data.
+    const refused = /^WhatsApp mailbox poll \d{3}:/.test(e.message);
+    console.error(refused
+      ? `[whatsapp-drain] poll refused, nothing dequeued: ${e.message}`
+      : `[whatsapp-drain] poll response lost AFTER the mailbox marked the batch — those messages are gone: ${e.message}`);
     return 0;
   }
   let acted = 0;
@@ -750,7 +761,28 @@ async function drainWhatsappInbound(env, now) {
     try {
       const foreman = await queryOne(db,
         `SELECT phone FROM harvest_foremen WHERE phone = ? AND channel = 'whatsapp'`, [from]);
-      if (!foreman) continue;   // not a Capataz WhatsApp foreman — not ours to answer
+      if (!foreman) {
+        // Expected, and so a log rather than a warn: Riego's crew shares this
+        // mailbox and their traffic must not cry wolf. It is also exactly what
+        // a Capataz foreman whose channel is still 'sms' looks like — his
+        // EMPEZAR vanishes here leaving no other trace — which is why the line
+        // names the number.
+        console.log(`[whatsapp-drain] ${m.wa_message_id} from ${from}: no whatsapp foreman — left for another consumer`);
+        continue;   // not a Capataz WhatsApp foreman — not ours to answer
+      }
+      // A voice note, sticker or captionless image arrives with text_body NULL
+      // (riego-whatsapp-mailbox stores only media_id/media_mime for those).
+      // Passing '' through would classify as chat and release the row
+      // processed = 0, which is precisely capatazWatchdog's "the relay is
+      // stalled" population — so one foreman's voice note would page Koa about
+      // an outage that is not happening. The mailbox keeps the row and its
+      // media_id on its side. Checked after the gate, so this line only ever
+      // fires for one of our own foremen and is therefore actionable; Riego's
+      // media is already accounted for by the gate log above.
+      if (!text.trim()) {
+        console.log(`[whatsapp-drain] ${m.wa_message_id} from ${from}: no text (${m.msg_type || 'unknown'}) — skipped`);
+        continue;
+      }
       const r = await processInbound(env, {
         from, text, sid: m.wa_message_id, deliver: true, channel: 'whatsapp', now,
       });
