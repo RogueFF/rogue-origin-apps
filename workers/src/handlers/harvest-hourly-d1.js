@@ -31,6 +31,7 @@ import { createError } from '../lib/errors.js';
 import { requireAuth, requireBearer } from '../lib/auth.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
+import { sendWhatsapp } from '../lib/whatsapp-mailbox.js';
 import { pacificDay, pacificParts, justEndedHour, sqliteUtc, parseSqliteUtc } from '../lib/pacific.js';
 import {
   BARN_LABELS, COUNT_FIELDS, FIELD_ES, validateCounts, missingFields, classifyInbound,
@@ -63,6 +64,18 @@ const seasonOf = (day) => Number(day.slice(0, 4));
 // every row for the barn, whatever its status. Two places computing this
 // differently is how a foreman's total stops matching the dashboard's.
 const sumRacks = (rows) => rows.reduce((s, r) => s + (r.racks || 0), 0);
+
+/**
+ * The one place outbound text leaves this worker for a foreman's phone.
+ * `foreman` must carry `channel` — a lookup that names its columns and forgets
+ * it reads undefined here and quietly routes a WhatsApp foreman to Twilio
+ * forever, which is the failure nothing errors on.
+ */
+function sendViaChannel(env, foreman, text) {
+  return foreman.channel === 'whatsapp'
+    ? sendWhatsapp(env, { to: foreman.phone, body: text })
+    : sendSms(env, { to: foreman.phone, body: text });
+}
 
 // ─── HTTP: /api/harvest?action=hourly* ─────────────────────────────────
 
@@ -125,20 +138,31 @@ function isTrue(v) {
   return s === true || s === 1 || s === 'true' || s === '1';
 }
 
-async function setForeman(db, body) {
+/**
+ * `channel` is 'sms' | 'whatsapp', and defaults to 'sms' so a roster written
+ * before the column keeps working untouched.
+ *
+ * Validated here rather than by a SQL CHECK, the same way barn is: a CHECK
+ * constraint on an existing SQLite column means a table rebuild, and the day a
+ * third transport arrives that price should be a line in this function.
+ */
+export async function setForeman(db, body) {
   const phone = String(body.phone || '').trim();
   const name = String(body.name || '').trim();
   const barn = String(body.barn || '').trim();
+  const channel = String(body.channel || 'sms').trim();
   if (!/^\+1\d{10}$/.test(phone)) throw createError('VALIDATION_ERROR', 'phone must be E.164, e.g. +15415551234');
   if (!name) throw createError('VALIDATION_ERROR', 'name is required');
   if (!BARN_LABELS[barn]) throw createError('VALIDATION_ERROR', 'barn must be upper or bottom');
+  if (channel !== 'sms' && channel !== 'whatsapp') throw createError('VALIDATION_ERROR', 'channel must be sms or whatsapp');
   const active = isTrue(body.active) ? 1 : 0;
   await execute(db, `
-    INSERT INTO harvest_foremen (phone, name, barn, active, active_since)
-    VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)
+    INSERT INTO harvest_foremen (phone, name, barn, active, channel, active_since)
+    VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)
     ON CONFLICT(phone) DO UPDATE SET name = excluded.name, barn = excluded.barn, active = excluded.active,
+      channel = excluded.channel,
       active_since = CASE WHEN excluded.active = 1 AND harvest_foremen.active = 0 THEN datetime('now') ELSE harvest_foremen.active_since END
-  `, [phone, name, barn, active, active]);
+  `, [phone, name, barn, active, channel, active]);
   // One active foreman per barn, on this path too — the same rule EMPEZAR
   // enforces. Two active phones would mean two prompts for one hour and two
   // half-answers racing for one row.
@@ -251,7 +275,7 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   await markInbox(db, { sid, kind: 'command', now, replied: true });
 
   if (deliver) {
-    for (const t of replies) await sendSms(env, { to: from, body: t });
+    for (const t of replies) await sendViaChannel(env, foreman, t);
   }
   return out(replies);
 }
@@ -492,10 +516,10 @@ async function pollSms(db, env, limitRaw) {
  * written by a model, and one accent turns a one-segment confirmation into a
  * three-segment UCS-2 message.
  */
-async function sendToForeman(db, env, body) {
+export async function sendToForeman(db, env, body) {
   const to = String(body.to || '').trim();
   if (!to) throw createError('VALIDATION_ERROR', 'to is required');
-  const foreman = await queryOne(db, `SELECT phone FROM harvest_foremen WHERE phone = ?`, [to]);
+  const foreman = await queryOne(db, `SELECT phone, channel FROM harvest_foremen WHERE phone = ?`, [to]);
   if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${to}`);
 
   const text = gsmSafe(body.text);
@@ -506,7 +530,7 @@ async function sendToForeman(db, env, body) {
       `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
   }
 
-  const sent = await sendSms(env, { to, body: text });
+  const sent = await sendViaChannel(env, foreman, text);
   // Best-effort marker for the tick watchdog: this phone's delivered texts are
   // no longer "taken by the relay and never answered". Which row it was is not
   // worth tracking — the watchdog only counts.
@@ -700,7 +724,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
     // Per row, not per barn: one bad phone number must not abandon the rest.
     try {
       if (!contacts.has(row.barn)) {
-        contacts.set(row.barn, await queryOne(db, `SELECT phone, name, active_since FROM harvest_foremen
+        contacts.set(row.barn, await queryOne(db, `SELECT phone, name, active_since, channel FROM harvest_foremen
           WHERE barn = ? ORDER BY active DESC, active_since DESC LIMIT 1`, [row.barn]));
       }
       const f = contacts.get(row.barn);
@@ -722,7 +746,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
         // so the hour lands on the dashboard and in Telegram — it just does
         // not light up the foreman's phone while he is off the clock.
         if (hourNow < STOP_HOUR) {
-          await sendSms(env, { to: f.phone, body: reminderText(row.barn, row.hour_start) });
+          await sendViaChannel(env, f, reminderText(row.barn, row.hour_start));
         }
       } else if (d.type === 'missing') {
         const { changes } = await execute(db,
@@ -758,7 +782,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
             VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [seasonOf(je.harvest_date), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
           if (changes) {
             acted++;
-            await sendSms(env, { to: f.phone, body: promptText(f.barn, je.hour_start) });
+            await sendViaChannel(env, f, promptText(f.barn, je.hour_start));
           }
         }
       }
@@ -773,7 +797,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
         const { changes } = await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ? AND active = 1`, [f.phone]);
         if (changes) {
           acted++;
-          await sendSms(env, { to: f.phone, body: 'Paramos por hoy. Escribe EMPEZAR manana.' });
+          await sendViaChannel(env, f, 'Paramos por hoy. Escribe EMPEZAR manana.');
         }
       }
     } catch (e) {
