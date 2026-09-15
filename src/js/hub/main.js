@@ -1,8 +1,10 @@
 /**
- * Ops Hub v3 — entry point. Owns state, fetching, timers, and the chrome
- * (range chips, theme, collapse, clock). Section rendering lives in sections.js.
+ * Ops Hub v3 — entry point. Owns state, fetching, timers, range chips and
+ * section collapse. The rail, topbar, theme button, clock and status come from
+ * src/shell/shell.js. Section rendering lives in sections.js.
  */
 import '../shared/theme.js';
+import { mountShell, setStatus } from '../../shell/shell.js';
 import { PT, greeting, clockTime, esc } from './format.js';
 import { resolveRange, todayISO } from './range.js';
 import * as api from './api.js';
@@ -38,17 +40,8 @@ const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- chrome
 
-function setStatus(kind, text) {
-  const dot = $('statusDot');
-  dot.className = `pulse-dot ${kind}`;
-  $('statusText').textContent = text;
-  $('railDot').className = `pulse-dot ${kind}`;
-  $('railText').textContent = text;
-}
-
 function tickClock() {
   const now = new Date();
-  $('clock').textContent = now.toLocaleTimeString('en-US', { timeZone: PT, hour: 'numeric', minute: '2-digit' });
   $('greetWord').textContent = greeting(now);
   $('greetDate').textContent = now.toLocaleDateString('en-US', { timeZone: PT, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
@@ -109,30 +102,9 @@ function initRangeChips() {
   else select('today', false);
 }
 
-function initNav() {
-  const btn = $('menuBtn');
-  btn.addEventListener('click', () => {
-    const open = document.body.classList.toggle('nav-open');
-    btn.setAttribute('aria-expanded', String(open));
-  });
-  document.addEventListener('click', (e) => {
-    if (document.body.classList.contains('nav-open') && !e.target.closest('.rail') && !e.target.closest('#menuBtn')) {
-      document.body.classList.remove('nav-open');
-    }
-  });
-}
-
 function initTheme() {
-  const btn = $('themeBtn');
-  const paint = () => {
-    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-    btn.querySelector('.sun').classList.toggle('hidden', !dark);
-    btn.querySelector('.moon').classList.toggle('hidden', dark);
-    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-  };
-  btn.addEventListener('click', () => window.toggleTheme());
-  document.addEventListener('ro:themechange', () => { paint(); renderCharts(); });
-  paint();
+  // The shell repaints its theme button; the charts read colours at draw time.
+  document.addEventListener('ro:themechange', () => renderCharts());
 }
 
 // ---------------------------------------------------------------- loading
@@ -280,9 +252,9 @@ function chatContext() {
 // ---------------------------------------------------------------- boot
 
 function boot() {
+  mountShell({ start: [$('topbarStart')], end: [$('topbarEnd')] });
   tickClock();
   setInterval(tickClock, 1000);
-  initNav();
   initTheme();
   initCollapse();
   initTimers();

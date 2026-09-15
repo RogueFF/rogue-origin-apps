@@ -1,0 +1,67 @@
+/*
+ * Design tokens for the shell and every screen on it: surfaces, ink, lines,
+ * status colours, chart series and the rail. Moved from hub.css unchanged.
+ * Brand tokens (--ro-green, --bg, fonts, shadows) still come from shared-base.css.
+ */
+
+:root {
+  --hub-rail: 232px;
+  --rail-bg: #2d3a2e;
+  --rail-ink: rgba(250, 248, 244, 0.86);
+  --rail-ink-2: rgba(250, 248, 244, 0.5);
+  --rail-line: rgba(255, 255, 255, 0.08);
+  --rail-active: rgba(228, 170, 79, 0.16);
+
+  --surface: #ffffff;
+  --surface-2: #f3efe7;
+  --ink: #2d3a32;
+  --ink-2: #5a6b5f;
+  --ink-3: #6f7d74;
+  --line: rgba(102, 137, 113, 0.14);
+  --line-strong: rgba(102, 137, 113, 0.28);
+
+  --chart-tops: #2f8556;
+  --chart-smalls: #a3aca6;
+  --chart-target: #b8862a;
+  --chart-grid: rgba(45, 58, 50, 0.1);
+  --chart-text: #6f7d74;
+  --chart-hover: rgba(102, 137, 113, 0.1);
+
+  --good: #3f7f57;
+  --warn: #9a7a2e;
+  --bad: #b5493a;
+  --good-bg: rgba(63, 127, 87, 0.12);
+  --warn-bg: rgba(228, 170, 79, 0.16);
+  --bad-bg: rgba(181, 73, 58, 0.12);
+
+  --topo-ink: %232d3a2e;
+  --topo-alpha: 0.05;
+}
+
+:root[data-theme="dark"] {
+  --rail-bg: #0f1210;
+  --surface: #1a1f1c;
+  --surface-2: #161b18;
+  --ink: rgba(255, 255, 255, 0.9);
+  --ink-2: rgba(255, 255, 255, 0.62);
+  --ink-3: rgba(255, 255, 255, 0.44);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+
+  --chart-tops: #4fa06b;
+  --chart-smalls: #6f7a73;
+  --chart-target: #e4aa4f;
+  --chart-grid: rgba(255, 255, 255, 0.07);
+  --chart-text: rgba(255, 255, 255, 0.5);
+  --chart-hover: rgba(255, 255, 255, 0.05);
+
+  --good: #7fbf95;
+  --warn: #e4aa4f;
+  --bad: #e07b6b;
+  --good-bg: rgba(127, 191, 149, 0.14);
+  --warn-bg: rgba(228, 170, 79, 0.16);
+  --bad-bg: rgba(224, 123, 107, 0.14);
+
+  --topo-ink: %23ffffff;
+  --topo-alpha: 0.035;
+}
