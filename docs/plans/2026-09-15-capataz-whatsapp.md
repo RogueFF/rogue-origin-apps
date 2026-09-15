@@ -497,8 +497,14 @@ async function sendToForeman(db, env, body) {
   }
 
   const sent = await sendViaChannel(env, foreman, text);
-  await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
-    WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
+  // Only when it actually went out: sendSms and sendWhatsapp both return false
+  // WITHOUT throwing on missing secrets, and a replied_at stamped on a reply
+  // that never left hides the phone from capatazWatchdog's "delivered, never
+  // replied" count — the one alarm that would have caught the outage.
+  if (sent) {
+    await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
+      WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
+  }
   return { sent, text, segments };
 }
 ```
