@@ -304,6 +304,15 @@ test('the takedown screen offers Finished on an open lot, and on a finished one 
   await finish(env, ctx, lot);
   html = await sessionScreen(env, ctx, lot);
   assert.match(html, /class="notice">This lot was marked finished on /);
+
+  // Start takedown POSTs to the same screen. A finished lot is not a radio,
+  // but a picker left open from before it was finished can still send one.
+  const posted = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_session_start&lang=en', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ session_id: String(lot), cultivar: 'Sour Lifter', bay: '9', storage: 'Supermarket' }).toString(),
+  }), env, ctx).then(res => res.text());
+  assert.match(posted, /class="notice">This lot was marked finished on /);
+  assert.match(posted, /<button id="printBtn" class="bigbtn" disabled>/);
   assert.match(html, /name="reopen" value="1"/);
   assert.doesNotMatch(html, /id="finishForm"/);
   assert.match(html, /<button id="printBtn" class="bigbtn" disabled>/);

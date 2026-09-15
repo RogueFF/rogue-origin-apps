@@ -1497,6 +1497,9 @@ async function handleSackVoid(db, env, ctx, body) {
     throw createError('VALIDATION_ERROR', `Sack ${sackId} already has weights recorded — it can't be voided.`);
   }
 
+  // No finished-lot check here, unlike sack_alloc, on purpose: retiring a
+  // mistaken tag after the lot is closed out is a correction, not more
+  // takedown. It spends no serial, and the rollback below keeps Shopify honest.
   await execute(db, `UPDATE harvest_sacks SET voided_at = datetime('now') WHERE sack_id = ? AND voided_at IS NULL`, [sackId]);
 
   const isTest = isTestMode(env) ? 1 : 0;
