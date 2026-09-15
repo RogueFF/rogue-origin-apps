@@ -107,7 +107,7 @@ test('sendWhatsapp throws on a mailbox error, naming the status and the recipien
     () => sendWhatsapp(
       { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'k' },
       { to: '+15415551234', body: 'hi' }, fakeFetch),
-    /403.*\+15415551234/s);
+    /403.*\+15415551234.*recipient_not_allowlisted/s);
 });
 
 test('pollWhatsappMailbox returns [] and does not fetch when unconfigured', async () => {
@@ -126,8 +126,8 @@ test('pollWhatsappMailbox GETs <mailbox>/poll?limit=N with the bearer and return
   };
   const messages = await pollWhatsappMailbox(
     { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'secret-key' },
-    { limit: 20 }, fakeFetch);
-  assert.equal(seenUrl, 'https://mailbox.example/poll?limit=20');
+    { limit: 5 }, fakeFetch);
+  assert.equal(seenUrl, 'https://mailbox.example/poll?limit=5');
   assert.equal(seenInit.headers.Authorization, 'Bearer secret-key');
   assert.equal(messages.length, 1);
   assert.equal(messages[0].wa_message_id, 'wamid.1');
@@ -136,7 +136,14 @@ test('pollWhatsappMailbox GETs <mailbox>/poll?limit=N with the bearer and return
 test('pollWhatsappMailbox throws on a non-2xx response', async () => {
   const fakeFetch = async () => new Response('unauthorized', { status: 401 });
   await assert.rejects(() => pollWhatsappMailbox(
-    { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'bad' }, {}, fakeFetch), /401/);
+    { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'bad' }, {}, fakeFetch), /401.*unauthorized/s);
+});
+
+test('pollWhatsappMailbox returns [] when the mailbox omits .messages', async () => {
+  const fakeFetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200 });
+  const messages = await pollWhatsappMailbox(
+    { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'k' }, {}, fakeFetch);
+  assert.deepEqual(messages, []);
 });
 ```
 
