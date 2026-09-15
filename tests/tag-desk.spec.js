@@ -141,6 +141,28 @@ test('tag: a queued card re-scan is idempotent; a fresh card queues once; the re
   expect(await page.$('.outbar')).toBeNull();
 });
 
+test('tag: +1 then Undo +1 lands back on what the scan queued, not on 1', async ({ page }) => {
+  const api = await mockApi(page);
+  const inCart = id => Object.values(api.cart).flat().find(r => r.cardId === id);
+  // want a card whose suggested qty is >= 3, so an undo computed off the wrong base cannot pass by accident
+  let picked = null;
+  for (const c of api.cards.filter(x => ['Uline', 'Amazon', 'Walmart'].includes(x.supplier) && !inCart(x.id))) {
+    await page.goto(`${PAGE}?flag=${c.id}`); await page.waitForSelector('.band');
+    const q = api.calls.filter(x => x.action === 'addToCart' && x.body.cardId === c.id).pop().body.qty;
+    if (q >= 3) { picked = { id: c.id, q }; break; }
+    await page.click('#tundo'); await page.waitForTimeout(300);
+  }
+  expect(picked).not.toBeNull();
+  await page.click('[data-tag="plus"]'); await page.waitForTimeout(400);
+  expect(inCart(picked.id).qty).toBe(picked.q + 1);
+  await page.click('#tundo'); await page.waitForTimeout(400);
+  expect(inCart(picked.id).qty).toBe(picked.q);
+  await page.click('[data-tag="plus"]'); await page.waitForTimeout(400);
+  await page.click('[data-tag="plus"]'); await page.waitForTimeout(400);
+  await page.click('#tundo'); await page.waitForTimeout(400);
+  expect(inCart(picked.id).qty).toBe(picked.q + 1);
+});
+
 test('tag: a Grove card goes to Damon; an unknown id says so', async ({ page }) => {
   const api = await mockApi(page);
   const grove = api.cards.find(c => c.supplier === 'Grove');
