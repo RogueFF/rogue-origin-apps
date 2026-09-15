@@ -46,8 +46,10 @@ follow. It is the visual anchor for everything below.
    Ledger design.
 7. **Supply Kanban:** `kanban.html` stays the primary page. Tag Desk is beta
    until it works as well as the old page.
-8. **TV boards stay outside the shell.** Scoreboard and Scale Display take the
-   shared tokens only and are not redesigned here.
+8. **TV boards stay outside the shell.** Scoreboard and Scale Display keep
+   their own tokens and are not redesigned here. (Amended 2026-09-15: they do
+   not read the shared tokens, and Tag Desk's own dark-theme tokens would be
+   overridden by them. See `2026-09-15-floor-manager-ledger.md`.)
 
 ## 1. Foundation
 
@@ -229,7 +231,9 @@ the rail, `hourly-entry.html` redirects, and its files are deleted.
 | 7 | SOP Manager, split out of its 5,000-line page | yes |
 | 8 | Supply Kanban: fix Tag Desk against the old page, then migrate | yes |
 
-Each step ships on its own and goes live only when Koa says "push it".
+The steps are built in this order on one branch and ship together, as one
+product (Koa, 2026-09-15: "keep building before we ship"). Nothing goes live
+until Koa says "push it".
 
 **Out of scope for now: the harvest board and dash.** They are HTML rendered
 inside Worker handlers (`harvest-board-page.js`, `harvest-dash-page.js`), served

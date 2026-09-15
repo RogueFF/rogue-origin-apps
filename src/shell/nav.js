@@ -28,6 +28,9 @@ export const NAV = [
     items: [
       { id: 'hub', label: 'Hub', href: 'index.html', icon: 'hub' },
       { id: 'floor-manager', label: 'Floor Manager', href: 'hourly-entry.html', icon: 'floor' },
+      // The rebuilt Floor Manager runs beside the original until a week of real
+      // shifts has run on it; then the entry above points here instead.
+      { id: 'floor-manager-new', label: 'Floor Manager (new)', href: 'floor.html', icon: 'floor' },
       { id: 'scoreboard', label: 'Scoreboard', href: 'scoreboard-v2.html', icon: 'scoreboard' },
       { id: 'scale-display', label: 'Scale Display', href: 'scale-display.html', icon: 'scale' },
       { id: 'supersack-tracker', label: 'Supersack Tracker', href: 'supersack-entry.html', icon: 'sack' },

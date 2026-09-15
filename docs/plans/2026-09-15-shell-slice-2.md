@@ -39,5 +39,6 @@ Procedimientos (SOP) (SOP Manager). The rest reuse names the apps already show.
 
 ## Still open for the shell
 
-- `shared-base.css` re-exports `tokens.css` so the TV boards pick it up.
+- ~~`shared-base.css` re-exports `tokens.css` so the TV boards pick it up.~~
+  Dropped; see `2026-09-15-floor-manager-ledger.md`.
 - Other pages move to `fonts.css` as they join the shell.
