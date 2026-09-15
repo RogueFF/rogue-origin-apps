@@ -1,0 +1,79 @@
+name: Deploy
+
+# Publishing the built site needs one change nobody should make quietly: this
+# repository's Pages source is still the master branch's root, and Actions
+# cannot publish to a branch-served site. Switching it redirects the live
+# deployment that the barn TV and the crew's phones load, so it is Koa's to do,
+# at the same moment as the first push.
+#
+# Until then this workflow is dormant on purpose. Both jobs are gated on a
+# repository variable, so the runs show as skipped rather than failing master
+# on every push.
+#
+# To go live, in this order:
+#   1. Settings > Pages > Build and deployment > Source: GitHub Actions
+#   2. Settings > Secrets and variables > Actions > Variables:
+#      PAGES_FROM_ACTIONS = true
+#   3. Push to master, then open the site and confirm the barn TV's scoreboard,
+#      a phone bookmark and the SMS policy page all still load.
+#
+# To go back: set the variable to false and switch the source back to the
+# master branch. The repository still serves as a working site on its own, so
+# nothing has to be rebuilt to fall back.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one half-way: an interrupted publish
+# leaves the site on a partial upload.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: vars.PAGES_FROM_ACTIONS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The site's URLs are this repository's paths, and outside systems name
+      # them. Nothing is published until they all still exist.
+      - name: Check published URLs
+        run: npm run check:urls
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    if: vars.PAGES_FROM_ACTIONS == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
