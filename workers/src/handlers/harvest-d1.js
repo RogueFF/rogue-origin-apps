@@ -1368,14 +1368,20 @@ async function handleLotFinish(ui, db, env, ctx, body) {
 }
 
 // Voided tags are excluded from the count — they were never a sack.
+//
+// The LAST tag is the newest by print time, then serial — never MAX(sack_id).
+// Sack ids are text, so "26-RAINGQ-4" sorts after "26-RAINGQ-20": the takedown
+// screen named #4 as the last tag once a lot passed #9, and Void acts on
+// whichever tag the screen names.
 async function getLotTagStats(db, sessionId, isTest) {
-  const row = await queryOne(db, `
-    SELECT COUNT(*) AS printed,
-           MAX(CASE WHEN voided_at IS NULL THEN sack_id END) AS last_sack_id
-    FROM harvest_sacks
-    WHERE zone_session_id = ? AND is_test = ? AND voided_at IS NULL
-  `, [sessionId, isTest]);
-  return { printed: row?.printed || 0, lastSackId: row?.last_sack_id || null };
+  const [row, last] = await Promise.all([
+    queryOne(db, `SELECT COUNT(*) AS printed FROM harvest_sacks
+                  WHERE zone_session_id = ? AND is_test = ? AND voided_at IS NULL`, [sessionId, isTest]),
+    queryOne(db, `SELECT sack_id FROM harvest_sacks
+                  WHERE zone_session_id = ? AND is_test = ? AND voided_at IS NULL
+                  ORDER BY printed_at DESC, serial DESC LIMIT 1`, [sessionId, isTest]),
+  ]);
+  return { printed: row?.printed || 0, lastSackId: last?.sack_id || null };
 }
 
 /**

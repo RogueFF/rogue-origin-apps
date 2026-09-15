@@ -271,6 +271,24 @@ test('finishing touches no sack — not its storage, void state or inventory fie
 
 // ─── the takedown screen ─────────────────────────────────────────────────────
 
+test('the last tag is the newest one, not the highest id as text — Void acts on it', async () => {
+  // Found verifying this screen on the live Rainbow GMO Quik lot: with tags
+  // #1-#20 it named #4 as the last tag, because "…-4" > "…-20" as text.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  const r = await tagged(env, ctx, lot, 12);
+  assert.equal(r.body.last_sack_id, `${yy}-SLIFT-12`, 'as text, "-9" sorts after "-12"');
+  assert.match(await sessionScreen(env, ctx, lot), new RegExp(`var lastId = "${yy}-SLIFT-12";`));
+
+  const v = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_void', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sack_id: `${yy}-SLIFT-12` }),
+  }), env, ctx).then(res => res.json());
+  assert.equal(v.last_sack_id, `${yy}-SLIFT-11`, 'after a void the next Void must reach #11, not #9');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM harvest_sacks WHERE voided_at IS NOT NULL').get().n, 1);
+});
+
 test('the takedown screen offers Finished on an open lot, and on a finished one says so with PRINT TAG off', async () => {
   const { sqlite, env, ctx } = freshDb();
   const lot = seedSession(sqlite);
