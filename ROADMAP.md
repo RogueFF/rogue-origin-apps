@@ -75,11 +75,11 @@ Transform Rogue Origin's operations into a data-driven, AI-assisted system that:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Node.js serial reader | ✅ Done | Brecknell GP100, NCI protocol polling |
+| Node.js serial reader | ✅ Done | OHAUS Defender 5000, RS-232 via FTDI USB-serial adapter |
 | Express local web display | ✅ Done | Live weight view at `http://localhost:3000` |
 | D1 cloud API endpoints | ✅ Done | `get/set` scale weight with stale detection |
 | Mock mode for testing | ✅ Done | Simulates scale without hardware |
-| Deployment package | ✅ Done | Setup docs in `scale-reader/SETUP.md` |
+| Deployment package | ✅ Done | Setup docs in `scale-reader/SETUP-INSTRUCTIONS.md` |
 
 **Files**:
 - `scale-reader/index.js` - Serial reader + Express server

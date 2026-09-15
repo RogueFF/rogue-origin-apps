@@ -1,166 +1,89 @@
-# Scale Reader - Deployment Package
+# Scale Reader
 
 **Rogue Origin Operations Hub**
-Live scale weight display for 5kg bag packing station
+Live scale weight display for the bag-packing station, with cloud sync to
+the production dashboard and scoreboard.
 
 ---
 
-## 📦 What's Included
+## Hardware
 
-This package contains everything needed to run the scale weight reader on your station PC.
+- **OHAUS Defender 5000** indicator (100 lb × 0.005 lb)
+- Connected via **RS-232** (DB9 cable) into an **FTDI USB-serial adapter**
+  plugged into the station PC
+
+---
+
+## Setup
+
+Don't follow this README for installation — it's not a step-by-step guide.
+Use these instead:
+
+- **[SETUP-INSTRUCTIONS.md](SETUP-INSTRUCTIONS.md)** — full install/config
+  walkthrough for a station PC (driver check, `git pull`, `npm install`,
+  COM port, auto-start, verifying the bag-logging workflow on
+  [hourly-entry.html](https://rogueff.github.io/rogue-origin-apps/hourly-entry.html)).
+- **[OPERATOR-SOP.md](OPERATOR-SOP.md)** — one-page floor procedure
+  (English/Spanish) for filling and logging bags. Post this at the scale
+  station.
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** — diagnostics and fixes for
+  a station that's already set up.
+
+---
+
+## What's in this folder
 
 ```
 scale-reader/
-├── index.js                    # Main application
-├── package.json                # Dependencies
-├── config.js                   # Configuration (edit COM port here)
-├── start-scale-reader.bat      # Windows startup script
-├── public/                     # Local display files
-│   ├── index.html
-│   ├── scale.css
-│   └── scale.js
-├── INSTALLATION.md             # Step-by-step setup guide
-├── TROUBLESHOOTING.md          # Common issues & fixes
-└── README.md                   # This file
+├── index.js                     Main app: RS-232 reader + Express server
+├── launcher.js                  pkg-built exe wrapper (auto-update + restart)
+├── mock-server.py               Hardware-free mock backend for demos/testing
+├── package.json                 Dependencies + pkg build config
+├── start-scale-reader.bat       Windows launcher (COM port is set here)
+├── install-autostart.bat        Registers auto-start (source build)
+├── install-autostart-bat.bat    Registers auto-start (start-scale-reader.bat)
+├── build.bat                    Builds the standalone ScaleReader.exe
+├── raw-test.js / test-serial.js Low-level serial diagnostics
+├── public/                      Local display (index.html / scale.css / scale.js)
+├── SETUP-INSTRUCTIONS.md        Station PC install guide
+├── OPERATOR-SOP.md              Floor procedure (EN/ES)
+├── TROUBLESHOOTING.md           Diagnostics and fixes
+├── BUILD.md                     Building the standalone .exe with pkg
+└── README.md                    This file
 ```
 
----
-
-## 🚀 Quick Start
-
-1. **Read INSTALLATION.md** - Complete setup instructions
-2. **Install Node.js** - If not already installed
-3. **Copy to PC** - `C:\RogueOrigin\scale-reader\`
-4. **Run** - `npm install && node index.js`
-5. **Open** - http://localhost:3000
+There is no `config.js` — the COM port is set directly in
+`start-scale-reader.bat` (see SETUP-INSTRUCTIONS.md), and other settings
+(API URL, push interval, target weight) live in the `CONFIG` object at the
+top of `index.js`.
 
 ---
 
-## 🎯 Features
-
-✅ **Real-time weight display**
-- Circular progress ring
-- Large, readable font
-- Auto lbs → kg conversion
-- Updates every 100-200ms
-
-✅ **Bilingual support**
-- English / Spanish toggle
-- One-click language switch
-
-✅ **Cloud integration**
-- Syncs to Cloudflare API
-- Updates scoreboard automatically
-- Works offline (local display continues)
-
-✅ **Production ready**
-- Auto-start on Windows boot
-- Error recovery
-- Logging for troubleshooting
-
----
-
-## 📋 Requirements
-
-- Windows 10/11
-- Node.js 18+
-- Brecknell GP100 scale (USB)
-- Internet connection (for cloud sync)
-
----
-
-## 🔧 Configuration
-
-Edit `config.js` to customize:
-
-```javascript
-{
-  comPort: 'COM3',          // Your scale's COM port
-  targetWeight: 5.0,        // Target bag weight (kg)
-  stationId: 'line1',       // Station identifier
-}
-```
-
----
-
-## 📱 Usage
-
-### Local Display
-Open http://localhost:3000 in any browser
-
-**Features:**
-- Press `F11` for full-screen
-- Double-click for full-screen
-- Click `ES` for Spanish
-
-### Cloud Integration
-Weight automatically syncs to:
-```
-https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scaleWeight
-```
-
-Scoreboard polls this every 1 second.
-
----
-
-## 🛠️ Support
-
-**Issues?** Check these in order:
-
-1. **INSTALLATION.md** - Setup instructions
-2. **TROUBLESHOOTING.md** - Common problems
-3. **Logs** - `logs/scale-reader.log`
-4. **Contact IT** - If still stuck
-
----
-
-## 🔄 Updates
-
-To update to a new version:
-
-1. Stop the running scale reader
-2. Backup your `config.js`
-3. Replace all files except `config.js`
-4. Run `npm install`
-5. Start scale reader
-
----
-
-## 📊 System Flow
+## System flow
 
 ```
-Brecknell GP100 Scale (USB)
+OHAUS Defender 5000 (RS-232)
+    ↓ FTDI USB-serial adapter
+COMx (9600 baud)
     ↓
-COM3 Serial Port (9600 baud)
-    ↓
-Node.js Scale Reader
-    ├→ Local Display (localhost:3000) - INSTANT
-    └→ Cloud API (500ms pushes)
+Node.js Scale Reader (index.js)
+    ├→ Local display (http://localhost:3000) — instant
+    └→ Cloud API (pushed every 500ms)
            ↓
-       D1 Database
+       D1 database
            ↓
-       Scoreboard (1s polling)
+       Scoreboard + Hourly Entry (poll every ~1s)
 ```
 
----
+**Local API:** `GET /api/weight` → `{"weight":1.18,"targetWeight":5,"percentComplete":24,"isConnected":true}`
 
-## ✅ Success Checklist
-
-After installation, verify:
-
-- [ ] Scale reader starts without errors
-- [ ] Local display shows weight
-- [ ] Weight updates when changed
-- [ ] Lbs converts to kg correctly
-- [ ] Cloud API receives data (check logs)
-- [ ] Auto-start works (if configured)
+**Cloud API:**
+`https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production?action=scaleWeight`
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** January 2026
-**Author:** Rogue Origin Dev Team
+## Support
 
----
-
-For detailed instructions, see **INSTALLATION.md**
+1. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) first.
+2. Check `logs\scale-reader.log` in this folder.
+3. Ask the manager — include the console window output if something's wrong.
