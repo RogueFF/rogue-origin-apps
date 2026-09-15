@@ -135,6 +135,21 @@ test('a scan is idempotent by construction and Grove goes to Damon', () => {
   assert.deepEqual(scanPlan(fresh.byId[1]), { outcome: 'queued', call: 'addToCart', qty: 36 });
 });
 
+test('a card ordered within its lead time + grace is on order: a re-scan does not queue it twice, the red card still fires', () => {
+  const orders = [order('2026-09-07', 'Uline', [{ cardId: 1, qty: 36 }])]; // 1-day lead, ordered Monday
+  const at = today => buildModel({ cards: [card()], cart: {}, orders, requests: [], today }).byId[1];
+  assert.deepEqual(at('2026-09-07').onOrder, { day: '2026-09-07', expected: '2026-09-08' });
+  assert.deepEqual(scanPlan(at('2026-09-07')), { outcome: 'on-order' });
+  assert.equal(scanPlan(at('2026-09-10')).outcome, 'on-order'); // lead 1 + grace 2 = still coming Thursday
+  assert.equal(at('2026-09-11').onOrder, null);                  // Friday: it landed; a scan is a new signal
+  assert.equal(scanPlan(at('2026-09-11')).outcome, 'queued');
+  assert.equal(scanPlan(at('2026-09-08'), { red: true }).outcome, 'out');
+  const queued = buildModel({ cards: [card()], cart: { Uline: [{ cartId: 1, cardId: 1, qty: 36, addedAt: 'x' }] }, orders, requests: [], today: '2026-09-08' }).byId[1];
+  assert.equal(scanPlan(queued).outcome, 'already');             // the cart still wins
+  const slow = buildModel({ cards: [card({ deliveryTime: '2 Weeks' })], cart: {}, orders, requests: [], today: '2026-09-20' }).byId[1];
+  assert.equal(scanPlan(slow).outcome, 'on-order');              // the window follows the card's own lead time
+});
+
 test('Uline quick-order paste text is one MODEL QTY per line; cards without a model are named, not pasted', () => {
   const r = ulinePasteText([{ model: 'S-23309-L', qty: 5 }, { model: null, qty: 1, item: 'Bucking Gloves' }, { model: 'S-423', qty: 36 }]);
   assert.equal(r.text, 'S-23309-L 5\nS-423 36'); assert.equal(r.lines, 2); assert.equal(r.missing.length, 1); assert.equal(r.missing[0].item, 'Bucking Gloves');
