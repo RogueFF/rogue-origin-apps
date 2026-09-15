@@ -26,18 +26,6 @@ export const chat = (body) => apiPost('production', 'chat', body, { auth: true }
 export const tts = (text) => apiPost('production', 'tts', { text }, { auth: true });
 
 /** Validate the shared password against the worker. Resolves true/false. */
-export async function validatePassword(password) {
-  const res = await fetch(`${API_ROOT}/orders?action=validatePassword`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ password }),
-  });
-  let raw = {};
-  try { raw = await res.json(); } catch { /* non-JSON body */ }
-  const result = raw.data || raw;
-  return Boolean(res.ok && result.success);
-}
-
 /**
  * Run several fetches, never reject. Returns { key: value|null, errors: {key: message} }.
  */

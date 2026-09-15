@@ -23,6 +23,7 @@ const ICONS = {
 
 export const NAV = [
   {
+    id: 'floor',
     group: 'Floor',
     items: [
       { id: 'hub', label: 'Hub', href: 'index.html', icon: 'hub' },
@@ -34,6 +35,7 @@ export const NAV = [
     ],
   },
   {
+    id: 'office',
     group: 'Office',
     items: [
       { id: 'wholesale', label: 'Wholesale', href: 'wholesale.html', icon: 'wholesale' },
@@ -61,16 +63,21 @@ export function currentApp(pathname) {
 const svg = (name) =>
   `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 
-/** Inner HTML of the rail: brand, one nav group per NAV entry, and the status foot. */
-export function railHtml(currentId, { brand = 'Ops Hub', logo = '../assets/ro-logo-horizontal.png' } = {}) {
+/**
+ * Inner HTML of the rail: brand, one nav group per NAV entry, and the status
+ * foot. With `i18n`, group and app names carry data-i18n keys from labels.js so
+ * the shared i18n module can swap their language.
+ */
+export function railHtml(currentId, { brand = 'Ops Hub', logo = '../assets/ro-logo-horizontal.png', i18n = false } = {}) {
+  const key = (k) => (i18n ? ` data-i18n="${k}"` : '');
   const groups = NAV.map((group) => {
     const links = group.items
       .map((item) => {
         const current = item.id === currentId ? ' aria-current="page"' : '';
-        return `<a href="${item.href}"${current}>${svg(item.icon)}${item.label}</a>`;
+        return `<a href="${item.href}"${current}>${svg(item.icon)}<span${key(`shell.nav.${item.id}`)}>${item.label}</span></a>`;
       })
       .join('');
-    return `<nav class="rail-group" aria-label="${group.group}"><div class="eyebrow">${group.group}</div>${links}</nav>`;
+    return `<nav class="rail-group" aria-label="${group.group}"><div class="eyebrow"${key(`shell.group.${group.id}`)}>${group.group}</div>${links}</nav>`;
   }).join('');
 
   return `<div class="rail-brand"><img src="${logo}" alt="" width="36" height="36"><div><strong>Rogue Origin</strong><span>${brand}</span></div></div>`

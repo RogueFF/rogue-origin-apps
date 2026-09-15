@@ -3,7 +3,7 @@
  * for the mic, worker TTS for the spoken reply when the speaker is on.
  */
 import { chat, tts } from './api.js';
-import { hasKey, unlock, forget } from './auth.js';
+import { hasKey, unlock, forget } from '../../shell/unlock.js';
 
 const HIST = 'hub-chat-history';
 const SID = 'hub-chat-session';
@@ -21,6 +21,9 @@ function loadHistory() {
 function saveHistory(h) {
   sessionStorage.setItem(HIST, JSON.stringify(h.slice(-MAX_TURNS)));
 }
+
+// The Hub's own reason for asking, kept word for word from before the shell owned the dialog.
+const UNLOCK_REASON = 'The assistant needs the shared password. It is the same one Wholesale and Consignment use, and it stays on this device.';
 
 export function initChat(getContext) {
   const fab = document.getElementById('chatFab');
@@ -68,7 +71,7 @@ export function initChat(getContext) {
   scrim.addEventListener('click', close);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer.classList.contains('open')) close(); });
   lockBtn.addEventListener('click', async () => {
-    if (hasKey()) { forget(); } else { await unlock(); }
+    if (hasKey()) { forget(); } else { await unlock({ reason: UNLOCK_REASON }); }
     refreshLock();
   });
 
@@ -87,7 +90,7 @@ export function initChat(getContext) {
     input.value = '';
     add('me', q);
     if (!hasKey()) {
-      const ok = await unlock();
+      const ok = await unlock({ reason: UNLOCK_REASON });
       refreshLock();
       if (!ok) { add('err', 'Unlock with the shared password to ask the line.'); return; }
     }

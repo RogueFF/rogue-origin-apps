@@ -293,16 +293,6 @@ table.grid-table tr.short td:first-child { color: var(--bad); font-weight: 600; 
 .scrim { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
 .scrim.on { opacity: 1; pointer-events: auto; }
 
-/* ---------- unlock dialog ---------- */
-dialog.unlock { border: 1px solid var(--line-strong); border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink); width: min(380px, 92vw); box-shadow: var(--shadow-lg); }
-dialog.unlock::backdrop { background: rgba(0, 0, 0, 0.45); }
-dialog.unlock form { padding: 22px; display: grid; gap: 12px; }
-dialog.unlock h3 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 22px; }
-dialog.unlock p { font-size: 13px; color: var(--ink-2); }
-dialog.unlock input { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); }
-dialog.unlock .row { display: flex; gap: 8px; justify-content: flex-end; }
-dialog.unlock .err { min-height: 16px; }
-
 /* ---------- skeleton ---------- */
 .skel { display: inline-block; height: 1em; width: 60%; border-radius: 4px; background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
