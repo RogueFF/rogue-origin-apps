@@ -82,6 +82,13 @@ function mockFetch(t) {
 const hitMailbox = (urls) => urls.some(u => u.startsWith(MAILBOX_SEND));
 const hitTwilio = (urls) => urls.some(u => u.includes(TWILIO_HOST));
 
+/** Replace console.warn and record the lines it is handed. */
+function mockWarn(t) {
+  const lines = [];
+  t.mock.method(console, 'warn', (...args) => { lines.push(args.join(' ')); });
+  return lines;
+}
+
 // ─── setForeman: the channel param ─────────────────────────────────────
 
 test('setForeman writes the channel it was given', async () => {
@@ -178,12 +185,40 @@ test('sendToForeman reaches a whatsapp foreman through the mailbox', async (t) =
 
 test('sendToForeman still reaches an sms foreman through Twilio', async (t) => {
   const urls = mockFetch(t);
+  const warns = mockWarn(t);
   const db = fakeDb([{ phone: PHONE, channel: 'sms' }, { changes: 1 }]);
 
   await sendToForeman(db, ENV, { to: PHONE, text: 'Ok 9-10 Arriba: R12' });
 
   assert.ok(hitTwilio(urls), `Twilio was not called (urls: ${urls.join(', ')})`);
   assert.ok(!hitMailbox(urls), 'an sms foreman must not be routed to the mailbox');
+  // 'sms' is the default and by far the common path — it must not warn, or the
+  // log fills with noise and the real warning below stops being findable.
+  assert.deepEqual(warns, [], 'the default channel must not warn');
+});
+
+// ─── the unrecognized-channel fallback ─────────────────────────────────
+
+/**
+ * The column is NOT NULL DEFAULT 'sms', so this fires only when a SELECT
+ * forgot the column or a caller passed the wrong object shape — the second of
+ * which also loses foreman.phone and so sends nothing at all. Both are silent
+ * at sites whose state write has already committed, which is what the warn is
+ * there to surface.
+ */
+test('an unrecognized channel falls back to SMS and says so in the log', async (t) => {
+  const urls = mockFetch(t);
+  const warns = mockWarn(t);
+  // No channel key at all: exactly what a SELECT that forgot the column yields.
+  const db = fakeDb([{ phone: PHONE }, { changes: 1 }]);
+
+  await sendToForeman(db, ENV, { to: PHONE, text: 'Ok 9-10 Arriba: R12' });
+
+  assert.ok(hitTwilio(urls), 'the fallback still delivers — a warn, never a throw');
+  assert.ok(!hitMailbox(urls));
+  assert.equal(warns.length, 1, `expected exactly one warning, got ${JSON.stringify(warns)}`);
+  assert.match(warns[0], /channel undefined unrecognized — falling back to SMS/);
+  assert.match(warns[0], /\+15415550101/, 'the warning must name the phone it happened to');
 });
 
 // ─── the tick's nudge ──────────────────────────────────────────────────
