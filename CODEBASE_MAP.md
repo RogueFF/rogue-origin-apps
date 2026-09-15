@@ -4,33 +4,55 @@
 
 ## File Locations by Purpose
 
-### Frontend Entry Points
-| App | HTML | JS Entry | CSS |
-|-----|------|----------|-----|
+### Frontend pages (GitHub Pages)
+| App | HTML | JS | CSS |
+|-----|------|----|-----|
 | Ops Hub | `src/pages/index.html` | `src/js/hub/main.js` | `src/css/hub.css` |
-| Scoreboard | `src/pages/scoreboard.html` | `src/js/scoreboard/main.js` | `src/css/scoreboard.css` |
-| Orders | `src/pages/orders.html` | `src/js/orders/index.js` | `src/css/orders.css` |
+| Floor Manager | `src/pages/hourly-entry.html` | `src/js/hourly-entry/index.js` | `src/css/hourly-entry.css` |
+| Scoreboard | `src/pages/scoreboard-v2.html` | `src/js/scoreboard-v2/main.js` | `src/css/scoreboard-v2.css` |
+| Scoreboard v3 (pace layer) | `src/pages/scoreboard-v3.html` | v2 modules + `src/js/scoreboard-v3/pace.js` | `src/css/scoreboard-v3.css` |
+| Scale Display | `src/pages/scale-display.html` | `src/js/scale-display/main.js` + v2 modules | `src/css/scale-display.css` |
+| Wholesale | `src/pages/wholesale.html` | `src/js/wholesale/index.js` | `src/css/wholesale.css` |
+| Consignment | `src/pages/consignment.html` | `src/js/consignment/main.js` | `src/css/consignment.css` |
+| Supply Kanban | `src/pages/kanban.html` | inline | `src/css/kanban.css` |
+| Tag Desk (beta) | `src/pages/tag-desk.html` | `src/js/tag-desk/main.js` | `src/css/tag-desk.css` |
 | SOP Manager | `src/pages/sop-manager.html` | inline | `src/css/sop-manager.css` |
-| Kanban | `src/pages/kanban.html` | inline | `src/css/kanban.css` |
-| Barcode | `src/pages/barcode.html` | inline | `src/css/barcode.css` |
-| Hourly Entry | `src/pages/hourly-entry.html` | `src/js/hourly-entry/index.js` | `src/css/hourly-entry.css` |
+| Complaints | `src/pages/complaints.html` | inline | `src/css/complaints.css` |
+| Supersack Tracker | `src/pages/supersack-entry.html` | inline | inline |
+| Supersack Analytics | `src/pages/supersack-analytics.html` | inline | inline |
 
-### Backend Handlers
-| Feature | D1 Handler | Sheets Handler | Active Backend |
-|---------|------------|----------------|----------------|
-| Production | `workers/src/handlers/production-d1.js` | `workers/src/handlers/production.js` | D1 |
-| Orders | `workers/src/handlers/orders-d1.js` | `workers/src/handlers/orders.js` | D1 |
-| Barcode | `workers/src/handlers/barcode-d1.js` | `workers/src/handlers/barcode.js` | D1 |
-| Kanban | `workers/src/handlers/kanban-d1.js` | `workers/src/handlers/kanban.js` | D1 |
-| SOP | `workers/src/handlers/sop-d1.js` | `workers/src/handlers/sop.js` | D1 |
-| Pool Proxy | `workers/src/handlers/pool.js` | — | Direct |
+Every page loads `src/css/shared-base.css` first except the Floor Manager and the
+two Supersack pages, which still define their own styles.
 
-### Apps Script Backends
-| Backend | File | Lines |
-|---------|------|-------|
-| Production Tracking | `apps-script/production-tracking/Code.gs` | ~1900 |
-| Wholesale Orders | `apps-script/wholesale-orders/Code.gs` | ~1200 |
-| Barcode Manager | `apps-script/barcode-manager/Code.gs` | ~500 |
+### Pages served by the Worker
+| Page | File |
+|------|------|
+| Harvest scan routes (`/s/`, `/b/`, `/z/`, `/c/`, `/fin`) | `workers/src/handlers/harvest-d1.js` |
+| Harvest board | `workers/src/handlers/harvest-board-page.js` |
+| Harvest dash | `workers/src/handlers/harvest-dash-page.js` |
+
+### Backend handlers (`workers/src/handlers/`)
+| Route | Handler |
+|-------|---------|
+| `/api/production` | `production-d1.js` → `production/` (scoreboard, hourly-entry, bag-tracking, shift, strain, scale, chat, inventory, config) |
+| `/api/wholesale` | `wholesale-d1.js` |
+| `/api/orders` | `orders-auth.js` (password check only; the unlock check for the Hub, Wholesale and Consignment) |
+| `/api/kanban` | `kanban-d1.js` |
+| `/api/sop` | `sop-d1.js` |
+| `/api/consignment` | `consignment-d1.js` |
+| `/api/complaints` | `complaints-d1.js` |
+| `/api/supersack`, `/api/supersack-qa` | `supersack-d1.js`, `supersack-qa.js` |
+| `/api/irrigation` | `irrigation-d1.js` |
+| `/api/harvest` | `harvest-d1.js`, `harvest-board-d1.js`, `harvest-hourly-d1.js` |
+| `/sms/inbound` | `harvest-hourly-d1.js` |
+| `/api/pool` | `pool.js` (Shopify inventory proxy) |
+| `/api/media` | `media-r2.js` (R2 uploads for SOP Manager) |
+
+### Apps Script
+| Backend | File |
+|---------|------|
+| Production Tracking (legacy sheet) | `apps-script/production-tracking/Code.gs` |
+| Mail relay | `apps-script/mail-relay/Code.gs` |
 
 ---
 
@@ -50,7 +72,7 @@
 
 ---
 
-## Scoreboard Modules (`src/js/scoreboard/`)
+## Scoreboard Modules (`src/js/scoreboard-v2/`)
 
 | Module | Purpose |
 |--------|---------|
@@ -59,29 +81,30 @@
 | `config.js` | Scoreboard-specific config |
 | `state.js` | Scoreboard state management |
 | `timer.js` | Bag cycle timer, break subtraction, pause |
-| `render.js` | Main UI rendering, order queue display |
-| `cycle-history.js` | 5 visualization modes for cycle data |
+| `render.js` | Main UI rendering |
+| `cycle-history.js` | Visualization modes for cycle data |
 | `shift-start.js` | One-click shift start adjustment |
 | `chart.js` | Hourly rate chart rendering |
 | `dom.js` | DOM element cache/selectors |
-| `i18n.js` | EN/ES translations |
+| `i18n-labels.js` | EN/ES labels, registered with `shared/i18n.js` |
 | `events.js` | Event listener attachment |
+| `fab-menu.js` | Floating action menu |
 | `scale.js` | Live scale weight polling |
 | `morning-report.js` | Morning report display |
 | `debug.js` | Debug panel for testing |
 
+`src/js/scoreboard-v3/` adds `pace.js` and `pace-math.js` on top of these.
+
 ---
 
-## Orders Modules (`src/js/orders/`)
+## Other App Modules
 
-```
-orders/
-├── core/           api.js, config.js, state.js
-├── features/       auth.js, customers.js, orders.js, shipments.js, payments.js
-├── ui/             modals.js, table.js, stats.js, toast.js
-├── utils/          format.js, validate.js
-└── index.js        Entry point
-```
+| Folder | Files |
+|--------|-------|
+| `src/js/wholesale/` | `index.js`, `state.js`, `queue.js`, `editor.js`, `render.js`, `auth.js` |
+| `src/js/consignment/` | `main.js`, `api.js`, `ui.js` |
+| `src/js/tag-desk/` | `main.js`, `api.js`, `model.js`, `store.js`, `render.js`, `labels.js` |
+| `src/js/scale-display/` | `main.js`, `layout.js` |
 
 ---
 
@@ -89,22 +112,26 @@ orders/
 
 | File | Purpose |
 |------|---------|
-| `api-cache.js` | In-memory API response cache with TTL |
-| `sanitize.js` | HTML sanitization utilities |
+| `api.js` | `API_ROOT` and the request helper (URL, content type, auth, unwrapping) |
+| `i18n.js` | Language on `ro-lang`; walks `[data-i18n]` |
+| `theme.js` | Theme on `ro-theme`; migrates legacy keys |
+| `toast.js` | Self-contained toast notifications |
+| `sanitize.js` | HTML escaping |
 
 ---
 
-## Workers Lib (`workers/src/lib/`)
+## Workers Lib (`workers/src/lib/`), most used
 
 | File | Purpose |
 |------|---------|
-| `db.js` | D1 query helpers (SELECT, INSERT, UPDATE) with table/column validation |
-| `sheets.js` | Google Sheets REST API client |
+| `db.js` | D1 query helpers with table/column validation (`VALID_TABLES`) |
 | `auth.js` | Password authentication with constant-time comparison |
 | `cors.js` | CORS headers |
-| `errors.js` | Custom ApiError class, error codes |
-| `response.js` | JSON response wrapper, body parsing, action extraction |
-| `validate.js` | Input validation (dates, strings, numbers, enums, sheets sanitization) |
+| `errors.js` | ApiError class and error codes |
+| `response.js` | JSON responses, body parsing, action extraction |
+| `validate.js` | Input validation |
+| `pacific.js` | Pacific-time day boundaries |
+| `sheets.js` | Google Sheets REST client |
 
 ---
 
@@ -114,13 +141,12 @@ orders/
 |--------|------|
 | API URL | `src/js/shared/api.js` (`API_ROOT`) |
 | Brand colors | `src/css/shared-base.css`; chart series in `src/css/hub.css` |
-| Break schedule | `workers/src/handlers/production/` |
+| Break schedule | `workers/src/handlers/production/shift.js`, `bag-tracking.js` |
 | D1 binding | `workers/wrangler.toml` |
-| D1 schema | `workers/schema.sql` |
-| D1 config schema | `workers/config-schema.sql` |
-| Feature flags | `workers/src/index.js` (top) |
-| Service worker version | `sw.js` (line 1) |
-| Valid D1 tables | `workers/src/lib/db.js` (VALID_TABLES) |
+| D1 schema | `workers/schema.sql`, `workers/config-schema.sql`, `workers/migrations/` |
+| Service worker version | `sw.js` (`CACHE_VERSION`) |
+| Valid D1 tables | `workers/src/lib/db.js` (`VALID_TABLES`) |
+| Asset hashes | `tools/stamp-modules.mjs` (run by the pre-commit hook) |
 
 ---
 
@@ -133,36 +159,33 @@ orders/
 | API endpoint URL | `src/js/shared/api.js` |
 | Hub section | `src/js/hub/sections.js` (+ `main.js` for its data) |
 | Theme colors | `src/css/shared-base.css` + `src/css/hub.css` |
-| Scoreboard timer | `src/js/scoreboard/timer.js` |
-| Cycle time display | `src/js/scoreboard/cycle-history.js` |
-| Break times | `workers/src/handlers/production/` |
-| Order workflow | `src/js/orders/features/orders.js` |
+| Scoreboard timer | `src/js/scoreboard-v2/timer.js` |
+| Cycle time display | `src/js/scoreboard-v2/cycle-history.js` |
+| Break times | `workers/src/handlers/production/shift.js` |
+| Wholesale order flow | `src/js/wholesale/` + `workers/src/handlers/wholesale-d1.js` |
 | AI chat UI | `src/js/hub/chat.js` |
-| AI chat backend | `workers/src/handlers/production-d1.js` (chat function) |
-| D1 database table | `workers/schema.sql` |
+| AI chat backend | `workers/src/handlers/production/chat.js` |
 | CORS settings | `workers/src/lib/cors.js` |
-| Labor cost rates | `workers/src/handlers/production-d1.js` (or D1 system_config table) |
 
 ### "I need to add..."
 
 | Task | File(s) |
 |------|---------|
 | New API action | `workers/src/handlers/[feature]-d1.js` |
-| New D1 table | `workers/schema.sql` → `wrangler d1 execute` → add to `workers/src/lib/db.js` VALID_TABLES |
+| New D1 table | `workers/migrations/NNNN-name.sql` (applied by hand) → add to `VALID_TABLES` in `workers/src/lib/db.js` |
 | New hub tile | `src/js/hub/sections.js` (`renderNow`) |
 | New hub section | `src/pages/index.html` + `src/js/hub/sections.js` + `main.js` |
-| New scoreboard section | `src/js/scoreboard/render.js` |
-| New order feature | `src/js/orders/features/` (new file) |
+| New scoreboard section | `src/js/scoreboard-v2/render.js` |
 
 ### "I need to debug..."
 
 | Issue | Start Here |
 |-------|------------|
 | Hub not loading | `src/js/hub/main.js` → `api.js`; check `npm run stamp:check` |
-| Scoreboard stuck | `src/js/scoreboard/main.js` → `api.js` |
+| Scoreboard stuck | `src/js/scoreboard-v2/main.js` → `api.js` |
 | API 500 error | `workers/src/handlers/[feature]-d1.js` |
 | D1 query failing | `workers/src/lib/db.js` |
-| Timer wrong | `src/js/scoreboard/timer.js` |
+| Timer wrong | `src/js/scoreboard-v2/timer.js` |
 | Hub timers | `src/js/hub/main.js` (`initTimers`) |
 | CORS error | `workers/src/lib/cors.js` |
 
@@ -185,8 +208,6 @@ orders/
 
 // Sheet IDs
 Production: 'REDACTED-PRODUCTION-SHEET-ID'
-Orders:     'REDACTED-ORDERS-SHEET-ID'
-Barcode:    'REDACTED-BARCODE-SHEET-ID'
 ```
 
 ---
@@ -195,37 +216,25 @@ Barcode:    'REDACTED-BARCODE-SHEET-ID'
 
 ```
 ├── src/
-│   ├── pages/          HTML apps (11 files)
-│   ├── js/
-│   │   ├── modules/    Dashboard ES6 (19 files)
-│   │   ├── scoreboard/ Scoreboard IIFE (16 files)
-│   │   ├── orders/     Orders system (12 files)
-│   │   ├── hourly-entry/ Hourly data entry
-│   │   └── shared/     api-cache.js, sanitize.js
-│   └── css/            Per-page styles (12 files)
+│   ├── pages/          HTML apps (13 pages)
+│   ├── js/             One folder per app, plus shared/ and vendor/
+│   └── css/            Per-page styles + shared-base.css
 │
 ├── workers/
 │   ├── src/
-│   │   ├── index.js    Router + feature flags
-│   │   ├── handlers/   API handlers (11 files: 5 D1 + 5 Sheets + pool)
-│   │   └── lib/        Utilities (7 files)
+│   │   ├── index.js    Router and cron triggers
+│   │   ├── handlers/   API handlers and Worker-served pages
+│   │   └── lib/        Shared Worker utilities
+│   ├── migrations/     D1 migrations, applied by hand
 │   ├── schema.sql      D1 tables
-│   ├── config-schema.sql  System config table
 │   └── wrangler.toml   Cloudflare config
 │
-├── api/                Vercel Functions (legacy backup)
-├── apps-script/        Google Apps Script backends (3 dirs)
-├── docs/               Documentation
-│   ├── design/         Visual design system specs
-│   ├── guides/         How-to guides
-│   ├── plans/          Implementation plans
-│   ├── reports/        Audit & test reports, lighthouse/
-│   ├── sessions/       Session summaries
-│   └── technical/      Technical architecture docs
-├── tests/              Playwright tests + screenshots
-├── archive/            Legacy files (kanban, designs, old backups)
+├── apps-script/        Google Apps Script backends (production tracking, mail relay)
+├── docs/               Documentation: design/, guides/, plans/, reports/, technical/
+├── tests/              node:test unit tests and Playwright specs (see tests/README.md)
+├── tools/              Repo tooling, including stamp-modules.mjs
 ├── scripts/            Import/migration scripts
-├── assets/             PWA icons
+├── assets/             PWA icons and README screenshots
 ├── scale-reader/       OHAUS Defender 5000 reader + install package
 └── sw.js               Service worker
 ```
