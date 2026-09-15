@@ -143,6 +143,9 @@ export function buildModel({ cards, cart, orders, requests, today, levelsChanged
     const lc = levelsChanged[c.id] || null;
     const stable = !(lc && n >= 2 && lc > ds[n - 2]);
     c.orderDays = ds; c.n = n; c.medianGap = med; c.lastOrderDay = last;
+    // On order, as any device can see it: the order history, not a desk's receipts. Lead days plus a grace for late deliveries.
+    const sinceOrder = last ? daysBetween(last, today) : null;
+    c.onOrder = sinceOrder != null && sinceOrder >= 0 && sinceOrder <= leadOf(c) + ON_ORDER_GRACE_DAYS ? { day: last, expected: addDays(last, leadOf(c)) } : null;
     c.expected = (n >= 3 && med && stable) ? addDays(last, Math.round(med)) : null;
     c.silent = !!(n >= 2 && med && daysBetween(last, today) > 2.5 * med);
     c.levelsChanged = lc; c.qtyHist = (qtyHist[c.id] || []).slice(-4);
@@ -172,6 +175,8 @@ export function buildModel({ cards, cart, orders, requests, today, levelsChanged
 
 // ---------- state of one card ----------
 export const leadOf = c => c.leadDays || 1;
+/** Days past a card's lead time that an order still counts as on its way (late deliveries). */
+export const ON_ORDER_GRACE_DAYS = 2;
 /** it must be on the NEXT check if it runs out before the check after that could restock it */
 export const dueBy = (c, M) => addDays(M.d2, leadOf(c));
 export const dueNextBy = (c, M) => addDays(M.d3, leadOf(c));
@@ -237,10 +242,15 @@ export function walmartCartUrl(rows) {
   return { url: ok.length ? `https://affil.walmart.com/cart/addToCart?items=${ok.map(r => `${r.wmId}|${Math.max(1, r.qty | 0)}`).join(',')}` : null, count: ok.length, missing };
 }
 
-/** What a Tag scan should do, decided from the cart alone (idempotent by construction). */
+/**
+ * What a Tag scan should do, decided from the cart and the order history (idempotent by construction).
+ * A card ordered within its lead time is already coming: a re-scan must not order it twice (Koa: never over-order).
+ * The red card still fires — completely out before the delivery lands is exactly what the desk must hear.
+ */
 export function scanPlan(c, { red = false } = {}) {
   if (!c) return { outcome: 'unknown' };
   if (c.lane === 'email') return { outcome: 'requested', call: 'addToCart' }; // Grove → Damon lane (already_open re-sends)
   if (c.inCart) return red ? { outcome: 'out', call: 'note', note: 'RED CARD' } : { outcome: 'already' };
+  if (c.onOrder && !red) return { outcome: 'on-order' };
   return red ? { outcome: 'out', call: 'addToCart', qty: c.suggested, note: 'RED CARD' } : { outcome: 'queued', call: 'addToCart', qty: c.suggested };
 }

@@ -148,8 +148,9 @@ test('tag: +1 then Undo +1 lands back on what the scan queued, not on 1', async 
   let picked = null;
   for (const c of api.cards.filter(x => ['Uline', 'Amazon', 'Walmart'].includes(x.supplier) && !inCart(x.id))) {
     await page.goto(`${PAGE}?flag=${c.id}`); await page.waitForSelector('.band');
-    const q = api.calls.filter(x => x.action === 'addToCart' && x.body.cardId === c.id).pop().body.qty;
-    if (q >= 3) { picked = { id: c.id, q }; break; }
+    const add = api.calls.filter(x => x.action === 'addToCart' && x.body.cardId === c.id).pop();
+    if (!add) continue; // already on order: the scan queues nothing
+    if (add.body.qty >= 3) { picked = { id: c.id, q: add.body.qty }; break; }
     await page.click('#tundo'); await page.waitForTimeout(300);
   }
   expect(picked).not.toBeNull();
@@ -161,6 +162,39 @@ test('tag: +1 then Undo +1 lands back on what the scan queued, not on 1', async 
   await page.click('[data-tag="plus"]'); await page.waitForTimeout(400);
   await page.click('#tundo'); await page.waitForTimeout(400);
   expect(inCart(picked.id).qty).toBe(picked.q + 1);
+});
+
+test('tag: a card already on order says so and is not queued twice; urgent and the red card still reach the desk', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('#actbar [data-mark]');
+  const ordered = api.cart.Uline.map(r => r.cardId);
+  await page.click('#actbar [data-mark]'); await page.waitForTimeout(700);
+  const adds = () => api.calls.filter(c => c.action === 'addToCart');
+  const before = adds().length;
+  await page.goto(`${PAGE}?flag=${ordered[0]}`); await page.waitForSelector('.band');
+  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/Already on order/);
+  expect(adds().length).toBe(before);
+  await page.click('[data-tag="urgent"]'); await page.waitForTimeout(500);
+  expect(adds().pop().body).toMatchObject({ cardId: ordered[0], note: 'URGENT', addedBy: 'tag' });
+  await page.goto(`${PAGE}?flag=${ordered[1]}&red=1`); await page.waitForSelector('.band');
+  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/OUT/);
+  expect(adds().pop().body).toMatchObject({ cardId: ordered[1], note: 'RED CARD' });
+});
+
+test('print: cancelling the dialog keeps the card on the to-print list; Yes marks it printed', async ({ page }) => {
+  await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.evaluate(() => { window.print = () => window.dispatchEvent(new Event('afterprint')); }); // Chrome fires afterprint on Cancel too
+  await page.click('.tabs [data-view="print"]'); await page.waitForSelector('#printOne');
+  const printed = () => page.evaluate(() => Object.keys((JSON.parse(localStorage.getItem('ro-tagdesk-v1') || '{}')).printed || {}).length);
+  let asked = '';
+  page.once('dialog', d => { asked = d.message(); d.dismiss(); });
+  await page.click('#printOne'); await page.waitForTimeout(400);
+  expect(asked).toMatch(/Did the card print\?/);
+  expect(await printed()).toBe(0);
+  page.once('dialog', d => d.accept());
+  await page.click('#printOne'); await page.waitForTimeout(400);
+  expect(await printed()).toBe(1);
 });
 
 test('tag: a Grove card goes to Damon; an unknown id says so', async ({ page }) => {
