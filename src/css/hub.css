@@ -15,66 +15,18 @@
   color: var(--ink);
 }
 
-/* ---------- greeting ---------- */
-.greeting { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 22px 0 6px; flex-wrap: wrap; }
-.greeting h1 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 34px; line-height: 1.1; letter-spacing: -0.01em; }
-.greeting .eyebrow { font-size: 12px; }
-
-/* ---------- sections ---------- */
-.sec { margin-top: 28px; }
-.sec-head {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  padding-bottom: 10px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--line-strong);
-}
-.sec-head h2 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 24px; line-height: 1; letter-spacing: -0.005em; }
-.sec-head .sec-meta { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
-.sec-head .sec-actions { margin-left: auto; display: flex; gap: 6px; }
+/* ---------- section collapse (Hub only) ---------- */
 .sec.collapsed .sec-body { display: none; }
 .sec.collapsed .icon-btn.collapse svg { transform: rotate(-90deg); }
-.sec-body { transition: opacity 0.2s ease; }
 body[data-loading="1"] .sec-body.stale { opacity: 0.55; }
 
 /* ---------- cards & tiles ---------- */
-.card-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.card-title h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
-.card-title a { font-size: 12px; color: var(--ink-3); text-decoration: none; }
-.card-title a:hover { color: var(--ink); text-decoration: underline; }
-.tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tile .label { font-size: 12px; color: var(--ink-3); }
-.tile .value { font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
-.tile .value small { font-size: 13px; font-weight: 500; color: var(--ink-3); margin-left: 4px; letter-spacing: 0; }
-.tile .sub { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.delta { font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
-.delta.up { color: var(--good); background: var(--good-bg); }
-.delta.down { color: var(--bad); background: var(--bad-bg); }
-.delta.flat { color: var(--ink-3); background: var(--surface-2); }
-.delta.up.is-bad { color: var(--bad); background: var(--bad-bg); }
-.delta.down.is-good { color: var(--good); background: var(--good-bg); }
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.status.good { color: var(--good); }
-.status.warn { color: var(--warn); }
-.status.bad { color: var(--bad); }
-.status.none { color: var(--ink-3); }
-.meter { position: relative; height: 6px; border-radius: 3px; background: var(--green-dim); overflow: hidden; }
-.meter > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ro-green); transition: width 0.6s var(--ease-out-expo, ease); }
-.meter.warn { background: var(--gold-dim); }
-.meter.warn > span { background: var(--ro-gold); }
-.meter.bad { background: var(--danger-dim); }
-.meter.bad > span { background: var(--danger); }
 .card-link { display: block; text-decoration: none; color: inherit; border-radius: 10px; transition: transform 0.15s ease; }
 .card-link:hover { transform: translateY(-2px); }
 .card-link:hover .card { border-color: var(--line-strong); }
 .card-link .card { height: 100%; }
 #chatLock[data-state="open"] { color: var(--good); }
 #chatLock[data-state="open"] .shackle { transform: translateX(3px) rotate(-20deg); transform-origin: 16px 11px; }
-.empty { font-size: 13px; color: var(--ink-3); padding: 10px 0; }
-.empty a { color: var(--ink-2); }
-.err { font-size: 12px; color: var(--bad); }
 
 /* ---------- Right now ---------- */
 .now-grid { display: grid; grid-template-columns: minmax(300px, 1.5fr) repeat(4, minmax(150px, 1fr)); gap: 14px; }
@@ -309,7 +261,7 @@ table.grid-table tr.short td:first-child { color: var(--bad); font-weight: 600; 
   .watch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .greeting h1 { font-size: 28px; }
+  .page-head h1 { font-size: 28px; }
   .hero .big .n { font-size: 52px; }
   .now-grid { grid-template-columns: 1fr 1fr; }
   .pipe-grid { grid-template-columns: 1fr; }

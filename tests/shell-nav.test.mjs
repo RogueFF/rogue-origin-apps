@@ -27,7 +27,8 @@ test('currentApp finds the page from the URL path', () => {
   assert.equal(currentApp('/rogue-origin-apps/src/pages/').id, 'hub');
   assert.equal(currentApp('/src/pages/hourly-entry.html').id, 'floor-manager');
   assert.equal(currentApp('/src/pages/kanban.html').id, 'supply-kanban');
-  assert.equal(currentApp('/src/pages/floor.html'), null);
+  assert.equal(currentApp('/src/pages/floor.html').id, 'floor-manager-new');
+  assert.equal(currentApp('/src/pages/ui-examples.html'), null);
 });
 
 test('Supply Kanban opens the original page and Tag Desk is marked beta', () => {

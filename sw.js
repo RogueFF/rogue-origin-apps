@@ -18,7 +18,7 @@
 // worker is not yet in control when the page's own assets are requested — and
 // precaching bare paths never fixed it, it only looked like it did.
 
-const CACHE_VERSION = 'ro-ops-v3.47';
+const CACHE_VERSION = 'ro-ops-v3.48';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';
@@ -30,6 +30,8 @@ const STATIC_ASSETS = [
   // HTML pages
   '/rogue-origin-apps/',
   '/rogue-origin-apps/src/pages/index.html',
+  '/rogue-origin-apps/src/pages/floor.html',
+  '/rogue-origin-apps/src/pages/ui-examples.html',
   '/rogue-origin-apps/src/pages/scoreboard-v2.html',
   '/rogue-origin-apps/src/pages/scoreboard-v3.html',
   '/rogue-origin-apps/src/pages/sop-manager.html',

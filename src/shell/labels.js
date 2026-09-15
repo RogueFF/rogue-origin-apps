@@ -35,6 +35,7 @@ export const SHELL_LABELS = {
     'shell.group.office': 'Oficina',
     'shell.nav.hub': 'Hub',
     'shell.nav.floor-manager': 'Gerente de Piso',
+    'shell.nav.floor-manager-new': 'Gerente de Piso (nuevo)',
     'shell.nav.scoreboard': 'Marcador',
     'shell.nav.scale-display': 'Pantalla de Báscula',
     'shell.nav.supersack-tracker': 'Rastreador de Supersacos',
