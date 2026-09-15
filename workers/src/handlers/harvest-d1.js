@@ -199,6 +199,7 @@ const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'lot_finish',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -253,6 +254,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackSession(ui, db, env, body);
         case 'sack_session':
           return await handleSackSession(ui, db, env, params);
+        case 'lot_finish':
+          return await handleLotFinish(ui, db, env, ctx, body);
         case 'sack_label':
           return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
@@ -1089,11 +1092,11 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
 // ever attribute a sack to the "currently active" zone the way barn intake
 // does; the operator explicitly picks which lot is coming down.
 
-async function handleSackPrintForm(ui, db, env) {
+async function handleSackPrintForm(ui, db, env, flash = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, lastBay, lastStorage] = await Promise.all([
     getRecentLots(db, isTest), getLastBay(db, isTest), getLastStorage(db, isTest)]);
-  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage));
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash));
 }
 
 /**
@@ -1184,7 +1187,7 @@ function lotLevel(lot) {
 async function getRecentLots(db, isTest) {
   const sessions = await query(db, `
     SELECT
-      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at,
+      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.takedown_done_at,
       CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) AS days_since_cut,
       COALESCE((
         SELECT COUNT(*) FROM harvest_sacks s
@@ -1220,7 +1223,16 @@ function mergePickerLot(sessions) {
     last_printed_at: sessions.map(s => s.last_printed_at).filter(Boolean).sort().pop() || null,
     // Dryness is judged from the earliest cut — the oldest material on the rack.
     days_since_cut: primary.days_since_cut,
+    // Finished only while EVERY session is — the same rule as getLotFinish(),
+    // so the picker and the print guard can never disagree about a lot.
+    takedown_done_at: lotFinishedAt(sessions),
   };
+}
+
+/** The lot's close-out time, or null while any of its sessions is still open. */
+function lotFinishedAt(sessions) {
+  if (!sessions.length || !sessions.every(s => s.takedown_done_at)) return null;
+  return sessions.map(s => s.takedown_done_at).sort().pop();
 }
 
 /**
@@ -1261,15 +1273,98 @@ async function handleSackSession(ui, db, env, input) {
   const stats = await getLotTagStats(db, sessionId, isTest);
   const bay = parseBay(input.bay, ui);
   const storage = parseStorage(input.storage, ui);
+  const finishedAt = await getLotFinish(db, lot);
 
   return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, bay, storage }));
+    sackSessionBody(ui, { lot, cultivar, stats, bay, storage, finishedAt }));
 }
 
 async function requireLot(db, sessionId) {
   const lot = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
   if (!lot) throw createError('NOT_FOUND', `No harvest lot found for session ${sessionId}.`);
   return lot;
+}
+
+/**
+ * Every enter session of the lot this session belongs to, as a WHERE clause.
+ * The same four parts as lotKey(), in SQL, so closing a lot out reaches a
+ * second crew's session and a same-shift re-entry as well as the primary.
+ */
+function lotSessionsWhere(lot) {
+  return {
+    where: `event_type = 'enter' AND is_test = ? AND zone = ? AND COALESCE(cultivar, '') = ?
+            AND cut_number IS ? AND COALESCE(season, ?) = ?`,
+    params: [lot.is_test, lot.zone, lot.cultivar || '', lot.cut_number, getSeason(), lot.season || getSeason()],
+  };
+}
+
+async function getLotFinish(db, lot) {
+  const f = lotSessionsWhere(lot);
+  const sessions = await query(db, `SELECT takedown_done_at FROM harvest_scan_log WHERE ${f.where}`, f.params);
+  return lotFinishedAt(sessions);
+}
+
+function lotLabel(ui, lot, cultivar = lot.cultivar) {
+  return `${lot.zone}${cultivar ? ` · ${cultivar}` : ''} ${ui.t('cut', { n: lot.cut_number ?? '?' })}`;
+}
+
+/** A UTC SQLite timestamp as the Pacific calendar date the crew lived it on. */
+function finishedDate(ui, at) {
+  return formatTagDate(ui.lang, pacificDay(parseSqliteUtc(at)));
+}
+
+/**
+ * Close a takedown lot out, or reopen it. Koa, 2026-09-15: "we might need to
+ * add a "Finished" button or something to close out that batch. the batch of 15
+ * 1st cut is still open however its all finished".
+ *
+ * Nothing else records the end of a takedown. The picker only knows a lot has
+ * tags, so a fully bagged lot sat at STARTED for the whole picker window, above
+ * the lots really coming down.
+ *
+ * Finished means "no more tags off this lot" — NOT "these sacks left". It
+ * touches no sack, no storage and no Shopify count, and one press undoes it,
+ * because someone will press it with a sack still on the rack.
+ *
+ * It does not close the rack board's `coming_down` either: a bay's current fill
+ * can hold several lots, so one lot finishing is not the bay standing empty.
+ */
+async function handleLotFinish(ui, db, env, ctx, body) {
+  const sessionId = parseInt(body.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+  }
+  const reopen = String(body.reopen ?? '') === '1';
+
+  const lot = await requireLot(db, sessionId);
+  const f = lotSessionsWhere(lot);
+  // Stamps only the sessions still open, so pressing Finished twice keeps the
+  // first time; a reopen clears every one.
+  const r = reopen
+    ? await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = NULL
+                         WHERE ${f.where} AND takedown_done_at IS NOT NULL`, f.params)
+    : await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = ?
+                         WHERE ${f.where} AND takedown_done_at IS NULL`, [sqliteUtc(new Date()), ...f.params]);
+
+  const row = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_sacks
+    WHERE voided_at IS NULL AND is_test = ?
+      AND zone_session_id IN (SELECT id FROM harvest_scan_log WHERE ${f.where})
+  `, [lot.is_test, ...f.params]);
+  const sacks = row?.n || 0;
+  const label = lotLabel(ui, lot);
+
+  if (r.changes > 0) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopen
+        ? `↩️ Takedown reopened — *${lot.cultivar || '?'}* ${lot.zone} cut ${lot.cut_number}.`
+        : `✅ Takedown finished — *${lot.cultivar || '?'}* ${lot.zone} cut ${lot.cut_number}: ${sacks} sack${sacks === 1 ? '' : 's'}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+
+  return handleSackPrintForm(ui, db, env,
+    ui.t(reopen ? 'lotReopened' : 'lotFinished', { lot: label, n: sacks }));
 }
 
 // Voided tags are excluded from the count — they were never a sack.
@@ -1301,6 +1396,12 @@ async function handleSackAlloc(db, env, ctx, body) {
   }
 
   const lot = await requireLot(db, sessionId);
+  // A finished lot takes no more tags until it is reopened. The session screen
+  // disables PRINT TAG, but a second phone still on the old page must not
+  // spend a serial on a closed lot — so the server refuses, before allocating.
+  if (await getLotFinish(db, lot)) {
+    throw createError('VALIDATION_ERROR', 'This lot is marked finished — reopen it from Print Sack Tags to print more.');
+  }
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
   const harvestDate = String(lot.occurred_at).substring(0, 10);
@@ -3255,6 +3356,21 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .badge.ok   { background: #2f7a4f; color: #fff; }
   .badge.warn { background: #8a6d1f; color: #fff; }
   .badge.bad  { background: #7a3a3a; color: #fff; }
+  /* Closing a lot out. Its own forms, outside the takedown form, so closing a
+     lot can never start one — and Reopen sits one press away. */
+  form.finishrow { display: flex; gap: 12px; align-items: center; padding: 14px; margin: 0;
+                   background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; }
+  form.finishrow .lotbody { flex: 1; }
+  form.finishrow button.btn { flex: none; margin: 0; padding: 14px 18px; font-size: 1rem; cursor: pointer; }
+  form.finishrow.done { background: #17271c; }
+  button.btn.alt { background: #3a5f4c; }
+  .finishlot { margin-top: 26px; }
+  .finishlot button.btn { width: 100%; cursor: pointer; }
+  .finishlot .hint { display: block; margin-top: 6px; }
+  .finished summary { font-size: 1rem; }
+  .notice { background: #3d3214; border: 1px solid #8a6d1f; border-left: 6px solid #e9c462; border-radius: 8px;
+            padding: 14px 16px; margin: 0 0 18px; font-size: 1.05rem; color: #f4f1e8; }
+  .notice button.btn { margin-top: 12px; width: 100%; cursor: pointer; }
   /* ── Sack scan page ──────────────────────────────────────────────────
      A crew member holding a sack, phone at arm's length, gloves on, barn
      light. Built like field signage: three dark planes (page → card →
@@ -3792,12 +3908,49 @@ function storageOptions(ui, selected) {
     + bayOptions(ui, selected);
 }
 
-function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
+function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null) {
+  // A finished lot is not a takedown candidate, so it never reaches the radio
+  // list — nor the pre-selection, which reads the top of that list.
+  const lots = allLots.filter(l => !l.takedown_done_at);
+  const finished = allLots.filter(l => l.takedown_done_at)
+    .sort((a, b) => String(b.takedown_done_at).localeCompare(String(a.takedown_done_at)));
+  const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
+
+  const closeForm = (l, reopen) => `
+    <form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" class="finishrow${reopen ? ' done' : ''}"${reopen ? ''
+      : ` data-confirm="${escapeHtml(ui.t('confirmFinish', { lot: lotLabel(ui, l), n: l.sacks_printed }))}"`}>
+      <input type="hidden" value="${l.id}" name="session_id">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
+      <span class="lotbody">
+        <strong>${escapeHtml(lotLabel(ui, l))}</strong>
+        <span class="lotmeta">${reopen
+          ? ui.t('finishedOn', { date: escapeHtml(finishedDate(ui, l.takedown_done_at)), n: l.sacks_printed })
+          : escapeHtml(ui.t('noteStarted', { n: l.sacks_printed }))}</span>
+      </span>
+      <button class="btn${reopen ? ' alt' : ''}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
+    </form>`;
+
+  // Collapsed: reopening is the rare case, and this page is for lots coming down.
+  const finishedHtml = finished.length ? `
+<details class="batch finished">
+  <summary>${ui.t('finishedLots', { n: finished.length })}</summary>
+  <div class="lotlist">${finished.map(l => closeForm(l, true)).join('')}</div>
+</details>` : '';
+
   if (!lots.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
-<p class="note">${ui.t('noLots', { n: LOT_PICKER_DAYS })}</p>`;
+${flashHtml}
+<p class="note">${ui.t(finished.length ? 'noOpenLots' : 'noLots', { n: LOT_PICKER_DAYS })}</p>
+${finishedHtml}`;
   }
+
+  // Only a lot with tags can be closed out from here. A lot never started has
+  // nothing to finish, and listing every lot twice would bury the ones that do.
+  const started = lots.filter(l => l.sacks_printed > 0);
+  const finishHtml = started.length ? `
+<h2>${ui.t('finishSection')}</h2>
+<p class="note">${ui.t('finishSectionHelp')}</p>
+<div class="lotlist">${started.map(l => closeForm(l, false)).join('')}</div>` : '';
 
   const BADGE = {
     ready:   { cls: 'ok',   text: ui.t('badgeReady') },
@@ -3838,6 +3991,7 @@ function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
 
   return `
 <h1>${ui.t('printTags')}</h1>
+${flashHtml}
 <p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
 <form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
@@ -3852,11 +4006,22 @@ function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
   <select id="storage" name="storage">${storageOptions(ui, lastStorage?.today ? lastStorage.storage : null)}</select>
   <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
+${finishHtml}
+${finishedHtml}
 
 <script>
 (function () {
   var form = document.getElementById('lotForm');
   var cv = document.getElementById('cultivar');
+
+  // Closing a lot out is undoable, but it takes the lot off this list, so it
+  // asks once, naming the lot and its tag count.
+  Array.prototype.forEach.call(document.querySelectorAll('form.finishrow[data-confirm]'), function (f) {
+    f.addEventListener('submit', function (e) {
+      if (!confirm(f.getAttribute('data-confirm'))) { e.preventDefault(); return; }
+      f.querySelector('button').disabled = true;
+    });
+  });
 
   function selected() { return form.querySelector('input[name=session_id]:checked'); }
 
@@ -3890,7 +4055,7 @@ function sackPrintFormBody(ui, lots, lastBay = null, lastStorage = null) {
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null, finishedAt = null }) {
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -3902,7 +4067,16 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
   const storageLine = `<div class="lot-meta">${storage
     ? ui.t('storedInWhere', { where: escapeHtml(storageLabel(ui, storage)) })
     : ui.t('storageNotSet')}</div>`;
-  return `
+  // A finished lot says so above everything, with Reopen right there: the print
+  // buttons are off, and whoever needs one more tag should not hunt for why.
+  const notice = finishedAt ? `
+<div class="notice">${ui.t('lotFinishedNotice', { date: escapeHtml(finishedDate(ui, finishedAt)) })}
+  <form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}">
+    <input type="hidden" value="${lot.id}" name="session_id"><input type="hidden" name="reopen" value="1">
+    <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
+  </form>
+</div>` : '';
+  return `${notice}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
@@ -3910,7 +4084,7 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
   ${storageLine}
 </div>
 
-<button id="printBtn" class="bigbtn">${ui.t('printTag')}</button>
+<button id="printBtn" class="bigbtn"${finishedAt ? ' disabled' : ''}>${ui.t('printTag')}</button>
 
 <div class="status">
   <div id="count">${stats.printed === 1 ? ui.t('tagForLot') : ui.t('tagsForLot', { n: stats.printed })}</div>
@@ -3926,9 +4100,15 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
   <p class="note">${ui.t('printSeveralHelp')}</p>
   <div class="batchrow">
     <input id="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5">
-    <button id="batchBtn" class="btn">${ui.t('printBatch')}</button>
+    <button id="batchBtn" class="btn"${finishedAt ? ' disabled' : ''}>${ui.t('printBatch')}</button>
   </div>
 </details>
+
+${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
+  <input type="hidden" value="${lot.id}" name="session_id">
+  <button class="btn alt" type="submit">${ui.t('finishLot')}</button>
+  <span class="hint">${ui.t('finishLotHelp')}</span>
+</form>`}
 
 <div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>
 
@@ -3946,6 +4126,7 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
     printFailed: ui.t('printFailed', { e: '{e}' }),
     voidFailed: ui.t('voidFailed', { e: '{e}' }),
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
+    confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -3957,15 +4138,18 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
   var voidLink = document.getElementById('voidLink');
   var lastId = ${stats.lastSackId ? JSON.stringify(stats.lastSackId) : 'null'};
   var busy = false;
+  var locked = ${finishedAt ? 'true' : 'false'};   // lot finished: no printing until it is reopened
+  var printed = ${stats.printed};
 
   function setBusy(b, label) {
     busy = b;
-    btn.disabled = b; batchBtn.disabled = b;
+    btn.disabled = b || locked; batchBtn.disabled = b || locked;
     btn.textContent = b ? (label || T.printing) : T.printTag;
   }
 
   function refresh(data) {
     var n = data.printed;
+    printed = n;
     countEl.innerHTML = (n === 1 ? T.tagForLot : T.tagsForLot.replace('{n}', n));
     lastId = data.last_sack_id;
     if (lastId) {
@@ -4026,6 +4210,13 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null 
         refresh(d); setBusy(false);
       })
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
+  });
+
+  // The count in the question is the live one, not the one the page loaded with.
+  var finishForm = document.getElementById('finishForm');
+  if (finishForm) finishForm.addEventListener('submit', function (e) {
+    if (busy || !confirm(T.confirmFinish.replace('{n}', printed))) { e.preventDefault(); return; }
+    finishForm.querySelector('button').disabled = true;
   });
 })();
 </script>`;

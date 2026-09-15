@@ -1,0 +1,21 @@
+-- When a takedown lot was closed out.
+--
+-- Koa, 2026-09-15: "we might need to add a "Finished" button or something to
+-- close out that batch. the batch of 15 1st cut is still open however its all
+-- finished". Nothing recorded the end of a takedown: the picker only knew a lot
+-- had tags, so a fully bagged lot stayed on it as STARTED for the whole picker
+-- window, above the lots really coming down.
+--
+-- ON THE ENTER ROWS, EVERY ONE OF THE LOT. A lot is season x zone x cultivar x
+-- cut and can span several sessions. The worker stamps them all and reads the
+-- lot as finished only while every session carries a stamp, so a crew that
+-- re-enters the zone afterwards has cut more and the lot comes back by itself.
+--
+-- NOT closed_at. That is when the crew left the ZONE, a cutting fact written by
+-- the day-end close; this is when the last sack came off the RACK.
+--
+-- NULLABLE, AND CLEARED ON REOPEN. Someone will press Finished with one sack
+-- still hanging, and undoing it must cost nothing. It touches no sack, no
+-- storage and no Shopify count: finished means "no more tags off this lot",
+-- not "these sacks left".
+ALTER TABLE harvest_scan_log ADD COLUMN takedown_done_at TEXT;

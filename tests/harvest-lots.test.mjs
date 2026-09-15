@@ -56,7 +56,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql',
 ];
 
 function freshDb() {
@@ -148,7 +148,7 @@ const picker = (env, ctx) => handleHarvestD1(
 
 /** The radio values the operator can actually pick, ignoring the bay <select>. */
 const lotChoices = (html) =>
-  [...html.matchAll(/name="session_id" value="(\d+)"/g)].map(m => Number(m[1]));
+  [...html.matchAll(/type="radio" name="session_id" value="(\d+)"/g)].map(m => Number(m[1]));
 
 before(function () {
   if (!DatabaseSync) this.skip('node:sqlite unavailable (needs Node >= 22.5)');
