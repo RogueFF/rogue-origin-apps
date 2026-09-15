@@ -64,7 +64,8 @@ Fix: the Tag route reloads through its own `refresh()`, which rebinds the model 
 - **Undo +1** shipped (`82b273ff`).
 - **Already on order.** A scan now reads the order history, which every phone can see. If the card was ordered within its lead time plus 2 days (`ON_ORDER_GRACE_DAYS`), the Tag says **"Already on order · arrives <date>"** and queues nothing. **"Tell the desk it's urgent"** still queues it with the note `URGENT`, and the **red card still fires**. Once the window passes, a scan queues normally again. This only covers cards printed from the new page; shelf cards that still point to `kanban.html` go through the old page.
 - **Print.** After the print dialog closes, the desk asks **"Did all N cards print?"**. Only Yes takes them off the to-print list; No or Cancel leaves them on it.
-- Tests: model 18/18 (new: on-order window, red card, cart wins, 2-week lead), browser 8/8 (new: on-order scan + urgent + red, print No/Yes), walkthrough 25/25.
+- **Desk warning.** A card can still get back in the cart while its order is on the way: a scan through the old page, or an Add at the desk. Its Queued card now carries a red flag, **"Already ordered <date> · arrives ~<date> — check it came before ordering again"**. An order undone at the desk doesn't count. On 2026-09-15 this flags **Alcohol** and **AAA Batteries**: both were ordered Sep 11 and queued again Sep 15 through the old page.
+- Tests: model 18/18 (new: on-order window, red card, cart wins, 2-week lead, undone order), browser 9/9 (new: on-order scan + urgent + red, desk flag + undone order, print No/Yes), walkthrough 25/25.
 
 The questions below are kept as they were asked.
 

@@ -139,6 +139,8 @@ function icard(c, mode) { const es = ES(); const r = c.inCart; let qty = '', act
     if (c.bumps) flags += `<span class="flag info">+${c.bumps} ${es ? 'desde el piso' : 'from the floor'}</span>`;
     if (om[c.id]) { cls = 'late'; flags += `<span class="flag late">${t('redCard')} · ${fmtTS(om[c.id].at)}</span>`; }
     if (c.urgent) flags += `<span class="flag urgent">${t('urgentFlag', { t: fmtTS(r.addedAt) })}</span>`;
+    // Queued again while an order for it is still on its way (a scan through the old page, or a desk add): never order it twice unseen.
+    if (c.onOrder) flags += `<span class="flag late onorder">${es ? `Ya pedido el ${fmtMD(c.onOrder.day)} · llega ~${fmtMD(c.onOrder.expected)} — revisa que llegó antes de pedirlo otra vez` : `Already ordered ${fmtMD(c.onOrder.day)} · arrives ~${fmtMD(c.onOrder.expected)} — check it came before ordering again`}</span>`;
     flags += earlyFlag(c);
     metaLine = meta([evidence(c), priceTxt(c, r.qty)]);
     acts = `<button class="link" data-remove="${c.id}">${t('remove')}</button>`;

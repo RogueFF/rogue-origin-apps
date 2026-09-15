@@ -181,6 +181,20 @@ test('tag: a card already on order says so and is not queued twice; urgent and t
   expect(adds().pop().body).toMatchObject({ cardId: ordered[1], note: 'RED CARD' });
 });
 
+test('desk: a card queued again while its order is on the way carries a red "Already ordered" flag; an undone order does not', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('#actbar [data-mark]');
+  const ids = api.cart.Uline.map(r => r.cardId);
+  await page.click('#actbar [data-mark]'); await page.waitForTimeout(700);
+  await page.click('[data-undo]'); await page.waitForTimeout(900);
+  expect(await page.$$eval('#view-order .lane.q .flag.onorder', e => e.length)).toBe(0);
+  await page.click('#actbar [data-mark]'); await page.waitForTimeout(700);
+  // an old-page scan lands in the cart behind the desk's back
+  await page.evaluate(id => fetch('https://rogue-origin-api.roguefamilyfarms.workers.dev/api/kanban?action=addToCart', { method: 'POST', body: JSON.stringify({ cardId: id, qty: 2 }) }), ids[0]);
+  await page.reload(); await page.waitForSelector('.vt');
+  expect(await page.$eval(`#view-order .lane.q .ic[data-id="${ids[0]}"] .flag.onorder`, e => e.textContent)).toMatch(/^Already ordered .+ check it came before ordering again$/);
+});
+
 test('print: cancelling the dialog keeps the card on the to-print list; Yes marks it printed', async ({ page }) => {
   await mockApi(page);
   await page.goto(PAGE); await page.waitForSelector('.vt');

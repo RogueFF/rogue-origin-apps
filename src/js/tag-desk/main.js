@@ -23,7 +23,7 @@ let RAW = {};
 async function fetchModel() {
   const d = await api.loadAll();
   RAW = Object.fromEntries(d.cards.map(c => [c.id, c]));
-  return buildModel({ ...d, today: todayISO(), levelsChanged: L.levelsChanged, archived: L.archived });
+  return buildModel({ ...d, today: todayISO(), levelsChanged: L.levelsChanged, archived: L.archived, undone: L.undone });
 }
 async function reload() { const M = await fetchModel(); setModel(M, RAW); }
 
