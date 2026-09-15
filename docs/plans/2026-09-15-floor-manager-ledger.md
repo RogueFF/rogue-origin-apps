@@ -44,7 +44,10 @@ Switching language turns the rail, title, headings, reasons, tiles, drawer and
 status pill Spanish. The page never scrolls sideways; below about 900 px the
 ledger card scrolls inside itself. No console errors apart from the local
 server's missing service-worker path. The floor and shell unit tests and lint
-pass.
+pass, and all five tests in `tests/floor.spec.js` pass in Chromium against mocked
+routes in 15 seconds. That spec reads `FLOOR_URL` so it can target this worktree's server; run it
+on its own, because two overlapping Playwright runs starve each other into
+page-load timeouts.
 
 Nothing was typed into an hour during the check, because the page writes to
 production.
@@ -64,4 +67,3 @@ production.
 
 - A shift of real entry on the new page, then point the rail's Floor Manager
   entry at `floor.html` and retire the "(new)" entry.
-- Playwright run of `tests/floor.spec.js` against a test date.

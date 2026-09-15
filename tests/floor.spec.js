@@ -16,7 +16,9 @@
 // and the bag countdown still behave as they do in production.
 const { test, expect } = require('@playwright/test');
 
-const BASE_URL = 'http://localhost:5500/src/pages/floor.html';
+// FLOOR_URL points the suite at another checkout's server, such as a worktree
+// served on its own port; the default is the main checkout's.
+const BASE_URL = process.env.FLOOR_URL || 'http://localhost:5500/src/pages/floor.html';
 const MOCK_TARGET_RATE = 1.35;
 
 /** Every key the worker's addProduction handler is sent, in contract order. */
