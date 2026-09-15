@@ -21,9 +21,6 @@ export const STATIC_PATHS = [
   'assets',
   'src/assets',
   'src/tools',
-  // Registered by src/js/sw-register.js at an absolute URL. Replaced by a
-  // generated worker in the PWA step; copied verbatim until then.
-  'sw.js',
 ];
 
 export function copyStatic({ root, outDir }) {
