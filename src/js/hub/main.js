@@ -12,7 +12,7 @@ import {
   renderNow, renderShift, renderPipe, renderWatch, renderTrend, renderCultivars, renderCost, renderDaily, dailyCsv, workedDays, periodTotals,
 } from './sections.js';
 import { initChat } from './chat.js';
-import { hasKey } from './auth.js';
+import { hasKey } from '../../shell/unlock.js';
 
 const LIVE_MS = 30_000;
 const SIDE_MS = 5 * 60_000;

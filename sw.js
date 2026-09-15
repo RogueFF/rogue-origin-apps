@@ -1,5 +1,5 @@
 ﻿// Service Worker for Rogue Origin Operations Hub
-// Version 3.46 - the Hub runs on the shared shell (src/shell, src/ui)
+// Version 3.47 - shell owns the unlock dialog; Hub fonts are self-hosted
 //
 // Asset URLs in the HTML are content-hashed (see tools/stamp-modules.mjs), so
 // .css and .js are NOT precached — a request for dashboard.css?h=2dde7146 can
@@ -18,7 +18,7 @@
 // worker is not yet in control when the page's own assets are requested — and
 // precaching bare paths never fixed it, it only looked like it did.
 
-const CACHE_VERSION = 'ro-ops-v3.46';
+const CACHE_VERSION = 'ro-ops-v3.47';
 const STATIC_CACHE = CACHE_VERSION + '-static';
 const DYNAMIC_CACHE = CACHE_VERSION + '-dynamic';
 const API_CACHE = CACHE_VERSION + '-api';

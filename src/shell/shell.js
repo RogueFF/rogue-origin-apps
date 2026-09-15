@@ -1,19 +1,25 @@
 /**
  * The shared frame every app screen mounts: the apps rail, the topbar around
- * the screen's own controls, the phone menu, the theme button, the Pacific
- * clock, and the connection status shown in both the topbar pill and the rail.
+ * the screen's own controls, the phone menu, the theme button, the optional
+ * EN/ES switch, the Pacific clock, and the connection status shown in both the
+ * topbar pill and the rail.
  *
  * A page keeps its own topbar controls in its markup, wrapped in
  * `.topbar-slot` elements, and hands them over:
  *
- *   mountShell({ start: [$('topbarStart')], end: [$('topbarEnd')] });
+ *   mountShell({ start: [$('topbarStart')], end: [$('topbarEnd')], lang: true });
  *
  * Slots are `display: contents`, so their children lay out as direct flex
  * items of the topbar, in this order:
- *   menu · start · spacer · status · clock · theme · end
+ *   menu · start · spacer · status · clock · language · theme · end
+ *
+ * `lang` is off by default. A page turns it on once its own labels have
+ * Spanish; until then the shell stays English on that page.
  */
 import { toggleTheme } from '../js/shared/theme.js';
+import { getLang, setLang, registerLabels } from '../js/shared/i18n.js';
 import { currentApp, railHtml } from './nav.js';
+import { SHELL_LABELS, label } from './labels.js';
 
 const PT = 'America/Los_Angeles';
 
@@ -25,9 +31,9 @@ const MOON_ICON = '<svg class="moon hidden" viewBox="0 0 24 24" fill="none" stro
 export function setStatus(kind, text) {
   for (const [dotId, textId] of [['statusDot', 'statusText'], ['railDot', 'railText']]) {
     const dot = document.getElementById(dotId);
-    const label = document.getElementById(textId);
+    const text_ = document.getElementById(textId);
     if (dot) dot.className = `pulse-dot ${kind}`;
-    if (label) label.textContent = text;
+    if (text_) text_.textContent = text;
   }
 }
 
@@ -44,15 +50,27 @@ function initMenu(rail, btn) {
   });
 }
 
-function initTheme(btn) {
+function initTheme(btn, L) {
   const paint = () => {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     btn.querySelector('.sun').classList.toggle('hidden', !dark);
     btn.querySelector('.moon').classList.toggle('hidden', dark);
-    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    btn.setAttribute('aria-label', L(dark ? 'shell.themeToLight' : 'shell.themeToDark'));
   };
   btn.addEventListener('click', () => toggleTheme());
   document.addEventListener('ro:themechange', paint);
+  document.addEventListener('ro:langchange', paint);
+  paint();
+}
+
+function initLang(btn, menuBtn, L) {
+  const paint = () => {
+    btn.textContent = L('shell.langButton');
+    btn.setAttribute('aria-label', L('shell.langLabel'));
+    menuBtn.setAttribute('aria-label', L('shell.menu'));
+  };
+  btn.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
+  document.addEventListener('ro:langchange', paint);
   paint();
 }
 
@@ -68,30 +86,40 @@ function initClock(el) {
  * Build the rail and topbar around the page's <main>. Call once, before the
  * page reads or writes status. Returns the status setter for convenience.
  */
-export function mountShell({ brand = 'Ops Hub', start = [], end = [] } = {}) {
+export function mountShell({ brand = 'Ops Hub', start = [], end = [], lang = false } = {}) {
+  const L = (key) => label(lang ? getLang() : 'en', key);
   const main = document.querySelector('main');
 
   const rail = document.createElement('aside');
   rail.className = 'rail';
   rail.id = 'rail';
   rail.setAttribute('aria-label', 'Apps');
-  rail.innerHTML = railHtml(currentApp(location.pathname)?.id, { brand });
+  rail.innerHTML = railHtml(currentApp(location.pathname)?.id, { brand, i18n: lang });
   document.body.insertBefore(rail, main);
 
   const bar = document.createElement('div');
   bar.className = 'topbar';
-  bar.innerHTML = `<button class="menu-btn" id="menuBtn" aria-label="Open apps menu" aria-expanded="false" aria-controls="rail">${MENU_ICON}</button>`
+  bar.innerHTML = `<button class="menu-btn" id="menuBtn" aria-label="${L('shell.menu')}" aria-expanded="false" aria-controls="rail">${MENU_ICON}</button>`
     + '<div class="tb-spacer"></div>'
-    + '<span class="status-pill" aria-live="polite"><span class="pulse-dot idle" id="statusDot"></span><span id="statusText">Connecting…</span></span>'
+    + `<span class="status-pill" aria-live="polite"><span class="pulse-dot idle" id="statusDot"></span><span id="statusText">${L('shell.connecting')}</span></span>`
     + '<span class="clock" id="clock">--:--</span>'
+    + (lang ? '<button class="tb-btn" id="langBtn" type="button"></button>' : '')
     + `<button class="tb-btn" id="themeBtn" aria-label="Switch theme">${SUN_ICON}${MOON_ICON}</button>`;
   const spacer = bar.querySelector('.tb-spacer');
   for (const el of start) if (el) bar.insertBefore(el, spacer);
   for (const el of end) if (el) bar.append(el);
   main.prepend(bar);
 
-  initMenu(rail, bar.querySelector('#menuBtn'));
-  initTheme(bar.querySelector('#themeBtn'));
+  const menuBtn = bar.querySelector('#menuBtn');
+  initMenu(rail, menuBtn);
+  initTheme(bar.querySelector('#themeBtn'), L);
   initClock(bar.querySelector('#clock'));
+
+  if (lang) {
+    document.getElementById('railText').textContent = L('shell.connecting');
+    registerLabels(SHELL_LABELS);
+    initLang(bar.querySelector('#langBtn'), menuBtn, L);
+    setLang(getLang());
+  }
   return { setStatus };
 }
