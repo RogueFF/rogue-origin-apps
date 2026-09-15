@@ -524,10 +524,12 @@ async function pollSms(db, env, limitRaw) {
 }
 
 /**
- * The relay's only way to reach a phone: Twilio's credentials stay on the
- * worker. Registered numbers only, and gsmSafe on the way out — the text was
- * written by a model, and one accent turns a one-segment confirmation into a
- * three-segment UCS-2 message.
+ * The relay's only way to reach a phone: the transport credentials stay on the
+ * worker, and only a registered number can be written to. What the text is put
+ * through on the way out depends on the foreman's channel — GSM-7 segment
+ * economics are an SMS problem, so an accent that would cost a Twilio message
+ * two extra UCS-2 segments costs a WhatsApp message nothing, and the Spanish
+ * reaches those foremen spelled properly.
  */
 export async function sendToForeman(db, env, body) {
   const to = String(body.to || '').trim();
@@ -535,21 +537,38 @@ export async function sendToForeman(db, env, body) {
   const foreman = await queryOne(db, `SELECT phone, channel FROM harvest_foremen WHERE phone = ?`, [to]);
   if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${to}`);
 
-  const text = gsmSafe(body.text);
-  if (!text) throw createError('VALIDATION_ERROR', 'text is required');
-  const segments = smsSegments(text);
-  if (segments > MAX_SMS_SEGMENTS) {
-    throw createError('VALIDATION_ERROR',
-      `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
+  let text = String(body.text || '').trim();
+  let segments = 1;
+  if (foreman.channel === 'whatsapp') {
+    // UTF-8, no per-segment billing — Meta's own /send truncates at 4096.
+    if (!text) throw createError('VALIDATION_ERROR', 'text is required');
+    if (text.length > 4096) {
+      throw createError('VALIDATION_ERROR', `text is ${text.length} characters; WhatsApp's limit is 4096`);
+    }
+  } else {
+    text = gsmSafe(text);
+    if (!text) throw createError('VALIDATION_ERROR', 'text is required');
+    segments = smsSegments(text);
+    if (segments > MAX_SMS_SEGMENTS) {
+      throw createError('VALIDATION_ERROR',
+        `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
+    }
   }
 
   const sent = await sendViaChannel(env, foreman, text);
   // Best-effort marker for the tick watchdog: this phone's delivered texts are
   // no longer "taken by the relay and never answered". Which row it was is not
   // worth tracking — the watchdog only counts.
-  await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
-    WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
-  return { sent, text, segments: smsSegments(text) };
+  //
+  // Only when it actually went out. sendSms and sendWhatsapp both return false
+  // WITHOUT throwing on missing secrets, so a half-configured deploy would
+  // otherwise stamp replies that were never sent — and the watchdog's
+  // "delivered, never replied" clause is the one thing that would have noticed.
+  if (sent) {
+    await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
+      WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
+  }
+  return { sent, text, segments };
 }
 
 /** The six counts plus the fields the relay's model should see — no ids, no raw text. */

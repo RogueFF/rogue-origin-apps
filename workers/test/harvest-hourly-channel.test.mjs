@@ -226,6 +226,127 @@ test('an unrecognized channel falls back to SMS and says so in the log', async (
   assert.match(warns[0], /\+15415550101/, 'the warning must name the phone it happened to');
 });
 
+// ─── sendToForeman: channel-aware sanitization ─────────────────────────
+
+/**
+ * A fetch mock that keeps the init object as well as the URL. `mockFetch`
+ * above deliberately returns a plain `string[]` — ten call sites read it that
+ * way — so the tests that need to look INSIDE the request body get their own
+ * recorder rather than a widened shared one. Use one or the other per test:
+ * two mocks on the same global fight over it.
+ */
+function mockFetchCalls(t) {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls.push({ url: String(url), init });
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
+  return calls;
+}
+
+/** What sendWhatsapp actually posted: JSON.stringify({ to, text }). */
+const mailboxText = (calls) => JSON.parse(calls.find(c => c.url.startsWith(MAILBOX_SEND)).init.body).text;
+/** What sendSms actually posted: a URLSearchParams with From/To/Body. */
+const twilioBody = (calls) => new URLSearchParams(calls.find(c => c.url.includes(TWILIO_HOST)).init.body).get('Body');
+
+const ACCENTED = 'Ok 9-10: café';
+
+test('sendToForeman leaves a whatsapp foreman accents, all the way into the request body', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'whatsapp' }, { changes: 1 }]);
+
+  const r = await sendToForeman(db, ENV, { to: PHONE, text: ACCENTED });
+
+  // The return value alone would pass even if the handler sanitized on the way
+  // out, so assert on what the mailbox was actually handed.
+  assert.equal(mailboxText(calls), ACCENTED, 'the accent must survive to the wire');
+  assert.equal(r.text, ACCENTED);
+  // Segments are a GSM-7 billing unit; over WhatsApp the field is a constant.
+  assert.equal(r.segments, 1);
+  assert.equal(r.sent, true);
+});
+
+test('sendToForeman still strips an sms foreman the same accents', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'sms' }, { changes: 1 }]);
+
+  const r = await sendToForeman(db, ENV, { to: PHONE, text: ACCENTED });
+
+  // The SAME string as the whatsapp test above: a branch wired backwards sends
+  // 'café' here and 'cafe' there, and both routing-only tests would still pass.
+  assert.equal(twilioBody(calls), 'Ok 9-10: cafe');
+  assert.equal(r.text, 'Ok 9-10: cafe');
+  assert.equal(r.segments, 1);
+});
+
+test('sendToForeman still refuses an sms foreman a fourth segment', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'sms' }]);
+
+  await assert.rejects(
+    () => sendToForeman(db, ENV, { to: PHONE, text: 'x'.repeat(460) }),
+    (e) => {
+      assert.equal(e.code, 'VALIDATION_ERROR');
+      assert.match(e.message, /the limit is 3 segments \(459 chars\)/);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0, 'a refused text costs no Twilio message');
+});
+
+test('sendToForeman accepts exactly 4096 characters over whatsapp', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'whatsapp' }, { changes: 1 }]);
+
+  // 4096 is Meta's own /send ceiling, so it is the last length that is still a
+  // deliverable message rather than a truncation.
+  const r = await sendToForeman(db, ENV, { to: PHONE, text: 'x'.repeat(4096) });
+
+  assert.equal(r.sent, true);
+  assert.equal(mailboxText(calls).length, 4096);
+});
+
+test('sendToForeman refuses 4097 characters over whatsapp', async (t) => {
+  const calls = mockFetchCalls(t);
+  const db = fakeDb([{ phone: PHONE, channel: 'whatsapp' }]);
+
+  await assert.rejects(
+    () => sendToForeman(db, ENV, { to: PHONE, text: 'x'.repeat(4097) }),
+    (e) => {
+      assert.equal(e.code, 'VALIDATION_ERROR');
+      // Not the segment message: at this length the SMS branch would ALSO
+      // throw VALIDATION_ERROR, so only the wording proves which branch ran.
+      assert.match(e.message, /text is 4097 characters; WhatsApp's limit is 4096/);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0, 'a refused text never reaches the mailbox');
+  assert.equal(db.matching('UPDATE harvest_sms_inbox').length, 0);
+});
+
+/**
+ * The half-configured deploy: Twilio fine, the mailbox pair missing. sendWhatsapp
+ * returns false WITHOUT throwing there, so nothing upstream notices — and a
+ * replied_at stamped anyway would hide the foreman from capatazWatchdog's
+ * "delivered, never replied" count for the whole harvest day.
+ */
+test('an unsent whatsapp reply leaves replied_at alone for the watchdog to find', async (t) => {
+  const calls = mockFetchCalls(t);
+  // Destructured off the shared ENV rather than a hand-built one: the point is
+  // the mailbox pair specifically, with every other secret still present.
+  const { WA_MAILBOX_URL, WA_MAILBOX_KEY, ...noMailbox } = ENV;
+  // A spare { changes: 1 } is canned on purpose, so removing the guard fails
+  // on the assertion below rather than on a missing canned response.
+  const db = fakeDb([{ phone: PHONE, channel: 'whatsapp' }, { changes: 1 }]);
+
+  const r = await sendToForeman(db, noMailbox, { to: PHONE, text: 'Ok 9-10 Arriba: R12' });
+
+  assert.equal(r.sent, false, 'an unconfigured mailbox returns false, it does not throw');
+  assert.equal(calls.length, 0);
+  assert.equal(db.matching('UPDATE harvest_sms_inbox', 'replied_at').length, 0,
+    'an unsent reply must stay visible to the watchdog');
+});
+
 // ─── the tick's nudge ──────────────────────────────────────────────────
 
 /**
