@@ -43,8 +43,6 @@
     "lint:scoreboard": "eslint src/js/scoreboard-v2/",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
-    "stamp": "node tools/stamp-modules.mjs --staged",
-    "stamp:check": "node tools/stamp-modules.mjs --staged --check",
     "build": "vite build",
     "check:urls": "node tools/check-urls.mjs",
     "build:check": "npm run build && npm run check:urls"

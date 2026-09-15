@@ -224,7 +224,8 @@ npm run test:e2e            # End-to-end tests — Playwright (needs browsers + 
 npm run playwright:install  # One-time browser download for the E2E suite
 ```
 
-CI runs `npm test` plus `npm run stamp:check` on every push and pull request.
+CI runs `npm run lint`, `npm test`, `npm run build` and `npm run check:urls`
+on every push and pull request.
 
 ---
 
