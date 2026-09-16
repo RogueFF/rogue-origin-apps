@@ -303,8 +303,6 @@ export async function handleHarvestD1(request, env, ctx) {
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
-    case 'sack_note_save':
-      return await handleSackNoteSave(ui, db, env, ctx, body);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
     default:
@@ -1406,6 +1404,16 @@ async function handleSackAlloc(db, env, ctx, body) {
   if (qty < 1 || qty > MAX_PRINT_QTY) {
     throw createError('VALIDATION_ERROR', `Quantity must be between 1 and ${MAX_PRINT_QTY}.`);
   }
+  // A note typed before PRINT TAG belongs to the bag that tag goes on (Koa,
+  // 2026-09-16: "the note should pertain to the next tag that gets printed").
+  // It is written in the same transaction as the tag, so a note can never land
+  // on a different bag or survive a print that failed. One bag, one tag: a
+  // batch is several bags and cannot share it, so it is refused before any
+  // serial is spent rather than guessed onto one of them.
+  const note = String(body.note || '').trim().substring(0, 500);
+  if (note && qty !== 1) {
+    throw createError('VALIDATION_ERROR', 'A note goes on one tag — print it with PRINT TAG, not a batch.');
+  }
 
   const lot = await requireLot(db, sessionId);
   // A finished lot takes no more tags until it is reopened. The session screen
@@ -1460,6 +1468,12 @@ async function handleSackAlloc(db, env, ctx, body) {
                lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest],
     });
   }
+  if (note) {
+    statements.push({
+      sql: `INSERT INTO harvest_sack_notes (sack_id, note, is_test) VALUES (?, ?, ?)`,
+      params: [ids[0], note, isTest],
+    });
+  }
   await transaction(db, statements);
 
   const stats = await getLotTagStats(db, sessionId, isTest);
@@ -1487,10 +1501,11 @@ async function handleSackAlloc(db, env, ctx, body) {
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.`,
+    text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.${note ? `\n📝 ${note}` : ''}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId });
+  return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
+    note_on: note ? ids[0] : null });
 }
 
 /**
@@ -2239,36 +2254,16 @@ async function handleSackNote(ui, db, env, ctx, body) {
     throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
   }
 
-  await saveSackNote(db, env, ctx, view.sack, note);
+  await execute(db, `INSERT INTO harvest_sack_notes (sack_id, note, is_test) VALUES (?, ?, ?)`,
+    [sackId, note, view.sack.is_test]);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `📝 *${sackId}* (${view.sack.cultivar || '?'} ${view.sack.zone}) — ${note}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
 
   const updated = await getSackView(db, sackId);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('noteSaved')));
-}
-
-/** One note on one sack — shared by the bag's page and the takedown screen. */
-async function saveSackNote(db, env, ctx, sack, note) {
-  await execute(db, `INSERT INTO harvest_sack_notes (sack_id, note, is_test) VALUES (?, ?, ?)`,
-    [sack.sack_id, note, sack.is_test]);
-  ctx.waitUntil(sendTelegramMessage(env, {
-    chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `📝 *${sack.sack_id}* (${sack.cultivar || '?'} ${sack.zone}) — ${note}`,
-  }).catch(e => console.error('[harvest][telegram]', e)));
-}
-
-/**
- * The takedown screen's note box. JSON, so the screen stays where it is and the
- * crew carries on printing (Koa, 2026-09-16). The same note, the same table and
- * the same limits as the bag's own page.
- */
-async function handleSackNoteSave(ui, db, env, ctx, body) {
-  const sackId = String(body.sack_id || '').trim();
-  const note = String(body.note || '').trim().substring(0, 500);
-  if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
-  const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
-  if (!sack) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
-  await saveSackNote(db, env, ctx, sack, note);
-  const row = await queryOne(db, `SELECT COUNT(*) AS n FROM harvest_sack_notes WHERE sack_id = ?`, [sackId]);
-  return successResponse({ success: true, sack_id: sackId, notes: row?.n || 0 });
 }
 
 /**
@@ -3385,12 +3380,13 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .status strong { font-size: 1.25rem; }
   .last { color: #cfe3d6; margin-top: 6px; }
   .lastActions { margin-top: 10px; display: flex; gap: 10px; }
-  .notepanel { margin-top: 12px; padding: 12px; background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; }
-  .notefor { color: #cfe3d6; margin-bottom: 8px; }
-  .notepanel textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.1rem; padding: 12px;
-                        border: none; border-radius: 8px; resize: vertical; }
-  .noterow { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
-  .noterow .btn { margin: 0; padding: 12px 20px; font-size: 1rem; cursor: pointer; }
+  /* The note for the NEXT tag sits above PRINT TAG, closed until someone needs
+     it. A note waiting to go out turns the heading gold and the button says so. */
+  .nextnote { margin: 0 0 12px; color: #cfe3d6; }
+  .nextnote summary { cursor: pointer; padding: 8px 0; font-size: 1.05rem; }
+  .nextnote.pending summary { color: #e9c462; font-weight: 700; }
+  .nextnote textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.1rem; padding: 12px;
+                       border: none; border-radius: 8px; resize: vertical; margin: 4px 0 6px; }
   a.mini { display: inline-block; padding: 10px 16px; background: #3a5f4c; color: #fff;
            text-decoration: none; border-radius: 8px; font-size: 0.95rem; }
   a.mini.danger { background: #7a3a3a; }
@@ -4165,6 +4161,15 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
   ${storageLine}
 </div>
 
+<!-- A note for the bag about to be tagged (Koa, 2026-09-16: "the note should
+     pertain to the next tag that gets printed, not the previous"). Typed first,
+     then PRINT TAG saves it on that tag, in the same write. -->
+<details id="nextNote" class="nextnote"${finishedAt ? ' hidden' : ''}>
+  <summary>${ui.t('noteNext')}</summary>
+  <textarea id="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea>
+  <div class="hint">${ui.t('noteNextHint')}</div>
+</details>
+
 <button id="printBtn" class="bigbtn"${finishedAt ? ' disabled' : ''}>${ui.t('printTag')}</button>
 
 <div class="status">
@@ -4173,19 +4178,6 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
   <div id="lastActions" class="lastActions" ${stats.lastSackId ? '' : 'hidden'}>
     <a id="reprintLink" class="mini" href="#">${ui.t('reprint')}</a>
     <a id="voidLink" class="mini danger" href="#">${ui.t('void')}</a>
-    <a id="noteLink" class="mini" href="#">${ui.t('addNote')}</a>
-  </div>
-  <!-- A note for one bag, written right here (Koa, 2026-09-16: add it "through
-       that app instead of taking us to the supersack page"). It is the same note
-       the bag's own page shows. The box names the tag it is for, because the
-       last tag moves on with every print. -->
-  <div id="notePanel" class="notepanel" hidden>
-    <div id="noteFor" class="notefor"></div>
-    <textarea id="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea>
-    <div class="noterow">
-      <button id="noteSave" class="btn" type="button">${ui.t('saveNote')}</button>
-      <a id="noteCancel" class="mini" href="#">${ui.t('noteCancel')}</a>
-    </div>
   </div>
   <div id="noteMsg" class="last" hidden></div>
 </div>
@@ -4222,8 +4214,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     voidFailed: ui.t('voidFailed', { e: '{e}' }),
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
-    noteFor: ui.t('noteFor', { id: '{id}' }), noteEmpty: ui.t('noteEmpty'),
-    noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }), noteFailed: ui.t('noteFailed', { e: '{e}' }),
+    printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -4233,14 +4224,9 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var actions = document.getElementById('lastActions');
   var reprint = document.getElementById('reprintLink');
   var voidLink = document.getElementById('voidLink');
-  var noteLink = document.getElementById('noteLink');
-  var notePanel = document.getElementById('notePanel');
-  var noteFor = document.getElementById('noteFor');
+  var noteBox = document.getElementById('nextNote');
   var noteText = document.getElementById('noteText');
-  var noteSave = document.getElementById('noteSave');
   var noteMsg = document.getElementById('noteMsg');
-  /** The tag the open note box writes to. Fixed when the box opens, not "whatever is last now". */
-  var noteTarget = null;
   var lastId = ${stats.lastSackId ? JSON.stringify(stats.lastSackId) : 'null'};
   var busy = false;
   var locked = ${finishedAt ? 'true' : 'false'};   // lot finished: no printing until it is reopened
@@ -4249,8 +4235,16 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   function setBusy(b, label) {
     busy = b;
     btn.disabled = b || locked; batchBtn.disabled = b || locked;
-    btn.textContent = b ? (label || T.printing) : T.printTag;
+    btn.textContent = b ? (label || T.printing) : idleLabel();
   }
+
+  function pendingNote() { return noteText.value.trim(); }
+  // The button names what it will do: a waiting note goes out with the tag.
+  function idleLabel() { return pendingNote() ? T.printTagNote : T.printTag; }
+  noteText.addEventListener('input', function () {
+    noteBox.classList.toggle('pending', !!pendingNote());
+    if (!busy) btn.textContent = idleLabel();
+  });
 
   function refresh(data) {
     var n = data.printed;
@@ -4265,68 +4259,34 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       lastEl.textContent = T.noTagsYet;
       actions.hidden = true;
     }
-    // A box still empty follows the newest tag; one with words in it keeps the
-    // tag it was opened for, and still names it. With no tag left, it closes.
-    if (!notePanel.hidden) {
-      if (!lastId) closeNote();
-      else if (!noteText.value.trim()) setNoteTarget(lastId);
-    }
   }
-
-  function setNoteTarget(id) {
-    noteTarget = id;
-    noteFor.innerHTML = T.noteFor.replace('{id}', id);
-  }
-  function closeNote() { notePanel.hidden = true; noteText.value = ''; noteTarget = null; }
-
-  noteLink.addEventListener('click', function (e) {
-    e.preventDefault();
-    if (!lastId) return;
-    if (!notePanel.hidden) { closeNote(); return; }
-    setNoteTarget(lastId);
-    noteMsg.hidden = true;
-    notePanel.hidden = false;
-    noteText.focus();
-  });
-  document.getElementById('noteCancel').addEventListener('click', function (e) { e.preventDefault(); closeNote(); });
-  noteSave.addEventListener('click', function () {
-    var text = noteText.value.trim();
-    if (!text) { alert(T.noteEmpty); noteText.focus(); return; }
-    var id = noteTarget;
-    noteSave.disabled = true;
-    fetch('${API}?action=sack_note_save&lang=${ui.lang}', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id, note: text })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Save failed');
-        noteSave.disabled = false;
-        closeNote();
-        noteMsg.innerHTML = T.noteSavedOn.replace('{id}', id);
-        noteMsg.hidden = false;
-      })
-      .catch(function (e) {
-        noteSave.disabled = false;
-        alert(T.noteFailed.replace('{e}', e.message));   // the words stay in the box to try again
-      });
-  });
 
   function print(ids) { frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
+    // Only PRINT TAG carries the note: a batch is several bags. The note waits
+    // in its box for the next single tag instead.
+    var note = qty === 1 ? pendingNote() : '';
     setBusy(true);
     fetch('${API}?action=sack_alloc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)} })
+      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
-        print(d.ids); refresh(d); setBusy(false);
+        print(d.ids); refresh(d);
+        if (d.note_on) {
+          // Saved with the tag: clear the box so it cannot ride onto the next one.
+          noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
+          noteMsg.innerHTML = T.noteSavedOn.replace('{id}', d.note_on);
+          noteMsg.hidden = false;
+        } else {
+          noteMsg.hidden = true;
+        }
+        setBusy(false);
       })
       .catch(function (e) {
         setBusy(false);

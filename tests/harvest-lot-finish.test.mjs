@@ -271,38 +271,41 @@ test('finishing touches no sack — not its storage, void state or inventory fie
 
 // ─── the takedown screen ─────────────────────────────────────────────────────
 
-test('a note is written on the takedown screen itself, onto the tag it names', async () => {
-  // Koa, 2026-09-16: "i dont see a spot to add notes to a specific tag", then
-  // "can we add it through that app instead of taking us to the supersack page".
+test('a note typed before PRINT TAG is saved on the tag that prints', async () => {
+  // Koa, 2026-09-16: "the note should pertain to the next tag that gets printed,
+  // not the previous".
   const { sqlite, env, ctx } = freshDb();
   const lot = seedSession(sqlite);
   const yy = String(SEASON).slice(-2);
-  await tagged(env, ctx, lot, 2);
+  await tagged(env, ctx, lot, 1);
 
   const html = await sessionScreen(env, ctx, lot);
-  assert.match(html, /<a id="noteLink" class="mini" href="#">Add note<\/a>/);
-  assert.doesNotMatch(html, /href="\/s\/[^"]*#sack-notes"/, 'it no longer leaves the screen');
-  assert.match(html, /<div id="notePanel" class="notepanel" hidden>[\s\S]*<textarea id="noteText" maxlength="500"/);
-  assert.match(html, /action=sack_note_save/);
+  const noteAt = html.indexOf('<details id="nextNote" class="nextnote">');
+  assert.ok(noteAt > 0 && noteAt < html.indexOf('<button id="printBtn"'), 'the note box sits above PRINT TAG');
+  assert.match(html, /<summary>Note for the next tag<\/summary>/);
+  assert.doesNotMatch(html, /id="noteLink"|sack_note_save/, 'no note on the previous tag any more');
 
-  const save = (body, lang = 'en') => handleHarvestD1(new Request(`https://x/api/harvest?action=sack_note_save&lang=${lang}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-  }), env, ctx).then(r => r.json()).catch(e => ({ success: false, error: e.message }));
+  const notes = () => sqlite.prepare('SELECT sack_id, note, is_test FROM harvest_sack_notes ORDER BY id').all()
+    .map(r => [r.sack_id, r.note, r.is_test]);
 
-  const ok = await save({ sack_id: `${yy}-SLIFT-1`, note: '  wet spot at the bottom  ' });
-  assert.deepEqual(ok, { success: true, sack_id: `${yy}-SLIFT-1`, notes: 1 });
-  const rows = sqlite.prepare('SELECT sack_id, note, is_test FROM harvest_sack_notes').all();
-  assert.deepEqual(rows.map(r => [r.sack_id, r.note, r.is_test]), [[`${yy}-SLIFT-1`, 'wet spot at the bottom', 1]],
-    'onto the tag named, trimmed, marked test like its sack — not onto the newest tag');
+  const r = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, note: '  torn at the seam  ' });
+  assert.deepEqual(r.body.ids, [`${yy}-SLIFT-2`]);
+  assert.equal(r.body.note_on, `${yy}-SLIFT-2`);
+  assert.deepEqual(notes(), [[`${yy}-SLIFT-2`, 'torn at the seam', 1]], 'on the new tag, not #1 before it');
 
-  assert.equal((await save({ sack_id: `${yy}-SLIFT-2`, note: '   ' })).success, false, 'an empty note is refused');
-  assert.equal((await save({ sack_id: `${yy}-SLIFT-99`, note: 'x' })).success, false, 'an unknown tag is refused');
-  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM harvest_sack_notes').get().n, 1, 'and neither writes a row');
+  const plain = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, note: '   ' });
+  assert.equal(plain.body.note_on, null, 'a blank box is no note');
+  assert.equal(notes().length, 1);
+
+  const batch = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 3, note: 'wet' });
+  assert.equal(batch.body.success, false, 'a batch is several bags and cannot share one note');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM harvest_sacks').get().n, 3, 'refused before any serial is spent');
+  assert.equal(notes().length, 1);
 
   const { handleSackScan } = await import(
     join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///'));
-  const page = await handleSackScan(new Request(`https://x/s/${yy}-SLIFT-1?lang=en`), env, ctx).then(r => r.text());
-  assert.match(page, /wet spot at the bottom/, "it is the same note the bag's page shows");
+  const page = await handleSackScan(new Request(`https://x/s/${yy}-SLIFT-2?lang=en`), env, ctx).then(res => res.text());
+  assert.match(page, /torn at the seam/, "it is the same note the bag's page shows");
 });
 
 test('the last tag is the newest one, not the highest id as text — Void acts on it', async () => {
