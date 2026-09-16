@@ -1952,7 +1952,7 @@ async function handleSackFind(ui, db, env, input) {
   if (raw === undefined || String(raw).trim() === '') {
     const recent = await query(db, `
       SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
-      WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
+      WHERE is_test = ? AND voided_at IS NULL ORDER BY printed_at DESC, id DESC LIMIT 8
     `, [isTest]);
     return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent }));
   }
@@ -1990,7 +1990,7 @@ async function handleSackFind(ui, db, env, input) {
 
   const recent = await query(db, `
     SELECT sack_id, serial, cultivar, zone, cut_number FROM harvest_sacks
-    WHERE is_test = ? AND voided_at IS NULL ORDER BY serial DESC LIMIT 8
+    WHERE is_test = ? AND voided_at IS NULL ORDER BY printed_at DESC, id DESC LIMIT 8
   `, [isTest]);
   return renderPage(ui, ui.t('findSack'), sackFindBody(ui, { recent, missing: id, typed: raw }), 404);
 }
