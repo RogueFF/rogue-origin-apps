@@ -1436,17 +1436,19 @@ async function handleSackAlloc(db, env, ctx, body) {
     // physical tags and puts the bag on the wrong per-cultivar sequence.
     throw createError('VALIDATION_ERROR', e.message);
   }
+  // Per cut as well (Koa, 2026-09-16): a second cut starts again at #1, and the
+  // sack id carries the cut so the two #1s stay distinct (formatSackId).
   const row = await queryOne(db, `
     SELECT COALESCE(MAX(serial), 0) AS max_serial FROM harvest_sacks
-    WHERE season = ? AND cultivar_code = ?
-  `, [season, code]);
+    WHERE season = ? AND cultivar_code = ? AND COALESCE(cut_number, 1) = COALESCE(?, 1)
+  `, [season, code, lot.cut_number]);
   const startSerial = (row?.max_serial || 0) + 1;
 
   const ids = [];
   const statements = [];
   for (let i = 0; i < qty; i++) {
     const serial = startSerial + i;
-    const sackId = formatSackId(season, code, serial);
+    const sackId = formatSackId(season, code, serial, lot.cut_number);
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
@@ -1899,8 +1901,15 @@ function normalizeSackId(raw, season) {
   q = q.toUpperCase().replace(/\s+/g, '').replace(/^#+/, '');
   const yy = String(season).slice(-2);
 
+  // 26-SL-C2-12 / SL-C2-12 — a later cut, whose number restarted. Checked
+  // before the plain forms, which would read "SL-C2" as a cultivar code.
+  let m = q.match(/^(\d{2})-([A-Z]+\d*)-C(\d{1,2})-(\d{1,6})$/);
+  if (m) return formatSackId(`20${m[1]}`, m[2], parseInt(m[4], 10), parseInt(m[3], 10));
+  m = q.match(/^([A-Z]+\d*?)-C(\d{1,2})-(\d{1,6})$/);
+  if (m) return formatSackId(season, m[1], parseInt(m[3], 10), parseInt(m[2], 10));
+
   // 26-SL-12 — already whole.
-  let m = q.match(/^(\d{2})-([A-Z]+\d*)-(\d{1,6})$/);
+  m = q.match(/^(\d{2})-([A-Z]+\d*)-(\d{1,6})$/);
   if (m) return `${m[1]}-${m[2]}-${parseInt(m[3], 10)}`;
 
   // SL-12 / SL12 — cultivar and number, season assumed. What someone reading a
@@ -2281,9 +2290,25 @@ async function handleSackStore(ui, db, env, ctx, body) {
     sackDetailBody(ui, updated, where ? ui.t('storageSaved', { where }) : ui.t('storageCleared')));
 }
 
-/** e.g. 26-SL-1. Unpadded on purpose (Koa): "1, 2, 3", not "0001". */
-function formatSackId(season, code, serial) {
-  return `${String(season).slice(-2)}-${code}-${serial}`;
+/**
+ * e.g. 26-SL-1. Unpadded on purpose (Koa): "1, 2, 3", not "0001".
+ *
+ * Numbers restart for each cut (Koa, 2026-09-16), so a later cut carries the
+ * cut in the id: 26-SL-C2-1. A first cut keeps the plain form — it is what the
+ * bags tagged before the change already carry in their QR, and a first cut is
+ * the common case.
+ */
+function formatSackId(season, code, serial, cut = 1) {
+  const c = Number(cut) >= 2 ? `C${Number(cut)}-` : '';
+  return `${String(season).slice(-2)}-${code}-${c}${serial}`;
+}
+
+/** The cut as the tag spells it, large: "1ST CUT", "2ND CUT", "3RD CUT". */
+function cutOrdinal(cut) {
+  const n = Number(cut);
+  if (!Number.isInteger(n) || n < 1) return null;
+  const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'TH' : ({ 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] || 'TH');
+  return `${n}${suffix}`;
 }
 
 function qrUrlFor(sackId) {
@@ -4302,6 +4327,13 @@ function labelInner(s) {
   // a long id under the QR. The full id still travels in the QR, and stays
   // reconstructable by eye: code + serial + the year off the harvest date.
   const serial = s.serial ?? String(s.sack_id || '').split('-').pop();
+  // The cut, large, beside the number (Koa, 2026-09-16). Numbers restart for
+  // each cut, so "#1" alone names two bags; this box is what tells them apart
+  // from across the barn. An outline, never a fill — a browser drops
+  // background colours when printing (see .exbar). It replaces "Cut N" in the
+  // meta line rather than repeating it.
+  const ord = cutOrdinal(s.cut_number);
+  const cutBox = ord ? `<div class="cutbox"><span class="ord">${ord}</span><span class="cw">CUT</span></div>` : '';
   return `
     <div class="qrwrap">
       <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
@@ -4310,8 +4342,11 @@ function labelInner(s) {
     <div class="txt">
       <div class="cultivar" style="font-size:${cultivarFontPt(s.cultivar)}pt">${escapeHtml(s.cultivar || '')}</div>
       ${s.cultivar_code ? `<div class="code">${escapeHtml(s.cultivar_code)}</div>` : ''}
-      <div class="bagno" style="font-size:${bagnoFontPt(serial)}pt">#${escapeHtml(String(serial))}</div>
-      <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)} · ${escapeHtml(translate(TAG_LANG, 'cut', { n: s.cut_number ?? '?' }))}${s.bay ? ` · ${escapeHtml(translate(TAG_LANG, 'bayN', { n: s.bay }))}` : ''}</div>
+      <div class="bagrow">
+        <div class="bagno" style="font-size:${bagnoFontPt(serial, ord ? CUT_BOX_PT : 0)}pt">#${escapeHtml(String(serial))}</div>
+        ${cutBox}
+      </div>
+      <div class="meta">${escapeHtml(formatTagDate(TAG_LANG, s.harvest_date))} · ${escapeHtml(s.zone)}${ord ? '' : ` · ${escapeHtml(translate(TAG_LANG, 'cut', { n: '?' }))}`}${s.bay ? ` · ${escapeHtml(translate(TAG_LANG, 'bayN', { n: s.bay }))}` : ''}</div>
     </div>`;
 }
 
@@ -4401,7 +4436,13 @@ function renderAverySheet(ui, sacks, opts = {}) {
      KEEP IN SYNC with the same rules in the other renderer. */
   .code { font-size: 13pt; font-weight: 700; line-height: 1.1; letter-spacing: .06em;
           white-space: nowrap; overflow: hidden; margin-top: 0.01in; }
-  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
+  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; min-width: 0; overflow: hidden; }
+  /* The number and its cut side by side. KEEP IN SYNC with the other renderer. */
+  .bagrow { display: flex; align-items: center; gap: 0.08in; margin-top: 0.02in; }
+  .cutbox { flex: none; border: 2pt solid #000; padding: 0.03in 0.06in; text-align: center;
+            line-height: 1; font-weight: 800; }
+  .cutbox .ord { display: block; font-size: 22pt; letter-spacing: -0.01em; }
+  .cutbox .cw { display: block; font-size: 10pt; letter-spacing: .14em; margin-top: 0.02in; }
   /* Bold, because at 203dpi a normal-weight 10.5pt stroke falls between dots
      and prints noticeably lighter than the rest of the tag. This is the ONLY
      line on the label CSS can darken: the cultivar and bag number are already
@@ -4492,11 +4533,11 @@ function specimenSacks() {
     // the screen it leads to can both be judged from one sheet.
     { example: true, sack_id: DEMO_SACK_ID, qr_id: DEMO_SACK_ID, serial: 142, cultivar_code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, harvest_date: today, bay: 7 },
     // Longest name in the roster, so the name font drops to its smallest step.
-    { example: true, sack_id: '26-ORNGPQ-12',    serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
+    { example: true, sack_id: '26-ORNGPQ-C2-12', serial: 12,  cultivar_code: 'ORNGPQ',   cultivar: 'Orange Pineapple Quik', zone: 'Z8',  cut_number: 2, harvest_date: today, bay: 9 },
     // The realistic worst case, and both squeezes at once: an 8-character
     // prefix (the longest planted this year) with a 3-digit serial, under a
     // 20-character name. This is the pairing that overlapped the QR.
-    { example: true, sack_id: '26-STRAWDNT-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today, bay: 12 },
+    { example: true, sack_id: '26-STRAWDNT-C3-123', serial: 123, cultivar_code: 'STRAWDNT', cultivar: 'Strawberry Doughnuts',  zone: 'Z10', cut_number: 3, harvest_date: today, bay: 12 },
   ];
 }
 
@@ -4578,7 +4619,15 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
      KEEP IN SYNC with the same rules in the other renderer. */
   .code { font-size: 13pt; font-weight: 700; line-height: 1.1; letter-spacing: .06em;
           white-space: nowrap; overflow: hidden; margin-top: 0.01in; }
-  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; margin-top: 0.02in; }
+  .bagno { font-weight: 800; line-height: 1.0; white-space: nowrap; min-width: 0; overflow: hidden; }
+  /* The number and its cut side by side (Koa, 2026-09-16: numbers restart per
+     cut, so the cut has to read from across the barn). An outline, not a
+     fill, for the reason .exbar gives. KEEP IN SYNC with the other renderer. */
+  .bagrow { display: flex; align-items: center; gap: 0.08in; margin-top: 0.02in; }
+  .cutbox { flex: none; border: 2pt solid #000; padding: 0.03in 0.06in; text-align: center;
+            line-height: 1; font-weight: 800; }
+  .cutbox .ord { display: block; font-size: 22pt; letter-spacing: -0.01em; }
+  .cutbox .cw { display: block; font-size: 10pt; letter-spacing: .14em; margin-top: 0.02in; }
   /* Bold: at 203dpi a normal-weight 10.5pt stroke falls between dots and prints
      lighter than the rest of the tag (Koa, 2026-09-03). This is the only line
      CSS can darken — cultivar and bag number are already 800, and Arial has no
@@ -4689,9 +4738,12 @@ const FIT_SAFETY = 0.96;
  * number -- 26-SLIFT-12 cut to 26-SLIFT-1 is a different sack -- so the text
  * must always shrink to fit, never be cut off.
  */
-function bagnoFontPt(serial) {
+/** Width the cut box takes out of the number's row: "2ND" at 22pt, padding, border and gap. */
+const CUT_BOX_PT = 64;
+
+function bagnoFontPt(serial, reservePt = 0) {
   const em = emWidth('#' + (serial ?? ''));
-  const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(em, 0.001);
+  const fit = ((TAG_COLUMN_PT - reservePt) * FIT_SAFETY) / Math.max(em, 0.001);
   // Capped by the label's height, not its width -- '#999' would fit far larger
   // across, but the line has to sit above the meta and below the name.
   return Math.max(20, Math.min(44, Math.floor(fit * 2) / 2));
@@ -4729,7 +4781,7 @@ function cultivarFontPt(name) {
  */
 const TAG_FIT_SCRIPT = `<script>
   function fitTagText() {
-    var els = document.querySelectorAll('.txt > .cultivar, .txt > .code, .txt > .bagno, .txt > .meta');
+    var els = document.querySelectorAll('.txt > .cultivar, .txt > .code, .txt > .bagrow > .bagno, .txt > .meta');
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
       var pt = parseFloat(getComputedStyle(el).fontSize) * 0.75;
@@ -4766,8 +4818,8 @@ function formatTagDate(lang, iso) {
 function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
   const list = recent.length
     ? recent.map(r => `<a class="btn alt findrow" href="/s/${encodeURIComponent(r.sack_id)}?lang=${ui.lang}">
-         <strong>${escapeHtml(r.cultivar || '')} #${escapeHtml(String(r.serial ?? String(r.sack_id || '').split('-').pop()))}</strong>
-         <span class="hint">${escapeHtml(r.sack_id)} · ${escapeHtml(r.zone)} · ${ui.t('cut', { n: r.cut_number ?? '?' })}</span>
+         <strong>${escapeHtml(r.cultivar || '')} #${escapeHtml(String(r.serial ?? String(r.sack_id || '').split('-').pop()))} · ${ui.t('cut', { n: r.cut_number ?? '?' })}</strong>
+         <span class="hint">${escapeHtml(r.sack_id)} · ${escapeHtml(r.zone)}</span>
        </a>`).join('')
     : '';
 

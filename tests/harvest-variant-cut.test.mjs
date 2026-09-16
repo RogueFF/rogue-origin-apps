@@ -38,7 +38,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
 ];
 
 /** A LIVE-mode worker (not test mode) — the Shopify paths only run there. */
@@ -138,9 +138,9 @@ test('a second-cut tag counts on 2nd Cut, a first-cut tag on 1st Cut — through
       { variantId: RG2, operation: 'add', amount: 2 },
       { variantId: RG1, operation: 'add', amount: 1 },
     ]);
-    const rows = sqlite.prepare('SELECT serial, shopify_variant_id, shopify_add_error FROM harvest_sacks ORDER BY serial').all();
-    assert.deepEqual(rows.map(r => [r.serial, r.shopify_variant_id, r.shopify_add_error]),
-      [[1, RG2, null], [2, RG2, null], [3, RG1, null]]);
+    const rows = sqlite.prepare('SELECT sack_id, shopify_variant_id, shopify_add_error FROM harvest_sacks ORDER BY id').all();
+    assert.deepEqual(rows.map(r => [r.sack_id, r.shopify_variant_id, r.shopify_add_error]),
+      [[`${YY}-RAINGQ-C2-1`, RG2, null], [`${YY}-RAINGQ-C2-2`, RG2, null], [`${YY}-RAINGQ-1`, RG1, null]]);
   } finally { pool.restore(); }
 });
 
