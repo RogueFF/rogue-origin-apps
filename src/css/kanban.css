@@ -1602,3 +1602,50 @@ a:focus-visible {
   0% { transform: translateY(0) rotate(0deg); opacity: 1; }
   100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
 }
+
+/* Shop card preview (5"×3", 6"×3", 8.5"×11") — name, picture, price only */
+.kanban.shop-card { background: #e8e4de; color: #2d3a2e; padding: 0; aspect-ratio: 6/3; }
+.kanban.shop-card.shop-5x3 { aspect-ratio: 5/3; max-width: 350px; }
+.kanban.shop-card.shop-sheet { aspect-ratio: 8.5/11; max-width: 300px; }
+.kanban.shop-card .kanban-border,
+.kanban.shop-card .kanban-inner { border-color: #8f9263; }
+.kanban.shop-card .kanban-inner { inset: 10px; border-width: 3px; }
+.shop-content { position: absolute; inset: 20px 22px; display: flex; flex-direction: column; }
+.shop-name {
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.shop-body { flex: 1; min-height: 0; display: flex; align-items: center; gap: 12px; }
+.shop-img {
+  flex: 1;
+  height: 100%;
+  background: #fff;
+  border: 3px solid #8f9263;
+  border-radius: var(--kanban-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 36px;
+}
+.shop-img img { width: 100%; height: 100%; object-fit: contain; }
+.shop-price {
+  background: #8f9263;
+  color: #faf8f5;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.shop-sheet .shop-body { flex-direction: column; }
+.shop-sheet .shop-img { width: 100%; min-height: 0; }
