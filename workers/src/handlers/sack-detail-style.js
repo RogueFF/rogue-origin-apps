@@ -92,6 +92,10 @@ export const SACK_DETAIL_STYLE = `
   .sd .notecard { padding: 14px 0; border: 0; border-bottom: 1px solid #e4e7dd; margin: 0;
     border-radius: 0; background: transparent; color: #344c3f; box-shadow: none; font-size: 14px; }
   .sd .notecard .hint { margin-top: 6px; font: 11px ui-monospace, monospace; }
+  .sd .noteedit summary { display: inline-block; cursor: pointer; margin-top: 6px; font-size: 13px; font-weight: 650;
+    color: #294c36; text-decoration: underline; min-height: 32px; padding: 6px 0; }
+  .sd .noteedit textarea { display: block; width: 100%; box-sizing: border-box; margin: 8px 0; padding: 10px;
+    font: inherit; font-size: 15px; background: #fff; color: #243d32; border: 1px solid #b4c0a9; border-radius: 8px; resize: vertical; }
   .sd .batch { border: 0; margin: 16px 0 0; padding: 0; color: #344c3f; background: transparent; }
   .sd .batch summary { font-size: 14px; font-weight: 650; min-height: 44px; box-sizing: border-box; padding: 12px 0; }
   .sd .batch input { background: #fff; color: #243d32; border: 1px solid #b4c0a9; border-radius: 8px; }
