@@ -194,6 +194,29 @@ test('the bay prints on the tag, in English like the rest of it', async () => {
   assert.doesNotMatch(label, /Bah&#237;a 7|Bahía 7/);
 });
 
+test('both tag renderers measure the printed text and shrink what the browser clips, before printing', async () => {
+  // "Rainbow GMO Quik" printed as "Rainbow GMO Qui" (Koa, 2026-09-16): the
+  // metrics-table size was 6% too wide for how Chrome actually draws Arial Bold.
+  // The layout itself can only be measured in a browser; this pins that the
+  // measuring script ships on both pages, and runs ahead of the auto-print.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedLot(sqlite);
+  await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1 });
+  const id = sacks(sqlite)[0].sack_id;
+
+  const thermal = await handleHarvestD1(
+    new Request(`https://x/api/harvest?action=sack_label&id=${id}`), env, ctx).then(r => r.text());
+  const fit = thermal.indexOf('function fitTagText()');
+  assert.ok(fit > 0, 'the thermal label page carries the fit script');
+  const autoPrint = thermal.indexOf('document.images');
+  assert.ok(autoPrint === -1 || fit < autoPrint, 'text is fitted before the auto-print script');
+  assert.match(thermal, /addEventListener\('beforeprint', fitTagText\)/);
+
+  const avery = await handleHarvestD1(
+    new Request(`https://x/api/harvest?action=sack_label&sheet=avery5163&id=${id}`), env, ctx).then(r => r.text());
+  assert.match(avery, /function fitTagText\(\)/, 'the Avery sheet carries it too');
+});
+
 test('a sack with no bay prints no bay, not an empty separator', async () => {
   const { sqlite, env, ctx } = freshDb();
   const lot = seedLot(sqlite);
