@@ -38,7 +38,7 @@ const DROPPED_KEYS = [
 
 // New keys the spec adds for the rebuild — must exist in both languages.
 const ADDED_KEYS = [
-  'now', 'prevHour', 'nextHour', 'lbTops', 'targetWord', 'trimmersShort', 'why',
+  'now', 'prevHour', 'nextHour', 'lbTops', 'targetWord', 'trimmersShort',
   'notes', 'retry', 'notSaved', 'enterSaves', 'unsavedHours', 'pace', 'behindPace',
   'aheadPace', 'onPace', 'projected', 'left', 'overtime', 'elapsedWord', 'shiftEnded',
   'notStarted', 'logBag', 'logging', 'logged', 'logFailed', 'bagsTodayWord', 'averaging',

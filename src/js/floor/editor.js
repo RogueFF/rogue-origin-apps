@@ -42,7 +42,7 @@ import {
   hourTitle, clockTime, num, lbsText, esc, cultivarParts, cultivarLabel, fieldText,
 } from './format.js';
 import { buildSlots } from './slots.js';
-import { LABELS, getLang } from './labels.js';
+import { LABELS } from './labels.js';
 
 /** The inputs that carry a form value, by element id. `note` holds free text only. */
 const FORM_INPUT_IDS = [
@@ -113,7 +113,12 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
   let line2 = false;
   let cultivars = [];
   let aliases = [];
-  /** Selected reason ids. Held here rather than read off the chips so a language flip can re-render them. */
+  /**
+   * Reason ids already saved on this hour. The reason chips are gone (Koa,
+   * 2026-09-16: a problem gets written in the note, by hand, only when there
+   * is one), but hours saved while they existed keep their [Reason: …] line —
+   * it is carried through untouched rather than dropped on the next autosave.
+   */
   const selected = new Set();
   let lastSaveState = null;
 
@@ -260,16 +265,6 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
     el.hidden = false;
     el.innerHTML = `${esc(t('targetWord'))} <span class="num">${num(target, 1)} ${esc(t('lbs'))}</span>`
       + (trimmers > 0 ? ` · ${esc(lbsText(trimmers))} ${esc(t('trimmersShort'))} × ${perTrimmer}` : '');
-  }
-
-  function renderChips() {
-    if (!els.chips) return;
-    const lang = getLang() === 'es' ? 'es' : 'en';
-    els.chips.innerHTML = REASONS.map((r) => (
-      `<button class="rchip" type="button" data-reason="${r.id}" aria-pressed="${selected.has(r.id) ? 'true' : 'false'}">`
-      + '<svg class="i"><use href="#i-check"/></svg>'
-      + `${esc(r[lang])}</button>`
-    )).join('');
   }
 
   /**
@@ -423,7 +418,6 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
   }
 
   function refreshLabels() {
-    renderChips();
     renderCultivars(); // re-renders the cultivar faces too
     setTarget();
     renderSaveState();
@@ -469,7 +463,6 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
     selected.clear();
     for (const id of parts.reasons) selected.add(id);
     if (els.note) els.note.value = parts.text;
-    renderChips();
 
     // The baseline has to be what form() will produce, not the row's raw
     // string: parseNotes trims, drops blank lines and reorders reason ids, so a
@@ -596,18 +589,6 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
     els.note.addEventListener('keydown', onKeydown, { signal });
   }
 
-  if (els.chips) {
-    els.chips.addEventListener('click', (e) => {
-      const btn = e.target.closest && e.target.closest('.rchip[data-reason]');
-      if (!btn) return;
-      const id = btn.dataset.reason;
-      if (selected.has(id)) selected.delete(id);
-      else selected.add(id);
-      btn.setAttribute('aria-pressed', selected.has(id) ? 'true' : 'false');
-      maybeSchedule();
-    }, { signal });
-  }
-
   if (els.line2Toggle) {
     els.line2Toggle.addEventListener('click', () => {
       setLine2(true);
@@ -638,7 +619,6 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
     els.retrySave.addEventListener('click', () => { if (saver) saver.retry(); }, { signal });
   }
 
-  renderChips();
   renderCultivarFaces();
 
   return {
