@@ -97,7 +97,7 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
     if (els.bagPace) {
       const running = reading.kind === 'remaining' || reading.kind === 'overtime';
       els.bagPace.hidden = !running || targetSeconds <= 0;
-      els.bagPace.style.bottom = `${Math.max(0, Math.min(100, gone))}%`;
+      els.scaleBar.style.setProperty('--time', String(Math.max(0, Math.min(100, gone))));
     }
 
     // Off shift there is no countdown to show. What the tile can honestly
@@ -126,13 +126,14 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
 
   function renderScale() {
     const stale = !lastScale || lastScale.isStale !== false;
-    // An offline scale has no reading, so it has no bar either: the word
-    // stands alone in caption ink rather than beside an empty track.
-    els.scaleBar.hidden = stale;
+    // An offline scale has no reading, so its ring goes quiet rather than
+    // drawing an empty arc as if the bag were empty. The ring itself stays,
+    // because the word "offline" sits inside it.
+    els.scaleBar.classList.toggle('stale', stale);
     els.scaleValue.classList.toggle('off', stale);
     if (stale) {
       els.scaleValue.textContent = t('scaleOffline');
-      els.scaleBar.firstElementChild.style.height = '0%';
+      els.scaleBar.style.setProperty('--weight', '0');
       // Scale offline never blocks logging — flag it, do not disable anything.
       els.logBag.title = t('scaleOfflineNote');
       return;
@@ -140,7 +141,7 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
 
     const grams = Math.round((lastScale.weight || 0) * 1000);
     els.scaleValue.textContent = `${grams.toLocaleString('en-US')} g`;
-    els.scaleBar.firstElementChild.style.height = `${Math.min(100, lastScale.percentComplete || 0)}%`;
+    els.scaleBar.style.setProperty('--weight', String(Math.min(100, lastScale.percentComplete || 0)));
 
     const gate = bagMode === '10lb' ? GATE_10LB : GATE_5KG;
     els.logBag.title = (grams < gate.min || grams > gate.max)

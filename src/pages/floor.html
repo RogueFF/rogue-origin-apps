@@ -308,22 +308,8 @@
         </div>
       </div>
 
-      <!-- Beside the hour: what the line is running, and the bag clock. -->
+      <!-- Bottom right: the bag, as one instrument. -->
       <div class="hour-side">
-
-        <div class="card tile queue" id="queueTile" hidden>
-          <p class="label" id="queueLead">Trimming <b>Godfather OG</b> <span class="muted">&middot; tops &middot; #35453</span></p>
-          <div class="fill" id="queueFill">
-            <div class="value">
-              <span id="queueDone">15.5</span>
-              <span class="of" id="queueOf">/ 30</span>
-              <small>lb</small>
-            </div>
-            <div class="meter" id="queueMeter"><span style="width: 52%"></span></div>
-            <p class="sub" id="queueNext"><svg class="i"><use href="#i-arrow-r"/></svg>next <b>Passion Fruit OG</b></p>
-          </div>
-        </div>
-
         <!-- The bag size is the control here, not a caption: setBagMode drives
              every station's Log button. -->
         <div class="card tile timer" id="timerTile" data-kind="remaining">
@@ -335,24 +321,36 @@
             </div>
           </div>
           <div class="fill">
-            <!-- The bag and its clock are one race: the green is what is on the
-                 scale now, the gold line is where the clock says it should be.
-                 Green above the line means the bag lands early. -->
+            <!-- The bag and its clock are one race, drawn on one ring: the green
+                 arc is what is on the scale now, the gold mark is where the clock
+                 says the bag should be. Green past the mark means it lands early. -->
             <div class="bag">
-              <div class="bag-read">
-                <span class="bag-weight num" id="scaleValue">4,812 g</span>
-                <span class="bag-clock"><span class="num" id="timerValue">31:48</span> <small id="timerUnit">left</small></span>
-              </div>
-              <div class="bag-gauge" id="scaleBar">
-                <span class="bag-fill" style="height: 96.2%"></span>
-                <span class="bag-pace" id="bagPace" style="bottom: 72%"></span>
+              <div class="dial" id="scaleBar">
+                <span class="dial-pace" id="bagPace"></span>
+                <div class="dial-face">
+                  <span class="bag-weight num" id="scaleValue">4,812 g</span>
+                  <span class="bag-clock"><span class="num" id="timerValue">31:48</span> <small id="timerUnit">left</small></span>
+                </div>
               </div>
             </div>
             <button class="tb-btn primary log" id="logBag" type="button"><svg class="i"><use href="#i-bag"/></svg><span id="logBagText" data-i18n="logBag">Log bag</span></button>
             <p class="sub" id="timerStats"><span class="num">12</span> bags today</p>
           </div>
-        </div>
 
+          <!-- What the line is running, as the card's last line. -->
+          <div class="queue" id="queueTile" hidden>
+            <p class="label" id="queueLead">Trimming <b>Godfather OG</b> <span class="muted">&middot; tops &middot; #35453</span></p>
+            <div class="queue-fill" id="queueFill">
+              <div class="value">
+                <span id="queueDone">15.5</span>
+                <span class="of" id="queueOf">/ 30</span>
+                <small>lb</small>
+              </div>
+              <div class="meter" id="queueMeter"><span style="width: 52%"></span></div>
+              <p class="sub" id="queueNext"><svg class="i"><use href="#i-arrow-r"/></svg>next <b>Passion Fruit OG</b></p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
