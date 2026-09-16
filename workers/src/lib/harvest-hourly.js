@@ -252,6 +252,7 @@ export function buildPollContext(rows, foreman, now) {
       barn_label: BARN_LABELS[foreman.barn],
       active: !!foreman.active,
       active_since: foreman.active_since ?? null,
+      channel: foreman.channel || 'sms',
     },
     open_row: open && {
       hour_start: open.hour_start,
