@@ -188,7 +188,6 @@ svg.i { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-widt
 
 /* ---------- the hour ---------- */
 .hour-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 24rem); grid-template-rows: minmax(0, 1fr); gap: 0.875rem; align-items: stretch; }
-.hour-side { display: flex; flex-direction: column; gap: 0.875rem; min-height: 0; }
 
 .day-sec { margin-top: clamp(0.35rem, 0.8vh, 0.6rem); }
 .editor { padding: 0; display: flex; flex-direction: column; }
@@ -284,14 +283,14 @@ select.select option, select.select optgroup { background: var(--surface); color
 .big-in {
   flex: 1 1 auto;
   display: flex; align-items: center; justify-content: space-between;
-  min-height: var(--fl-h-ctl); max-height: clamp(3rem, 8.5vh, 6.5rem);
+  min-height: var(--fl-h-ctl);
   border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong); background: var(--fl-well);
 }
 .big-in input {
   flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 0.25rem 0 1rem;
   background: transparent; border: 0; outline: 0; color: var(--ink);
-  font-family: var(--font-mono); font-size: clamp(1.5rem, 5vh, 3rem); font-weight: 600;
+  font-family: var(--font-mono); font-size: clamp(1.75rem, 5.2vh, 4rem); font-weight: 600;
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
   -moz-appearance: textfield; appearance: textfield;
 }
@@ -359,44 +358,69 @@ kbd.k {
 /* ---------- the instruments beside the hour ---------- */
 .hour-side .tile .value { display: flex; align-items: baseline; gap: 0.375rem; }
 .hour-side .tile .value .of { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; color: var(--ink-3); }
-.hour-side .tile .fill { display: flex; flex-direction: column; gap: 0.5rem; }
 .hour-side .tile .sub b, .hour-side .tile .label b { color: var(--ink); font-weight: 600; }
 .hour-side .tile .sub svg.i { width: 0.8125rem; height: 0.8125rem; vertical-align: -0.15em; margin-right: 0.25rem; }
 /* Cultivar names are the display serif, as they are on the Hub. */
 .queue .label b, #queueNext b { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 0.9375rem; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 0.625rem; }
 
-/* The bag and its clock, on one scale.
+/* The bag and its clock, on one ring.
  *
- * The green is what is on the scale right now; the gold line is where the
+ * The green arc is what is on the scale right now; the gold mark is where the
  * clock says the bag should be by now. The two are read against each other,
  * because the manager's question is not "how long is left" but "will this bag
- * be full when the time is up" - green above the line means it lands early.
+ * be full when the time is up" - green past the gold means it lands early.
  * The same grammar as the ledger columns and the pace meter: fill is what
- * happened, gold is what should have.
+ * happened, gold is what should have. The ring takes the whole bottom right and
+ * sizes itself to whichever of width or height runs out first.
  */
-.timer { flex: 1; min-height: 0; }
-.timer .fill { flex: 1; min-height: 0; gap: 0.75rem; }
-.bag { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 1rem; }
-.bag-read { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.375rem; }
-.bag-weight { font-size: clamp(2rem, 5.4vh, 3.75rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
-.bag-weight.off { font-size: 1.25rem; font-weight: 500; color: var(--ink-3); }
-.bag-clock { font-size: 0.875rem; color: var(--ink-3); }
-.bag-clock .num { font-size: clamp(1.375rem, 3vh, 2rem); font-weight: 600; letter-spacing: -0.02em; color: var(--good); margin-right: 0.25rem; }
+.hour-side { display: flex; flex-direction: column; min-height: 0; }
+.timer { flex: 1; min-height: 0; gap: 0.625rem; }
+.timer > .fill { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.bag { flex: 1; min-height: 8rem; container-type: size; display: grid; place-items: center; }
+.dial {
+  --ring: clamp(0.875rem, 3.2cqmin, 1.625rem);
+  position: relative;
+  width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
+}
+.dial::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(var(--fl-fill) calc(var(--weight, 0) * 1%), var(--fl-track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 1px));
+}
+.dial.stale::before { background: var(--fl-track); }
+/* The gold mark: a spoke from the centre whose tip crosses the ring at the
+   angle the clock has reached. timer.js writes --time as a percentage. */
+.dial-pace {
+  position: absolute; left: 50%; top: 0; width: 0.25rem; height: 50%; margin-left: -0.125rem;
+  transform-origin: 50% 100%; transform: rotate(calc(var(--time, 0) * 3.6deg));
+}
+.dial-pace::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -0.3rem;
+  height: calc(var(--ring) + 0.6rem); border-radius: 2px; background: var(--fl-target);
+}
+.dial-face {
+  position: absolute; inset: var(--ring);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.375rem;
+  text-align: center;
+}
+.bag-weight { font-size: clamp(2rem, 11cqmin, 5rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
+.bag-weight.off { font-size: clamp(1.25rem, 6cqmin, 2rem); font-weight: 500; color: var(--ink-3); }
+.bag-clock { font-size: clamp(0.8125rem, 3cqmin, 1rem); color: var(--ink-3); }
+.bag-clock .num { font-size: clamp(1.25rem, 5.5cqmin, 2.5rem); font-weight: 600; letter-spacing: -0.02em; color: var(--good); margin-right: 0.25rem; }
 .timer[data-kind="overtime"] .bag-clock .num { color: var(--warn); }
 .timer[data-kind="break"] .bag-clock .num,
 .timer[data-kind="ended"] .bag-clock .num,
 .timer[data-kind="waiting"] .bag-clock .num { color: var(--ink-3); }
+.timer .log { align-self: stretch; justify-content: center; height: 2.75rem; font-size: 0.9375rem; }
+.timer > .fill > .sub { text-align: center; }
 
-.bag-gauge {
-  position: relative; flex: 0 0 auto;
-  width: 3.5rem; min-height: 5rem;
-  border-radius: var(--fl-r-sm); background: var(--fl-track);
-}
-.bag-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: var(--fl-r-sm); background: var(--fl-fill); transition: height 0.3s ease; }
-.bag-pace { position: absolute; left: -0.375rem; right: -0.375rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
-.timer .log { align-self: stretch; justify-content: center; height: 3rem; font-size: 0.9375rem; }
-.timer .sub { text-align: center; }
+/* What the line is running: the card's last line, not a card of its own. */
+.timer .queue { padding-top: 0.625rem; border-top: 1px solid var(--line); }
+.timer .queue .queue-fill { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.timer .queue .value { font-size: 1.25rem; }
+.timer .queue .meter { flex: 1 1 5rem; }
 
 /* ---------- drawer panel (off-canvas) ---------- */
 /* Kept visibility:hidden while closed so Tab cannot land inside the
