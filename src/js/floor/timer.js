@@ -141,9 +141,14 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
 
     const grams = Math.round((lastScale.weight || 0) * 1000);
     els.scaleValue.textContent = `${grams.toLocaleString('en-US')} g`;
-    els.scaleBar.style.setProperty('--weight', String(Math.min(100, lastScale.percentComplete || 0)));
 
+    // The ring is full when the bag can be logged. Not the scale's own
+    // percentComplete: the reader measures against a fixed 5 kg in every bag
+    // mode, which reads a 10 lb bag about nine percent light and would put the
+    // weight ring behind the time ring on a bag that is actually on pace.
     const gate = bagMode === '10lb' ? GATE_10LB : GATE_5KG;
+    els.scaleBar.style.setProperty('--weight', String(Math.min(100, Math.round((grams / gate.min) * 100))));
+
     els.logBag.title = (grams < gate.min || grams > gate.max)
       ? fillTemplate(t('scaleWindow'), { g: grams, min: gate.min, max: gate.max })
       : '';
