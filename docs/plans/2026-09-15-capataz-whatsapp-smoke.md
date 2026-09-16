@@ -642,3 +642,29 @@ all behaved in a live run exactly as their unit tests claimed.
 The one gap is not in this feature's code: **the persona still tells the model to
 write without accents** (§4). Fix that and the round trip is accent-clean from
 the foreman's thumb to the foreman's screen.
+
+## 9. Addendum (2026-09-16): persona fix verified live
+
+`prompts/persona.md` was updated (commit `239d0f5`, after this transcript's relay
+HEAD `0d9cc8d`) to make the "sin acentos" rule conditional on the `[From <name>,
+in SMS]` / `in WhatsApp` label already in every prompt. That fix landed **after**
+the run above and was only unit-tested — a review flagged that literal
+instruction-following by the model can't be proven by a unit test, and this
+feature's whole premise was exactly that kind of failure (the persona *said*
+"in WhatsApp" the whole time in §4 and the model still stripped accents).
+
+Re-verified live against current relay HEAD with a minimal direct `CCSession`
+call (small talk, no tool call, so the reply is the model's own composed
+Spanish rather than a worker-authored `confirmText()` echo, which stays
+unaccented by design on both channels regardless of persona wording):
+
+> `[From Test Arriba, in WhatsApp]` ... `buenos dias, como andamos?`
+>
+> **Reply:** `Buenos días, aquí andamos. Todavía no hay hora abierta; cuando
+> tengas los números de la primera hora, mándamelos.`
+
+Five accented codepoints (í, í, í, ú, á), confirmed via `[hex(ord(c)) for c in
+reply if ord(c) > 127]` written to a UTF-8 file rather than trusting a terminal
+echo (the first attempt printed mangled `�` glyphs from a console codepage
+mismatch — the underlying string was correct the whole time, the display
+wasn't). **The persona fix works as intended.**
