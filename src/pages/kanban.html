@@ -28,8 +28,8 @@
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
   
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/kanban.css?h=3951b889" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/kanban.css?h=3951b889"></noscript>
+  <link rel="preload" href="../css/kanban.css?h=76bec297" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/kanban.css?h=76bec297"></noscript>
 </head>
 <body>
   <!-- RO Home Button -->
@@ -181,10 +181,9 @@
             <select id="printSize" style="width:100%" onchange="updatePrintCount()">
               <option value="card">Card (6" × 4")</option>
               <option value="tag">Price Tag (4" × 2")</option>
-              <option value="shop">Shop Label (6" × 3")</option>
-              <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
-              <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
-              <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
+              <option value="shop-small">Shop Card (5" × 3")</option>
+              <option value="shop">Shop Card (6" × 3")</option>
+              <option value="shop-sheet">Shop Card (8.5" × 11")</option>
               <option value="full">Full Sheet (8.5" × 11")</option>
               <option value="sticker-4x4" data-supplier="Sticker Mule">Sticker Mule (4" × 4.45")</option>
               <option value="sticker-4x8" data-supplier="Sticker Mule">Sticker Mule (8" × 4")</option>
@@ -261,10 +260,9 @@
           <select id="previewPrintSize" style="width:100%" onchange="updatePreviewSizeInfo()">
             <option value="card">Card (6" × 4")</option>
             <option value="tag">Price Tag (4" × 2")</option>
-            <option value="shop">Shop Label (6" × 3")</option>
-            <option value="shop-portrait">Shop Card (6" × 4") - Portrait</option>
-            <option value="shop-small">Shop Card Small (5" × 3") - Portrait</option>
-            <option value="shop-letter">Shop Card (11" × 8.5") - Landscape</option>
+            <option value="shop-small">Shop Card (5" × 3")</option>
+            <option value="shop">Shop Card (6" × 3")</option>
+            <option value="shop-sheet">Shop Card (8.5" × 11")</option>
             <option value="sticker-4x4" data-supplier="Sticker Mule">Sticker Mule (4" × 4.45")</option>
             <option value="sticker-4x8" data-supplier="Sticker Mule">Sticker Mule (8" × 4")</option>
           </select>
@@ -308,7 +306,7 @@
           <ul style="margin:0 0 16px 0;padding-left:20px;color:var(--text-muted)">
             <li id="helpPrint1"><strong>Single card:</strong> Click a card → choose print size → "Print This Card"</li>
             <li id="helpPrint2"><strong>Batch print:</strong> Click "Print Cards" → select items → choose size & colors → Print</li>
-            <li id="helpPrint3"><strong>Print sizes:</strong> Card (6"×4"), Shop Label (6"×3"), or Full Sheet (8.5"×11")</li>
+            <li id="helpPrint3"><strong>Print sizes:</strong> Card (6"×4"), Shop Cards (5"×3", 6"×3", 8.5"×11" — name, picture, price), or Full Sheet (8.5"×11")</li>
           </ul>
           
           <h4 style="color:var(--green);margin:0 0 8px 0" id="helpH6"><i class="ph-duotone ph-arrows-clockwise" style="margin-right:6px"></i> Reordering Cards</h4>
@@ -1650,8 +1648,11 @@ function renderPreview() {
   document.getElementById('previewArea').innerHTML = cardHtml(previewCard, previewColor, side, size);
 }
 
+var SHOP_CLASS = { 'shop-small': 'shop-5x3', 'shop': 'shop-6x3', 'shop-sheet': 'shop-sheet' };
+function isShopSize(size) { return SHOP_CLASS.hasOwnProperty(size); }
+
 function cardHtml(c, color, side, size) {
-  var qrSize = (size === 'full' || size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small' || size === 'shop' || size === 'sticker-4x8' || size === 'sticker-4x4') ? '400x400' : '200x200';
+  var qrSize = (size === 'full' || size === 'sticker-4x8' || size === 'sticker-4x4') ? '400x400' : '200x200';
   // QR deep-links to the Friday cart (scan = add this card to the order), not the vendor product page.
   var flagUrl = 'https://rogueff.github.io/rogue-origin-apps/src/pages/kanban.html?flag=' + c.id;
   var qr = c.id ? 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + '&data=' + encodeURIComponent(flagUrl) : '';
@@ -1718,79 +1719,18 @@ function cardHtml(c, color, side, size) {
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
 
+  // Shop cards (5"×3", 6"×3", 8.5"×11"): name, picture and price only. Neutral, front only.
+  if (isShopSize(size)) {
+    return '<div class="kanban shop-card ' + SHOP_CLASS[size] + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
+      '<div class="shop-content"><h3 class="shop-name">' + esc(c.item) + '</h3>' +
+      '<div class="shop-body"><div class="shop-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
+      '<div class="shop-price">' + esc(c.price || '$0') + '</div></div></div></div>';
+  }
+
   if (side === 'back') {
     return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
       '<div class="kanban-back"><h3>' + t('scanToOrder') + '</h3>' +
       '<div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div>' +
-      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
-  }
-
-  // Shop labels: header, picture + price, QR scan column
-  if (size === 'shop') {
-    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
-      '<div class="kanban-content"><div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
-      '<div class="kanban-body" style="justify-content:center;align-items:center;gap:16px">' +
-      '<div class="kanban-right" style="justify-content:center;align-items:center"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
-      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div>' +
-      '<div class="kanban-qrcol"><div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : '') + '</div>' +
-      '<div class="shop-scan">' + t('scanToOrder') + '</div></div></div>' +
-      '<div class="kanban-loc" style="position:absolute;bottom:20px;right:24px">' + esc(c.crumbtrail) + '</div></div>' +
-      '<img class="kanban-logo" src="' + logoUrl + '"></div>';
-  }
-  
-  // Shop-letter (11x8.5 landscape): big shelf card - Reorder At / Fill To + photo + scan QR
-  if (size === 'shop-letter') {
-    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
-      '<div class="kanban-content">' +
-      '<div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
-      '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
-      '<div class="kanban-body">' +
-      '<div class="kanban-left">' +
-      '<div class="kanban-field"><small>' + t('reorderAt') + '</small><span>' + esc(c.orderWhen || '-') + '</span></div>' +
-      '<div class="kanban-field"><small>' + t('fillTo') + '</small><span>' + esc(c.orderQty || '-') + '</span></div>' +
-      '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier || '-') + '</span></div>' +
-      '</div>' +
-      '<div class="kanban-mid"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
-      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div>' +
-      '<div class="kanban-qrcol"><div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : 'No URL') + '</div><div class="shop-scan">' + t('scanToOrder') + '</div></div>' +
-      '</div>' +
-      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
-  }
-
-  // Shop-portrait (6"×4" portrait): supplier info + photo + scan QR (3-column, like shop-letter)
-  if (size === 'shop-portrait') {
-    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
-      '<div class="kanban-content">' +
-      '<div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
-      '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
-      '<div class="kanban-body">' +
-      '<div class="kanban-left">' +
-      '<div class="kanban-field"><small>' + t('supplier') + '</small><span>' + esc(c.supplier || '-') + '</span></div>' +
-      '<div class="kanban-field"><small>' + t('orderQty') + '</small><span>' + esc(c.orderQty || '-') + '</span></div>' +
-      '<div class="kanban-field"><small>' + t('delivery') + '</small><span>' + esc(c.deliveryTime || '-') + '</span></div>' +
-      '</div>' +
-      '<div class="kanban-mid"><div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
-      '<div class="kanban-price">' + esc(c.price || '$0') + '</div></div>' +
-      '<div class="kanban-qrcol"><div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : '') + '</div>' +
-      '<div class="shop-scan">' + t('scanToOrder') + '</div></div>' +
-      '</div>' +
-      '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
-  }
-
-  // Shop-small (5"×3" portrait): compact — photo + QR side by side
-  if (size === 'shop-small') {
-    return '<div class="kanban ' + color + '"><div class="kanban-border"></div><div class="kanban-inner"></div>' +
-      '<div class="kanban-content">' +
-      '<div class="kanban-header"><h3>' + esc(c.item) + '</h3></div>' +
-      '<div class="kanban-loc">' + esc(c.crumbtrail) + '</div>' +
-      '<div class="kanban-body" style="justify-content:center;align-items:center;gap:16px">' +
-      '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">' +
-      '<div class="kanban-img">' + (c.picture && sanitizeImageUrl(c.picture) ? '<img src="' + esc(sanitizeImageUrl(c.picture)) + '" onerror="this.outerHTML=\'📷\'">' : '📷') + '</div>' +
-      '<div class="kanban-price">' + esc(c.price || '$0') + '</div>' +
-      '</div>' +
-      '<div class="kanban-qrcol"><div class="kanban-qr">' + (qr ? '<img src="' + qr + '">' : '') + '</div>' +
-      '<div class="shop-scan">' + t('scanToOrder') + '</div></div>' +
-      '</div>' +
       '</div><img class="kanban-logo" src="' + logoUrl + '"></div>';
   }
 
@@ -1911,17 +1851,16 @@ function updatePrintCount() {
   var color = document.getElementById('printColor').value;
   var sidesCount = side === 'both' ? 2 : 1;
   var colorsCount = color === 'both' ? 2 : 1;
-  var cardsPerPage = (size === 'full' || size === 'shop-letter') ? 1 : (size === 'shop-portrait' ? 2 : (size === 'shop-small' ? 3 : 2));
-  // Shop-letter: 1 per page, shop-portrait: 2 per page grid, shop-small: 3 per page grid
-  // Sticker sizes: 1 per page (front only, neutral color)
-  if (size === 'shop-letter' || size === 'sticker-4x4' || size === 'sticker-4x8') {
-    var pages = selectedIds.length; // 1 card per page
-  } else if (size === 'shop-portrait') {
-    var pages = Math.ceil(selectedIds.length / 2); // 2 cards per page
-  } else if (size === 'shop-small') {
-    var pages = Math.ceil(selectedIds.length / 3); // 3 cards per page
+  var cardsPerPage = size === 'full' ? 1 : 2;
+  // Shop cards: front only, neutral — 5"×3" and 6"×3" fit 3 per page, 8.5"×11" is 1 per page
+  // Sticker sizes: 1 per page (front only)
+  var pages;
+  if (size === 'shop-sheet' || size === 'sticker-4x4' || size === 'sticker-4x8') {
+    pages = selectedIds.length;
+  } else if (size === 'shop' || size === 'shop-small') {
+    pages = Math.ceil(selectedIds.length / 3);
   } else {
-    var pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
+    pages = Math.ceil((selectedIds.length * sidesCount * colorsCount) / cardsPerPage);
   }
 
   document.getElementById('printCount').textContent = selectedIds.length;
@@ -1930,10 +1869,9 @@ function updatePrintCount() {
   var sizeInfo = {
     'card': '6"×4" cards, 2 per page',
     'tag': '4"×2" tags, compact layout',
-    'shop': '6"×3" shop labels, simplified',
-    'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
-    'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
-    'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
+    'shop': '6"×3" shop cards (name, picture, price), 3 per page',
+    'shop-small': '5"×3" shop cards (name, picture, price), 3 per page',
+    'shop-sheet': '8.5"×11" shop card (name, picture, price), 1 per page',
     'full': '8.5"×11" full sheet, 1 per page (single-sided, QR on front)',
     'sticker-4x4': '4"×4.45" Sticker Mule, 1 per page (QR on front)',
     'sticker-4x8': '8"×4" Sticker Mule, 1 per page (QR on front)'
@@ -1946,10 +1884,9 @@ function updatePreviewSizeInfo() {
   var sizeInfo = {
     'card': '6"×4" cards, 2 per page (green + red)',
     'tag': '4"×2" compact tags, 2 per page',
-    'shop': '6"×3" shop labels, simplified layout',
-    'shop-portrait': '6"×4" neutral shop cards, 2 per page in grid',
-    'shop-small': '5"×3" compact neutral shop cards, 3 per page in grid',
-    'shop-letter': '10"×7.5" neutral shop card, 1 per page (landscape)',
+    'shop': '6"×3" shop cards (name, picture, price), 3 per page',
+    'shop-small': '5"×3" shop cards (name, picture, price), 3 per page',
+    'shop-sheet': '8.5"×11" shop card (name, picture, price), 1 per page',
     'full': '7.5"×5" full sheet, 1 card per page',
     'sticker-4x4': '4"×4.45" sticker, 1 per page (QR on front)',
     'sticker-4x8': '8"×4" sticker, 1 per page (QR on front)'
@@ -2021,125 +1958,46 @@ function getPrintCSS(size) {
       '.kanban-qr{width:70px;height:70px;border-width:2px}' +
       '.kanban-border{border-width:3px}' +
       '.kanban-inner{border-width:2px}';
-  } else if (size === 'shop') {
-    // 6" x 3" shop label - simplified with header, picture, price, logo, crumbtrail
-    return base +
-      '.page{padding:0.75in 0 0 0}' +
-      '.page-inner{display:flex;flex-direction:column;align-items:center;gap:0.25in}' +
-      '.kanban{width:6in;height:3in;padding:10px}' +
-      '.kanban-inner{inset:12px}' +
-      '.kanban-content{padding:14px 18px;position:relative}' +
-      '.kanban-header{padding-bottom:6px;margin-bottom:0}' +
-      '.kanban-header h3{font-size:28px}' +
-      '.kanban-loc{font-size:14px;margin-bottom:0;position:absolute;bottom:16px;right:20px}' +
-      '.kanban-body{flex:1;justify-content:center;align-items:center}' +
-      '.kanban-left{display:none}' +
-      '.kanban-right{padding-top:0;justify-content:center;align-items:center}' +
-      '.kanban-img{width:140px;height:100px}' +
-      '.kanban-price{margin-top:8px;padding:6px 24px;font-size:18px}' +
-      '.kanban-logo{bottom:16px;left:16px;width:40px;height:40px}' +
-      '.kanban-back h3{font-size:36px;margin-bottom:20px}' +
-      '.kanban-qr{width:130px;height:130px}' +
-      '.kanban-qrcol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}' +
-      '.shop-scan{text-transform:uppercase;font-weight:700;font-size:9px;letter-spacing:0.5px;opacity:0.9;text-align:center}';
-  } else if (size === 'shop-letter') {
-    // 11" x 8.5" landscape shop card - Reorder At / Fill To + photo + scan QR
-    return '@page{size:letter landscape;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
+  } else if (isShopSize(size)) {
+    // Shop cards: neutral, name + picture + price only
+    var shopCss = '@page{size:letter portrait;margin:0}*{box-sizing:border-box;margin:0;padding:0}' +
       'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.page{page-break-after:always;width:10.5in;height:8in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box}' +
+      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;align-items:center;justify-content:center}' +
       '.page:last-child{page-break-after:auto}' +
-      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%}' +
-      '.kanban{width:10in;height:7.5in;padding:20px;border-radius:12px;position:relative;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
-      '.kanban-border{position:absolute;inset:0;border:8px solid #8f9263;border-radius:12px}' +
-      '.kanban-inner{position:absolute;inset:26px;border:6px solid #8f9263;border-radius:10px}' +
-      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:34px 46px 26px 46px}' +
-      '.kanban-header{border-bottom:5px solid currentColor;padding-bottom:12px;margin-bottom:4px}' +
-      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:2px;font-size:48px}' +
-      '.kanban-loc{text-align:right;font-weight:700;font-size:26px;margin-bottom:4px}' +
-      '.kanban-body{flex:1;display:flex;gap:26px;align-items:center;justify-content:space-between}' +
-      '.kanban-left{display:flex;flex-direction:column;justify-content:center;gap:20px;flex:0 1 auto;min-width:0;padding-left:78px}' +
-      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:18px;margin-bottom:3px}' +
-      '.kanban-field span{font-weight:800;font-size:50px;line-height:1.05}' +
-      '.kanban-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex:1}' +
-      '.kanban-img{background:#fff;border-radius:12px;border:6px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:295px;height:220px;font-size:90px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#8f9263;border-radius:30px;font-weight:700;color:#faf8f5;padding:12px 42px;font-size:34px;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qrcol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;flex-shrink:0}' +
-      '.kanban-qr{background:#fff;border-radius:12px;border:5px solid #8f9263;display:flex;align-items:center;justify-content:center;width:185px;height:185px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qr img{width:92%;height:92%}' +
-      '.shop-scan{text-transform:uppercase;font-weight:700;font-size:18px;letter-spacing:1px;text-align:center}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:30px;left:38px;width:58px;height:58px}' +
-      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
-      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
-      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
-  } else if (size === 'shop-portrait') {
-    // 6" x 4" portrait shop card - neutral colors, 2 cards per page in grid
-    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
-      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
-      '.page:last-child{page-break-after:auto}' +
-      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.25in;width:100%;height:100%}' +
-      '.kanban{width:6in;height:4in;padding:12px;border-radius:10px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
+      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.25in}' +
+      '.kanban.shop-card{position:relative;flex-shrink:0;page-break-inside:avoid;background:#e8e4de !important;color:#2d3a2e !important;border-radius:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.kanban-border{position:absolute;inset:0;border:5px solid #8f9263;border-radius:10px}' +
-      '.kanban-inner{position:absolute;inset:14px;border:4px solid #8f9263;border-radius:8px}' +
-      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:20px 24px}' +
-      '.kanban-header{border-bottom:3px solid currentColor;padding-bottom:8px;margin-bottom:6px}' +
-      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:1px;font-size:26px}' +
-      '.kanban-loc{text-align:right;font-weight:700;font-size:18px;margin-bottom:4px}' +
-      '.kanban-body{flex:1;display:flex;gap:20px;align-items:center}' +
-      '.kanban-left{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px}' +
-      '.kanban-field{margin-bottom:0}' +
-      '.kanban-field small{text-transform:uppercase;opacity:0.8;display:block;font-weight:600;font-size:12px;margin-bottom:2px}' +
-      '.kanban-field span{font-weight:700;font-size:22px}' +
-      '.kanban-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:12px}' +
-      '.kanban-mid{display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0}' +
-      '.kanban-qrcol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;flex-shrink:0}' +
-      '.kanban-img{background:#fff;border-radius:8px;border:4px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:150px;height:115px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#8f9263;border-radius:25px;font-weight:700;color:#faf8f5;padding:8px 32px;font-size:22px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.shop-scan{text-transform:uppercase;font-weight:700;font-size:12px;letter-spacing:0.5px;text-align:center}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:22px;left:22px;width:50px;height:50px}' +
-      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
-      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:2px;font-size:42px;margin-bottom:28px}' +
-      '.kanban-qr{background:#fff;border-radius:10px;border:4px solid #8f9263;display:flex;align-items:center;justify-content:center;width:110px;height:110px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qr img{width:92%;height:92%}' +
+      '.kanban-inner{position:absolute;inset:12px;border:3px solid #8f9263;border-radius:7px}' +
+      '.shop-content{position:absolute;display:flex;flex-direction:column}' +
+      '.shop-name{text-transform:uppercase;font-weight:800;letter-spacing:.5px;line-height:1.05;text-align:center;border-bottom:3px solid currentColor;overflow-wrap:anywhere}' +
+      '.shop-body{flex:1;min-height:0;display:flex;align-items:center}' +
+      '.shop-img{background:#fff;border:4px solid #8f9263;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.shop-img img{width:100%;height:100%;object-fit:contain}' +
+      '.shop-price{background:#8f9263;color:#faf8f5;border-radius:999px;font-weight:800;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
       '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
       '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
-  } else if (size === 'shop-small') {
-    // 5" x 3" portrait shop card - compact size, neutral colors, 3 cards per page
-    // Simplified layout: Header, Picture, Price, QR Code only (no supplier/delivery details)
-    return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
-      'body{font-family:system-ui,sans-serif;background:#faf8f5;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.page{page-break-after:always;width:8.5in;height:11in;margin:0;display:flex;justify-content:center;align-items:center;box-sizing:border-box;padding:0.25in}' +
-      '.page:last-child{page-break-after:auto}' +
-      '.page-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.25in;width:100%;height:100%}' +
-      '.kanban{width:5in;height:3in;padding:10px;border-radius:8px;position:relative;flex-shrink:0;page-break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban{background:#e8e4de !important;color:#2d3a2e !important}' +
-      '.kanban-border{position:absolute;inset:0;border:4px solid #8f9263;border-radius:8px}' +
-      '.kanban-inner{position:absolute;inset:12px;border:3px solid #8f9263;border-radius:6px}' +
-      '.kanban-content{height:100%;display:flex;flex-direction:column;padding:12px 16px}' +
-      '.kanban-header{border-bottom:2px solid currentColor;padding-bottom:6px;margin-bottom:4px}' +
-      '.kanban-header h3{text-transform:uppercase;margin:0;font-weight:700;letter-spacing:0.5px;font-size:20px}' +
-      '.kanban-loc{text-align:right;font-weight:700;font-size:12px;margin-bottom:2px}' +
-      '.kanban-body{flex:1;display:flex;justify-content:center;align-items:center}' +
-      '.kanban-left{display:none}' +
-      '.kanban-right{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}' +
-      '.kanban-img{background:#fff;border-radius:6px;border:3px solid #8f9263;display:flex;align-items:center;justify-content:center;overflow:hidden;width:110px;height:85px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-img img{width:100%;height:100%;object-fit:contain}' +
-      '.kanban-price{background:#8f9263;border-radius:20px;font-weight:700;color:#faf8f5;padding:6px 24px;font-size:18px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qrcol{display:flex;flex-direction:column;align-items:center;gap:4px}' +
-      '.shop-scan{text-transform:uppercase;font-weight:700;font-size:8px;letter-spacing:0.5px;text-align:center}' +
-      '.kanban-logo{position:absolute;border-radius:50%;bottom:14px;left:14px;width:35px;height:35px}' +
-      '.kanban-back{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}' +
-      '.kanban-back h3{text-transform:uppercase;font-weight:700;letter-spacing:1.5px;font-size:28px;margin-bottom:16px}' +
-      '.kanban-qr{background:#fff;border-radius:8px;border:3px solid #8f9263;display:flex;align-items:center;justify-content:center;width:85px;height:85px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-      '.kanban-qr img{width:92%;height:92%}' +
-      '.no-print{padding:12px;background:#1a1f16;color:#fff;position:fixed;top:0;left:0;right:0;z-index:100}' +
-      '.no-print button{padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin-right:8px}' +
-      '@media print{.no-print{display:none}.print-wrapper{padding-top:0 !important}body{background:#fff}}';
+    if (size === 'shop-sheet') {
+      // 8.5"×11": big name on top, large picture, price underneath
+      return shopCss +
+        '.kanban.shop-card{width:7.7in;height:10.2in;border-radius:16px}' +
+        '.kanban-border{border-width:8px;border-radius:16px}' +
+        '.kanban-inner{inset:22px;border-width:5px;border-radius:12px}' +
+        '.shop-content{inset:56px}' +
+        '.shop-name{font-size:60px;padding-bottom:18px;margin-bottom:28px;border-bottom-width:5px}' +
+        '.shop-body{flex-direction:column;justify-content:space-between;gap:36px}' +
+        '.shop-img{width:100%;flex:1;min-height:0;border-width:7px;border-radius:14px;font-size:160px}' +
+        '.shop-price{font-size:72px;padding:18px 70px}';
+    }
+    // 5"×3" and 6"×3": name across the top, picture left, price right
+    var wide = size === 'shop';
+    return shopCss +
+      '.kanban.shop-card{width:' + (wide ? '6in' : '5in') + ';height:3in}' +
+      '.shop-content{inset:26px 28px}' +
+      '.shop-name{font-size:' + (wide ? '26px' : '22px') + ';padding-bottom:6px;margin-bottom:10px}' +
+      '.shop-body{gap:18px}' +
+      '.shop-img{flex:1;height:100%;font-size:56px}' +
+      '.shop-price{font-size:' + (wide ? '32px' : '28px') + ';padding:10px 22px}';
   } else if (size === 'sticker-4x4') {
     // 4" x 4.45" Sticker Mule sticker - uses kanban classes for consistent fonts
     return '@page{size:letter portrait;margin:0.25in}*{box-sizing:border-box;margin:0;padding:0}' +
@@ -2268,7 +2126,7 @@ function getPrintCSS(size) {
 
 function printOneCard(card, size) {
   var allHtml = [];
-  if (size === 'shop-letter' || size === 'shop-portrait' || size === 'shop-small') {
+  if (isShopSize(size)) {
     // Shop card: neutral color, front only, 1 per page
     allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(card, 'neutral', 'front', size) + '</div></div>');
   } else if (size === 'sticker-4x4' || size === 'sticker-4x8') {
@@ -2314,32 +2172,11 @@ function printCards(cards) {
   
   var allHtml = [];
 
-  if (size === 'shop-letter') {
-    // Shop letter: 1 card per page, neutral color, front only
-    cards.forEach(function(c) {
-      allHtml.push('<div class="page"><div class="page-inner">' + cardHtml(c, 'neutral', 'front', size) + '</div></div>');
-    });
-  } else if (size === 'shop-portrait') {
-    // Shop portrait: 2 cards per page in grid
-    for (var i = 0; i < cards.length; i += 2) {
-      var pageCards = '';
-      pageCards += cardHtml(cards[i], 'neutral', 'front', size);
-      if (i + 1 < cards.length) {
-        pageCards += cardHtml(cards[i + 1], 'neutral', 'front', size);
-      }
-      allHtml.push('<div class="page"><div class="page-inner">' + pageCards + '</div></div>');
-    }
-  } else if (size === 'shop-small') {
-    // Shop small: 3 cards per page in grid
-    for (var i = 0; i < cards.length; i += 3) {
-      var pageCards = '';
-      pageCards += cardHtml(cards[i], 'neutral', 'front', size);
-      if (i + 1 < cards.length) {
-        pageCards += cardHtml(cards[i + 1], 'neutral', 'front', size);
-      }
-      if (i + 2 < cards.length) {
-        pageCards += cardHtml(cards[i + 2], 'neutral', 'front', size);
-      }
+  if (isShopSize(size)) {
+    // Shop cards: neutral, front only — 3 per page (5"×3", 6"×3"), 1 per page (8.5"×11")
+    var perPage = size === 'shop-sheet' ? 1 : 3;
+    for (var i = 0; i < cards.length; i += perPage) {
+      var pageCards = cards.slice(i, i + perPage).map(function(c) { return cardHtml(c, 'neutral', 'front', size); }).join('');
       allHtml.push('<div class="page"><div class="page-inner">' + pageCards + '</div></div>');
     }
   } else if (size === 'sticker-4x4' || size === 'sticker-4x8') {
