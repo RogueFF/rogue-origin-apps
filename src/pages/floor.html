@@ -315,8 +315,8 @@
           </div>
           <div class="fill">
             <!-- The bag and its clock are one race, drawn on one ring: the green
-                 arc is what is on the scale now, the gold mark is where the clock
-                 says the bag should be. Green past the mark means it lands early. -->
+                 ring is the weight on the scale, the gold ring inside it is the
+                 time gone. Green further round than gold means it lands early. -->
             <div class="bag">
               <div class="dial" id="scaleBar">
                 <span class="dial-pace" id="bagPace"></span>
@@ -325,6 +325,10 @@
                   <span class="bag-clock"><span class="num" id="timerValue">31:48</span> <small id="timerUnit">left</small></span>
                 </div>
               </div>
+            </div>
+            <div class="dial-key">
+              <span><i class="weight"></i><span data-i18n="ringWeight">Weight on the scale</span></span>
+              <span><i class="time"></i><span data-i18n="ringTime">Time gone</span></span>
             </div>
             <button class="tb-btn primary log" id="logBag" type="button"><svg class="i"><use href="#i-bag"/></svg><span id="logBagText" data-i18n="logBag">Log bag</span></button>
             <p class="sub" id="timerStats"><span class="num">12</span> bags today</p>

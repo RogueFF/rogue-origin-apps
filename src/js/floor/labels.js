@@ -90,6 +90,8 @@ export const LABELS = {
     // The shared topbar's connection pill, written by main.js's version poll.
     // The ledger's own words: the column chart's key, and the save it offers.
     smallsShort: 'sm',
+    ringWeight: 'Weight on the scale',
+    ringTime: 'Time gone',
     legendTops: 'Tops logged',
     legendTarget: 'Target for the hour',
     legendSmalls: 'Smalls are listed under each hour',
@@ -221,6 +223,8 @@ export const LABELS = {
     notSaved: 'Sin guardar',
     enterSaves: 'guarda',
     smallsShort: 'peq',
+    ringWeight: 'Peso en la báscula',
+    ringTime: 'Tiempo transcurrido',
     legendTops: 'Tops registrados',
     legendTarget: 'Meta de la hora',
     legendSmalls: 'Los pequeños se listan bajo cada hora',
