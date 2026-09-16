@@ -81,3 +81,33 @@ test('pollWhatsappMailbox returns [] when the mailbox omits .messages', async ()
     { WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'k' }, {}, fakeFetch);
   assert.deepEqual(messages, []);
 });
+
+// Cloudflare blocks one Worker fetch()-ing another Worker's raw *.workers.dev
+// URL (error 1042) — confirmed live 2026-09-16, the reason the drain never
+// actually worked in production despite every test above passing. The
+// WA_MAILBOX service binding routes around it; these two tests pin the
+// selection logic between an explicit fetchImpl (every test above), the
+// binding, and the plain-fetch fallback.
+
+test('an explicit fetchImpl always wins over a WA_MAILBOX service binding', async () => {
+  let bindingCalled = false;
+  const env = {
+    WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'k',
+    WA_MAILBOX: { fetch: async () => { bindingCalled = true; return new Response('{}', { status: 200 }); } },
+  };
+  const fakeFetch = async () => new Response(JSON.stringify({ messages: [] }), { status: 200 });
+  await pollWhatsappMailbox(env, {}, fakeFetch);
+  assert.equal(bindingCalled, false);
+});
+
+test('with no fetchImpl, a WA_MAILBOX service binding is used over global fetch', async () => {
+  let seenUrl;
+  const env = {
+    WA_MAILBOX_URL: 'https://mailbox.example', WA_MAILBOX_KEY: 'k',
+    WA_MAILBOX: {
+      fetch: async (url) => { seenUrl = url; return new Response(JSON.stringify({ messages: [] }), { status: 200 }); },
+    },
+  };
+  await pollWhatsappMailbox(env, { limit: 5 });
+  assert.equal(seenUrl, 'https://mailbox.example/poll?limit=5');
+});
