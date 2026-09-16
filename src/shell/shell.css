@@ -17,7 +17,7 @@
  * look exactly as they did. Hairlines and 2px bars stay in px; they are the
  * same rule at any size and should not blur.
  */
-html { scroll-behavior: smooth; font-size: clamp(16px, 0.78vw + 6px, 26px); }
+html { scroll-behavior: smooth; font-size: clamp(16px, 0.42vw + 10.6px, 22px); }
 body {
   display: grid;
   grid-template-columns: var(--hub-rail) minmax(0, 1fr);
