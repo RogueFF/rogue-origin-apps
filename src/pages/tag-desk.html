@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
   <title>Supply Kanban · Tag &amp; Desk - Rogue Origin</title>
   <script>
+    (function () {
     try {
       var t = localStorage.getItem('ro-theme');
       if (t !== 'dark' && t !== 'light') {
@@ -27,6 +28,7 @@
       }
       if (t) document.documentElement.setAttribute('data-theme', t);
     } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

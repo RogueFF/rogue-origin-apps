@@ -84,10 +84,12 @@ export function legacyScripts({ root, outDir }) {
           mkdirSync(dirname(emitted), { recursive: true });
           copyFileSync(source, emitted);
           carried.add(relative(root, source).replace(/\\/g, '/'));
-          // Only a hashable asset gets a cache key; a link to another page
-          // keeps the URL people have bookmarked.
+          // Only a hashable asset gets a cache key. Everything else keeps the
+          // URL exactly as written, query string included: the Worker texts
+          // the crew links like kanban.html?flag=<id>, and a build that
+          // quietly dropped the query would send them to the wrong place.
           if (/\.(js|mjs|css)$/i.test(path)) return `${attr}="${path}?h=${hashFile(source)}"`;
-          return query ? `${attr}="${path}"` : tag;
+          return tag;
         });
 
         writeFileSync(page, html);

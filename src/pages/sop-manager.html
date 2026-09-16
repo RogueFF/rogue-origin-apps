@@ -37,6 +37,7 @@
        theme.js resolution order (legacy keys included); theme.js still owns
        writing and migration, so re-applying the same value later is a no-op. -->
   <script>
+    (function () {
     try {
       var t = localStorage.getItem('ro-theme');
       if (t !== 'dark' && t !== 'light') {
@@ -51,6 +52,7 @@
       }
       if (t) document.documentElement.setAttribute('data-theme', t);
     } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
   </script>
   <link rel="stylesheet" href="../css/shared-base.css">
   

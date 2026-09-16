@@ -39,6 +39,9 @@ page is an entry at the path it already has, and nothing moves.
 - [x] The stamp tool, its pre-commit hook, the `?h=` query strings and the
       generated import maps are gone from all fifteen pages. CI runs the build
       and the parity check in their place.
+- [x] `tests/pages-smoke.spec.js`: every page opens, nothing it asks the site
+      for is missing, and nothing throws on load. Run against a served copy via
+      `SMOKE_BASE`. This is the smoke test the deploy workflow gates on.
 - [x] `.github/workflows/deploy.yml`, dormant until the Pages source moves.
 
 ## The service-worker hand-over
@@ -78,8 +81,24 @@ maps removed, the Hub, the Floor Manager and the scoreboard were served raw and
 loaded with no failed requests. So a push before the switch does not break the
 site, and going back is a settings change, not a rebuild.
 
+## A live bug the smoke test found
+
+`src/pages/complaints.html` threw `Identifier 't' has already been declared` on
+load, and had been doing so in production: the pre-paint theme snippet declares
+`var t` at global scope and a later inline block declares `const t`, which is a
+SyntaxError that kills the whole block rather than one line. It failed the same
+way on the untouched source, so the build did not cause it.
+
+Fixed at the source of the class rather than the one collision: the theme
+snippet is wrapped in an IIFE on all eight pages that carry it, so none of its
+variables reach global scope.
+
 ## Verified
 
-Build and parity check pass, lint passes, 565 unit tests pass, and the built
-site was loaded in the browser: the Hub, the Floor Manager and the scoreboard,
-each with no failed requests and the scoreboard's `window` globals intact.
+Build and parity check pass, lint passes, and `npm test` passes exactly as CI
+runs it: 778 tests, harvest included.
+
+All eighteen pages open with nothing missing and nothing thrown, in both ways
+the site can be served: the built output, and the source tree under its
+published path prefix. The Floor Manager's own suite passes against both as
+well, five of five.
