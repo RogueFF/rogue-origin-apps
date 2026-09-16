@@ -65,6 +65,17 @@ database_id = "31397aa4-aa8c-47c4-965d-d51d36be8b13"
 binding = "MEDIA_BUCKET"
 bucket_name = "sop-media"
 
+# Service binding to riego-whatsapp-mailbox (Capataz WhatsApp transport).
+# Cloudflare blocks one Worker from fetch()-ing another Worker's raw
+# *.workers.dev URL (error 1042 / 404) as an anti-loop measure — a service
+# binding calls the target Worker directly within the account, bypassing the
+# public internet entirely. lib/whatsapp-mailbox.js uses this binding when
+# present and falls back to a plain fetch() otherwise (unit tests pass their
+# own fetchImpl and never see this binding).
+[[services]]
+binding = "WA_MAILBOX"
+service = "riego-whatsapp-mailbox"
+
 # CORS configuration
 [vars]
 # Harvest capture: "true" writes every scan as test data and skips Shopify.
