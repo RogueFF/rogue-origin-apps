@@ -3,19 +3,40 @@
  * Inventory Service.
  *
  * All supersacks are ONE Shopify product ("Super Sack Inventory") whose
- * variants are cultivar-years: "2026 - Sour Lifter / Sungrown". Each variant's
- * quantity is a count of sacks on hand. The variant carries a SKU
- * (SLIFT-SG-SUPRSAK-2026) but the pool service does not return it, so matching
- * is by TITLE — the same way the supersack tracker page already does it.
+ * variants are cultivar-year-cuts: "2026 - Sour Lifter / Sungrown / 1st Cut".
+ * Each variant's quantity is a count of sacks on hand. The variant carries a
+ * SKU (SLIFT-SG-C1-SUPRSAK-2026) but the pool service does not return it, so
+ * matching is by TITLE — the same way the supersack tracker page already does.
+ *
+ * THE CUT SPLIT (Koa, 2026-09-16). Until then a variant was a cultivar-year,
+ * "2026 - Sour Lifter / Sungrown". Every 2026 variant was split into 1st Cut
+ * and 2nd Cut — the old variants renamed in place to "/ 1st Cut", new ones
+ * created for "/ 2nd Cut". First cut is the whole plant and second cut is side
+ * branches, so they are different material and different stock. 2025 and older
+ * variants keep the two-part title; the harvest system has no sacks from them.
  *
  * This reuses `update_supersack_inventory` through the existing pool proxy
  * rather than calling Shopify directly. A second write path to the same count
  * would drift from the first, and the proxy already holds the API key.
  */
 
-/** Variant title for a cultivar-year, e.g. "2026 - Sour Lifter / Sungrown". */
-export function variantTitle(season, cultivar, harvestType = 'Sungrown') {
-  return `${season} - ${String(cultivar).trim()} / ${harvestType}`;
+/**
+ * The cut as Super Sack Inventory spells it. Only two exist: a third cut has no
+ * variant, and naming one here would only move the miss somewhere quieter.
+ */
+export function cutLabel(cut) {
+  const n = Number(cut);
+  return n === 1 ? '1st Cut' : n === 2 ? '2nd Cut' : null;
+}
+
+/**
+ * Variant title for a cultivar-year, e.g. "2026 - Sour Lifter / Sungrown", and
+ * with a cut "2026 - Sour Lifter / Sungrown / 1st Cut".
+ */
+export function variantTitle(season, cultivar, harvestType = 'Sungrown', cut = null) {
+  const base = `${season} - ${String(cultivar).trim()} / ${harvestType}`;
+  const label = cutLabel(cut);
+  return label ? `${base} / ${label}` : base;
 }
 
 /**
@@ -59,8 +80,8 @@ export function findVariant(variants, title) {
 }
 
 /**
- * Variant titles this cultivar is EXPLICITLY known by, for one season and one
- * harvest type.
+ * Variant titles this cultivar is EXPLICITLY known by, for one season, one
+ * harvest type and one cut.
  *
  * The website does not always carry the farm's name for a cultivar — "Rainbow
  * GMO Quik" is listed as "Rainbow GMO" (Koa, 2026-09-09) — so an exact title
@@ -78,14 +99,21 @@ export function findVariant(variants, title) {
  * for this and the allocation path already reads it, so one row fixes both the
  * count and the weights.
  *
- * The season and harvest-type filters are the second guard: a 2025 alias can
- * never satisfy a 2026 request, and a Greenhouse title can never satisfy a
- * Sungrown one, whatever anyone puts in the table.
+ * An alias names the CULTIVAR, so it may be recorded without a cut ("2026 -
+ * Rainbow GMO / Sungrown") and the sack's cut is added to it; one row then
+ * serves both cuts, and the rows recorded before the split keep working. An
+ * alias recorded WITH a cut is used only for that cut.
+ *
+ * The season, harvest-type and cut filters are the second guard: a 2025 alias
+ * can never satisfy a 2026 request, a Greenhouse title never satisfies a
+ * Sungrown one, and a 2nd Cut title never satisfies a 1st Cut bag, whatever
+ * anyone puts in the table.
  */
-async function aliasedTitles(db, season, cultivar, harvestType) {
+async function aliasedTitles(db, season, cultivar, harvestType, label) {
   if (!db) return [];
   const head = `${season} - `.toLowerCase();
-  const tail = ` / ${harvestType}`.toLowerCase();
+  const base = ` / ${harvestType}`.toLowerCase();
+  const full = `${base} / ${label}`.toLowerCase();
   let rows;
   try {
     rows = await db.prepare(`
@@ -96,49 +124,98 @@ async function aliasedTitles(db, season, cultivar, harvestType) {
   } catch { return []; }
   return (rows?.results || [])
     .map(r => String(r.alias || '').trim())
-    .filter(t => {
+    .filter(t => t.toLowerCase().startsWith(head))
+    .map(t => {
       const k = t.toLowerCase();
-      return k.startsWith(head) && k.endsWith(tail);
-    });
+      if (k.endsWith(full)) return t;
+      if (k.endsWith(base)) return `${t} / ${label}`;
+      return null;
+    })
+    .filter(Boolean);
 }
 
 /**
- * Move a cultivar-year's sack count. `delta` is signed: -1 when a bag is
- * opened, +1 to put one back.
+ * The variant a sack of this cultivar, zone and cut counts on, from a variant
+ * list already fetched. Returns { variant, title, matchedBy, error }: exactly
+ * one of `variant` and `error` is set.
+ */
+export async function matchSupersackVariant(variants, db, { season, cultivar, zone, cut }) {
+  const harvestType = harvestTypeForZone(zone);
+  const label = cutLabel(cut);
+  if (!label) {
+    return { variant: null, title: null, matchedBy: null,
+      error: `No Super Sack Inventory variant exists for cut ${cut ?? '?'} — there are 1st Cut and 2nd Cut variants only.` };
+  }
+  const title = variantTitle(season, cultivar, harvestType, cut);
+
+  const exact = findVariant(variants, title);
+  if (exact) return { variant: exact, title, matchedBy: 'name', error: null };
+
+  const hits = new Map();
+  for (const t of await aliasedTitles(db, season, cultivar, harvestType, label)) {
+    const hit = findVariant(variants, t);
+    if (hit) hits.set(hit.id, hit);
+  }
+  if (hits.size === 1) return { variant: [...hits.values()][0], title, matchedBy: 'alias', error: null };
+  if (hits.size > 1) {
+    // Two recorded names both landing on real variants is a data problem,
+    // not a tie to break. Picking one would put bags on the wrong count.
+    return { variant: null, title, matchedBy: null,
+      error: `"${cultivar}" has ${hits.size} aliased ${season} ${harvestType} ${label} variants — refusing to guess which.` };
+  }
+  return { variant: null, title, matchedBy: null,
+    error: `No Super Sack Inventory variant titled "${title}", and no alias recorded for one. Rename the variant in Shopify, or add a cultivar_aliases row for the title it does have.` };
+}
+
+/**
+ * Would a tag printed for this lot move a count? Asked at Start takedown,
+ * before a serial is spent — the miss is otherwise silent: the tag prints, the
+ * sack saves, and only a column on the sack row knows the count never moved.
+ *
+ * Returns { ok: true, title } | { ok: false, error } | { ok: null, error } when
+ * the check itself could not run. Never throws.
+ */
+export async function checkSupersackVariant(env, db, lot) {
+  try {
+    const variants = await listSupersackVariants(env);
+    const m = await matchSupersackVariant(variants, db, lot);
+    return m.variant ? { ok: true, title: m.variant.title, error: null } : { ok: false, title: m.title, error: m.error };
+  } catch (e) {
+    return { ok: null, title: null, error: String(e.message || e).slice(0, 300) };
+  }
+}
+
+/**
+ * Move a sack count. `delta` is signed: -1 when a bag is opened, +1 to put one
+ * back.
+ *
+ * `variantId` is where an earlier move for this sack LANDED. A void or an
+ * opening undoes or debits exactly that variant, whatever it is called now —
+ * re-matching by title is how a rename sends a correction to a different count.
+ * If that variant is gone, the move is refused rather than re-matched.
  *
  * Returns { ok, variantId, matchedBy, error }. Never throws — the caller has
  * already recorded a measurement it must not lose over a bookkeeping call.
  */
-export async function adjustSupersackCount(env, { season, cultivar, zone, delta, note, db = null }) {
-  const harvestType = harvestTypeForZone(zone);
-  const title = variantTitle(season, cultivar, harvestType);
+export async function adjustSupersackCount(env, { season, cultivar, zone, cut, delta, note, db = null, variantId = null }) {
   try {
     const variants = await listSupersackVariants(env);
-    let v = findVariant(variants, title);
-    let matchedBy = 'name';
+    let v, matchedBy;
 
-    if (!v) {
-      const titles = await aliasedTitles(db, season, cultivar, harvestType);
-      const hits = new Map();
-      for (const t of titles) {
-        const hit = findVariant(variants, t);
-        if (hit) hits.set(hit.id, hit);
-      }
-      if (hits.size === 1) {
-        v = [...hits.values()][0];
-        matchedBy = 'alias';
-      } else if (hits.size > 1) {
-        // Two recorded names both landing on real variants is a data problem,
-        // not a tie to break. Picking one would put bags on the wrong count.
+    if (variantId) {
+      v = variants.find(x => String(x.id) === String(variantId)) || null;
+      matchedBy = 'id';
+      if (!v) {
         return { ok: false, variantId: null, matchedBy: null,
-          error: `"${cultivar}" has ${hits.size} aliased ${season} ${harvestType} variants — refusing to guess which.` };
+          error: `The Super Sack Inventory variant this sack was counted on (${variantId}) no longer exists — refusing to move a different one.` };
       }
+    } else {
+      const m = await matchSupersackVariant(variants, db, { season, cultivar, zone, cut });
+      if (!m.variant) return { ok: false, variantId: null, matchedBy: null, error: m.error };
+      v = m.variant;
+      matchedBy = m.matchedBy;
     }
 
-    if (!v) {
-      return { ok: false, variantId: null, matchedBy: null,
-        error: `No Super Sack Inventory variant titled "${title}", and no alias recorded for one. Rename the variant in Shopify, or add a cultivar_aliases row for the title it does have.` };
-    }
     await poolCall(env, 'update_supersack_inventory', {
       variantId: v.id,
       inventoryItemId: v.inventoryItemId,

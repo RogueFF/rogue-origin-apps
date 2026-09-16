@@ -54,7 +54,7 @@ import { cultivarsFor, isMultiCultivar, isHarvestTracked,
   cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
-import { adjustSupersackCount, listSupersackVariants, variantTitle, harvestTypeForZone } from '../lib/supersack-inventory.js';
+import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
@@ -1274,9 +1274,13 @@ async function handleSackSession(ui, db, env, input) {
   const bay = parseBay(input.bay, ui);
   const storage = parseStorage(input.storage, ui);
   const finishedAt = await getLotFinish(db, lot);
+  // Will these tags move a Super Sack count? Asked here, before a serial is
+  // spent, because a miss is otherwise silent until someone reconciles.
+  const variantCheck = isTest ? null : await checkSupersackVariant(env, db, {
+    season: lot.season || getSeason(), cultivar, zone: lot.zone, cut: lot.cut_number });
 
   return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, bay, storage, finishedAt }));
+    sackSessionBody(ui, { lot, cultivar, stats, bay, storage, finishedAt, variantCheck }));
 }
 
 async function requireLot(db, sessionId) {
@@ -1464,7 +1468,7 @@ async function handleSackAlloc(db, env, ctx, body) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
-        season, cultivar, zone: lot.zone, delta: qty,
+        season, cultivar, zone: lot.zone, cut: lot.cut_number, delta: qty,
         note: `[Harvest] ${qty} tag${qty === 1 ? '' : 's'} printed — ${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''} (${lot.zone} cut ${lot.cut_number})`,
       });
       const ph = ids.map(() => '?').join(',');
@@ -1517,7 +1521,9 @@ async function handleSackVoid(db, env, ctx, body) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
-        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
+        // Where this sack's +1 landed, so the -1 takes it off the same count.
+        variantId: sack.shopify_variant_id, delta: -1,
         note: `[Harvest] ${sackId} voided — tag retired with no sack`,
       });
       await execute(db, `
@@ -1642,7 +1648,9 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
-        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
+        // Where this sack's +1 landed, so the -1 takes it off the same count.
+        variantId: sack.shopify_variant_id, delta: -1,
         note: `[Harvest] ${sackId} opened — ${tops} lb tops / ${smalls} lb smalls (${sack.zone} cut ${sack.cut_number})`,
       });
       await execute(db, `
@@ -1999,7 +2007,9 @@ async function handleSackOpen(ui, db, env, ctx, body) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
-        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, delta: -1,
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
+        // Where this sack's +1 landed, so the -1 takes it off the same count.
+        variantId: sack.shopify_variant_id, delta: -1,
         note: `[Harvest] ${sackId} opened (${sack.zone} cut ${sack.cut_number})`,
       });
       await execute(db, `
@@ -2561,15 +2571,15 @@ async function getReconcile(db, env, params) {
   const season = parseInt(params.season, 10) || getSeason();
 
   const rows = await query(db, `
-    SELECT cultivar, zone,
+    SELECT cultivar, zone, cut_number,
            COUNT(*) AS tagged,
            SUM(CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END) AS unopened,
            SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened,
            SUM(CASE WHEN opened_at IS NOT NULL AND shopify_synced_at IS NULL THEN 1 ELSE 0 END) AS unsynced
     FROM harvest_sacks
     WHERE season = ? AND is_test = ? AND voided_at IS NULL
-    GROUP BY cultivar, CASE WHEN zone LIKE 'GH%' THEN 'GH' ELSE 'FIELD' END
-    ORDER BY cultivar
+    GROUP BY cultivar, CASE WHEN zone LIKE 'GH%' THEN 'GH' ELSE 'FIELD' END, cut_number
+    ORDER BY cultivar, cut_number
   `, [season, isTest]);
 
   let variants = [];
@@ -2577,17 +2587,20 @@ async function getReconcile(db, env, params) {
   try { variants = await listSupersackVariants(env); }
   catch (e) { variantsError = String(e.message || e); }
 
-  const byTitle = new Map(variants.map(v =>
-    [String(v.title || '').trim().toLowerCase().replace(/\s+/g, ' '), v]));
-
-  const lines = rows.map(r => {
-    const title = variantTitle(season, r.cultivar, harvestTypeForZone(r.zone));
-    const v = byTitle.get(title.toLowerCase().replace(/\s+/g, ' '));
+  // Per cut, through the same matcher (aliases included) that moves the count —
+  // a reconcile that matched differently would report drift that isn't there.
+  const lines = await Promise.all(rows.map(async r => {
+    const m = await matchSupersackVariant(variants, db,
+      { season, cultivar: r.cultivar, zone: r.zone, cut: r.cut_number });
+    const v = m.variant;
+    const title = v ? v.title : m.title;
     const shopify = v ? Number(v.quantity) || 0 : null;
     return {
       cultivar: r.cultivar,
+      cut: r.cut_number,
       variant_title: title,
       variant_exists: !!v,
+      match_error: v ? null : m.error,
       tagged: r.tagged,
       unopened: r.unopened,
       opened: r.opened,
@@ -2596,7 +2609,7 @@ async function getReconcile(db, env, params) {
       // Our unopened bags should equal what Shopify says is on hand.
       drift: shopify === null ? null : r.unopened - shopify,
     };
-  });
+  }));
 
   return successResponse({
     success: true,
@@ -4064,7 +4077,7 @@ ${finishedHtml}
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null, finishedAt = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null, finishedAt = null, variantCheck = null }) {
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -4085,7 +4098,13 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
     <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
   </form>
 </div>` : '';
-  return `${notice}
+  // Printing still works when there is no variant — a Shopify gap must not stop
+  // a takedown — but the crew lead sees it on the first screen, not months later.
+  // A check that could not run (ok === null) stays quiet: an outage is not news
+  // about this lot.
+  const variantWarn = variantCheck?.ok === false ? `
+<div class="notice">⚠️ ${ui.t('variantMissing', { e: escapeHtml(variantCheck.error) })}</div>` : '';
+  return `${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>

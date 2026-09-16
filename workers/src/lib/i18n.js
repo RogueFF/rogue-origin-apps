@@ -147,6 +147,7 @@ const S = {
     lotReopened: '{lot} reabierto — ya está otra vez en la lista de bajada.',
     lotFinishedNotice: 'Este lote se marcó terminado el {date}. Reábrelo para imprimir más etiquetas.',
     noOpenLots: 'Todos los lotes de los últimos {n} días están terminados. Escanea una zona, o reabre un lote abajo.',
+    variantMissing: 'Las etiquetas se imprimen, pero el conteo de Super Sacks en Shopify <strong>no va a cambiar</strong>. Avísale a Koa: {e}',
 
     // — sack detail —
     sack: 'Bolsa',
@@ -375,6 +376,7 @@ const S = {
     lotReopened: '{lot} reopened — it is back on the takedown list.',
     lotFinishedNotice: 'This lot was marked finished on {date}. Reopen it to print more tags.',
     noOpenLots: 'Every lot from the last {n} days is marked finished. Scan a zone QR, or reopen a lot below.',
+    variantMissing: 'Tags will print, but the Shopify Super Sack count <strong>will not move</strong>. Tell Koa: {e}',
 
     sack: 'Sack',
     zoneCut: 'Zone <strong>{zone}</strong> · Cut {n}',
