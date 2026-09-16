@@ -142,3 +142,34 @@ test('a cutter count tapped from a scanned sign is actually recorded', async () 
   const row = sqlite.prepare("SELECT headcount FROM harvest_scan_log WHERE event_type='enter'").get();
   assert.equal(row.headcount, 6, 'the tap must record the count, not just look like it did');
 });
+
+// ─── the tools home ──────────────────────────────────────────────────────────
+
+test('the tools home links every harvest page, and never links a scan that writes a record', async () => {
+  // Koa, 2026-09-16: "a dashboard/ect that has all these accessible through it".
+  const { env, ctx } = freshDb();
+  const res = await handleHarvestD1(new Request('https://x/api/harvest?action=hub&lang=en'), env, ctx);
+  assert.equal(res.status, 200);
+  const html = await res.text();
+
+  for (const href of [
+    '/api/harvest?action=sack_print&lang=en', '/api/harvest?action=find&lang=en', '/b?lang=en',
+    '/api/harvest?action=crew&lang=en', '/api/harvest?action=print_codes&lang=en',
+    '/api/harvest?action=sack_label&examples=1&lang=en', '/api/harvest?action=harvest_dash',
+    '/api/harvest?action=board_page',
+  ]) {
+    assert.ok(html.includes(`href="${href}"`), `links ${href}`);
+  }
+  assert.match(html, /<form class="hub-search" method="GET" action="\/api\/harvest">[\s\S]*name="action" value="find"/,
+    'a Find box right on the page');
+
+  // Opening these writes a record — a zone session, a day-end close, a crew tag
+  // on the phone — so they are named, never linked.
+  assert.doesNotMatch(html, /href="\/z\/|href="\/fin|href="\/c\//);
+  assert.match(html, /<code>\/z\/Z8<\/code>/);
+  assert.equal((html.match(/SCAN ONLY/g) || []).length, 4);
+
+  const es = await handleHarvestD1(new Request('https://x/api/harvest?action=hub&lang=es'), env, ctx).then(r => r.text());
+  assert.match(es, /Herramientas de cosecha/);
+  assert.match(es, /Imprimir etiquetas/);
+});
