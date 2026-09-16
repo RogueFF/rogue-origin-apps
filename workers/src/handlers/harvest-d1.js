@@ -4145,6 +4145,11 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
   <div id="lastActions" class="lastActions" ${stats.lastSackId ? '' : 'hidden'}>
     <a id="reprintLink" class="mini" href="#">${ui.t('reprint')}</a>
     <a id="voidLink" class="mini danger" href="#">${ui.t('void')}</a>
+    <!-- A note belongs to one bag, and lives on that bag's page (Koa, 2026-09-16:
+         "i dont see a spot to add notes to a specific tag"). A new tab, so the
+         takedown screen stays up for the next sack. -->
+    <a id="noteLink" class="mini" target="_blank" rel="noopener"
+       href="${stats.lastSackId ? `/s/${encodeURIComponent(stats.lastSackId)}?lang=${ui.lang}#sack-notes` : '#'}">${ui.t('addNote')}</a>
   </div>
 </div>
 
@@ -4189,6 +4194,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var actions = document.getElementById('lastActions');
   var reprint = document.getElementById('reprintLink');
   var voidLink = document.getElementById('voidLink');
+  var noteLink = document.getElementById('noteLink');
   var lastId = ${stats.lastSackId ? JSON.stringify(stats.lastSackId) : 'null'};
   var busy = false;
   var locked = ${finishedAt ? 'true' : 'false'};   // lot finished: no printing until it is reopened
@@ -4209,6 +4215,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       lastEl.innerHTML = T.lastTag.replace('{id}', lastId);
       actions.hidden = false;
       reprint.href = '${API}?action=sack_label&id=' + encodeURIComponent(lastId);
+      noteLink.href = '/s/' + encodeURIComponent(lastId) + '?lang=${ui.lang}#sack-notes';
     } else {
       lastEl.textContent = T.noTagsYet;
       actions.hidden = true;
@@ -5101,7 +5108,7 @@ ${areaRow}
 <section class="sd-panel sd-notes" aria-labelledby="sack-notes">
 <h2 id="sack-notes">${ui.t('secNotes')}</h2>
 ${noteList}
-<details class="batch">
+<details class="batch" id="addNoteBox">
   <summary>${ui.t('addNote')}</summary>
   <form method="POST" action="/api/harvest?action=sack_note&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
@@ -5109,6 +5116,14 @@ ${noteList}
     <button class="btn" type="submit">${ui.t('saveNote')}</button>
   </form>
 </details>
+<script>
+  // Arriving from the takedown screen's "Add note" (#sack-notes): open the box
+  // and put the cursor in it, so the note is one tap away rather than three.
+  if (location.hash === '#sack-notes') {
+    var box = document.getElementById('addNoteBox');
+    if (box) { box.open = true; var f = box.querySelector('input[name=note]'); if (f) f.focus(); }
+  }
+</script>
 
 </section>
 <div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>

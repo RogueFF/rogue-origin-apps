@@ -271,6 +271,25 @@ test('finishing touches no sack — not its storage, void state or inventory fie
 
 // ─── the takedown screen ─────────────────────────────────────────────────────
 
+test('the takedown screen links the last tag to its notes, which open ready to type', async () => {
+  // Koa, 2026-09-16: "i dont see a spot to add notes to a specific tag".
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  assert.doesNotMatch(await sessionScreen(env, ctx, lot), /id="noteLink"[^>]*href="\/s\//, 'no tag yet, nothing to note');
+
+  await tagged(env, ctx, lot, 2);
+  const html = await sessionScreen(env, ctx, lot);
+  assert.match(html, new RegExp(`id="noteLink" class="mini" target="_blank" rel="noopener"\\s+href="/s/${yy}-SLIFT-2\\?lang=en#sack-notes">Add note</a>`));
+  assert.match(html, /noteLink\.href = '\/s\/' \+ encodeURIComponent\(lastId\)/, 'and it follows the next print');
+
+  const { handleSackScan } = await import(
+    join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///'));
+  const page = await handleSackScan(new Request(`https://x/s/${yy}-SLIFT-2?lang=en`), env, ctx).then(r => r.text());
+  assert.match(page, /<details class="batch" id="addNoteBox">/);
+  assert.match(page, /location\.hash === '#sack-notes'/);
+});
+
 test('the last tag is the newest one, not the highest id as text — Void acts on it', async () => {
   // Found verifying this screen on the live Rainbow GMO Quik lot: with tags
   // #1-#20 it named #4 as the last tag, because "…-4" > "…-20" as text.
