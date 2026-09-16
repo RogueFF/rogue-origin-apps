@@ -178,6 +178,8 @@ const S = {
     addNote: 'Agregar nota', notePlaceholder: 'ej. mancha mojada en el fondo',
     saveNote: 'Guardar nota', noNotes: 'Sin notas todavía.',
     noteSaved: 'Nota guardada.', noteEmpty: 'Escribe algo antes de guardar.',
+    noteFor: 'Nota para la etiqueta <strong>#&nbsp;{id}</strong>', noteCancel: 'Cancelar',
+    noteSavedOn: '✓ Nota guardada en <strong>#&nbsp;{id}</strong>', noteFailed: 'No se pudo guardar la nota: {e}',
     approx: 'aprox.',
     // — sack scan page: state pill, tiles, journey, weights bar —
     stateUnopened: 'SIN ABRIR', stateOpened: 'ABIERTA', stateVoided: 'ANULADA',
@@ -405,6 +407,8 @@ const S = {
     addNote: 'Add note', notePlaceholder: 'e.g. wet spot at the bottom',
     saveNote: 'Save note', noNotes: 'No notes yet.',
     noteSaved: 'Note saved.', noteEmpty: 'Write something before saving.',
+    noteFor: 'Note for tag <strong>#&nbsp;{id}</strong>', noteCancel: 'Cancel',
+    noteSavedOn: '✓ Note saved on <strong>#&nbsp;{id}</strong>', noteFailed: 'Could not save the note: {e}',
     approx: 'approx.',
     stateUnopened: 'NOT OPENED', stateOpened: 'OPENED', stateVoided: 'VOIDED',
     kSinceCut: 'Since cut', kInLot: 'In the lot', kSacks: 'sacks', kSack: 'sack',
