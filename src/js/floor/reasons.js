@@ -70,7 +70,7 @@ export function parseNotes(qcNotes) {
   }
 
   // Always report reason ids in REASONS order, not the order they appeared
-  // in the note — the reason chips render in that fixed order too.
+  // in the note, so a saved reason line composes back the same every time.
   const reasons = REASONS.filter((r) => reasonIds.includes(r.id)).map((r) => r.id);
   return { reasons, text: textLines.join('\n'), brackets };
 }

@@ -302,22 +302,6 @@ select.select option, select.select optgroup { background: var(--surface); color
 .big-in:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
 .big-in input:focus-visible { outline: 0; }
 
-/* commentary - one row: the question, the reasons, and the note taking the rest */
-.reasons { display: flex; align-items: center; flex-wrap: wrap; gap: 0.375rem 0.375rem; }
-.reasons p { flex: 0 0 auto; margin: 0; font-size: 0.75rem; color: var(--ink-2); white-space: nowrap; }
-/* The reason toggles are their own control, not the topbar's segmented .chip:
-   any number of them can be on at once. */
-#chips { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.rchip {
-  display: inline-flex; align-items: center; gap: 0.375rem;
-  height: 2.125rem; padding: 0 0.4375rem; border-radius: var(--fl-r-ctl);
-  border: 1px solid var(--line-strong);
-  font-size: 0.75rem; color: var(--ink-2); white-space: nowrap;
-}
-.rchip:hover { color: var(--ink); border-color: var(--ink-3); transform: none; box-shadow: none; }
-.rchip[aria-pressed="true"] { background: var(--good-bg); border-color: var(--fl-fill); color: var(--ink); }
-.rchip svg.i { width: 0.8125rem; height: 0.8125rem; color: var(--fl-fill); display: none; }
-.rchip[aria-pressed="true"] svg.i { display: block; }
 .note-box {
   flex: 1 1 11rem; min-width: 0;
   display: flex; align-items: center;

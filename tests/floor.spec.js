@@ -249,16 +249,23 @@ test.describe('Floor Manager', () => {
   test('the ES button translates the page', async ({ page }) => {
     await open(page);
 
-    await expect(page.locator('#reasonsLead')).toHaveText('Why? (optional)');
+    await expect(page.locator('#saveHour')).toHaveText('Save hour');
+    await expect(page.locator('#note')).toHaveAttribute('placeholder', 'Notes');
     await page.locator('#langBtn').click();
 
-    await expect(page.locator('#reasonsLead')).toHaveText('¿Por qué? (opcional)');
-    await expect(page.locator('#chips .rchip').first()).toContainText('máquina parada');
+    await expect(page.locator('#saveHour')).toHaveText('Guardar hora');
+    await expect(page.locator('#note')).toHaveAttribute('placeholder', 'Notas');
     // The hour title is a clock reading, not a phrase — it stays put.
     await expect(page.locator('#hourTitle')).toHaveText('10–11 AM');
 
     await page.locator('#langBtn').click();
-    await expect(page.locator('#reasonsLead')).toHaveText('Why? (optional)');
+    await expect(page.locator('#saveHour')).toHaveText('Save hour');
+  });
+
+  test('there are no reason chips — a problem is written in the note by hand', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#chips, .rchip, #reasonsLead')).toHaveCount(0);
+    await expect(page.locator('#note')).toBeVisible();
   });
 
   test('with no shift start the ribbon shows all ten hours', async ({ page }) => {
