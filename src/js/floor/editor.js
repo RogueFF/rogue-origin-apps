@@ -644,6 +644,11 @@ export function initEditor({ els, t, saver, onNavigate, targetFor, getContext } 
   return {
     load,
     form,
+    /** Send this hour now: what Enter does, for the button that says so. */
+    save() {
+      maybeSchedule();
+      if (saver) saver.flush();
+    },
     snapshot,
     payload,
     setTarget,

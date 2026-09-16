@@ -88,6 +88,18 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
 
     els.timerTile.dataset.kind = reading.kind;
 
+    // Where the clock says the bag should be by now. The gauge draws it as a
+    // line across the weight, so the two are read against each other: the
+    // manager's question is not "how long left" but "will it be full in time".
+    const gone = targetSeconds > 0 && reading.kind === 'remaining'
+      ? ((targetSeconds - reading.seconds) / targetSeconds) * 100
+      : (reading.kind === 'overtime' ? 100 : 0);
+    if (els.bagPace) {
+      const running = reading.kind === 'remaining' || reading.kind === 'overtime';
+      els.bagPace.hidden = !running || targetSeconds <= 0;
+      els.bagPace.style.bottom = `${Math.max(0, Math.min(100, gone))}%`;
+    }
+
     // Off shift there is no countdown to show. What the tile can honestly
     // say is when the last bag went — if one went today — and that the day
     // is over (or has not begun). A frozen "22:48" beside "shift ended" read
@@ -120,7 +132,7 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
     els.scaleValue.classList.toggle('off', stale);
     if (stale) {
       els.scaleValue.textContent = t('scaleOffline');
-      els.scaleBar.firstElementChild.style.width = '0%';
+      els.scaleBar.firstElementChild.style.height = '0%';
       // Scale offline never blocks logging — flag it, do not disable anything.
       els.logBag.title = t('scaleOfflineNote');
       return;
@@ -128,7 +140,7 @@ export function initTimer({ els, api, t, getShiftStart, onLogged }) {
 
     const grams = Math.round((lastScale.weight || 0) * 1000);
     els.scaleValue.textContent = `${grams.toLocaleString('en-US')} g`;
-    els.scaleBar.firstElementChild.style.width = `${lastScale.percentComplete || 0}%`;
+    els.scaleBar.firstElementChild.style.height = `${Math.min(100, lastScale.percentComplete || 0)}%`;
 
     const gate = bagMode === '10lb' ? GATE_10LB : GATE_5KG;
     els.logBag.title = (grams < gate.min || grams > gate.max)

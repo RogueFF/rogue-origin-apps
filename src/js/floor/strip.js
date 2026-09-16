@@ -39,35 +39,36 @@ function rowSmalls(row) {
 }
 
 /**
- * What ran this hour, as a name. The stored value carries the grow method and
- * crop year ("2025 - Lifter / Sungrown"); a column this narrow only has room
- * for the name, and a second line running something else is a "+1".
+ * What ran this hour, on two lines: the cultivar, and how it was grown. The
+ * stored value carries both plus the crop year ("2025 - Lifter / Sungrown"),
+ * and the year is the one part a manager reading the day does not need. A
+ * second line running something else is a "+1".
  */
-function cultivarText(row) {
-  const first = row?.cultivar1 ? cultivarParts(row.cultivar1).name : '';
-  if (!first) return '';
+function cultivarLines(row) {
+  if (!row?.cultivar1) return ['—', ''];
+  const first = cultivarParts(row.cultivar1);
   const second = rowHasLine2(row) && row?.cultivar2 ? cultivarParts(row.cultivar2).name : '';
-  return second && second !== first ? `${first} +1` : first;
+  const name = second && second !== first.name ? `${first.name} +1` : first.name;
+  return [name, first.grow];
 }
 
 /**
  * Where the green fill and the gold target mark sit inside a column's bar.
  *
- * The bar is scaled to whichever is larger, the pounds or the target, so an
- * hour that beat its target shows green running past the gold mark rather
- * than pinned flat at 100%. An hour with pounds but no target (no trimmers
- * logged yet) is full green and carries no mark.
+ * `scale` is the day's, not the hour's: every column is drawn against the
+ * largest number anywhere on the day, so the columns read as one chart and a
+ * tall hour looks tall. Scaling each bar to its own target instead would make
+ * a 5 lb hour that met target look identical to a 15 lb one.
  */
-function barGeometry(tops, target) {
-  const scale = Math.max(tops, target);
+function barGeometry(tops, target, scale) {
   if (scale <= 0) return { fill: 0, target: null };
   return {
-    fill: (tops / scale) * 100,
-    target: target > 0 ? (target / scale) * 100 : null,
+    fill: Math.min(100, (tops / scale) * 100),
+    target: target > 0 ? Math.min(100, (target / scale) * 100) : null,
   };
 }
 
-function buildColumn({ slot, index, slots, row, target, isOpen, isSelected, pending, t }) {
+function buildColumn({ slot, index, slots, row, target, scale, isOpen, isSelected, pending, t }) {
   const tops = rowTops(row);
   const smalls = rowSmalls(row);
   const state = tickState({ row, target, isOpen });
@@ -93,16 +94,23 @@ function buildColumn({ slot, index, slots, row, target, isOpen, isSelected, pend
   }
 
   btn.appendChild(el('span', 't-hour', tickLabel(slot, index, slots)));
-  btn.appendChild(el('span', 't-cv', cultivarText(row)));
 
-  const geometry = barGeometry(tops, target);
+  const [name, grow] = cultivarLines(row);
+  const cv = el('span', 't-cv');
+  cv.appendChild(el('span', 't-cv-name', name));
+  if (grow) cv.appendChild(el('span', 't-cv-grow', grow));
+  btn.appendChild(cv);
+
+  // The bar is the column: pounds rising from the floor, and the target as a
+  // line across it. Where the green stops against that line is the hour.
+  const geometry = barGeometry(tops, target, scale);
   const bar = el('span', 't-bar');
   const fill = el('span', 't-fill');
-  fill.style.width = `${geometry.fill}%`;
+  fill.style.height = `${geometry.fill}%`;
   bar.appendChild(fill);
   if (geometry.target != null) {
     const mark = el('span', 't-tgt');
-    mark.style.left = `${geometry.target}%`;
+    mark.style.bottom = `${geometry.target}%`;
     bar.appendChild(mark);
   }
   btn.appendChild(bar);
@@ -111,15 +119,13 @@ function buildColumn({ slot, index, slots, row, target, isOpen, isSelected, pend
   // em dash, never a zero.
   const topsRow = el('span', 't-tops');
   topsRow.appendChild(el('span', 'num', tops > 0 ? num(tops) : '—'));
-  if (target > 0) topsRow.appendChild(el('span', 't-of', `/ ${num(target)}`));
   btn.appendChild(topsRow);
+  btn.appendChild(el('span', 't-of', target > 0 ? `/ ${num(target)}` : ''));
 
   // Smalls are listed per hour but never added into the day's total, which is
-  // tops only — the one number the shift is judged on.
-  const smallsRow = el('span', 't-smalls');
-  smallsRow.appendChild(document.createTextNode(`${t('smalls')} `));
-  smallsRow.appendChild(el('span', 'num', smalls > 0 ? num(smalls) : '—'));
-  btn.appendChild(smallsRow);
+  // tops only — the one number the shift is judged on. The line keeps its
+  // height when the hour has none, so the columns stay on one baseline.
+  btn.appendChild(el('span', 't-smalls', smalls > 0 ? `+${num(smalls)} ${t('smallsShort')}` : ''));
 
   return btn;
 }
@@ -152,6 +158,14 @@ export function renderStrip(host, {
   onSelect = () => {},
 } = {}) {
   const pending = new Set(pendingKeys);
+
+  // One scale for the whole day, so the columns read as a single chart: the
+  // tallest thing anywhere on the day, whether that is pounds or a target.
+  let scale = 0;
+  for (const slot of slots) {
+    if (!isVisible(slot)) continue;
+    scale = Math.max(scale, rowTops(dayData[slot]), targetFor(slot) || 0);
+  }
 
   // The rebuild below throws away every node, focus included. Remember which
   // column had it by index (not by node, which is about to be gone) so a
@@ -186,6 +200,7 @@ export function renderStrip(host, {
       slots,
       row,
       target,
+      scale,
       isOpen,
       isSelected: index === selectedIndex,
       pending: pending.has(`${dateKey}|${slot}`),

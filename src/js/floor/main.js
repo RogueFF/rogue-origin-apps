@@ -475,6 +475,10 @@ const drawer = initDrawer({ els, api, t });
 els.prevHour.addEventListener('click', () => moveSlot(-1));
 els.nextHour.addEventListener('click', () => moveSlot(1));
 
+// The hour saves itself as it is typed and Enter sends it immediately; the
+// button is for the manager who wants to be told so, and takes the same path.
+els.saveHour.addEventListener('click', () => { if (editor) editor.save(); });
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
   const delta = e.key === 'ArrowRight' ? 1 : -1;

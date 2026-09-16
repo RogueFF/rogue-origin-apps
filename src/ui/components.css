@@ -8,7 +8,7 @@
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -17,18 +17,18 @@
 .hidden { display: none !important; }
 
 /* ---------- status dot ---------- */
-.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 var(--good); }
+.pulse-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 var(--good); }
 .pulse-dot.live { animation: pulse 2.4s ease-out infinite; }
 .pulse-dot.off { background: var(--bad); }
 .pulse-dot.idle { background: var(--ink-3); }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(127, 191, 149, 0); } 100% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0); } }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0.5); } 70% { box-shadow: 0 0 0 0.5rem rgba(127, 191, 149, 0); } 100% { box-shadow: 0 0 0 0 rgba(127, 191, 149, 0); } }
 
 /* ---------- chips ---------- */
-.chips { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.chips { display: flex; gap: 0.25rem; padding: 0.1875rem; border-radius: 0.5rem; background: var(--surface-2); border: 1px solid var(--line); }
 .chip {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
   color: var(--ink-2);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -39,91 +39,91 @@
 .tb-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 8px;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.75rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--ink-2);
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 .tb-btn:hover { color: var(--ink); }
 .tb-btn:active { transform: scale(0.98); }
-.tb-btn svg { width: 14px; height: 14px; }
+.tb-btn svg { width: 0.875rem; height: 0.875rem; }
 .tb-btn.primary { background: var(--ro-green); border-color: var(--ro-green); color: #fff; }
 .tb-btn.primary:hover { color: #fff; filter: brightness(1.06); }
 .tb-spacer { flex: 1; }
-.icon-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--ink-3); }
+.icon-btn { width: 1.75rem; height: 1.75rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 0.375rem; color: var(--ink-3); }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
-.icon-btn svg { width: 14px; height: 14px; }
+.icon-btn svg { width: 0.875rem; height: 0.875rem; }
 
 /* ---------- card ---------- */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: 0.625rem;
+  padding: 1rem 1.125rem;
   box-shadow: var(--shadow-sm);
 }
 
 /* ---------- page head ---------- */
 /* The screen's own title row: a serif italic name, and whatever the screen
    puts opposite it. Every app page opens with one. */
-.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 22px 0 6px; flex-wrap: wrap; }
-.page-head h1 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 34px; line-height: 1.1; letter-spacing: -0.01em; }
-.page-head .eyebrow { font-size: 12px; }
+.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 1.375rem 0 0.375rem; flex-wrap: wrap; }
+.page-head h1 { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 2.125rem; line-height: 1.1; letter-spacing: -0.01em; }
+.page-head .eyebrow { font-size: 0.75rem; }
 
 /* ---------- sections ---------- */
 /* The page rhythm every screen shares: a serif section head over a rule,
    with the screen's own meta and actions on the same baseline. */
-.sec { margin-top: 28px; }
+.sec { margin-top: 1.75rem; }
 .sec-head {
   display: flex;
   align-items: baseline;
-  gap: 14px;
-  padding-bottom: 10px;
-  margin-bottom: 14px;
+  gap: 0.875rem;
+  padding-bottom: 0.625rem;
+  margin-bottom: 0.875rem;
   border-bottom: 1px solid var(--line-strong);
 }
-.sec-head h2 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 24px; line-height: 1; letter-spacing: -0.005em; }
-.sec-head .sec-meta { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
-.sec-head .sec-actions { margin-left: auto; display: flex; gap: 6px; }
+.sec-head h2 { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 1.5rem; line-height: 1; letter-spacing: -0.005em; }
+.sec-head .sec-meta { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.sec-head .sec-actions { margin-left: auto; display: flex; gap: 0.375rem; }
 .sec-body { transition: opacity 0.2s ease; }
 
 /* ---------- cards, tiles and readouts ---------- */
 /* Moved here from hub.css unchanged so every screen reads a number the
    same way: one tile, one meter, one status dot, one delta badge. */
-.card-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-.card-title h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
-.card-title a { font-size: 12px; color: var(--ink-3); text-decoration: none; }
+.card-title { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.625rem; }
+.card-title h3 { font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.01em; }
+.card-title a { font-size: 0.75rem; color: var(--ink-3); text-decoration: none; }
 .card-title a:hover { color: var(--ink); text-decoration: underline; }
-.tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tile .label { font-size: 12px; color: var(--ink-3); }
-.tile .value { font-family: var(--font-mono); font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
-.tile .value small { font-size: 13px; font-weight: 500; color: var(--ink-3); margin-left: 4px; letter-spacing: 0; }
-.tile .sub { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.delta { font-family: var(--font-mono); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+.tile { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.tile .label { font-size: 0.75rem; color: var(--ink-3); }
+.tile .value { font-family: var(--font-mono); font-size: 1.75rem; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
+.tile .value small { font-size: 0.8125rem; font-weight: 500; color: var(--ink-3); margin-left: 0.25rem; letter-spacing: 0; }
+.tile .sub { font-size: 0.75rem; color: var(--ink-2); display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
+.delta { font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; padding: 1px 0.375rem; border-radius: 0.25rem; }
 .delta.up { color: var(--good); background: var(--good-bg); }
 .delta.down { color: var(--bad); background: var(--bad-bg); }
 .delta.flat { color: var(--ink-3); background: var(--surface-2); }
 .delta.up.is-bad { color: var(--bad); background: var(--bad-bg); }
 .delta.down.is-good { color: var(--good); background: var(--good-bg); }
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.status { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; }
+.status::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; }
 .status.good { color: var(--good); }
 .status.warn { color: var(--warn); }
 .status.bad { color: var(--bad); }
 .status.none { color: var(--ink-3); }
-.meter { position: relative; height: 6px; border-radius: 3px; background: var(--green-dim); overflow: hidden; }
-.meter > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--ro-green); transition: width 0.6s var(--ease-out-expo, ease); }
+.meter { position: relative; height: 0.375rem; border-radius: 0.1875rem; background: var(--green-dim); overflow: hidden; }
+.meter > span { position: absolute; inset: 0 auto 0 0; border-radius: 0.1875rem; background: var(--ro-green); transition: width 0.6s var(--ease-out-expo, ease); }
 .meter.warn { background: var(--gold-dim); }
 .meter.warn > span { background: var(--ro-gold); }
 .meter.bad { background: var(--danger-dim); }
 .meter.bad > span { background: var(--danger); }
-.empty { font-size: 13px; color: var(--ink-3); padding: 10px 0; }
+.empty { font-size: 0.8125rem; color: var(--ink-3); padding: 0.625rem 0; }
 .empty a { color: var(--ink-2); }
-.err { font-size: 12px; color: var(--bad); }
+.err { font-size: 0.75rem; color: var(--bad); }
 
 @media (max-width: 520px) {
   .chips { flex-wrap: wrap; }
