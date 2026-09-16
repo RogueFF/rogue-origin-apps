@@ -5,7 +5,7 @@
  */
 
 :root {
-  --hub-rail: 232px;
+  --hub-rail: 14.5rem;
   --rail-bg: #2d3a2e;
   --rail-ink: rgba(250, 248, 244, 0.86);
   --rail-ink-2: rgba(250, 248, 244, 0.5);

@@ -15,19 +15,23 @@
  * prefixed --fl- and every one of them is derived from a shared token, so a
  * change to the Hub's palette carries here without an edit.
  *
- * The look is the Hub's, applied to data entry:
- *   · The hour is a serif italic section heading over a rule, the way every
- *     Hub section is headed.
- *   · A quantity is mono and tabular. Measured weights carry one decimal; a
- *     value that does not exist is an em dash, never a zero.
- *   · Green is banked pounds, gold is the target, grey is short. Nothing else
- *     carries colour.
- *   · Depth is one hairline. No gradients, no shadows past the card's own.
+ * The proportions come from the board Koa picked on the design canvas
+ * ("Ledger, chosen"), and the two rules that make it read as a ledger rather
+ * than a form are worth naming:
  *
- * The two pound fields are the largest objects on the screen on purpose: they
- * are what the manager is here to type, ten times a shift, without looking.
+ *   · The day is a column chart. Every hour is drawn against one scale - the
+ *     largest number anywhere on the day - so a tall hour looks tall, with
+ *     the target as a gold line across the column. Two marks on one scale,
+ *     the rule the scoreboard already uses.
+ *   · The screen is full. The page is a column that fills the viewport and
+ *     the hour row takes whatever the ledger leaves, so the work does not
+ *     trail off into empty ground (Koa, 2026-09-15: "a lot of wasted space").
  *
- * Sections: tokens · page · ledger · editor · instruments · drawer · queue
+ * Everything is in rem: shell.css scales the root with the viewport, so this
+ * whole screen grows on a big monitor. Hairlines and the 2px target line stay
+ * in px - they are the same mark at any size.
+ *
+ * Sections: tokens · page · ledger · the hour · instruments · drawer · queue
  *           board · narrow.
  */
 
@@ -40,146 +44,168 @@
   --fl-fill: var(--chart-tops);
   --fl-target: var(--chart-target);
   --fl-short: var(--chart-smalls);
-  --fl-ring: 0 0 0 3px var(--good-bg);
+  --fl-ring: 0 0 0 0.1875rem var(--good-bg);
 
-  --fl-r: 10px;      /* matches .card */
-  --fl-r-ctl: 8px;   /* matches .tb-btn */
-  --fl-r-sm: 6px;
+  --fl-r: 0.625rem;      /* matches .card */
+  --fl-r-ctl: 0.5rem;    /* matches .tb-btn */
+  --fl-r-sm: 0.375rem;
 
-  /* Control heights. 44px is the floor shared-base sets for touch, so the
-     controls are built to it rather than against it. */
-  --fl-h-ctl: 44px;
-  --fl-h-big: 88px;
-
-  /* The pound numerals: big enough to read from a step back, capped so a wide
-     monitor does not turn them into a billboard. */
-  --fl-fs-big: clamp(40px, 4.4vw, 64px);
-  --fl-fs-step: 22px;
+  /* One control height for the whole editor: the steppers, the pound fields,
+     the cultivar select and the Line 2 button all sit on it. */
+  --fl-h-ctl: 3rem;
+  /* The ledger column's bar. Everything else in a column is type. */
+  --fl-h-bar: 6.5rem;
+  --fl-w-bar: 2.125rem;
 }
 
 /* ---------- page ---------- */
+/* The screen is one column that fills the viewport: topbar, title, ledger,
+   then the hour taking what is left. */
+.main { display: flex; flex-direction: column; min-height: 100vh; }
+.hour-sec { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
 /* The page's own topbar controls, laid out as the shell's flex children. */
 .anchor { position: relative; display: inline-flex; align-items: center; }
-.tb-date { gap: 8px; }
+.tb-date { gap: 0.5rem; }
 .tb-date .num { color: var(--ink); }
 .tb-btn .num { color: var(--ink); }
-.tb-btn.sm { padding: 4px 8px; font-size: 12px; }
-.tb-btn svg.i { width: 14px; height: 14px; }
+.tb-btn.sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+.tb-btn svg.i { width: 0.875rem; height: 0.875rem; }
 /* The drawer button's open-order count, and the label it drops on a phone. */
 .drawer .m { color: var(--ink-3); }
 /* Visually hidden but still laid out: showPicker() anchors the calendar to
    this box, so display:none is not an option. */
 .vh { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .popover {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px;
+  position: absolute; top: calc(100% + 0.375rem); left: 0; z-index: 50;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
   border-radius: var(--fl-r); border: 1px solid var(--line-strong);
   background: var(--surface); box-shadow: var(--shadow-md);
   white-space: nowrap;
 }
 .popover input {
-  font: inherit; height: 34px; padding: 0 8px; border-radius: var(--fl-r-sm);
+  font: inherit; height: 2.125rem; padding: 0 0.5rem; border-radius: var(--fl-r-sm);
   border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
 }
 
-svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+svg.i { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
 .sprite { position: absolute; width: 0; height: 0; }
 
 /* A segmented control: the bag size, the drawer's tabs, its pool switches. */
-.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--fl-r-ctl); background: var(--surface-2); border: 1px solid var(--line); }
-.seg button { padding: 4px 10px; border-radius: var(--fl-r-sm); font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.seg { display: inline-flex; padding: 0.1875rem; gap: 2px; border-radius: var(--fl-r-ctl); background: var(--surface-2); border: 1px solid var(--line); }
+.seg button { padding: 0.25rem 0.625rem; border-radius: var(--fl-r-sm); font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
 
 /* The pace tile sits opposite the page title, so it reads on the baseline of
    the heading rather than as a card of its own. */
-.page-head .pace { flex: 0 1 300px; gap: 6px; }
-.page-head .pace .value .of { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--ink-3); margin-left: 4px; }
-.page-head .pace .meter { overflow: visible; margin-top: 2px; }
+.page-head { padding: 0.75rem 0 0.25rem; }
+.sec { margin-top: 1rem; }
+.page-head .pace { flex: 0 1 19rem; gap: 0.375rem; }
+.page-head .pace .value .of { font-family: var(--font-mono); font-size: 0.9375rem; font-weight: 500; color: var(--ink-3); margin-left: 0.25rem; }
+.page-head .pace .meter { overflow: visible; margin-top: 0.125rem; }
 /* The gold mark is where the day should be right now; pace.js sets only its
    left, so the centring lives here. */
-.page-head .pace .meter .tgt { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--fl-target); }
+.page-head .pace .meter .tgt { position: absolute; top: -0.1875rem; bottom: -0.1875rem; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--fl-target); }
 .page-head .pace .sub .num { color: var(--ink); font-weight: 600; }
 
-.sec-head .now { margin-bottom: 2px; }
-.sec-head .hour-nav { display: flex; gap: 4px; }
+/* The hour names itself at the top of the card being typed into, the way the
+   board does, rather than costing a section heading and a rule of its own. */
+.ed-head {
+  display: flex; align-items: baseline; gap: 0.75rem;
+  padding: 0.75rem 1rem 0;
+}
+.ed-head h2 { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 1.5rem; line-height: 1.1; }
+.ed-head .now { margin-bottom: 0.125rem; }
+.ed-head .hour-nav { margin-left: auto; align-self: center; display: flex; gap: 0.25rem; }
 
 /* ---------- the ledger ---------- */
-/* One column per hour, read left to right: when, what ran, how it went
-   against target, and what came off as smalls. The selected column is a tab
-   into the editor below it. */
-.hours-card { padding: 0; overflow-x: auto; }
-/* Ten columns need room to stay legible; below that the card scrolls
-   sideways rather than squeezing the figures. */
-.hours { display: flex; align-items: stretch; min-width: 880px; }
+/* One column per hour, read left to right: when, what ran, how the pounds
+   landed against target, and what came off as smalls. The selected column is
+   a tab into the editor below it. */
+.hours-card { padding: 0.875rem 0.75rem 0.625rem; overflow-x: auto; }
+.hours { display: flex; align-items: stretch; gap: 0.375rem; min-width: 55rem; }
 .tick {
   position: relative;
   flex: 1 1 0; min-width: 0;
-  display: grid; align-content: start; gap: 7px;
-  padding: 14px 12px 15px;
-  border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+  padding: 0.625rem 0.25rem 0.75rem;
   border-radius: var(--fl-r-ctl);
-  text-align: left;
+  text-align: center;
 }
-.tick:first-of-type { border-left: 0; }
-.tick.half { flex: 0.72 1 0; }
 .tick:hover { background: var(--fl-hover); }
-.tick:hover + .tick, .tick:hover { border-left-color: transparent; }
+/* An hour with nothing on it yet recedes rather than reading as a zero. */
+.tick.none, .tick.open { opacity: 0.55; }
 /* The open hour is outlined in gold - the same gold that marks target
    everywhere else on the page. */
-.tick[aria-current="true"] { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--fl-target); border-left-color: transparent; }
-.tick[aria-current="true"] + .tick { border-left-color: transparent; }
+.tick[aria-current="true"] { opacity: 1; background: var(--warn-bg); outline: 1px solid var(--fl-target); outline-offset: -1px; }
 
-.t-hour { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
-.tick[aria-current="true"] .t-hour { color: var(--ink); }
-/* Cultivar names are the display serif, as they are on the Hub. */
+.t-hour { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; color: var(--ink-2); }
+.tick[aria-current="true"] .t-hour { color: var(--fl-target); }
+/* Two lines, and the box keeps its height when an hour has no cultivar, so
+   every bar in the row starts from the same line. */
 .t-cv {
-  font-family: var(--font-display); font-style: italic; font-size: 13px; line-height: 1.2;
-  color: var(--ink-2); min-height: 1.2em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; flex-direction: column; gap: 0.125rem;
+  height: 2.25rem; width: 100%; min-width: 0;
+  font-size: 0.75rem; line-height: 1.25; color: var(--ink-2);
 }
-.t-bar { position: relative; height: 6px; border-radius: 3px; background: var(--fl-track); }
-.t-fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--fl-short); }
-.t-tgt { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--fl-target); }
+.t-cv-name, .t-cv-grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-cv-grow { color: var(--ink-3); }
+
+.t-bar { position: relative; width: var(--fl-w-bar); height: var(--fl-h-bar); border-radius: var(--fl-r-sm); background: var(--fl-track); }
+.t-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: var(--fl-r-sm); background: var(--fl-short); }
+/* The target line runs past the bar on both sides, so it reads as a level the
+   column is measured against rather than part of the column. */
+.t-tgt { position: absolute; left: -0.375rem; right: -0.375rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
 .tick.met .t-fill { background: var(--fl-fill); }
 .tick.near .t-fill { background: var(--fl-target); }
-.tick.open .t-bar, .tick.none .t-bar { visibility: hidden; }
-.t-tops { display: flex; align-items: baseline; gap: 5px; line-height: 1; white-space: nowrap; }
-.t-tops .num { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
-.tick.none .t-tops .num, .tick.open .t-tops .num { color: var(--ink-3); font-weight: 400; }
-.t-of { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
-.t-smalls { font-size: 11px; color: var(--ink-3); white-space: nowrap; }
-.t-smalls .num { color: var(--ink-2); }
+
+.t-tops { display: flex; align-items: baseline; gap: 0.25rem; line-height: 1; }
+.t-tops .num { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+.tick[aria-current="true"] .t-tops .num { color: var(--fl-target); }
+.t-of { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-3); min-height: 0.9375rem; }
+.t-smalls { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-3); min-height: 0.9375rem; white-space: nowrap; }
 /* An hour typed but not yet on the server. */
-.t-unsaved { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--fl-target); }
+.t-unsaved { position: absolute; top: 0.375rem; right: 0.375rem; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--fl-target); }
 /* Lunch: the fixed break between the morning and afternoon halves. */
-.lunch { flex: 0 0 14px; align-self: stretch; position: relative; }
-.lunch::before { content: ""; position: absolute; left: 50%; top: 22%; bottom: 22%; border-left: 1px dashed var(--line-strong); }
+.lunch { flex: 0 0 0.75rem; align-self: stretch; position: relative; }
+.lunch::before { content: ""; position: absolute; left: 50%; top: 20%; bottom: 20%; border-left: 1px dashed var(--line-strong); }
+
+/* The key, and how to drive it. */
+.hours-legend {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1.125rem;
+  margin-top: 0.5rem; padding: 0 0.375rem;
+  font-size: 0.8125rem; color: var(--ink-3);
+}
+.hours-legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.hours-legend i { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: 2px; background: var(--fl-fill); }
+.hours-legend i.tgt { width: 0.75rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
 
 /* ---------- the hour ---------- */
-.hour-grid { display: grid; grid-template-columns: minmax(0, 1fr) 304px; gap: 14px; align-items: start; }
-.hour-side { display: grid; gap: 14px; }
+.hour-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 21rem); gap: 0.875rem; align-items: stretch; }
+.hour-side { align-self: start; display: flex; flex-direction: column; gap: 0.875rem; }
 
-.editor { padding: 0; }
-.ed-body { display: flex; flex-direction: column; gap: 22px; padding: 18px 20px 20px; }
-.field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.field > label { font-size: 12px; color: var(--ink-3); }
+.day-sec { margin-top: 0.75rem; }
+.editor { padding: 0; display: flex; flex-direction: column; }
+.ed-body { flex: 1; display: flex; flex-direction: column; gap: 0.875rem; padding: 0.875rem 1rem; }
+.field { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.field > label { font-size: 0.875rem; color: var(--ink-2); }
 
 /* crew - the people on the line this hour, and what they are running */
-.crew { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
-.crew2 { padding-top: 2px; }
+.crew { display: flex; align-items: flex-end; gap: 0.875rem; flex-wrap: wrap; }
+.crew2 { padding-top: 0.125rem; }
 .stepper {
   display: inline-flex; align-items: stretch;
   height: var(--fl-h-ctl); border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong); background: var(--fl-well);
   overflow: hidden;
 }
-.stepper button { width: 30px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); }
+.stepper button { width: 2.25rem; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); }
 .stepper button:hover { background: var(--fl-hover); color: var(--ink); transform: none; box-shadow: none; }
 .stepper input {
-  width: 46px; text-align: center; border: 0; background: transparent; outline: 0;
-  font-family: var(--font-mono); font-size: var(--fl-fs-step); font-weight: 600;
+  width: 3rem; text-align: center; border: 0; background: transparent; outline: 0;
+  font-family: var(--font-mono); font-size: 1.625rem; font-weight: 600;
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--ink);
   border-left: 1px solid var(--line); border-right: 1px solid var(--line);
   -moz-appearance: textfield; appearance: textfield;
@@ -189,7 +215,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
    outline would draw inside the borders. */
 .stepper:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
 .stepper input:focus-visible { outline: 0; }
-.field.grow { flex: 1 1 240px; }
+.field.grow { flex: 1 1 15rem; }
 
 /* Cultivar. The native select keeps the picking; its own text is made
    transparent and a face laid over it typesets the choice as a name with its
@@ -199,15 +225,15 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 select.select {
   appearance: none; -webkit-appearance: none;
   display: block; width: 100%; height: var(--fl-h-ctl); min-width: 0;
-  padding: 0 38px 0 12px;
+  padding: 0 2.375rem 0 0.75rem;
   border-radius: var(--fl-r-ctl); border: 1px solid var(--line-strong);
   background-color: var(--fl-well); color: var(--ink);
-  font: inherit; font-size: 14px;
+  font: inherit; font-size: 0.9375rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23858f89' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 16px 16px;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
 }
 .cv > select.select { color: transparent; }
 select.select:hover { border-color: var(--ink-3); }
@@ -216,100 +242,101 @@ select.select:focus-visible { outline: 0; border-color: var(--fl-fill); box-shad
    left alone on purpose. */
 select.select option, select.select optgroup { background: var(--surface); color: var(--ink); font-weight: 400; }
 .cv-face {
-  position: absolute; inset: 0 38px 0 12px;
-  display: flex; align-items: center; gap: 10px;
+  position: absolute; inset: 0 2.375rem 0 0.75rem;
+  display: flex; align-items: center; gap: 0.625rem;
   white-space: nowrap; overflow: hidden;
   pointer-events: none;
 }
 .cv-face i {
   min-width: 0; flex: 0 1 auto;
-  font-family: var(--font-display); font-style: italic; font-weight: 400;
-  font-size: 19px; color: var(--ink);
+  font-family: var(--font-ui); font-style: normal; font-weight: 600;
+  font-size: 1.25rem; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis;
 }
-.cv-face small { flex: 0 0 auto; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-.cv-face.empty i { font-family: var(--font-ui); font-style: normal; font-size: 14px; color: var(--ink-3); }
+.cv-face small { flex: 0 0 auto; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.cv-face.empty i { font-family: var(--font-ui); font-style: normal; font-size: 0.875rem; color: var(--ink-3); }
 .line2 {
   flex: 0 0 auto; align-self: flex-end;
-  display: inline-flex; align-items: center; gap: 6px;
-  height: var(--fl-h-ctl); padding: 0 14px; border-radius: var(--fl-r-ctl);
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  height: var(--fl-h-ctl); padding: 0 0.875rem; border-radius: var(--fl-r-ctl);
   border: 1px dashed var(--line-strong); color: var(--ink-3);
-  font-size: 13px; white-space: nowrap;
+  font-size: 0.875rem; white-space: nowrap;
 }
 .line2:hover { color: var(--ink); border-color: var(--ink-3); }
 
-/* pounds - the two numbers the hour is for, and the two biggest things on
-   the screen. One row; with line 2 open, four wells share that row rather
-   than stacking a second one under the first. */
-.lbs { display: flex; gap: 20px; }
-.lbs-grid { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: end; }
-.lbs .field > label { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; font-weight: 600; color: var(--ink); }
-/* Target sits as one sentence beside the Tops label - a fact, not a fourth box. */
-.lbs .field > label .tgt { font-weight: 400; font-size: 12px; color: var(--ink-3); }
+/* pounds - the two numbers the hour is for. They sit on the same control
+   height as the crew steppers: the board Koa chose sizes them for a desktop
+   and a keyboard, not for reading across the room. */
+.lbs { flex: 1 1 auto; min-height: 0; display: flex; gap: 0.875rem; }
+.lbs-grid { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem; align-items: stretch; }
+.lbs .field > label { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; font-size: 0.875rem; color: var(--ink-2); }
+.lbs .field > label > span:first-child { font-weight: 600; color: var(--ink); }
+/* Target sits as one sentence beside the Tops label - a fact, not a third box. */
+.lbs .field > label .tgt { font-weight: 400; font-size: 0.8125rem; color: var(--ink-3); }
 .lbs .field > label .tgt .num { color: var(--fl-target); font-weight: 600; }
 /* The field being typed into says so twice: the well takes the accent edge
    and its label takes the accent ink. */
 .lbs .field:has(.big-in:focus-within) > label > span:first-child { color: var(--fl-fill); }
 .big-in {
-  display: flex; align-items: baseline;
-  height: var(--fl-h-big);
-  border-radius: var(--fl-r);
+  flex: 1 1 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: var(--fl-h-ctl); max-height: 9rem;
+  border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong); background: var(--fl-well);
 }
 .big-in input {
-  flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 4px 0 18px;
+  flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 0.25rem 0 1rem;
   background: transparent; border: 0; outline: 0; color: var(--ink);
-  font-family: var(--font-mono); font-size: var(--fl-fs-big); font-weight: 600;
-  font-variant-numeric: tabular-nums; letter-spacing: -0.03em;
+  font-family: var(--font-mono); font-size: clamp(1.625rem, 6vh, 3.5rem); font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
   -moz-appearance: textfield; appearance: textfield;
 }
 .big-in input::-webkit-outer-spin-button, .big-in input::-webkit-inner-spin-button { -webkit-appearance: none; }
 /* An empty field is an em dash in caption ink - the same mark the ledger
    uses for an hour with nothing on it. */
 .big-in input::placeholder { color: var(--ink-3); font-weight: 400; opacity: 1; }
-.big-in .unit { flex: 0 0 auto; padding-right: 16px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.big-in .unit { flex: 0 0 auto; padding-right: 1rem; font-size: 0.875rem; color: var(--ink-3); }
 .big-in:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
 .big-in input:focus-visible { outline: 0; }
-.lbs.two-lines .big-in { height: 68px; }
-.lbs.two-lines .big-in input { font-size: clamp(30px, 2.8vw, 42px); padding-left: 14px; }
-.lbs.two-lines .field > label { flex-wrap: nowrap; }
-.lbs.two-lines .tgt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* commentary - one row: the question, the reasons, and the note taking the rest */
-.reasons { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
-.reasons p { flex: 0 0 auto; margin: 0; font-size: 13px; color: var(--ink-2); }
+.reasons { display: flex; align-items: center; flex-wrap: wrap; gap: 0.625rem 0.875rem; }
+.reasons p { flex: 0 0 auto; margin: 0; font-size: 0.875rem; color: var(--ink-2); }
 /* The reason toggles are their own control, not the topbar's segmented .chip:
    any number of them can be on at once. */
-#chips { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: 6px; }
+#chips { flex: 0 1 auto; display: flex; flex-wrap: wrap; gap: 0.375rem; }
 .rchip {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 36px; padding: 0 12px; border-radius: var(--fl-r-ctl);
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  height: 2.5rem; padding: 0 0.875rem; border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong);
-  font-size: 13px; color: var(--ink-2); white-space: nowrap;
+  font-size: 0.875rem; color: var(--ink-2); white-space: nowrap;
 }
 .rchip:hover { color: var(--ink); border-color: var(--ink-3); transform: none; box-shadow: none; }
 .rchip[aria-pressed="true"] { background: var(--good-bg); border-color: var(--fl-fill); color: var(--ink); }
-.rchip svg.i { width: 13px; height: 13px; color: var(--fl-fill); display: none; }
+.rchip svg.i { width: 0.8125rem; height: 0.8125rem; color: var(--fl-fill); display: none; }
 .rchip[aria-pressed="true"] svg.i { display: block; }
 .note-box {
-  flex: 1 1 280px; min-width: 0;
+  flex: 1 1 17.5rem; min-width: 0;
   display: flex; align-items: center;
-  height: 36px; padding: 0 12px; border-radius: var(--fl-r-ctl);
+  height: 2.5rem; padding: 0 0.875rem; border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong); background: var(--fl-well);
 }
-.note-box input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 0; outline: 0; }
+.note-box input { flex: 1; min-width: 0; font: inherit; font-size: 0.875rem; color: var(--ink); background: transparent; border: 0; outline: 0; }
 .note-box input::placeholder { color: var(--ink-3); opacity: 1; }
 .note-box:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
 .note-box input:focus-visible { outline: 0; }
 
-/* The one place save state lives. The sentence is coloured by what it says:
-   saved is green, anything not yet on the server is gold, failed is red. */
+/* The foot: the save, and the one place save state lives. The sentence is
+   coloured by what it says - saved is green, anything not yet on the server
+   is gold, failed is red - and Enter does what the button does. */
 .ed-foot {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 20px;
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-top: auto;
+  padding: 0.875rem 1.125rem;
   border-top: 1px solid var(--line);
-  font-size: 13px; color: var(--ink-2);
+  font-size: 0.875rem; color: var(--ink-2);
 }
+.ed-foot .save { height: 2.875rem; padding: 0 1.5rem; font-size: 0.9375rem; justify-content: center; }
 #saveState { font-weight: 600; }
 #saveState[data-state="saved"] { color: var(--good); }
 #saveState[data-state="dirty"], #saveState[data-state="pending"], #saveState[data-state="saving"] { color: var(--warn); }
@@ -319,40 +346,52 @@ select.select option, select.select optgroup { background: var(--surface); color
 .ed-foot .warn { color: var(--warn); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-foot .kbhint { margin-left: auto; color: var(--ink-3); white-space: nowrap; }
 kbd.k {
-  font-family: var(--font-mono); font-size: 11px; line-height: 1;
-  padding: 3px 5px; border-radius: 4px;
+  font-family: var(--font-mono); font-size: 0.6875rem; line-height: 1;
+  padding: 0.1875rem 0.3125rem; border-radius: 0.25rem;
   border: 1px solid var(--line-strong); border-bottom-width: 2px;
   color: var(--ink-2);
 }
 
 /* ---------- the instruments beside the hour ---------- */
-.hour-side .tile .value { display: flex; align-items: baseline; gap: 6px; }
-.hour-side .tile .value .of { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--ink-3); }
-.hour-side .tile .fill { display: flex; flex-direction: column; gap: 8px; }
+.hour-side .tile .value { display: flex; align-items: baseline; gap: 0.375rem; }
+.hour-side .tile .value .of { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; color: var(--ink-3); }
+.hour-side .tile .fill { display: flex; flex-direction: column; gap: 0.5rem; }
 .hour-side .tile .sub b, .hour-side .tile .label b { color: var(--ink); font-weight: 600; }
-.hour-side .tile .sub svg.i { width: 13px; height: 13px; vertical-align: -0.15em; margin-right: 4px; }
-/* Cultivar names are the display serif, as in the ledger. */
-.queue .label b, #queueNext b { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 15px; }
-.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-/* The reading and the Log button share a line until they cannot: Spanish's
-   "restante" is twice the width of "left", and the button drops below it
-   rather than being overlapped. */
-.timer-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 10px; }
-.timer .value { flex: 1 1 auto; min-width: 0; }
-.timer .value > span { min-width: 2.6em; display: inline-block; white-space: nowrap; }
-.timer .value small { white-space: nowrap; }
-.timer .log { flex: 0 0 auto; margin-left: auto; }
-/* The countdown changes colour with the reading: gold once the bag is late,
-   quiet whenever the clock is not running. */
-.timer[data-kind="overtime"] .value > span { color: var(--warn); }
-.timer[data-kind="break"] .value > span,
-.timer[data-kind="ended"] .value > span,
-.timer[data-kind="waiting"] .value > span { color: var(--ink-3); }
-.scale { display: flex; align-items: center; gap: 10px; margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
-.scale .num { color: var(--ink); font-weight: 600; }
-.scale .num.off { color: var(--ink-3); font-weight: 400; }
-.scale .bar { flex: 1; position: relative; height: 4px; border-radius: 2px; background: var(--fl-track); }
-.scale .bar span { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--fl-fill); }
+.hour-side .tile .sub svg.i { width: 0.8125rem; height: 0.8125rem; vertical-align: -0.15em; margin-right: 0.25rem; }
+/* Cultivar names are the display serif, as they are on the Hub. */
+.queue .label b, #queueNext b { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 0.9375rem; }
+.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 0.625rem; }
+
+/* The bag and its clock, on one scale.
+ *
+ * The green is what is on the scale right now; the gold line is where the
+ * clock says the bag should be by now. The two are read against each other,
+ * because the manager's question is not "how long is left" but "will this bag
+ * be full when the time is up" - green above the line means it lands early.
+ * The same grammar as the ledger columns and the pace meter: fill is what
+ * happened, gold is what should have.
+ */
+.timer .fill { flex: 1; gap: 0.75rem; }
+.bag { display: flex; align-items: stretch; gap: 1rem; }
+.bag-read { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.375rem; }
+.bag-weight { font-size: clamp(2rem, 5.2vh, 3.5rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
+.bag-weight.off { font-size: 1.25rem; font-weight: 500; color: var(--ink-3); }
+.bag-clock { font-size: 0.875rem; color: var(--ink-3); }
+.bag-clock .num { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--good); margin-right: 0.25rem; }
+.timer[data-kind="overtime"] .bag-clock .num { color: var(--warn); }
+.timer[data-kind="break"] .bag-clock .num,
+.timer[data-kind="ended"] .bag-clock .num,
+.timer[data-kind="waiting"] .bag-clock .num { color: var(--ink-3); }
+
+.bag-gauge {
+  position: relative; flex: 0 0 auto;
+  width: 3rem; height: clamp(8rem, 24vh, 15rem);
+  border-radius: var(--fl-r-sm); background: var(--fl-track);
+}
+.bag-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: var(--fl-r-sm); background: var(--fl-fill); transition: height 0.3s ease; }
+.bag-pace { position: absolute; left: -0.375rem; right: -0.375rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
+.timer .log { align-self: stretch; justify-content: center; height: 3rem; font-size: 0.9375rem; }
+.timer .sub { text-align: center; }
 
 /* ---------- drawer panel (off-canvas) ---------- */
 /* Kept visibility:hidden while closed so Tab cannot land inside the
@@ -361,7 +400,7 @@ kbd.k {
 .scrim.on { opacity: 1; pointer-events: auto; }
 .panel {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 70;
-  width: min(460px, 100vw);
+  width: min(28.75rem, 100vw);
   display: flex; flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--line-strong);
@@ -370,83 +409,85 @@ kbd.k {
   transition: transform 0.25s ease, visibility 0s linear 0.25s;
 }
 .panel.open { transform: none; visibility: visible; transition: transform 0.25s ease, visibility 0s; }
-.panel-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
-.panel-title { flex: 1; font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 22px; line-height: 1.2; }
-.panel > .seg { display: flex; margin: 14px 20px 0; }
+.panel-head { display: flex; align-items: center; gap: 0.625rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
+.panel-title { flex: 1; font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 1.375rem; line-height: 1.2; }
+.panel > .seg { display: flex; margin: 0.875rem 1.25rem 0; }
 .panel > .seg button { flex: 1; text-align: center; }
-.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 20px 20px; }
-.panel-body section { display: flex; flex-direction: column; gap: 10px; }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.875rem 1.25rem 1.25rem; }
+.panel-body section { display: flex; flex-direction: column; gap: 0.625rem; }
 .panel-body .seg { align-self: flex-start; }
-.panel-body .row { display: flex; align-items: center; gap: 10px; }
+.panel-body .row { display: flex; align-items: center; gap: 0.625rem; }
 .panel-body .row > select, .panel-body .row > input { flex: 1; min-width: 0; }
-.panel-body .row.recent-head { justify-content: space-between; margin-top: 6px; }
-.panel-body select.select { height: 38px; font-size: 13px; }
+.panel-body .row.recent-head { justify-content: space-between; margin-top: 0.375rem; }
+.panel-body select.select { height: 2.375rem; font-size: 0.8125rem; }
 .panel-body input[type="number"], .panel-body input[type="text"] {
-  height: 38px; padding: 0 10px; border-radius: var(--fl-r-ctl);
+  height: 2.375rem; padding: 0 0.625rem; border-radius: var(--fl-r-ctl);
   border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
-  font: inherit; font-size: 13px; min-width: 0;
+  font: inherit; font-size: 0.8125rem; min-width: 0;
 }
 .panel-body input::placeholder { color: var(--ink-3); opacity: 1; }
 .panel-body input:focus-visible { outline: 0; border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
-.pool-now { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.pool-now { display: flex; align-items: baseline; gap: 0.25rem; flex-wrap: wrap; }
 .pool-now .eyebrow { flex: 1 0 100%; }
-.pool-now .num { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
-.pool-now .num + .muted { margin-right: 10px; font-size: 12px; }
-.preview { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; border-radius: var(--fl-r-ctl); border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+.pool-now .num { font-size: 1.375rem; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.pool-now .num + .muted { margin-right: 0.625rem; font-size: 0.75rem; }
+.preview { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 0.625rem; padding: 0.625rem 0.75rem; border-radius: var(--fl-r-ctl); border: 1px solid var(--line); font-size: 0.75rem; color: var(--ink-2); }
 .preview .num { color: var(--ink); font-weight: 600; text-align: right; }
 .panel-body .tb-btn.primary { align-self: flex-start; }
-.recent { display: flex; flex-direction: column; font-size: 12px; color: var(--ink-2); }
-.recent .change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.recent { display: flex; flex-direction: column; font-size: 0.75rem; color: var(--ink-2); }
+.recent .change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.125rem 0.5rem; padding: 0.375rem 0; border-top: 1px solid var(--line); }
 .recent .change .num { color: var(--ink); font-weight: 600; }
 .recent .change .muted { flex: 1 0 100%; }
-.qt-empty, .qt-more { padding: 10px 0; color: var(--ink-3); font-size: 12px; }
+.qt-empty, .qt-more { padding: 0.625rem 0; color: var(--ink-3); font-size: 0.75rem; }
 
 /* ---------- queue board (queue.js renders into #queueBoard) ---------- */
-.qt-order { padding: 10px 0; border-top: 1px solid var(--line); }
+.qt-order { padding: 0.625rem 0; border-top: 1px solid var(--line); }
 .qt-order:first-child { border-top: 0; padding-top: 0; }
-.qt-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-.qt-rank { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-3); }
-.qt-who { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qt-pct { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.qt-head { display: flex; align-items: baseline; gap: 0.625rem; margin-bottom: 0.25rem; }
+.qt-rank { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.08em; color: var(--ink-3); }
+.qt-who { flex: 1; min-width: 0; font-weight: 600; font-size: 0.8125rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qt-pct { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-2); }
 /* Three columns so the optional "now" mark sits beside the cultivar and the
    form label stays pinned right whether or not the mark is present. */
 .qt-pass {
   display: grid; grid-template-columns: auto 1fr auto; align-items: baseline;
-  column-gap: 10px; row-gap: 3px;
-  padding: 6px 0 6px 14px;
-  font-size: 12px; color: var(--ink-2);
+  column-gap: 0.625rem; row-gap: 0.1875rem;
+  padding: 0.375rem 0 0.375rem 0.875rem;
+  font-size: 0.75rem; color: var(--ink-2);
 }
-.qt-cv { grid-column: 1; grid-row: 1; font-family: var(--font-display); font-style: italic; font-size: 15px; color: var(--ink); }
+.qt-cv { grid-column: 1; grid-row: 1; font-family: var(--font-ui); font-weight: 600; font-style: normal; font-size: 0.9375rem; color: var(--ink); }
 .qt-form { grid-column: 3; grid-row: 1; color: var(--ink-3); text-align: right; }
-.qt-now { grid-column: 2; grid-row: 1; justify-self: start; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--good); }
+.qt-now { grid-column: 2; grid-row: 1; justify-self: start; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--good); }
 .qt-pass.live .qt-cv { color: var(--good); }
 .qt-pass.done .qt-cv { color: var(--ink-3); }
-.qt-nums { grid-column: 1 / 3; grid-row: 2; display: flex; flex-wrap: wrap; gap: 10px; }
-.qt-edit-row { display: inline-flex; align-items: baseline; gap: 5px; }
+.qt-nums { grid-column: 1 / 3; grid-row: 2; display: flex; flex-wrap: wrap; gap: 0.625rem; }
+.qt-edit-row { display: inline-flex; align-items: baseline; gap: 0.3125rem; }
 .qt-edit-form { color: var(--ink-3); }
 .qt-done-edit {
-  width: 68px; height: 30px; padding: 0 6px;
+  width: 4.25rem; height: 1.875rem; padding: 0 0.375rem;
   text-align: right; border-radius: var(--fl-r-sm);
   border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
-  font: inherit; font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  font: inherit; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;
 }
 .qt-done-edit:focus-visible { outline: 0; border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
 .qt-done-edit:disabled { opacity: 0.5; }
 /* A credited line is one the floor did not trim in full; the dotted rule
    marks the number as edited rather than measured. */
-.qt-done-edit.credited { text-decoration: underline dotted currentColor; text-underline-offset: 3px; }
+.qt-done-edit.credited { text-decoration: underline dotted currentColor; text-underline-offset: 0.1875rem; }
 .qt-of, .qt-lbs { font-family: var(--font-mono); color: var(--ink-2); }
 .qt-state { grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap; }
-.qt-bar { grid-column: 1 / -1; position: relative; height: 3px; border-radius: 2px; background: var(--fl-track); overflow: hidden; }
+.qt-bar { grid-column: 1 / -1; position: relative; height: 0.1875rem; border-radius: 2px; background: var(--fl-track); overflow: hidden; }
 .qt-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--fl-fill); }
 .qt-pass.done .qt-fill { background: var(--ink-3); }
-.qt-eta { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--ink-3); }
-.qt-order-eta { padding: 4px 0 0 14px; font-size: 12px; color: var(--ink-3); }
+.qt-eta { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.04em; color: var(--ink-3); }
+.qt-order-eta { padding: 0.25rem 0 0 0.875rem; font-size: 0.75rem; color: var(--ink-3); }
 
 /* ---------- narrow ---------- */
 @media (max-width: 1180px) {
+  .main { min-height: 0; }
   .hour-grid { grid-template-columns: minmax(0, 1fr); }
-  .hour-side { grid-template-columns: 1fr 1fr; }
+  .hour-side { display: grid; grid-template-columns: 1fr 1fr; }
+  .timer { flex: none; }
 }
 @media (max-width: 860px) {
   .hour-side { grid-template-columns: 1fr; }

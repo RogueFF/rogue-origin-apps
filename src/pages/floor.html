@@ -128,11 +128,7 @@
        column is a tab into the editor below it. strip.js renders the real
        columns; these two are placeholders so the composition can be judged
        before any script runs. -->
-  <section class="sec" aria-labelledby="dayHead">
-    <div class="sec-head">
-      <h2 id="dayHead" data-i18n="today">Today</h2>
-      <span class="sec-meta" data-i18n="lbTops">lb tops</span>
-    </div>
+  <section class="sec day-sec" aria-label="Today">
     <div class="card hours-card">
       <nav class="hours" id="ribbon" aria-label="Hours">
         <button class="tick met" type="button" data-index="0">
@@ -150,23 +146,28 @@
           <span class="t-smalls">sm <span class="num">2.1</span></span>
         </button>
       </nav>
+      <div class="hours-legend">
+        <span><i></i><span data-i18n="legendTops">Tops logged</span></span>
+        <span><i class="tgt"></i><span data-i18n="legendTarget">Target for the hour</span></span>
+        <span data-i18n="legendSmalls">Smalls are listed under each hour</span>
+        <span data-i18n="legendPick">Click an hour, or use the arrow keys</span>
+      </div>
     </div>
   </section>
 
   <!-- The hour being typed. The heading is the hour itself; everything under
        it belongs to that one row of the day. -->
-  <section class="sec" aria-labelledby="hourTitle">
-    <div class="sec-head">
-      <h2 id="hourTitle">3&ndash;4 PM</h2>
-      <span class="status good now" id="nowBadge" hidden data-i18n="now">now</span>
-      <div class="sec-actions hour-nav">
-        <button class="icon-btn" id="prevHour" type="button" title="Previous hour" aria-label="Previous hour" data-i18n-title="prevHour"><svg class="i"><use href="#i-chev-l"/></svg></button>
-        <button class="icon-btn" id="nextHour" type="button" title="Next hour" aria-label="Next hour" data-i18n-title="nextHour"><svg class="i"><use href="#i-chev-r"/></svg></button>
-      </div>
-    </div>
-
+  <section class="sec hour-sec" aria-labelledby="hourTitle">
     <div class="hour-grid">
       <div class="card editor" id="editor">
+        <div class="ed-head">
+          <h2 id="hourTitle">3&ndash;4 PM</h2>
+          <span class="status good now" id="nowBadge" hidden data-i18n="now">now</span>
+          <div class="hour-nav">
+            <button class="icon-btn" id="prevHour" type="button" title="Previous hour" aria-label="Previous hour" data-i18n-title="prevHour"><svg class="i"><use href="#i-chev-l"/></svg></button>
+            <button class="icon-btn" id="nextHour" type="button" title="Next hour" aria-label="Next hour" data-i18n-title="nextHour"><svg class="i"><use href="#i-chev-r"/></svg></button>
+          </div>
+        </div>
         <div class="ed-body">
 
       <div class="crew" id="crew1">
@@ -298,6 +299,7 @@
 
         <!-- the one place save state lives -->
         <div class="ed-foot">
+          <button class="tb-btn primary save" id="saveHour" type="button" data-i18n="saveHour">Save hour</button>
           <span id="saveState" data-state="saved">Saved <span class="num">3:58 PM</span></span>
           <span class="sep" id="saveSep" hidden>&middot;</span>
           <span class="warn" id="saveWarn" hidden></span>
@@ -333,19 +335,21 @@
             </div>
           </div>
           <div class="fill">
-            <div class="timer-main">
-              <div class="value">
-                <span id="timerValue">31:48</span>
-                <small id="timerUnit">left</small>
+            <!-- The bag and its clock are one race: the green is what is on the
+                 scale now, the gold line is where the clock says it should be.
+                 Green above the line means the bag lands early. -->
+            <div class="bag">
+              <div class="bag-read">
+                <span class="bag-weight num" id="scaleValue">4,812 g</span>
+                <span class="bag-clock"><span class="num" id="timerValue">31:48</span> <small id="timerUnit">left</small></span>
               </div>
-              <button class="tb-btn primary log" id="logBag" type="button"><svg class="i"><use href="#i-bag"/></svg><span id="logBagText" data-i18n="logBag">Log bag</span></button>
+              <div class="bag-gauge" id="scaleBar">
+                <span class="bag-fill" style="height: 96.2%"></span>
+                <span class="bag-pace" id="bagPace" style="bottom: 72%"></span>
+              </div>
             </div>
+            <button class="tb-btn primary log" id="logBag" type="button"><svg class="i"><use href="#i-bag"/></svg><span id="logBagText" data-i18n="logBag">Log bag</span></button>
             <p class="sub" id="timerStats"><span class="num">12</span> bags today</p>
-            <div class="scale">
-              <span class="eyebrow" data-i18n="scale">scale</span>
-              <span class="num" id="scaleValue">4,812 g</span>
-              <span class="bar" id="scaleBar"><span style="width: 96.2%"></span></span>
-            </div>
           </div>
         </div>
 
