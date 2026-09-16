@@ -47,7 +47,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql',
 ];
 
 function freshDb() {
@@ -354,4 +354,48 @@ test('storage never prints on the tag — a printed place that later changes is 
     new Request(`https://x/api/harvest?action=sack_label&id=${id}`), env, ctx).then(r => r.text());
   assert.match(label, /Bay 9/);
   assert.doesNotMatch(label, /Supermarket/);
+});
+
+// ─── editing a note ──────────────────────────────────────────────────────────
+
+test('a note on a bag can be edited: the page offers it, the original is kept, the edit is marked', async () => {
+  // Koa, 2026-09-16: "can you make it so we can edit previous notes".
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 2, bay: 9 });
+  const [a, b] = sacks(sqlite).map(s => s.sack_id);
+
+  await form(env, ctx, 'sack_note', { sack_id: a, note: 'wet spot at the botom' });
+  await form(env, ctx, 'sack_note', { sack_id: b, note: 'fine' });
+  const noteA = sqlite.prepare('SELECT id FROM harvest_sack_notes WHERE sack_id = ?').get(a).id;
+  const noteB = sqlite.prepare('SELECT id FROM harvest_sack_notes WHERE sack_id = ?').get(b).id;
+
+  const page = await scan(env, ctx, a);
+  assert.match(page, /action=sack_note_edit/, 'each note carries an edit form');
+  assert.match(page, new RegExp(`name="note_id" value="${noteA}"`), 'naming its own note');
+  assert.match(page, /<textarea name="note"[^>]*>wet spot at the botom<\/textarea>/, 'filled with its words');
+
+  const r = await form(env, ctx, 'sack_note_edit', { sack_id: a, note_id: String(noteA), note: ' wet spot at the bottom ' });
+  assert.equal(r.status, 200);
+  assert.match(r.html, /Note updated\./);
+  assert.match(r.html, /wet spot at the bottom/);
+  assert.match(r.html, /edited \d{4}-\d{2}-\d{2}/, 'the page says it was edited');
+  let row = sqlite.prepare('SELECT note, original_note, edited_at FROM harvest_sack_notes WHERE id = ?').get(noteA);
+  assert.equal(row.note, 'wet spot at the bottom');
+  assert.equal(row.original_note, 'wet spot at the botom');
+  assert.ok(row.edited_at);
+
+  await form(env, ctx, 'sack_note_edit', { sack_id: a, note_id: String(noteA), note: 'wet spot, bottom left' });
+  row = sqlite.prepare('SELECT note, original_note FROM harvest_sack_notes WHERE id = ?').get(noteA);
+  assert.equal(row.original_note, 'wet spot at the botom', 'a second edit never overwrites the original');
+
+  // Another bag's note through this bag's form, and an empty edit, are refused.
+  assert.ok((await form(env, ctx, 'sack_note_edit', { sack_id: a, note_id: String(noteB), note: 'hijack' })).status >= 400);
+  assert.ok((await form(env, ctx, 'sack_note_edit', { sack_id: a, note_id: String(noteA), note: '   ' })).status >= 400);
+  assert.equal(sqlite.prepare('SELECT note FROM harvest_sack_notes WHERE id = ?').get(noteB).note, 'fine');
+  assert.equal(sqlite.prepare('SELECT note FROM harvest_sack_notes WHERE id = ?').get(noteA).note, 'wet spot, bottom left');
+
+  // Saving the same words is not an edit.
+  await form(env, ctx, 'sack_note_edit', { sack_id: b, note_id: String(noteB), note: 'fine' });
+  assert.equal(sqlite.prepare('SELECT edited_at FROM harvest_sack_notes WHERE id = ?').get(noteB).edited_at, null);
 });

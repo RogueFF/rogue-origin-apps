@@ -198,7 +198,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish',
 ]);
 
@@ -266,6 +266,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleCrewSet(ui, db, env, ctx, body);
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
+        case 'sack_note_edit':
+          return await handleSackNoteEdit(ui, db, env, ctx, body);
         case 'sack_store':
           return await handleSackStore(ui, db, env, ctx, body);
         case 'sack_open':
@@ -1846,7 +1848,7 @@ async function getSackView(db, sackId) {
 
   const facts = zoneFacts(sack.zone);
   const notes = await query(db, `
-    SELECT note, created_at FROM harvest_sack_notes
+    SELECT id, note, created_at, edited_at FROM harvest_sack_notes
     WHERE sack_id = ? ORDER BY created_at DESC, id DESC LIMIT 50
   `, [sackId]);
 
@@ -2264,6 +2266,43 @@ async function handleSackNote(ui, db, env, ctx, body) {
 
   const updated = await getSackView(db, sackId);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('noteSaved')));
+}
+
+/**
+ * Change the wording of a note already on a sack (Koa, 2026-09-16: "make it so
+ * we can edit previous notes").
+ *
+ * The note must belong to the sack the form names — a note id alone could be
+ * any bag's, and editing the wrong bag's history is worse than no edit. The
+ * words as first saved are kept in original_note on the first edit and never
+ * overwritten after, and edited_at lets the page say the note was changed.
+ * Saving the same words again changes nothing, not even the edited mark.
+ */
+async function handleSackNoteEdit(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const noteId = parseInt(body.note_id, 10);
+  const note = String(body.note || '').trim().substring(0, 500);
+  if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
+
+  const row = Number.isInteger(noteId)
+    ? await queryOne(db, `SELECT id, note FROM harvest_sack_notes WHERE id = ? AND sack_id = ?`, [noteId, sackId])
+    : null;
+  if (!row) throw createError('NOT_FOUND', ui.t('noteNotFound'));
+
+  if (row.note !== note) {
+    await execute(db, `
+      UPDATE harvest_sack_notes
+      SET original_note = COALESCE(original_note, note), note = ?, edited_at = datetime('now')
+      WHERE id = ? AND sack_id = ?
+    `, [note, noteId, sackId]);
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ Note edited on *${sackId}* — ${note}`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+
+  const view = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, ui.t('noteUpdated')));
 }
 
 /**
@@ -5133,7 +5172,16 @@ ${canMove ? `<details class="batch">
 
   const noteList = notes.length
     ? notes.map(n => `<div class="notecard">${escapeHtml(n.note)}
-        <span class="hint">${escapeHtml(String(n.created_at).substring(0, 10))}</span></div>`).join('')
+        <span class="hint">${escapeHtml(String(n.created_at).substring(0, 10))}${n.edited_at ? ` · ${ui.t('noteEdited', { d: escapeHtml(String(n.edited_at).substring(0, 10)) })}` : ''}</span>
+        ${n.id ? `<details class="noteedit">
+          <summary>${ui.t('editNote')}</summary>
+          <form method="POST" action="/api/harvest?action=sack_note_edit&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+            <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+            <input type="hidden" name="note_id" value="${Number(n.id)}">
+            <textarea name="note" maxlength="500" rows="2" required>${escapeHtml(n.note)}</textarea>
+            <button class="btn" type="submit">${ui.t('saveNote')}</button>
+          </form>
+        </details>` : ''}</div>`).join('')
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
   return `<div class="sd">
@@ -5167,14 +5215,6 @@ ${noteList}
     <button class="btn" type="submit">${ui.t('saveNote')}</button>
   </form>
 </details>
-<script>
-  // Arriving from the takedown screen's "Add note" (#sack-notes): open the box
-  // and put the cursor in it, so the note is one tap away rather than three.
-  if (location.hash === '#sack-notes') {
-    var box = document.getElementById('addNoteBox');
-    if (box) { box.open = true; var f = box.querySelector('input[name=note]'); if (f) f.focus(); }
-  }
-</script>
 
 </section>
 <div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
