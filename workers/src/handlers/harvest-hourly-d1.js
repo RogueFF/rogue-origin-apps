@@ -13,7 +13,7 @@
  * - POST /sms/inbound                              Twilio webhook (signature-verified)
  * - GET  /api/harvest?action=hourly&date=YYYY-MM-DD   rows + day summary   [password]
  * - GET  /api/harvest?action=foremen               registry                 [password]
- * - POST /api/harvest?action=foreman_set           {phone,name,barn,active} [password]
+ * - POST /api/harvest?action=foreman_set           {phone,name,barn,active,channel} [password]
  * - POST /api/harvest?action=hourly_simulate       {from, body} -> replies  [password]
  *   (commands always; a chat text only while HARVEST_TEST_MODE is true, or the
  *   simulated text joins the real queue and the live relay answers a real phone)
@@ -31,6 +31,7 @@ import { createError } from '../lib/errors.js';
 import { requireAuth, requireBearer } from '../lib/auth.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { sendSms, verifyTwilioSignature } from '../lib/sms.js';
+import { sendWhatsapp, pollWhatsappMailbox } from '../lib/whatsapp-mailbox.js';
 import { pacificDay, pacificParts, justEndedHour, sqliteUtc, parseSqliteUtc } from '../lib/pacific.js';
 import {
   BARN_LABELS, COUNT_FIELDS, FIELD_ES, validateCounts, missingFields, classifyInbound,
@@ -63,6 +64,31 @@ const seasonOf = (day) => Number(day.slice(0, 4));
 // every row for the barn, whatever its status. Two places computing this
 // differently is how a foreman's total stops matching the dashboard's.
 const sumRacks = (rows) => rows.reduce((s, r) => s + (r.racks || 0), 0);
+
+/**
+ * The one place outbound text leaves this worker for a foreman's phone.
+ * `foreman` must carry `channel` — a lookup that names its columns and forgets
+ * it reads undefined here and quietly routes a WhatsApp foreman to Twilio
+ * forever, which is the failure nothing errors on.
+ */
+function sendViaChannel(env, foreman, text) {
+  if (foreman.channel === 'whatsapp') return sendWhatsapp(env, { to: foreman.phone, body: text });
+  // The column is NOT NULL DEFAULT 'sms', so reaching here with anything else
+  // means a SELECT that forgot the column or a caller passing the wrong object
+  // shape — and the second one leaves foreman.phone undefined too, so sendSms
+  // logs "no recipient" and the send is lost entirely. Both are silent, and
+  // both happen at sites whose state write has already committed.
+  //
+  // A warn, not a throw: the tick commits the row state before it sends, on
+  // purpose — that ordering is what makes a text at-most-once. A throw here is
+  // caught by the per-row try/catch but cannot undo the committed write, so
+  // the row advances, nothing is delivered, and the next tick sees it as done
+  // and never retries. A degraded-but-delivering SMS beats that.
+  if (foreman.channel !== 'sms') {
+    console.warn(`[send] ${foreman.phone}: channel ${JSON.stringify(foreman.channel)} unrecognized — falling back to SMS`);
+  }
+  return sendSms(env, { to: foreman.phone, body: text });
+}
 
 // ─── HTTP: /api/harvest?action=hourly* ─────────────────────────────────
 
@@ -125,20 +151,31 @@ function isTrue(v) {
   return s === true || s === 1 || s === 'true' || s === '1';
 }
 
-async function setForeman(db, body) {
+/**
+ * `channel` is 'sms' | 'whatsapp', and defaults to 'sms' so a roster written
+ * before the column keeps working untouched.
+ *
+ * Validated here rather than by a SQL CHECK, the same way barn is: a CHECK
+ * constraint on an existing SQLite column means a table rebuild, and the day a
+ * third transport arrives that price should be a line in this function.
+ */
+export async function setForeman(db, body) {
   const phone = String(body.phone || '').trim();
   const name = String(body.name || '').trim();
   const barn = String(body.barn || '').trim();
+  const channel = String(body.channel || 'sms').trim();
   if (!/^\+1\d{10}$/.test(phone)) throw createError('VALIDATION_ERROR', 'phone must be E.164, e.g. +15415551234');
   if (!name) throw createError('VALIDATION_ERROR', 'name is required');
   if (!BARN_LABELS[barn]) throw createError('VALIDATION_ERROR', 'barn must be upper or bottom');
+  if (channel !== 'sms' && channel !== 'whatsapp') throw createError('VALIDATION_ERROR', 'channel must be sms or whatsapp');
   const active = isTrue(body.active) ? 1 : 0;
   await execute(db, `
-    INSERT INTO harvest_foremen (phone, name, barn, active, active_since)
-    VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)
+    INSERT INTO harvest_foremen (phone, name, barn, active, channel, active_since)
+    VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END)
     ON CONFLICT(phone) DO UPDATE SET name = excluded.name, barn = excluded.barn, active = excluded.active,
+      channel = excluded.channel,
       active_since = CASE WHEN excluded.active = 1 AND harvest_foremen.active = 0 THEN datetime('now') ELSE harvest_foremen.active_since END
-  `, [phone, name, barn, active, active]);
+  `, [phone, name, barn, active, channel, active]);
   // One active foreman per barn, on this path too — the same rule EMPEZAR
   // enforces. Two active phones would mean two prompts for one hour and two
   // half-answers racing for one row.
@@ -187,7 +224,7 @@ export async function handleSmsInbound(request, env, ctx) {
  *   `queued` is true when the text was left in the inbox for the Capataz relay,
  *   which is what answers everything that is not a command.
  */
-export async function processInbound(env, { from, text, sid, deliver, now = new Date() }) {
+export async function processInbound(env, { from, text, sid, deliver, channel = 'sms', now = new Date() }) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
   const out = (replies = [], queued = false) => ({ replies, queued, message_sid: sid || null });
@@ -203,8 +240,8 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   // text beats a doubled one, and the row keeps the foreman's words either way.
   if (sid) {
     const { changes } = await execute(db,
-      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body, processed) VALUES (?, ?, ?, 1)`,
-      [sid, from, text]);
+      `INSERT OR IGNORE INTO harvest_sms_inbox (message_sid, from_phone, body, processed, channel) VALUES (?, ?, ?, 1, ?)`,
+      [sid, from, text, channel]);
     if (changes === 0) return out();
   }
 
@@ -251,7 +288,7 @@ export async function processInbound(env, { from, text, sid, deliver, now = new 
   await markInbox(db, { sid, kind: 'command', now, replied: true });
 
   if (deliver) {
-    for (const t of replies) await sendSms(env, { to: from, body: t });
+    for (const t of replies) await sendViaChannel(env, foreman, t);
   }
   return out(replies);
 }
@@ -487,32 +524,55 @@ async function pollSms(db, env, limitRaw) {
 }
 
 /**
- * The relay's only way to reach a phone: Twilio's credentials stay on the
- * worker. Registered numbers only, and gsmSafe on the way out — the text was
- * written by a model, and one accent turns a one-segment confirmation into a
- * three-segment UCS-2 message.
+ * The relay's only way to reach a phone: the transport credentials stay on the
+ * worker, and only a registered number can be written to. What the text is put
+ * through on the way out depends on the foreman's channel — GSM-7 segment
+ * economics are an SMS problem, so an accent that would cost a Twilio message
+ * two extra UCS-2 segments costs a WhatsApp message nothing, and the Spanish
+ * reaches those foremen spelled properly.
  */
-async function sendToForeman(db, env, body) {
+export async function sendToForeman(db, env, body) {
   const to = String(body.to || '').trim();
   if (!to) throw createError('VALIDATION_ERROR', 'to is required');
-  const foreman = await queryOne(db, `SELECT phone FROM harvest_foremen WHERE phone = ?`, [to]);
+  const foreman = await queryOne(db, `SELECT phone, channel FROM harvest_foremen WHERE phone = ?`, [to]);
   if (!foreman) throw createError('NOT_FOUND', `No foreman registered for ${to}`);
 
-  const text = gsmSafe(body.text);
-  if (!text) throw createError('VALIDATION_ERROR', 'text is required');
-  const segments = smsSegments(text);
-  if (segments > MAX_SMS_SEGMENTS) {
-    throw createError('VALIDATION_ERROR',
-      `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
+  let text = String(body.text || '').trim();
+  // A GSM-7 billing unit, so it means nothing over WhatsApp — Meta bills per
+  // conversation, and the relay chunks long text on its own side before it
+  // ever calls. Held at 1 there rather than computed or nulled: the field is
+  // part of this endpoint's response shape and nothing consumes it.
+  let segments = 1;
+  if (foreman.channel === 'whatsapp') {
+    // UTF-8, no per-segment billing — Meta's own /send truncates at 4096.
+    if (!text) throw createError('VALIDATION_ERROR', 'text is required');
+    if (text.length > 4096) {
+      throw createError('VALIDATION_ERROR', `text is ${text.length} characters; WhatsApp's limit is 4096`);
+    }
+  } else {
+    text = gsmSafe(text);
+    if (!text) throw createError('VALIDATION_ERROR', 'text is required');
+    segments = smsSegments(text);
+    if (segments > MAX_SMS_SEGMENTS) {
+      throw createError('VALIDATION_ERROR',
+        `text is ${text.length} characters (${segments} segments); the limit is 3 segments (459 chars)`);
+    }
   }
 
-  const sent = await sendSms(env, { to, body: text });
+  const sent = await sendViaChannel(env, foreman, text);
   // Best-effort marker for the tick watchdog: this phone's delivered texts are
   // no longer "taken by the relay and never answered". Which row it was is not
   // worth tracking — the watchdog only counts.
-  await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
-    WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
-  return { sent, text, segments: smsSegments(text) };
+  //
+  // Only when it actually went out. sendSms and sendWhatsapp both return false
+  // WITHOUT throwing on missing secrets, so a half-configured deploy would
+  // otherwise stamp replies that were never sent — and the watchdog's
+  // "delivered, never replied" clause is the one thing that would have noticed.
+  if (sent) {
+    await execute(db, `UPDATE harvest_sms_inbox SET replied_at = ?
+      WHERE from_phone = ? AND replied_at IS NULL AND processed = 1`, [sqliteUtc(new Date()), to]);
+  }
+  return { sent, text, segments };
 }
 
 /** The six counts plus the fields the relay's model should see — no ids, no raw text. */
@@ -676,6 +736,87 @@ async function capatazWatchdog(db, env, now) {
   return released + 1;
 }
 
+/**
+ * Drain riego-whatsapp-mailbox's queue and feed each row from a registered
+ * WhatsApp foreman through the same processInbound path the Twilio webhook
+ * uses inline — same command handling, same dedupe-by-message-id, same
+ * chat-queueing for the relay.
+ *
+ * Only rows whose sender is a registered `channel = 'whatsapp'` foreman are
+ * claimed. Everyone else (Riego's own crew sharing this mailbox, or an
+ * unregistered number) is left alone — this worker is not the only consumer
+ * of this mailbox's traffic even though it is currently the only ACTIVE one
+ * (Riego's WhatsApp poller has been off since 2026-07; see the wiki design
+ * doc's v3 section before ever adding a second poller here).
+ *
+ * The mailbox has already marked whatever it hands back as processed on ITS
+ * side — there is no redelivery once /poll responds. Each row is written into
+ * harvest_sms_inbox (dedup on the WhatsApp message id, reusing the
+ * message_sid column) via processInbound's own INSERT OR IGNORE before it is
+ * classified, so the row being processed is persisted before it can fail —
+ * the same trade processInbound already makes for the Twilio path between
+ * claim and release. Note what that does NOT buy: rows still sitting in
+ * `messages` when the worker dies are lost, because the mailbox has already
+ * marked them and there is no redelivery.
+ */
+async function drainWhatsappInbound(env, now) {
+  const db = env.DB;
+  let messages;
+  try {
+    messages = await pollWhatsappMailbox(env, { limit: POLL_LIMIT_MAX });
+  } catch (e) {
+    // Two very different failures land here and an operator has to be able to
+    // tell them apart. A non-2xx is thrown before the mailbox marks anything:
+    // nothing was dequeued and the next tick sees the same rows. A body that
+    // fails to parse (a truncated response, a mailbox deploy mid-flight) is
+    // thrown AFTER the mailbox marked the whole batch processed — those
+    // messages are gone, with no redelivery. Only the second one lost data.
+    const refused = /^WhatsApp mailbox poll \d{3}:/.test(e.message);
+    console.error(refused
+      ? `[whatsapp-drain] poll refused, nothing dequeued: ${e.message}`
+      : `[whatsapp-drain] poll response lost AFTER the mailbox marked the batch — those messages are gone: ${e.message}`);
+    return 0;
+  }
+  let acted = 0;
+  for (const m of messages) {
+    const from = '+' + String(m.from_number || '').replace(/[^\d]/g, '');
+    const text = m.text_body || '';
+    try {
+      const foreman = await queryOne(db,
+        `SELECT phone FROM harvest_foremen WHERE phone = ? AND channel = 'whatsapp'`, [from]);
+      if (!foreman) {
+        // Expected, and so a log rather than a warn: Riego's crew shares this
+        // mailbox and their traffic must not cry wolf. It is also exactly what
+        // a Capataz foreman whose channel is still 'sms' looks like — his
+        // EMPEZAR vanishes here leaving no other trace — which is why the line
+        // names the number.
+        console.log(`[whatsapp-drain] ${m.wa_message_id} from ${from}: no whatsapp foreman — left for another consumer`);
+        continue;   // not a Capataz WhatsApp foreman — not ours to answer
+      }
+      // A voice note, sticker or captionless image arrives with text_body NULL
+      // (riego-whatsapp-mailbox stores only media_id/media_mime for those).
+      // Passing '' through would classify as chat and release the row
+      // processed = 0, which is precisely capatazWatchdog's "the relay is
+      // stalled" population — so one foreman's voice note would page Koa about
+      // an outage that is not happening. The mailbox keeps the row and its
+      // media_id on its side. Checked after the gate, so this line only ever
+      // fires for one of our own foremen and is therefore actionable; Riego's
+      // media is already accounted for by the gate log above.
+      if (!text.trim()) {
+        console.log(`[whatsapp-drain] ${m.wa_message_id} from ${from}: no text (${m.msg_type || 'unknown'}) — skipped`);
+        continue;
+      }
+      const r = await processInbound(env, {
+        from, text, sid: m.wa_message_id, deliver: true, channel: 'whatsapp', now,
+      });
+      if (r.replies.length || r.queued) acted++;
+    } catch (e) {
+      console.error(`[whatsapp-drain] ${m.wa_message_id}: ${e.message}`);
+    }
+  }
+  return acted;
+}
+
 export async function runHarvestHourlyTick(env, now = new Date()) {
   const db = env.DB;
   const isTest = isTestMode(env) ? 1 : 0;
@@ -683,6 +824,19 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
   const je = justEndedHour(now);
   const day = pacificDay(now);
   let acted = 0;
+
+  // ── WhatsApp inbound is a pull, not a push: Meta's webhook reaches a
+  // separate worker and this one drains it. First, before the open-row loop
+  // and the ask/auto-stop loop, so an EMPEZAR or PARAR received over WhatsApp
+  // takes effect ahead of this same tick's decisions — which is how the Twilio
+  // webhook already behaves relative to the tick. Wrapped for the same reason
+  // capatazWatchdog is: another machine's outage must not cost the barn its
+  // prompts and nudges.
+  try {
+    acted += await drainWhatsappInbound(env, now);
+  } catch (e) {
+    console.error(`[whatsapp-drain] ${e.message}`);
+  }
 
   // ── (a) Every open row today, driven by the rows rather than by the roster.
   // An open row is the barn's business whether or not anyone is on shift: the
@@ -700,7 +854,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
     // Per row, not per barn: one bad phone number must not abandon the rest.
     try {
       if (!contacts.has(row.barn)) {
-        contacts.set(row.barn, await queryOne(db, `SELECT phone, name, active_since FROM harvest_foremen
+        contacts.set(row.barn, await queryOne(db, `SELECT phone, name, active_since, channel FROM harvest_foremen
           WHERE barn = ? ORDER BY active DESC, active_since DESC LIMIT 1`, [row.barn]));
       }
       const f = contacts.get(row.barn);
@@ -722,7 +876,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
         // so the hour lands on the dashboard and in Telegram — it just does
         // not light up the foreman's phone while he is off the clock.
         if (hourNow < STOP_HOUR) {
-          await sendSms(env, { to: f.phone, body: reminderText(row.barn, row.hour_start) });
+          await sendViaChannel(env, f, reminderText(row.barn, row.hour_start));
         }
       } else if (d.type === 'missing') {
         const { changes } = await execute(db,
@@ -758,7 +912,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
             VALUES (?, ?, ?, ?, 'pending', ?, ?)`, [seasonOf(je.harvest_date), je.harvest_date, je.hour_start, f.barn, sqliteUtc(now), isTest]);
           if (changes) {
             acted++;
-            await sendSms(env, { to: f.phone, body: promptText(f.barn, je.hour_start) });
+            await sendViaChannel(env, f, promptText(f.barn, je.hour_start));
           }
         }
       }
@@ -773,7 +927,7 @@ export async function runHarvestHourlyTick(env, now = new Date()) {
         const { changes } = await execute(db, `UPDATE harvest_foremen SET active = 0 WHERE phone = ? AND active = 1`, [f.phone]);
         if (changes) {
           acted++;
-          await sendSms(env, { to: f.phone, body: 'Paramos por hoy. Escribe EMPEZAR manana.' });
+          await sendViaChannel(env, f, 'Paramos por hoy. Escribe EMPEZAR manana.');
         }
       }
     } catch (e) {

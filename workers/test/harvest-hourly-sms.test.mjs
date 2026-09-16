@@ -129,8 +129,19 @@ test('buildPollContext: the foreman block names the barn in Spanish and active i
   assert.deepEqual(ctx.foreman, {
     name: 'Test Arriba', barn: 'upper', barn_label: 'Granero Arriba',
     active: true, active_since: '2026-10-15 13:00:00',
+    // FOREMAN carries no channel key at all — the defensive default, which is
+    // also what a roster row written before the column looks like.
+    channel: 'sms',
   });
   assert.equal(buildPollContext([], { ...FOREMAN, active: 0 }, NOW).foreman.active, false);
+});
+
+/**
+ * The relay decides on its own side whether to strip accents, so the context
+ * it polls has to say which transport this foreman is on.
+ */
+test('buildPollContext: the foreman block carries the channel through to the relay', () => {
+  assert.equal(buildPollContext([], { ...FOREMAN, channel: 'whatsapp' }, NOW).foreman.channel, 'whatsapp');
 });
 
 test('buildPollContext: today counts racks from every row whatever its status', () => {
