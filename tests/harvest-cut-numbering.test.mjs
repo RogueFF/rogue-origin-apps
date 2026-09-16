@@ -168,3 +168,14 @@ test('the tag prints the cut large beside the number, and not again in the small
   assert.match(avery.html, /<span class="ord">2ND<\/span>/, 'the Avery sheet shows it too');
   assert.match(avery.html, /\.cutbox \{/, 'and carries the style for it');
 });
+
+test('Find lists the newest tags first, not the highest numbers', async () => {
+  // Numbers restart per cut, so a first-cut #15 is older than a second-cut #2.
+  const { sqlite, env, ctx } = freshDb();
+  await alloc(env, ctx, { session_id: seedLot(sqlite, { cut: 1 }), cultivar: 'Rainbow GMO Quik', qty: 15 });
+  sqlite.exec("UPDATE harvest_sacks SET printed_at = datetime('now', '-1 day')");
+  await alloc(env, ctx, { session_id: seedLot(sqlite, { cut: 2 }), cultivar: 'Rainbow GMO Quik', qty: 2 });
+  const { html } = await get(env, ctx, 'action=find&lang=en');
+  const listed = [...html.matchAll(/<strong>Rainbow GMO Quik #(\d+) · Cut (\d)<\/strong>/g)].map(m => `${m[2]}-${m[1]}`);
+  assert.deepEqual(listed.slice(0, 3), ['2-2', '2-1', '1-15']);
+});
