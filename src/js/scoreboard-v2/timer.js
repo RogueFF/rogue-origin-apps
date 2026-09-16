@@ -321,7 +321,10 @@
       // No bag in progress and shift hasn't been started - show a neutral
       // "Waiting to Start" state and stop (don't count time until the shift
       // is manually started).
-      const waitingLabel = Utils.translate('waiting') || 'Waiting to Start';
+      // window.ScoreboardUtils is never defined, so this read threw on every
+      // tick before Start Day and stopped the waiting state from drawing on
+      // both the scoreboard and the scale display.
+      const waitingLabel = (Utils && Utils.translate && Utils.translate('waiting')) || 'Waiting to Start';
       const wPanel = DOM ? DOM.get('timerPanel') : document.getElementById('timerPanel');
       const wValue = DOM ? DOM.get('timerValue') : document.getElementById('timerValue');
       const wLabel = DOM ? DOM.get('timerLabel') : document.getElementById('timerLabel');
