@@ -4436,6 +4436,7 @@ function renderAverySheet(ui, sacks, opts = {}) {
   <div class="warn">Print at 100% scale, margins None, headers/footers off — anything else shifts every label.</div>
 </div>
 ${pages.join('')}
+${TAG_FIT_SCRIPT}
 </body></html>`;
 
   return new Response(html, {
@@ -4611,6 +4612,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 <div class="toolbar">${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${opts.banner || ''}
 ${labels}
+${TAG_FIT_SCRIPT}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
   (function () {
@@ -4712,6 +4714,34 @@ function cultivarFontPt(name) {
   const fit = (TAG_COLUMN_PT * FIT_SAFETY) / Math.max(emWidth(name || ''), 0.001);
   return Math.max(11, Math.min(25, Math.floor(fit * 2) / 2));
 }
+
+/**
+ * Shrink any tag line the browser actually draws wider than its column.
+ *
+ * The sizes above come from a metrics table, and Chrome draws Arial Bold wider
+ * than that table says: "Rainbow GMO Quik" was set at 19.5pt, came out 268px in
+ * a 253px column, and printed as "Rainbow GMO Qui" (Koa, 2026-09-16). The
+ * estimate stays as the starting size — it is right for most names and keeps a
+ * page without scripts close — and this measures the real text and steps each
+ * clipped line down half a point until nothing is cut. It runs as soon as the
+ * labels are parsed, before the auto-print waits on the QR images, and again on
+ * `beforeprint` for the toolbar's manual Print link.
+ */
+const TAG_FIT_SCRIPT = `<script>
+  function fitTagText() {
+    var els = document.querySelectorAll('.txt > .cultivar, .txt > .code, .txt > .bagno, .txt > .meta');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var pt = parseFloat(getComputedStyle(el).fontSize) * 0.75;
+      while (el.scrollWidth > el.clientWidth + 0.5 && pt > 6) {
+        pt -= 0.5;
+        el.style.fontSize = pt + 'pt';
+      }
+    }
+  }
+  fitTagText();
+  window.addEventListener('beforeprint', fitTagText);
+</script>`;
 
 const MONTHS = {
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
