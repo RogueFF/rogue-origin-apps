@@ -19,6 +19,7 @@
        page for as long as the module graph took to load. This mirrors the stored
        value onto <html> up front; theme.js still owns writing and migration. -->
   <script>
+    (function () {
     try {
       var t = localStorage.getItem('ro-theme');
       if (t !== 'dark' && t !== 'light') {
@@ -33,6 +34,7 @@
       }
       if (t) document.documentElement.setAttribute('data-theme', t);
     } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
   </script>
 
   <link rel="preconnect" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">

@@ -62,6 +62,24 @@ jobs:
       - name: Check published URLs
         run: npm run check:urls
 
+      # The build proves every URL exists; only a browser proves the pages then
+      # run. Served under the real path prefix, because the pages ask for the
+      # manifest and the favicon by absolute URL.
+      - name: Serve the build
+        run: |
+          mkdir -p _site/rogue-origin-apps
+          cp -r dist/. _site/rogue-origin-apps/
+          python3 -m http.server 5503 --directory _site &
+          sleep 2
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test every page
+        env:
+          SMOKE_BASE: http://localhost:5503/rogue-origin-apps
+        run: npx playwright test tests/pages-smoke.spec.js --project=chromium
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -8,10 +8,12 @@
   <title>Rogue Origin — UI examples</title>
   <!-- Theme before first paint, as on the Hub. -->
   <script>
+    (function () {
     try {
       var t = localStorage.getItem('ro-theme');
       if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
     } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
   </script>
   <link rel="stylesheet" href="../ui/fonts.css">
   <link rel="stylesheet" href="../css/shared-base.css">
