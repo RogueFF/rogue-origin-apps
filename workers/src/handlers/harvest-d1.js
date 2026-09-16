@@ -199,7 +199,7 @@ const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish',
+  'lot_finish', 'hub',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -246,6 +246,8 @@ export async function handleHarvestD1(request, env, ctx) {
           // after the operator types the password, the same way the lot board
           // does — so the public HTML never carries the season's numbers.
           return dashPage();
+        case 'hub':
+          return renderPage(ui, ui.lang === 'es' ? 'Herramientas de cosecha' : 'Harvest tools', hubBody(ui));
         case 'print_codes':
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui), 200);
         case 'sack_print':
@@ -3404,6 +3406,31 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   select, input[type=number], input[type=text], input:not([type]) { font-size: 1.2rem; padding: 12px; width: 100%; box-sizing: border-box; margin: 8px 0 16px; border-radius: 8px; border: none; }
   label { font-size: 1rem; color: #cfe3d6; }
 
+  /* Harvest tools home — one lane per stage, in the order the material moves.
+     Each lane has its own colour so a stage is found by colour before it is
+     read. A card that only works from a printed QR is not a link at all. */
+  .hub-search { display: flex; gap: 10px; margin: 6px 0 22px; }
+  .hub-search input { margin: 0; }
+  .hub-search .btn { margin: 0; padding: 12px 20px; white-space: nowrap; cursor: pointer; }
+  .lane { margin: 0 0 22px; border-left: 6px solid var(--lane); padding-left: 14px; }
+  .lane-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .lane-n { flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--lane); color: #14251a;
+            font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+  .lane-t { font-size: 1.25rem; font-weight: 800; }
+  .lane-s { color: #9fc2ac; font-size: 0.9rem; }
+  .hubgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 10px; }
+  .hubcard { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px;
+             background: #1b3123; border: 1px solid #2c4a36; color: #f2f6f2; text-decoration: none; }
+  a.hubcard:hover { border-color: var(--lane); background: #21402c; }
+  a.hubcard.primary { background: #2f7a4f; border-color: #3f9a66; }
+  .hubcard .ht { font-size: 1.12rem; font-weight: 700; }
+  .hubcard .hd { color: #cfe3d6; font-size: 0.9rem; line-height: 1.35; }
+  .hubcard .hb { align-self: flex-start; margin-top: 4px; font-size: 0.68rem; font-weight: 800; letter-spacing: .06em;
+                 padding: 3px 7px; border-radius: 4px; background: #3a5f4c; color: #fff; }
+  .hubcard.scan { border-style: dashed; }
+  .hubcard.scan .hb { background: #8a6d1f; }
+  .hubcard code { font-size: 0.85rem; color: #e9c462; }
+
   /* Takedown session screen — big targets, gloves on, one job per press. */
   .lot { border-left: 4px solid #2f7a4f; padding-left: 12px; margin-bottom: 22px; }
   .lot-cultivar { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
@@ -4236,7 +4263,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   <span class="hint">${ui.t('finishLotHelp')}</span>
 </form>`}
 
-<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
@@ -4912,6 +4939,68 @@ function formatTagDate(lang, iso) {
     : `${m} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
+/**
+ * Every harvest tool on one page, in the order the material moves (Koa,
+ * 2026-09-16: "a dashboard/ect that has all these accessible through it").
+ *
+ * Links only — no season data — so it needs no password; the pages that carry
+ * numbers keep their own. Three tools are deliberately NOT links: a zone sign
+ * (/z/) opens a cutting session, /fin closes the day, and a crew card (/c/)
+ * tags the phone. Opening those from a menu would write real records, so they
+ * are shown as "scan only" with where the printed code lives.
+ */
+function hubBody(ui) {
+  const es = ui.lang === 'es';
+  const L = (en, sp) => (es ? sp : en);
+  const q = `lang=${ui.lang}`;
+  const card = (href, title, desc, badge = '', primary = false) =>
+    `<a class="hubcard${primary ? ' primary' : ''}" href="${href}"><span class="ht">${title}</span><span class="hd">${desc}</span>${badge ? `<span class="hb">${badge}</span>` : ''}</a>`;
+  const scan = (title, desc, code) =>
+    `<div class="hubcard scan"><span class="ht">${title}</span><span class="hd">${desc}</span><span class="hd"><code>${code}</code></span><span class="hb">${L('SCAN ONLY', 'SOLO ESCANEAR')}</span></div>`;
+  const lane = (n, color, title, sub, cards) => `
+<section class="lane" style="--lane:${color}">
+  <div class="lane-head"><span class="lane-n">${n}</span><span class="lane-t">${title}</span><span class="lane-s">${sub}</span></div>
+  <div class="hubgrid">${cards.join('')}</div>
+</section>`;
+  const PW = L('PASSWORD', 'CONTRASEÑA');
+
+  return `
+<h1>${L('Harvest tools', 'Herramientas de cosecha')}</h1>
+<p class="sub">${L('Field to sack, in the order the material moves.', 'Del campo a la bolsa, en el orden en que se mueve el material.')}</p>
+
+<form class="hub-search" method="GET" action="${API}">
+  <input type="hidden" name="action" value="find">
+  <input type="hidden" name="lang" value="${ui.lang}">
+  <input name="q" autocomplete="off" autocapitalize="off" autocorrect="off" required
+         placeholder="${L('Find a sack — e.g. RAINGQ-C2-3 or 7', 'Buscar bolsa — ej. RAINGQ-C2-3 o 7')}">
+  <button class="btn" type="submit">${L('Find', 'Buscar')}</button>
+</form>
+${lane(1, '#4a9d6a', L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'), [
+    scan(L('Zone sign', 'Letrero de zona'), L('Starts cutting a zone: cultivar and crew size.', 'Empieza a cortar una zona: cultivar y número de cortadores.'), '/z/Z8'),
+    scan(L('Crew card', 'Tarjeta de cuadrilla'), L('Scan once per phone to set Crew A or B.', 'Escanéala una vez por teléfono: Cuadrilla A o B.'), '/c/A · /c/B'),
+    scan(L('End of day', 'Fin del día'), L('Closes the zone that is open.', 'Cierra la zona que esté abierta.'), '/fin'),
+    card(`${API}?action=print_codes&${q}`, L('Print signs &amp; cards', 'Imprimir letreros y tarjetas'), L('Every zone sign, crew card and barn code as QR codes.', 'Todos los letreros, tarjetas y códigos de bodega en QR.')),
+  ])}
+${lane(2, '#e9c462', L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
+    card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
+    card(`${API}?action=crew&${q}`, L('Crew roster', 'Cuadrilla'), L('Drivers, hangers and water spiders on shift.', 'Choferes, colgadores y water spiders en turno.')),
+  ])}
+${lane(3, '#8fc2a0', L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
+    card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
+    card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
+    card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
+  ])}
+${lane(4, '#c49bd6', L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a abrirlas'), [
+    card(`${API}?action=find&${q}`, L('Find a sack', 'Buscar bolsa'), L('Look up any tag by code or number; recent tags listed.', 'Busca cualquier etiqueta por código o número; muestra las recientes.')),
+    scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
+  ])}
+${lane(5, '#8fb3d9', L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
+    card(`${API}?action=harvest_dash`, L('Harvest dashboard', 'Tablero de cosecha'), L('Rack board, storage, cycle times.', 'Racks, almacén, tiempos de ciclo.'), PW),
+    card(`${API}?action=board_page`, L('Lot board', 'Tablero de lotes'), L('Every lot from untested to supersacked.', 'Cada lote, de sin probar a embolsado.'), PW),
+    card(`${API}?action=reconcile&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
+  ])}`;
+}
+
 function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
   const list = recent.length
     ? recent.map(r => `<a class="btn alt findrow" href="/s/${encodeURIComponent(r.sack_id)}?lang=${ui.lang}">
@@ -4935,7 +5024,7 @@ ${ambiguous !== undefined && !missing ? `<p class="note">⚠️ ${ui.t('findAmbi
 </form>
 <p class="note"><span class="hint">${ui.t('findUnreadable')}</span></p>
 ${list ? `<h2>${ui.t('findRecent')}</h2><div class="cvgrid">${list}</div>` : ''}
-<div class="footer"><a href="${API}?action=sack_print">${ui.t('printTags')} →</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('printTags')} →</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
 <script>
   // A USB imager types the code then presses Enter, so the box submits itself.
   // Select the existing text immediately, not just on focus: the box is
