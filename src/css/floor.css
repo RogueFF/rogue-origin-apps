@@ -349,12 +349,13 @@ kbd.k {
 .queue .label b, #queueNext b { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 0.9375rem; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 0.625rem; }
 
-/* The bag and its clock, on one ring.
+/* The bag and its clock, as two rings.
  *
- * The green arc is what is on the scale right now; the gold mark is where the
- * clock says the bag should be by now. The two are read against each other,
- * because the manager's question is not "how long is left" but "will this bag
- * be full when the time is up" - green past the gold means it lands early.
+ * The outer green ring is what is on the scale right now; the thinner gold ring
+ * inside it is how much of the bag's time has gone. Both fill clockwise from
+ * the top, so they are read against each other, because the manager's question
+ * is not "how long is left" but "will this bag be full when the time is up" -
+ * green further round than gold means it lands early (Koa, 2026-09-16).
  * The same grammar as the ledger columns and the pace meter: fill is what
  * happened, gold is what should have. The ring takes the whole bottom right and
  * sizes itself to whichever of width or height runs out first.
@@ -365,6 +366,8 @@ kbd.k {
 .bag { flex: 1; min-height: 8rem; container-type: size; display: grid; place-items: center; }
 .dial {
   --ring: clamp(0.875rem, 3.2cqmin, 1.625rem);
+  --ring-gap: clamp(0.25rem, 1.2cqmin, 0.625rem);
+  --ring-inner: clamp(0.5rem, 2.2cqmin, 1.125rem);
   position: relative;
   width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
 }
@@ -375,22 +378,20 @@ kbd.k {
   mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 1px));
 }
 .dial.stale::before { background: var(--fl-track); }
-/* The gold mark: a spoke from the centre whose tip crosses the ring at the
-   angle the clock has reached. timer.js writes --time as a percentage. */
+/* The time ring, inside the weight ring. timer.js writes --time on the dial as
+   a percentage and hides this ring whenever the clock is not running. */
 .dial-pace {
-  position: absolute; left: 50%; top: 0; width: 0.25rem; height: 50%; margin-left: -0.125rem;
-  transform-origin: 50% 100%; transform: rotate(calc(var(--time, 0) * 3.6deg));
-}
-.dial-pace::before {
-  content: ""; position: absolute; left: 0; right: 0; top: -0.3rem;
-  height: calc(var(--ring) + 0.6rem); border-radius: 2px; background: var(--fl-target);
+  position: absolute; inset: calc(var(--ring) + var(--ring-gap)); border-radius: 50%;
+  background: conic-gradient(var(--fl-target) calc(var(--time, 0) * 1%), var(--fl-track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-inner)), #000 calc(100% - var(--ring-inner) + 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-inner)), #000 calc(100% - var(--ring-inner) + 1px));
 }
 .dial-face {
-  position: absolute; inset: calc(var(--ring) + 6%);
+  position: absolute; inset: calc(var(--ring) + var(--ring-gap) + var(--ring-inner) + 5%);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.375rem;
   text-align: center;
 }
-.bag-weight { font-size: clamp(1rem, 13cqmin, 5rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; }
+.bag-weight { font-size: clamp(1rem, 12cqmin, 4.75rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; }
 .bag-weight.off { font-size: clamp(0.875rem, 8cqmin, 2.5rem); font-weight: 500; color: var(--ink-3); }
 .bag-clock { font-size: clamp(0.6875rem, 3.2cqmin, 1rem); color: var(--ink-3); white-space: nowrap; }
 .bag-clock .num { font-size: clamp(0.875rem, 6.5cqmin, 2.5rem); font-weight: 600; letter-spacing: -0.02em; color: var(--good); margin-right: 0.25rem; }
@@ -398,6 +399,12 @@ kbd.k {
 .timer[data-kind="break"] .bag-clock .num,
 .timer[data-kind="ended"] .bag-clock .num,
 .timer[data-kind="waiting"] .bag-clock .num { color: var(--ink-3); }
+/* The key: which ring is which. */
+.dial-key { display: flex; justify-content: center; gap: 1.25rem; font-size: 0.8125rem; color: var(--ink-3); }
+.dial-key > span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.dial-key i { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; }
+.dial-key i.weight { background: var(--fl-fill); }
+.dial-key i.time { background: var(--fl-target); }
 .timer .log { align-self: stretch; justify-content: center; height: 2.75rem; font-size: 0.9375rem; }
 .timer > .fill > .sub { text-align: center; }
 
