@@ -34,7 +34,7 @@ export const SACK_DETAIL_STYLE = `
     font: 500 clamp(42px, 5vw, 66px)/1 'Karla', Arial, sans-serif; letter-spacing: -.06em; margin: 6px; }
   .sd-head .fullid { grid-column: 1; grid-row: 3; margin: 0; color: var(--muted);
     font: 13px ui-monospace, monospace; letter-spacing: .04em; }
-  .sd .badge { font: 700 11px/1.2 system-ui, sans-serif; letter-spacing: .08em;
+  .sd .badge { font: 700 12px/1.2 system-ui, sans-serif; letter-spacing: .08em;
     padding: 8px 12px; border-radius: 999px; border: 1px solid transparent; }
   .sd .badge.ok { background: #e4eddd; color: #285039; border-color: #bccdae; }
   .sd .badge.neutral { background: #eaece2; color: #4b5b43; border-color: #c9d0bd; }
@@ -46,7 +46,7 @@ export const SACK_DETAIL_STYLE = `
     background: transparent; box-shadow: none; color: #243d32; justify-content: flex-start; }
   .sd .tile:first-child { padding-left: 0; }
   .sd .tile:last-child { border-right: 0; }
-  .sd .tile .tl { font-size: 11px; letter-spacing: .13em; color: var(--muted); }
+  .sd .tile .tl { font-size: 12px; letter-spacing: .12em; color: var(--muted); }
   .sd .tile .tv { font: 500 34px/1.15 'Karla', Arial, sans-serif; margin: 8px 0 4px; color: #244332; }
   .sd .tile .ts { font-size: 13px; color: var(--muted); }
   .sd-columns { display: grid; grid-template-columns: 1.05fr 1fr; gap: 24px; margin-top: 28px; align-items: start; }
@@ -91,7 +91,7 @@ export const SACK_DETAIL_STYLE = `
   .sd-notes { margin-top: 24px; }
   .sd .notecard { padding: 14px 0; border: 0; border-bottom: 1px solid #e4e7dd; margin: 0;
     border-radius: 0; background: transparent; color: #344c3f; box-shadow: none; font-size: 14px; }
-  .sd .notecard .hint { margin-top: 6px; font: 11px ui-monospace, monospace; }
+  .sd .notecard .hint { margin-top: 6px; font: 12px ui-monospace, monospace; }
   .sd .noteedit summary { display: inline-block; cursor: pointer; margin-top: 6px; font-size: 13px; font-weight: 650;
     color: #294c36; text-decoration: underline; min-height: 32px; padding: 6px 0; }
   .sd .noteedit textarea { display: block; width: 100%; box-sizing: border-box; margin: 8px 0; padding: 10px;
@@ -115,7 +115,7 @@ export const SACK_DETAIL_STYLE = `
     .sd-mark { width: 34px; height: 34px; font-size: 26px; }
     .sd-brand-sub { font-size: 12px; }
     .sd .sd-head { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; padding: 24px 0; }
-    .sd-eyebrow { font-size: 10px; }
+    .sd-eyebrow { font-size: 12px; }
     .sd-head h1 { grid-column: 1 / -1; font-size: 34px; padding-right: 0; }
     .sd-head h1 .code { font-size: 11px; margin-top: 8px; }
     .sd-head .serial { grid-row: 3 / 5; min-width: 74px; min-height: 66px; font-size: 32px; padding: 6px; margin: 0 5px; }
@@ -123,7 +123,7 @@ export const SACK_DETAIL_STYLE = `
     .sd .badge { font-size: 12px; padding: 7px 10px; }
     .sd .tiles { padding: 20px 0; }
     .sd .tile { padding: 0 12px; }
-    .sd .tile .tl { font-size: 10px; letter-spacing: .05em; min-height: 26px; }
+    .sd .tile .tl { font-size: 12px; letter-spacing: .05em; min-height: 26px; }
     .sd .tile .tv { font-size: 29px; margin-top: 3px; }
     .sd .tile .ts { font-size: 12px; }
     .sd-columns { grid-template-columns: 1fr; gap: 16px; margin-top: 22px; }
@@ -180,7 +180,7 @@ export const SACK_DETAIL_STYLE = `
   @media (max-width:700px) {
     .sd-logo { width: 64px; height: 64px; }
     .sd-brand { gap: 10px; }
-    .sd-brand-caption { font-size: 12px; max-width: 92px; line-height: 1.5; }
+    .sd-brand-caption { font-size: 13px; max-width: 104px; line-height: 1.5; }
     .sd-language a { padding: 8px 12px; }
     .sd .sd-head { padding: 24px 20px; border-radius: 16px; grid-template-columns: minmax(0,1fr) 84px; gap: 12px; }
     .sd-head h1 { font-size: 32px; }
@@ -188,7 +188,7 @@ export const SACK_DETAIL_STYLE = `
     .sd-head .serial { width: 80px; min-height: 80px; height: 80px; font-size: 32px; }
     .sd .tiles { padding: 18px 0; }
     .sd .tile, .sd .tile:first-child { padding: 0 12px; }
-    .sd .tile .tl { min-height: 28px; font-size: 11px; }
+    .sd .tile .tl { min-height: 28px; font-size: 12px; }
     .sd .tile .ts { font-size: 12px; }
     .sd .wtop .tv { font-size: 42px; }
   }

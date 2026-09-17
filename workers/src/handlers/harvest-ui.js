@@ -8,16 +8,16 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen *{box-sizing:border-box}
 .harvest-header{display:flex;align-items:center;gap:14px;padding:22px 0;margin-bottom:30px;border-bottom:1px solid #d9dfd1}
 .harvest-header img{width:54px;height:54px;object-fit:contain}
-.harvest-header strong{display:block;font-size:13px;letter-spacing:.12em}
-.harvest-header small{color:#60715d;font-size:12px}
+.harvest-header strong{display:block;font-size:14px;letter-spacing:.1em}
+.harvest-header small{color:#5a6b57;font-size:13px}
 .harvest-header nav{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
-.harvest-header a{color:#304e3c;text-decoration:none;border:1px solid #c6d0bc;border-radius:24px;padding:11px 15px;font-size:13px;min-height:44px}
+.harvest-header a{color:#304e3c;text-decoration:none;border:1px solid #c6d0bc;border-radius:24px;padding:11px 15px;font-size:14px;min-height:44px;display:flex;align-items:center}
 .harvest-screen h1{font:700 clamp(30px,4vw,42px)/1.12 Karla,system-ui,sans-serif;letter-spacing:-.035em;margin-bottom:14px}
 .harvest-screen h2{font:700 21px/1.25 Karla,system-ui,sans-serif;letter-spacing:-.02em;text-transform:none;color:#304e3c;margin:26px 0 14px}
 .harvest-screen :is(.sub,.hint,.lot-meta,.lotmeta,.batch,.last){color:#60715d}
 .harvest-screen .sub{font-size:16px;line-height:1.6;margin-bottom:24px}
 .harvest-screen .note{color:#40543f;line-height:1.6;font-size:16px}
-.harvest-screen .hint{font-size:13px;line-height:1.6}
+.harvest-screen .hint{font-size:14px;line-height:1.6}
 .harvest-screen form:not(.finishrow):not(.finishlot){padding:24px;background:#fff;border:1px solid #d9dfd1;border-radius:14px;margin:20px 0}
 .harvest-screen label{color:#304e3c;font-weight:700;font-size:16px}
 .harvest-screen :is(input,select,textarea){color:#263f32;background:white;border:1px solid #bcc9b2;border-radius:8px;font:16px system-ui,sans-serif;min-height:50px;padding:12px;width:100%}
@@ -34,7 +34,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen label.lot{background:#fff;color:#263f32;border-color:#cbd5c0;padding:20px}
 .harvest-screen label.lot:has(input:checked){background:#edf2e4;border-color:#7f9b68}
 .harvest-screen label.lot.green{opacity:1}
-.harvest-screen .badge{border-radius:20px;font-size:11px;padding:6px 10px}
+.harvest-screen .badge{border-radius:20px;font-size:12px;padding:6px 10px}
 .harvest-screen .badge.ok{background:#e5eddb;color:#345c38}
 .harvest-screen .badge.warn{background:#f8ebcb;color:#77511a}
 .harvest-screen .badge.bad{background:#f4e0d8;color:#954431}
@@ -45,6 +45,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .status{padding:22px;background:#fff;border:1px solid #d9dfd1;border-radius:12px}
 .harvest-screen .mini{min-height:44px;background:#edf1e4;color:#304e3c;border:1px solid #c2cdb8}
 .harvest-screen .mini.danger{background:#fff;color:#994837;border-color:#d7b2a4}
+.harvest-screen :is(.nextnote,.batch,.finished,details) summary{min-height:48px;display:flex;align-items:center;font-size:16px}
 .harvest-screen .nextnote{color:#304e3c}.harvest-screen .nextnote.pending summary{color:#825b14}
 .harvest-screen .notice{background:#f8edcf;color:#77511a;border-color:#d7b574}
 .harvest-screen .flash{background:#e8efdd;color:#365b36;border-color:#abc093}
@@ -74,7 +75,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .crew-stepper button{min-width:50px;min-height:50px;border:1px solid #c5d1b9;border-radius:8px;background:#e9eedf;color:#304e3c;font-size:26px}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
 @media(min-width:900px){.harvest-screen:has(#intakeForm),.harvest-screen:has(.crew-stepper),.harvest-screen:has(.grid),.harvest-screen:has(#printBtn){max-width:800px}}
-@media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:11px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 10px;font-size:12px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}
+@media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:13px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 12px;font-size:14px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}
 @media(max-width:700px){body.testmode:has(.sd)>.testband{margin-left:-18px;margin-right:-18px}}
 @media print{.harvest-header{display:none}}
 `;
