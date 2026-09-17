@@ -1225,6 +1225,16 @@ export const BOARD_PAGE = `<!doctype html>
     .doc button { padding: .3rem .5rem; }
     .season .chip { padding: .22rem .6rem .22rem .5rem; }
   }
+
+/* Harvest family styling; retain stage colors and the full board interaction. */
+:root { --paper:#f6f5ef; --surface:#fff; --surface-2:#e9eedf; --line:#c8d2be; --line-soft:#d9dfd1; --ink:#263f32; --ink-2:#455b43; --ink-3:#60715d; }
+.bar { padding-top:20px; padding-bottom:20px; }
+.brand h1 { letter-spacing:-.03em; }
+.act { min-height:44px; border-radius:8px; }
+.gate-card { border-radius:16px; }
+.foot { font-size:13px; }
+@media(max-width:600px) { .board { gap:12px; } .doc button { min-height:44px; } }
+
 </style>
 </head>
 <body>
@@ -1235,7 +1245,7 @@ export const BOARD_PAGE = `<!doctype html>
       <span class="season-tag" id="season-tag">2026</span>
     </div>
 
-    <div class="controls">
+    <div class="controls"><a class="act" href="/api/harvest?action=hub">All tools</a>
       <div class="field">
         <label for="q">Find</label>
         <input id="q" type="search" placeholder="cultivar or zone" autocomplete="off">
@@ -1273,11 +1283,8 @@ export const BOARD_PAGE = `<!doctype html>
   </main>
 
   <footer class="foot">
-    <strong>This board is the stage overlay, not the yield record.</strong>
-    Weights, bins and sack tags stay in <code>wiki/seasons/2026/harvest.md</code>, built from the
-    QR scan data &mdash; if the two ever disagree, the scans win. The timings behind those scans
-    live on the <a href="/api/harvest?action=harvest_dash">cycle-time dashboard</a>. PDFs of record live in
-    <code>raw/compliance/2026/</code> and the compliance Drive; cards hold the link, not the file.
+    Follow each lot from testing through bagging. Open a card for test records, documents and stage changes.
+    For rack status, crew rates and scan history, open the <a href="/api/harvest?action=harvest_dash">harvest dashboard</a>.
   </footer>
 </div>
 

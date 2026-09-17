@@ -1,3 +1,4 @@
+import { OFFICE_UI_STYLE } from './harvest-ui.js';
 /**
  * The harvest cycle-time dashboard.
  *
@@ -186,14 +187,16 @@ export function dashPage() {
              align-items:center; flex-wrap:wrap; }
   .demobar .grow { flex:1; }
   .hide { display:none !important; }
+${OFFICE_UI_STYLE}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap"><a class="office-home" href="/api/harvest?action=hub">← All harvest tools</a>
 
   <div id="gate">
     <h2>Harvest cycle times</h2>
     <p>Season timings, crew rates and every scan timestamp. Password required — this is the farm's own numbers.</p>
+    <label for="pw">Farm password</label>
     <input id="pw" type="password" autocomplete="current-password" placeholder="Password" autofocus>
     <div class="row">
       <button id="go">Open dashboard</button>
@@ -385,7 +388,7 @@ export function dashPage() {
     }
 
     $('cards').innerHTML = ['<div id="hourly"></div>',
-      cardRacks(d), cardDry(d), cardCadence(d), cardCrew(d), cardAfterTag(d), cardFeed(d)
+      cardRacks(d), '<details><summary>Drying &amp; crew analysis</summary>', cardDry(d), cardCadence(d), cardCrew(d), '</details>', cardAfterTag(d), '<details><summary>Scan history</summary>', cardFeed(d), '</details>'
     ].join('');
   }
 

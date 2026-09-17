@@ -349,14 +349,12 @@ test('the door says which door it is', async () => {
   assert.match(html, /Crew B/);
 });
 
-test('a single unlabelled intake behaves exactly as it did', async () => {
+test('an unlabelled intake asks for a door instead of borrowing a zone', async () => {
   const { env, ctx } = freshDb();
   await scanZone(env, ctx, 'Z4', 'A');
   const html = await (await barnForm(env, ctx, null)).text();
-  // /b predates the stations and is still on a wall somewhere. It must fall
-  // back to whichever zone is open rather than to "no crew" and nothing.
-  assert.match(html, /<option value="Z4" selected/);
-  assert.doesNotMatch(html, /Barn intake/);
+  assert.equal(/<option value="Z4" selected/.test(html), false);
+  assert.ok(html.includes('/b/1?lang=en') && html.includes('/b/2?lang=en'));
 });
 
 test('scanning the door QR makes the tablet remember which door it is', async () => {
@@ -402,16 +400,12 @@ test('the load records which crew delivered it', async () => {
   assert.equal(lastLoad(sqlite).crew, 'A');
 });
 
-test("a load landing on the other crew's lot says so, rather than looking normal", async () => {
+test("a labelled door never attributes a load to the other crew", async () => {
   const { sqlite, env, ctx } = freshDb();
-  await scanZone(env, ctx, 'Z4', 'A');
   await scanZone(env, ctx, 'Z7', 'B');
-
-  // Crew B's zone, logged at crew A's door: fine if a trailer really was moved,
-  // a mis-tap otherwise, and only the person at the door can tell which.
-  const html = await (await logLoadAt(env, ctx, 'Z7', 20, 1)).text();
-  assert.match(html, /Crew B/);
-  assert.match(html, /Check the zone if that is wrong/);
+  await logLoadAt(env, ctx, 'Z7', 20, 1);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, null);
+  assert.equal(lastLoad(sqlite).crew, 'A');
 });
 
 test('an ordinary load at the right door says nothing extra', async () => {
@@ -440,17 +434,12 @@ test("the 6-minute grace prefers this crew's just-closed zone", async () => {
   assert.doesNotMatch(html, /logged with no lot/);
 });
 
-test("before its own crew has scanned in, a door borrows the open zone and names it", async () => {
+test("before its own crew scans in, a door has no preselected zone", async () => {
   const { env, ctx } = freshDb();
-  // Crew B is cutting; crew A has not scanned in yet this morning.
   await scanZone(env, ctx, 'Z7', 'B');
-
   const html = await (await barnForm(env, ctx, 1)).text();
-  // Borrowing beats a blank default — an empty dropdown invites a wrong pick
-  // from a long scrolling list — but it must not read as this door's own zone.
-  assert.match(html, /<option value="Z7" selected/);
-  assert.match(html, /Crew B's zone/);
-  assert.match(html, /this intake's crew has nothing open yet/);
+  assert.equal(/<option value="Z7" selected/.test(html), false);
+  assert.ok(html.includes('<option value="">Choose a zone</option>'));
 });
 
 test('a door showing its OWN crew\'s zone borrows nothing and says nothing', async () => {
@@ -463,17 +452,20 @@ test('a door showing its OWN crew\'s zone borrows nothing and says nothing', asy
   assert.doesNotMatch(html, /nothing open yet/);
 });
 
-test('a door borrowing from an UNTAGGED session still says it is borrowed', async () => {
-  const { sqlite, env, ctx } = freshDb();
-  // Exactly the shape of a leftover walkthrough session: open, crew NULL.
-  // Nothing a tagged crew does will ever close one, so they persist until
-  // someone clears them — which is why the season-start clear-out is a
-  // correctness step now, not housekeeping.
+test('a labelled door never defaults to an untagged session', async () => {
+  const { env, ctx } = freshDb();
   await scanZone(env, ctx, 'Z9', null);
-
   const html = await (await barnForm(env, ctx, 1)).text();
-  assert.match(html, /<option value="Z9" selected/);
-  assert.match(html, /nothing open yet/);
+  assert.equal(/<option value="Z9" selected/.test(html), false);
+});
+
+test('the newly scanned zone wins over the previous zone during grace', async () => {
+  const { env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z5', 'A');
+  const html = await (await barnForm(env, ctx, 1)).text();
+  assert.ok(/<option value="Z5" selected/.test(html));
+  assert.equal(/<option value="Z4" selected/.test(html), false);
 });
 
 // --- the print sheet ---------------------------------------------------------
@@ -540,7 +532,7 @@ test('the sheet reads in Spanish first, like the screens the crew use', async ()
   const html = await codeSheet(env, ctx);
   // The supersack tag is the deliberate exception to this, not the rule.
   assert.match(html, /Escan[ée]alo <strong>una vez<\/strong>/);
-  assert.match(html, /Escan[ée]alo <strong>en cada carga<\/strong>/);
+  assert.ok(html.includes('Registra cada carga sin salir de la pantalla.'));
 });
 
 test('the sheet does not fire the printer by itself', async () => {
@@ -548,7 +540,9 @@ test('the sheet does not fire the printer by itself', async () => {
   // The sack sheet auto-prints because a barn PC in kiosk mode runs it dozens
   // of times a day. This is printed once a season, onto card stock, by someone
   // who wants to choose the tray first.
-  assert.doesNotMatch(await codeSheet(env, ctx), /window\.print\(\)/);
+  const html = await codeSheet(env, ctx);
+  assert.ok(html.includes('onclick="window.print()"'));
+  assert.equal(/<script[^>]*>[^<]*window\.print/.test(html), false);
 });
 
 test('the print sheet strips what the screen wrapper adds', async () => {
@@ -570,4 +564,50 @@ test('a crew card is sized to the card, not to the page', async () => {
   // Sizing the PAIR to fill the page fit only the default margins.
   assert.match(html, /\.card \{ height: 4\.6in;/);
   assert.doesNotMatch(html, /\.cards \{[^}]*height: 10in/);
+});
+
+test('open intake follows its crew, preserves an override, and logs repeatedly in place', async () => {
+  const { chromium } = await import('@playwright/test');
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  await scanZone(env, ctx, 'Z7', 'B');
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.route('https://x/**', async route => {
+      const r = route.request();
+      const request = new Request(r.url(), { method: r.method(), headers: r.headers(),
+        ...(r.method() === 'POST' ? { body: r.postData() } : {}) });
+      const response = await quiet(() => r.url().includes('/b/1')
+        ? handleBarnScan(request, env, ctx) : handleHarvestD1(request, env, ctx));
+      await route.fulfill({ status: response.status, contentType: response.headers.get('content-type'), body: await response.text() });
+    });
+    await page.goto('https://x/b/1?lang=en');
+    await page.waitForFunction(() => document.getElementById('zone').value === 'Z4');
+    await scanZone(env, ctx, 'Z5', 'A');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForFunction(() => document.getElementById('zone').value === 'Z5');
+    await page.locator('#zone').selectOption('Z4');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('#zone').inputValue(), 'Z4');
+    await page.locator('#followCrew').click();
+    await page.waitForFunction(() => document.getElementById('zone').value === 'Z5');
+    await page.locator('#bay').selectOption('3');
+    await page.locator('#bins').fill('18');
+    await page.locator('#intakeForm button').click();
+    await page.waitForFunction(() => document.getElementById('intakeReceipt').textContent.includes('Ready for another'));
+    assert.equal(lastLoad(sqlite).zone, 'Z5');
+    assert.equal(lastLoad(sqlite).crew, 'A');
+    assert.equal(lastLoad(sqlite).bins, 18);
+    assert.equal(await page.locator('#bins').inputValue(), '22');
+    assert.equal(await page.locator('#bay').inputValue(), '3');
+    await page.locator('#intakeForm button').click();
+    await page.waitForFunction(() => document.getElementById('intakeReceipt').textContent.includes('Ready for another'));
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM harvest_scan_log WHERE event_type='barn_load'").get().n, 2);
+    assert.equal(page.url(), 'https://x/b/1?lang=en');
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
 });
