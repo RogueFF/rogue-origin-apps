@@ -41,27 +41,3 @@ export function withinBarnGrace(closedAtMs, nowMs, graceMs = BARN_GRACE_MS) {
   return elapsed >= 0 && elapsed <= graceMs;
 }
 
-/**
- * Which zone should the intake form pre-select?
- *
- * During the grace window after a zone change, any trailer pulling in was
- * almost certainly loaded in the zone before — so that is the default, with the
- * dropdown left in place to override it.
- *
- * Returns null when there is nothing to suggest, which includes the case that
- * matters most: a crew re-entering the SAME zone (a within-shift cut resume)
- * closes and reopens it, and suggesting a zone against itself would be noise
- * dressed up as a correction.
- */
-export function suggestedIntakeZone({
-  activeZone = null,
-  lastClosedZone = null,
-  lastClosedAtMs = null,
-  nowMs,
-  graceMs = BARN_GRACE_MS,
-} = {}) {
-  if (!lastClosedZone) return null;
-  if (lastClosedZone === activeZone) return null;
-  if (!withinBarnGrace(lastClosedAtMs, nowMs, graceMs)) return null;
-  return lastClosedZone;
-}
