@@ -71,7 +71,11 @@ const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many 
 const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, plus a 13+ link
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
-const LOT_PICKER_DAYS = 45;              // how far back the takedown lot picker looks
+const LOT_PICKER_DAYS = 45;
+// How far back the barn door may reach when it names a lot by hand. Long
+// enough for a trailer that sat overnight, short enough that last week's lot is
+// not one mis-tap away.
+const LOT_AT_DOOR_DAYS = 3;              // how far back the takedown lot picker looks
 
 // Drying bays, numbered continuously across both barns (Koa, 2026-09-03).
 // The barn is DERIVED from the number rather than stored: two columns that have
@@ -951,9 +955,35 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const bayStale = !!(lastFill && lastFill.occurred_at &&
     pacificDay(parseSqliteUtc(lastFill.occurred_at)) !== pacificDay(new Date()));
 
+  const [openNow, recentLots] = await Promise.all([
+    query(db, `SELECT zone FROM harvest_scan_log
+               WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?`, [isTest]),
+    getRecentEnterSessions(db, isTest),
+  ]);
+
   return renderPage(ui, ui.t('barnIntake'),
     barnIntakeFormBody(ui, active, station,
-      { bay: lastFill ? lastFill.bay : null, stale: bayStale }));
+      { bay: lastFill ? lastFill.bay : null, stale: bayStale },
+      recentLots, openNow.map(r => r.zone)));
+}
+
+/**
+ * The lot the door named, or null when it named none. Throws rather than
+ * falling back: a load that quietly ignored the choice made at the door would
+ * be worse than one that never offered the choice.
+ */
+async function pickedLot(ui, db, isTest, raw, zone) {
+  const value = raw === undefined || raw === null ? '' : String(raw).trim();
+  if (!value) return null;
+  const id = parseInt(value, 10);
+  if (!Number.isInteger(id) || id <= 0) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
+  const lot = await queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE id = ? AND event_type = 'enter' AND is_test = ? AND zone = ?
+      AND julianday('now') - julianday(occurred_at) <= ?
+  `, [id, isTest, zone, LOT_AT_DOOR_DAYS]);
+  if (!lot) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
+  return lot;
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -979,10 +1009,21 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const crew = station ? STATION_CREW[station] : null;
 
+  // A lot named at the door beats every rule below it. Nothing automatic knows
+  // more than the person holding the trailer, who was told which zone started
+  // (Koa, 2026-09-17) — and this is the case where the automatic answer is
+  // "nothing", which loses the bins off every lot.
+  //
+  // Checked against the zone on the same form: an id for another zone is a
+  // mis-tap or a stale page, not an override, and it would move a trailer of
+  // bins onto a lot it never touched. Old lots are refused for the same reason.
+  const picked = await pickedLot(ui, db, isTest, body.lot, zone);
+
   // Labelled doors attribute only to their own crew, including a just-closed
   // session for a manually selected previous zone. Unlabelled legacy submits
   // retain their old attribution behavior.
-  let zoneSession = crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null;
+  let zoneSession = picked
+    || (crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null);
   if (!zoneSession && !crew) zoneSession = await getOpenSessionForZone(db, isTest, zone);
 
   // A cultivar switch INSIDE one zone is invisible to the two steps above: the
@@ -1003,7 +1044,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   // Self-limiting: in a single-cultivar zone the previous session carries the
   // same cultivar, so this never fires.
   let viaSwitch = null;
-  if (zoneSession) {
+  if (zoneSession && !picked) {
     const prev = await getLastClosedAnyCultivar(db, isTest, zone, zoneSession.crew ?? null);
     const now = zoneSession.cultivar || null;
     if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
@@ -1016,7 +1057,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   // grace window the load was cut there and is only now arriving, so it belongs
   // to that closed lot.
   let viaGrace = false;
-  if (!zoneSession && crew) {
+  if (!zoneSession && !picked && crew) {
     const mine = await getLastClosedAnyCultivar(db, isTest, zone, crew);
     if (inBarnGrace(mine)) { zoneSession = mine; viaGrace = true; }
   }
@@ -1047,7 +1088,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const loadNumber = (todayCount?.n) || 1;
 
   const cutNote = zoneSession
-    ? `cut ${zoneSession.cut_number}${viaGrace ? ', just-closed lot' : ''}`
+    ? `cut ${zoneSession.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
       + `${viaSwitch ? `, ${viaSwitch.from || '?'} (cultivar just changed)` : ''}`
       + `${crossedCrew ? `, Crew ${zoneSession.crew}` : ''}`
     : 'no active session for this zone';
@@ -1057,6 +1098,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
+    chosen: picked ? `${picked.zone} · ${picked.cultivar || '?'} · ${translate(ui.lang, 'cut', { n: picked.cut_number ?? '?' })}` : null,
     zone, bins, loadNumber, station, bay,
     hasActiveSession: !!zoneSession,
     grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
@@ -2379,6 +2421,12 @@ async function getStatus(db, env) {
     headcount_at: a.headcount_at,
   });
 
+  // The barn door's "which lot?" picker: when nothing is open for a zone, the
+  // person at the door names the lot instead of the load landing on nothing.
+  // Carried on the status poll so a tablet left up all day keeps seeing lots
+  // that have closed since it loaded.
+  const recent = await getRecentEnterSessions(db, isTest);
+
   return successResponse({
     success: true,
     season: getSeason(),
@@ -2387,7 +2435,23 @@ async function getStatus(db, env) {
     // the honest answer.
     active_zone: open.length ? shape(open[0]) : null,
     active_zones: open.map(shape),
+    recent_lots: recent.map(a => ({ ...shape(a), closed_at: a.closed_at })),
   });
+}
+
+/**
+ * Lots a trailer arriving now could plausibly have been cut from: every zone
+ * session of the last few days, open or closed. Deliberately not filtered to
+ * one crew or one zone — the picker is for the case where the automatic
+ * attribution has nothing, and the barn is the one that knows.
+ */
+async function getRecentEnterSessions(db, isTest, days = LOT_AT_DOOR_DAYS) {
+  return await query(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND is_test = ?
+      AND julianday('now') - julianday(occurred_at) <= ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 40
+  `, [isTest, days]);
 }
 
 async function getLogs(db, env, params) {
@@ -3850,7 +3914,8 @@ function areaBasisFor(zone, cultivar) {
   return `${rows} of ${total} rows in ${zone}`;
 }
 
-function barnIntakeFormBody(ui, active, station = null, lastFill = null) {
+function barnIntakeFormBody(ui, active, station = null, lastFill = null,
+                            recentLots = [], openZones = []) {
   // A full trailer, pre-filled, so the ordinary load is one tap on Submit
   // instead of a typed number. Read off the constant rather than written here,
   // because that constant carries "recalibrate once 2026 trailers run" and the
@@ -3894,6 +3959,18 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null) {
   // Stale means the last load with a bay was on an earlier Pacific day, so the
   // crew has almost certainly moved to the next bay since. Say the number out
   // loud rather than leaving it pre-selected and unremarked.
+  // The picker only appears when the zone in the box has nothing open — with a
+  // session open the load attributes itself, and asking would be a question
+  // with one answer. Rendered for every recent lot and filtered by the script,
+  // so the page keeps working when the script does not: the server refuses a
+  // lot that does not belong to the zone submitted with it.
+  const lotOptions = [`<option value="">${ui.t('lotAtDoorNone')}</option>`].concat(
+    recentLots.map(l => `<option value="${l.id}" data-zone="${escapeHtml(l.zone)}">${
+      escapeHtml(`${l.zone} · ${l.cultivar || '?'} · `)}${ui.t('cut', { n: l.cut_number ?? '?' })}${
+      escapeHtml(` · ${String(l.occurred_at).substring(0, 10)}`)}${
+      l.closed_at ? '' : ` · ${ui.t('lotAtDoorOpen')}`}</option>`)).join('');
+  const lotPickHidden = preselect && openZones.includes(preselect) ? ' hidden' : '';
+
   const bayHint = !lastFill || !lastFill.bay
     ? ui.t('bayHungHint')
     : (lastFill.stale ? ui.t('bayStale', { n: lastFill.bay })
@@ -3908,6 +3985,11 @@ ${station ? `<button id="followCrew" type="button" class="btn alt" style="margin
   ${stationField}
   <label for="zone">${ui.t('zone')}</label>
   <select id="zone" name="zone" required><option value="">${ui.lang === 'es' ? 'Elige una zona' : 'Choose a zone'}</option>${options}</select>
+  <div id="lotPick"${lotPickHidden}>
+    <label for="lot">${ui.t('lotAtDoor')}</label>
+    <select id="lot" name="lot">${lotOptions}</select>
+    <p class="note"><span class="hint">${ui.t('lotAtDoorHint')}</span></p>
+  </div>
   <label for="bins">${ui.t('binsOnLoad')} <span class="hint">${ui.t('binsPrefilled', { n: FULL_TRAILER })}</span></label>
   <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required
          value="${FULL_TRAILER}" onfocus="this.select()">
@@ -3935,6 +4017,9 @@ function barnLiveScript(ui, station) {
     ready: es ? 'Listo para otra carga. Se restableció la carga completa.' : 'Ready for another trailer. Full-load bin count restored.',
     uncertain: es ? 'No se pudo confirmar el guardado. Revisa el registro antes de enviar de nuevo.' : 'Could not confirm the save. Check the load log before submitting again.',
     check: es ? 'Ver registro de cargas' : 'Check load log',
+    none_lot: es ? 'Sin lote — anotar de todos modos' : 'No lot — log it anyway',
+    open_lot: es ? 'abierto' : 'open',
+    cut: es ? 'Corte ' : 'Cut ',
   };
   return `<script>
 (function () {
@@ -3943,10 +4028,36 @@ function barnLiveScript(ui, station) {
   var status = document.getElementById('intakeActive'), receipt = document.getElementById('intakeReceipt');
   var follow = document.getElementById('followCrew'), busy = false, manual = false, polling = false;
   var latest = null, modeVersion = 0;
+  var lotPick = document.getElementById('lotPick'), lotSel = document.getElementById('lot');
+  var openZones = [], recentLots = null;
   function applyActive() {
     if (manual || busy) return;
     zone.value = latest ? latest.zone : '';
     status.textContent = latest ? T.live + crew + ': ' + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
+  }
+  // The picker is for the case the rules cannot answer: this zone has nothing
+  // open, so without a lot named here the bins land on no lot at all. With a
+  // session open it stays hidden AND cleared — a stale selection must never
+  // ride along and override a lot that is genuinely open.
+  function syncPicker() {
+    if (!lotPick) return;
+    var z = zone.value, needed = !!z && openZones.indexOf(z) === -1;
+    if (recentLots) {
+      var keep = lotSel.value;
+      lotSel.replaceChildren();
+      lotSel.appendChild(new Option(T.none_lot, ''));
+      recentLots.filter(function (l) { return l.zone === z; }).forEach(function (l) {
+        var label = l.zone + ' · ' + (l.cultivar || '?') + ' · ' + T.cut + (l.cut_number == null ? '?' : l.cut_number)
+          + ' · ' + String(l.occurred_at).substring(0, 10) + (l.closed_at ? '' : ' · ' + T.open_lot);
+        lotSel.appendChild(new Option(label, String(l.id), false, String(l.id) === keep));
+      });
+    } else {
+      Array.prototype.forEach.call(lotSel.options, function (o) {
+        if (o.value) o.hidden = o.dataset.zone !== z;
+      });
+    }
+    if (!needed) lotSel.value = '';
+    lotPick.hidden = !needed;
   }
   async function refresh() {
     if (!crew || polling || busy || document.hidden) return;
@@ -3957,11 +4068,14 @@ function barnLiveScript(ui, station) {
       var d = await r.json();
       if (!Array.isArray(d.active_zones)) throw new Error('status');
       latest = d.active_zones.find(function (s) { return s.crew === crew; }) || null;
+      openZones = d.active_zones.map(function (s) { return s.zone; });
+      if (Array.isArray(d.recent_lots)) recentLots = d.recent_lots;
       applyActive();
+      syncPicker();
     } catch (_) { if (!manual && !busy) status.textContent = T.offline; }
     finally { polling = false; }
   }
-  zone.addEventListener('change', function () { manual = true; modeVersion++; status.textContent = T.manual; });
+  zone.addEventListener('change', function () { manual = true; modeVersion++; status.textContent = T.manual; syncPicker(); });
   if (follow) follow.addEventListener('click', function () { manual = false; modeVersion++; refresh(); });
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -3989,6 +4103,7 @@ function barnLiveScript(ui, station) {
       });
       var ready = document.createElement('p'); ready.textContent = T.ready; receipt.appendChild(ready);
       document.getElementById('bins').value = '${CONSTANTS.binsPerTrailer.value}';
+      if (lotSel) { lotSel.value = ''; syncPicker(); }
     } catch (_) {
       receipt.textContent = T.uncertain + ' ';
       var a = document.createElement('a'); a.href = '${API}?action=logs&event_type=barn_load';
@@ -3999,6 +4114,7 @@ function barnLiveScript(ui, station) {
       if (submittedMode === modeVersion) refresh();
     }
   });
+  syncPicker();
   refresh();
   setInterval(refresh, 5000);
   window.addEventListener('focus', refresh);
@@ -4009,14 +4125,16 @@ function barnLiveScript(ui, station) {
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
                                   crossedCrew = null, station = null, bay = null,
-                                  switched = null }) {
+                                  switched = null, chosen = null }) {
   // Four outcomes, and the person at the door should be able to tell them
   // apart: attributed to the open lot (silent), to a lot that just closed (say
   // so — it is a correction), to the OTHER crew's lot (say so — only they can
   // judge it), or to nothing (warn, that one loses bins).
-  const attribution = grace
-    ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
-    : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
+  const attribution = chosen
+    ? `<p class="note">${ui.t('lotChosen', { lot: escapeHtml(chosen) })}</p>`
+    : grace
+      ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
+      : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
   const crossNote = crossedCrew
     ? `<p class="note">${ui.t('crossedCrew', { crew: crossedCrew })}</p>`
     : '';

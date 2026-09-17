@@ -611,3 +611,104 @@ test('open intake follows its crew, preserves an override, and logs repeatedly i
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });
+
+// --- the door names the lot when nothing is open -----------------------------
+//
+// Koa, 2026-09-17: "If a zone isn't automatically assigned (which it should be
+// if cut-leads scan it in) they will be able to catch it at the door. Cutters
+// notify the barn when new zones are started." A load that lands on no lot
+// takes its bins off every lot's yield, silently.
+
+const logLoadWithLot = (env, ctx, { zone, bins = 20, station = 1, lot }) => quiet(() => handleHarvestD1(
+  new Request('https://x/api/harvest?action=barn_log&lang=en', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ zone, bins: String(bins), station: String(station), lot: String(lot) }),
+  }), env, ctx));
+
+const lotIdFor = (sqlite, zone) => sqlite.prepare(
+  "SELECT id FROM harvest_scan_log WHERE event_type='enter' AND zone=? ORDER BY id DESC LIMIT 1").get(zone).id;
+
+test('a load names its lot at the door, and lands on it', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // Crew A cut Z4 yesterday and has scanned nothing today; the trailer is only
+  // arriving now, so nothing automatic can attribute it.
+  await scanZone(env, ctx, 'Z4', 'A');
+  const lot = lotIdFor(sqlite, 'Z4');
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-1 day'), closed_at = datetime('now','-20 hours') WHERE id = ?").run(lot);
+
+  const plain = await logLoadAt(env, ctx, 'Z4', 22, 1);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, null, 'without a lot it still lands on nothing');
+  assert.match(await plain.text(), /logged with no lot/i);
+
+  const html = await (await logLoadWithLot(env, ctx, { zone: 'Z4', bins: 20, lot })).text();
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, lot);
+  assert.equal(lastLoad(sqlite).bins, 20);
+  assert.match(html, /Logged to the lot you chose/);
+});
+
+test('a lot from another zone, or too old, is refused — the bins are not moved onto it', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const z4 = lotIdFor(sqlite, 'Z4');
+  await scanZone(env, ctx, 'Z7', 'B');
+  const before = sqlite.prepare("SELECT COUNT(*) AS n FROM harvest_scan_log WHERE event_type='barn_load'").get().n;
+
+  // Z4's lot submitted with Z7 on the form: a mis-tap or a stale page.
+  const wrongZone = await logLoadWithLot(env, ctx, { zone: 'Z7', bins: 20, lot: z4 });
+  assert.ok(wrongZone.status >= 400);
+  assert.match(await wrongZone.text(), /not in this zone|too old/i);
+
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-9 days') WHERE id = ?").run(z4);
+  const tooOld = await logLoadWithLot(env, ctx, { zone: 'Z4', bins: 20, lot: z4 });
+  assert.ok(tooOld.status >= 400);
+
+  const nonsense = await logLoadWithLot(env, ctx, { zone: 'Z4', bins: 20, lot: 'abc' });
+  assert.ok(nonsense.status >= 400);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM harvest_scan_log WHERE event_type='barn_load'").get().n,
+    before, 'a refused load writes no row at all');
+});
+
+test('a named lot beats the automatic answer, including the other crew\'s open zone', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  // Z4 is open under crew B. Door 1 (crew A) is holding a trailer from Z4's
+  // earlier cut, which crew A cut and closed this morning.
+  await scanZone(env, ctx, 'Z4', 'A');
+  const mine = lotIdFor(sqlite, 'Z4');
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-6 hours'), closed_at = datetime('now','-5 hours') WHERE id = ?").run(mine);
+  await scanZone(env, ctx, 'Z4', 'B');
+  const theirs = lotIdFor(sqlite, 'Z4');
+
+  await logLoadWithLot(env, ctx, { zone: 'Z4', bins: 18, lot: mine });
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, mine, "the door's choice wins over the open session");
+  assert.notEqual(mine, theirs);
+});
+
+test('the form offers the picker only when the zone has nothing open', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const lot = lotIdFor(sqlite, 'Z4');
+
+  const open = await (await barnForm(env, ctx, 1)).text();
+  assert.match(open, /<div id="lotPick" hidden>/, 'Z4 is open, so there is nothing to ask');
+  assert.match(open, new RegExp(`<option value="${lot}" data-zone="Z4"`), 'the lots are on the page for the no-script case');
+
+  sqlite.prepare("UPDATE harvest_scan_log SET closed_at = datetime('now','-30 minutes') WHERE id = ?").run(lot);
+  const closed = await (await barnForm(env, ctx, 1)).text();
+  assert.match(closed, /<div id="lotPick">/, 'nothing open now, so the door is asked');
+  assert.match(closed, /Which lot did this trailer come from\?/);
+  assert.match(closed, /No lot — log it anyway/);
+});
+
+test('the status feed carries the recent lots the picker offers', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4', 'A');
+  const lot = lotIdFor(sqlite, 'Z4');
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-9 days') WHERE id = ?").run(lot);
+  await scanZone(env, ctx, 'Z7', 'B');
+
+  const d = await handleHarvestD1(new Request('https://x/api/harvest?action=status'), env, ctx).then(r => r.json());
+  const body = d.data || d;
+  assert.deepEqual(body.recent_lots.map(l => l.zone), ['Z7'], 'a lot older than the window is not offered');
+  assert.equal(body.recent_lots[0].closed_at, null);
+});
