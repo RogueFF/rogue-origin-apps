@@ -1,3 +1,4 @@
+import { practicePage } from './harvest-practice.js';
 /**
  * Harvest Zone-Entry & Barn-Intake API Handler — D1
  *
@@ -45,6 +46,7 @@
  */
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
+import { HARVEST_UI_STYLE } from './harvest-ui.js';
 import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
 import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
@@ -62,7 +64,7 @@ import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
 import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
-import { withinBarnGrace, suggestedIntakeZone } from '../lib/barn-attribution.js';
+import { withinBarnGrace } from '../lib/barn-attribution.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -199,7 +201,7 @@ const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'hub',
+  'lot_finish', 'hub', 'reconcile_page',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -218,6 +220,7 @@ export async function handleCrewScan(request, env, ctx) {
 export async function handleHarvestD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
+  if (action === 'practice') return practicePage(pickLang(request));
   const params = getQueryParams(request);
   const db = env.DB;
   const ui = makeUi(request, env);
@@ -246,10 +249,12 @@ export async function handleHarvestD1(request, env, ctx) {
           // after the operator types the password, the same way the lot board
           // does — so the public HTML never carries the season's numbers.
           return dashPage();
+        case 'reconcile_page':
+          return renderPage(ui, ui.lang === 'es' ? 'Inventario' : 'Inventory comparison', reconcileBody(ui));
         case 'hub':
           return renderPage(ui, ui.lang === 'es' ? 'Herramientas de cosecha' : 'Harvest tools', hubBody(ui));
         case 'print_codes':
-          return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui), 200);
+          return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
         case 'sack_session_start':
@@ -933,44 +938,21 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const crew = station ? STATION_CREW[station] : null;
 
-  // At a station, this crew's zone is the one whose trailers arrive here.
-  //
-  // The fall-through to ANY open zone is deliberate, not an accident of the
-  // `||`. It covers two real cases: a single unlabelled intake (a bookmark or a
-  // sign that predates the doors), and the first load of a morning before this
-  // door's crew has scanned in. A blank default there would be worse than a
-  // borrowed one — it invites a wrong pick from a scrolling list. But a
-  // borrowed default must never look like this door's own, so it is named.
-  const mine = crew ? await getActiveSession(db, isTest, crew) : null;
-  const active = mine || await getAnyOpenSession(db, isTest);
-  const borrowed = !!(crew && !mine && active);
-
-  // Just after a zone change, any trailer pulling in was almost certainly
-  // loaded in the zone before — it was already on the road when the crew
-  // scanned. Pre-select that zone and say why; the dropdown still overrides.
-  const lastClosed = (crew ? await getLastClosedAnyCultivar(db, isTest, null, crew) : null)
-    || await getLastClosedAnyCultivar(db, isTest);
-  const suggested = suggestedIntakeZone({
-    activeZone: active ? active.zone : null,
-    lastClosedZone: lastClosed ? lastClosed.zone : null,
-    lastClosedAtMs: lastClosed && lastClosed.closed_at
-      ? parseSqliteUtc(lastClosed.closed_at).getTime() : null,
-    nowMs: Date.now(),
-  });
+  // A labelled barn follows only its own crew. No other crew is a default.
+  const active = crew ? await getActiveSession(db, isTest, crew) : null;
 
   // The bay default is worth more care than it looks. A wrong bay is
   // unrecoverable — nothing afterwards distinguishes it from a right one —
   // whereas a missing bay is merely unknown. So the default is silent while it
   // is still the same Pacific day, and NAMED once the day has turned, which is
   // exactly when the crew has moved on to the next bay and the default has
-  // quietly stopped being true. Same treatment the borrowed zone gets above.
+  // quietly stopped being true. Keep the stale bay warning visible.
   const lastFill = await getLastFilledBay(db, isTest, crew);
   const bayStale = !!(lastFill && lastFill.occurred_at &&
     pacificDay(parseSqliteUtc(lastFill.occurred_at)) !== pacificDay(new Date()));
 
   return renderPage(ui, ui.t('barnIntake'),
-    barnIntakeFormBody(ui, active, suggested ? lastClosed : null, station,
-      borrowed ? { crew: active.crew || null } : null,
+    barnIntakeFormBody(ui, active, station,
       { bay: lastFill ? lastFill.bay : null, stale: bayStale }));
 }
 
@@ -997,18 +979,11 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const crew = station ? STATION_CREW[station] : null;
 
-  // A WIDENING cascade, narrowest first. Losing the bins is the worst outcome
-  // available — the ledger counts them by joining on this FK, so a NULL drops
-  // them off every lot rather than misplacing them — so every step here trades
-  // a little precision to avoid that, and the screen says which step it took.
-  //
-  //   1. this station's crew, still cutting that zone
-  //   2. any crew still cutting it (both crews can be in one zone)
-  //   3. this crew's zone that closed inside the grace window
-  //   4. any crew's, same window
-  //   5. nothing, and say so loudly
+  // Labelled doors attribute only to their own crew, including a just-closed
+  // session for a manually selected previous zone. Unlabelled legacy submits
+  // retain their old attribution behavior.
   let zoneSession = crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null;
-  if (!zoneSession) zoneSession = await getOpenSessionForZone(db, isTest, zone);
+  if (!zoneSession && !crew) zoneSession = await getOpenSessionForZone(db, isTest, zone);
 
   // A cultivar switch INSIDE one zone is invisible to the two steps above: the
   // zone is still open, so the load attaches to whatever is being cut NOW, and
@@ -1045,7 +1020,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
     const mine = await getLastClosedAnyCultivar(db, isTest, zone, crew);
     if (inBarnGrace(mine)) { zoneSession = mine; viaGrace = true; }
   }
-  if (!zoneSession) {
+  if (!zoneSession && !crew) {
     const recent = await getLastClosedAnyCultivar(db, isTest, zone);
     if (inBarnGrace(recent)) { zoneSession = recent; viaGrace = true; }
   }
@@ -3252,7 +3227,7 @@ async function getMetrics(request, db, env, params, body) {
  * a barn PC in kiosk mode many times a day, this is printed once a season by
  * someone who wants to pick the tray and the paper first.
  */
-function codeSheetBody(ui) {
+function codeSheetBody(ui, packet = 'crew') {
   const card = (crew) => `
   <div class="card">
     <div class="kicker">Rogue Family Farms · 2026</div>
@@ -3271,8 +3246,8 @@ function codeSheetBody(ui) {
   <div class="big">RECEPCIÓN ${n}</div>
   <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
   <img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/b/${n}`, 900)}" alt="">
-  <div class="how">Escanéalo <strong>en cada carga</strong>. Escribe las cajas y envía.</div>
-  <div class="how en">Scan on <strong>every load</strong>. Type the bin count and submit.</div>
+  <div class="how">Abre la recepción. Registra cada carga sin salir de la pantalla.</div>
+  <div class="how en">Open intake once. Log each trailer without leaving the screen.</div>
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
 </section>`;
 
@@ -3293,6 +3268,8 @@ function codeSheetBody(ui) {
   </div>`;
 
   const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
+  const zones = [...VALID_ZONES].filter(isHarvestTracked).sort((a,b) => a.localeCompare(b,'en',{numeric:true}));
+  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div><img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/z/${z}`, 900)}" alt="QR ${z}"><div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
 
   return `
 <style>
@@ -3338,6 +3315,15 @@ function codeSheetBody(ui) {
   .noprint { max-width: 6.5in; margin: 0 auto 18pt; padding: 12pt 14pt; border: 1pt solid #ccd;
              border-radius: 8pt; background: #f6f7f9; font-size: 11pt; color: #334; text-align: left; }
   .noprint ul { margin: 6pt 0 0; padding-left: 18pt; }
+  @media screen {
+    .codesheet { max-width:860px; margin:auto; }
+    .codesheet .sheet { margin:20px 0; background:white; border:1px solid #d4dccd; border-radius:12px; padding:20px; }
+    .codesheet .noprint { background:#edf1e4; color:#304e3c; line-height:1.7; border-radius:14px; }
+    .codesheet .noprint a,.codesheet .noprint button { display:inline-block;padding:10px 14px;margin:4px;border:1px solid #becdb2;border-radius:8px;color:#304e3c;background:white;text-decoration:none;font:inherit;cursor:pointer; }
+    .codesheet .big-qr { max-width:100%; height:auto; }
+    .codesheet .url { overflow-wrap:anywhere; }
+    @media(max-width:600px){.codesheet .big,.codesheet .door .big{font-size:36px}.codesheet .how{font-size:15px}.codesheet .card{height:auto;min-height:4.6in}.codesheet .qr{max-width:100%;height:auto}}
+  }
   @media print {
     .noprint { display: none; }
     /* The page wrapper pads the body and floats a language toggle in the
@@ -3350,19 +3336,21 @@ function codeSheetBody(ui) {
 </style>
 <div class="codesheet">
   <div class="noprint">
-    <strong>${ui.t('printCodes')}</strong> — ${Object.keys(STATION_CREW).length + 2} pages.
+    <strong>${ui.t('printCodes')}</strong> — ${packet === 'zones' ? zones.length : Object.keys(STATION_CREW).length + 2} pages.
+    <div><a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${API}?action=print_codes&packet=crew&lang=${ui.lang}">Crew / Cuadrilla</a><a href="${API}?action=print_codes&packet=zones&lang=${ui.lang}">Zones / Zonas</a><button type="button" onclick="window.print()">Print / Imprimir</button><a href="${API}?action=practice&lang=${ui.lang}">${ui.lang === 'es' ? 'Practicar sin guardar' : 'Practice without saving'}</a></div>
     Print at 100% (no &ldquo;fit to page&rdquo;), then laminate.
-    <ul>
+    ${packet === 'zones' ? '<p>One zone per page / Una zona por página.</p>' : `<ul>
       <li><strong>Page 1</strong> — the two crew cards. Cut along the dashed line;
           one for each crew lead's clipboard. Scanned <em>once</em> per phone.</li>
-      <li><strong>Pages 2–${Object.keys(STATION_CREW).length + 1}</strong> — one per barn intake door.
-          Scanned on every load, like the old barn code.</li>
-    </ul>
+      <li><strong>Page 2</strong> — End of day / Fin del día.</li>
+      <li><strong>Pages 3–${Object.keys(STATION_CREW).length + 2}</strong> — one per barn intake door.
+          Open once, then log each trailer on the same screen.</li>
+    </ul>`}
   </div>
 
-  <section class="sheet cards">${CREWS.map(card).join('')}</section>
+  ${packet === 'zones' ? zoneSheets : `<section class="sheet cards">${CREWS.map(card).join('')}</section>
   <section class="sheet cards">${dayEndCard}</section>
-  ${doors}
+  ${doors}`}
 </div>`;
 }
 
@@ -3370,11 +3358,13 @@ function codeSheetBody(ui) {
 
 function renderPage(ui, title, bodyHtml, status = 200) {
   const lang = ui.lang;
+  const working = !bodyHtml.includes('class="sd"') && !bodyHtml.includes('class="harvest-hub"') && !bodyHtml.includes('class="codesheet"');
+  const chrome = `<header class="harvest-header"><img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="54" height="54"><div><strong>ROGUE ORIGIN</strong><small>${lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</small></div><nav aria-label="${lang === 'es' ? 'Navegación' : 'Navigation'}"><a href="${API}?action=hub&lang=${lang}">${lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${escapeHtml(ui.toggle)}">${ui.t('langOther')}</a></nav></header>`;
   const html = `<!doctype html>
 <html lang="${lang}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)} — Harvest</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 20px; background: #14251a; color: #f2f6f2; }
@@ -3657,12 +3647,13 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   body.testmode .lang { top: 50px; }
   @media print { .testband { display: none; } }
   ${SACK_DETAIL_STYLE}
+  ${HARVEST_UI_STYLE}
 </style>
 </head>
 <body${ui.isTest ? ' class="testmode"' : ''}>
 ${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
 <div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}">${ui.t('langOther')}</a></div>
-${bodyHtml}
+${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtml}
 </body>
 </html>`;
   return new Response(html, {
@@ -3813,7 +3804,7 @@ function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
-<div id="hcstat" class="hcstat"></div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
 }
@@ -3825,7 +3816,7 @@ function alreadyEnteredBody(ui, active) {
 <p class="note">${ui.t('alreadyEnteredAt', { t: active.occurred_at })}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
 <div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
-<div id="hcstat" class="hcstat"></div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
 ${headcountScript(ui)}`;
 }
 
@@ -3838,7 +3829,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <p class="sub">${zone} — ${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${ui.t('wrongNumber')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId, count)}</div>
-<div id="hcstat" class="hcstat"></div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
 <div class="footer"><a href="${API}?action=status">${ui.t('viewStatus')}</a></div>
 ${headcountScript(ui)}`;
 }
@@ -3859,8 +3850,7 @@ function areaBasisFor(zone, cultivar) {
   return `${rows} of ${total} rows in ${zone}`;
 }
 
-function barnIntakeFormBody(ui, active, justClosed = null, station = null, borrowed = null,
-                            lastFill = null) {
+function barnIntakeFormBody(ui, active, station = null, lastFill = null) {
   // A full trailer, pre-filled, so the ordinary load is one tap on Submit
   // instead of a typed number. Read off the constant rather than written here,
   // because that constant carries "recalibrate once 2026 trailers run" and the
@@ -3876,13 +3866,12 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null, borro
   // No autofocus now: the common case needs no keyboard at all. Tapping the
   // field selects it, so a partial is typed over rather than edited around.
   const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
-  // Within the grace window the just-closed zone is the better default — the
-  // trailer at the door left that zone before the crew moved.
-  const preselect = justClosed ? justClosed.zone : (active ? active.zone : null);
+  // Follow the matching crew; older arriving trailers use a manual override.
+  const preselect = active ? active.zone : null;
 
   // Only zones harvest actually counts — offering GH here would let a load be
   // logged against a zone no bag will ever be tagged from.
-  const options = [...VALID_ZONES].filter(isHarvestTracked).sort().map(z =>
+  const options = [...VALID_ZONES].filter(isHarvestTracked).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map(z =>
     `<option value="${z}" ${preselect === z ? 'selected' : ''}>${z}</option>`
   ).join('');
   const activeNote = active
@@ -3891,12 +3880,6 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null, borro
         n: active.cut_number,
       })}</p>`
     : `<p class="note">${ui.t('noZoneOpen')}</p>`;
-  const graceNote = justClosed
-    ? `<p class="note">${ui.t('justMoved', {
-        newZone: active ? active.zone : '?',
-        prevZone: justClosed.zone,
-      })}</p>`
-    : '';
   // Which door this is, stated on the screen: two intakes that look identical
   // are two chances to log a load at the wrong one.
   const stationNote = station
@@ -3907,17 +3890,6 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null, borro
   // Carried explicitly rather than trusted to the cookie: the cookie makes a
   // bookmark remember its door, this makes THIS submission unambiguous.
   const stationField = station ? `<input type="hidden" name="station" value="${station}">` : '';
-
-  // The default came from the other crew, or from a phone carrying no crew at
-  // all — a spare handset, or a leftover session from a walkthrough that no
-  // tagged crew will ever close. Either way it is borrowed, and the person at
-  // the door is the only one who can judge it, so both cases say so. An
-  // unnamed source is the one that most needs saying.
-  const borrowedNote = borrowed
-    ? `<p class="note">${borrowed.crew
-        ? ui.t('otherCrewZone', { crew: borrowed.crew })
-        : ui.t('untaggedZone')}</p>`
-    : '';
 
   // Stale means the last load with a bay was on an earlier Pacific day, so the
   // crew has almost certainly moved to the next bay since. Say the number out
@@ -3930,13 +3902,12 @@ function barnIntakeFormBody(ui, active, justClosed = null, station = null, borro
   return `
 <h1>${ui.t('barnIntake')}</h1>
 ${stationNote}
-${activeNote}
-${borrowedNote}
-${graceNote}
-<form method="POST" action="${API}?action=barn_log&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+<div id="intakeActive" role="status">${activeNote}</div>
+${station ? `<button id="followCrew" type="button" class="btn alt" style="margin-bottom:16px">${ui.lang === 'es' ? 'Seguir zona de Cuadrilla ' : 'Follow Crew '}${STATION_CREW[station]}${ui.lang === 'es' ? '' : ' zone'}</button>` : `<p class="note">${ui.lang === 'es' ? 'Elige tu recepción para seguir la zona de tu cuadrilla.' : 'Choose your intake to follow your crew’s scanned zone.'}</p><div class="intake-choices">${[['A', 1], ['B', 2]].map(([crew, door]) => `<a class="intake-choice crew-${crew.toLowerCase()}" href="/b/${door}?lang=${ui.lang}"><span class="intake-letter" aria-hidden="true">${crew}</span><span><strong>${ui.lang === 'es' ? 'Cuadrilla' : 'Crew'} ${crew}</strong><small>${ui.lang === 'es' ? 'Recepción' : 'Barn intake'} ${door}</small></span><span class="intake-arrow" aria-hidden="true">→</span></a>`).join('')}</div>`}
+<form id="intakeForm" method="POST" action="${API}?action=barn_log&lang=${ui.lang}">
   ${stationField}
   <label for="zone">${ui.t('zone')}</label>
-  <select id="zone" name="zone" required>${options}</select>
+  <select id="zone" name="zone" required><option value="">${ui.lang === 'es' ? 'Elige una zona' : 'Choose a zone'}</option>${options}</select>
   <label for="bins">${ui.t('binsOnLoad')} <span class="hint">${ui.t('binsPrefilled', { n: FULL_TRAILER })}</span></label>
   <input id="bins" name="bins" type="number" min="1" max="500" inputmode="numeric" required
          value="${FULL_TRAILER}" onfocus="this.select()">
@@ -3946,7 +3917,94 @@ ${graceNote}
     ${bayOptions(ui, lastFill ? lastFill.bay : null)}
   </select>
   <button class="btn" type="submit">${ui.t('logLoad')}</button>
-</form>`;
+</form>
+<div id="intakeReceipt" role="status" aria-live="polite"></div>
+${barnLiveScript(ui, station)}`;
+}
+
+// Progressive enhancement: the normal POST remains usable without JavaScript.
+// Never retry a failed POST automatically: a lost response may already be saved.
+function barnLiveScript(ui, station) {
+  const es = ui.lang === 'es';
+  const text = {
+    live: es ? 'Zona actual de Cuadrilla ' : 'Current zone for Crew ',
+    none: es ? 'Sin zona abierta para esta cuadrilla. Elige una zona.' : 'No open zone for this crew. Choose a zone.',
+    manual: es ? 'Zona manual — se conserva para cargas anteriores. Pulsa Seguir para volver.' : 'Manual zone — held for arriving loads. Press Follow to resume automatic selection.',
+    offline: es ? 'No se pudo actualizar la zona. Confírmala antes de registrar.' : 'Zone update unavailable. Confirm the zone before logging.',
+    saving: es ? 'Registrando…' : 'Recording…',
+    ready: es ? 'Listo para otra carga. Se restableció la carga completa.' : 'Ready for another trailer. Full-load bin count restored.',
+    uncertain: es ? 'No se pudo confirmar el guardado. Revisa el registro antes de enviar de nuevo.' : 'Could not confirm the save. Check the load log before submitting again.',
+    check: es ? 'Ver registro de cargas' : 'Check load log',
+  };
+  return `<script>
+(function () {
+  var T = ${JSON.stringify(text)}, crew = ${JSON.stringify(STATION_CREW[station] || null)};
+  var form = document.getElementById('intakeForm'), zone = document.getElementById('zone');
+  var status = document.getElementById('intakeActive'), receipt = document.getElementById('intakeReceipt');
+  var follow = document.getElementById('followCrew'), busy = false, manual = false, polling = false;
+  var latest = null, modeVersion = 0;
+  function applyActive() {
+    if (manual || busy) return;
+    zone.value = latest ? latest.zone : '';
+    status.textContent = latest ? T.live + crew + ': ' + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
+  }
+  async function refresh() {
+    if (!crew || polling || busy || document.hidden) return;
+    polling = true;
+    try {
+      var r = await fetch('${API}?action=status', { cache: 'no-store' });
+      if (!r.ok) throw new Error('status');
+      var d = await r.json();
+      if (!Array.isArray(d.active_zones)) throw new Error('status');
+      latest = d.active_zones.find(function (s) { return s.crew === crew; }) || null;
+      applyActive();
+    } catch (_) { if (!manual && !busy) status.textContent = T.offline; }
+    finally { polling = false; }
+  }
+  zone.addEventListener('change', function () { manual = true; modeVersion++; status.textContent = T.manual; });
+  if (follow) follow.addEventListener('click', function () { manual = false; modeVersion++; refresh(); });
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (busy || !form.reportValidity()) return;
+    // Capture the visible selection before disabling controls; an in-flight
+    // status response must never change the zone of this trailer.
+    var body = new URLSearchParams(new FormData(form));
+    var submittedMode = modeVersion;
+    busy = true;
+    var controls = Array.from(form.querySelectorAll('input, select, button'));
+    controls.forEach(function (el) { el.disabled = true; });
+    if (follow) follow.disabled = true;
+    receipt.textContent = T.saving;
+    try {
+      var r = await fetch(form.action, { method: 'POST', body: body });
+      var html = await r.text();
+      if (!r.ok) throw new Error('save');
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      var heading = doc.querySelector('h1');
+      if (!heading) throw new Error('receipt');
+      receipt.replaceChildren();
+      // Only render text from the server receipt, never replay its scripts.
+      [heading].concat(Array.from(doc.querySelectorAll('p.sub, p.note'))).forEach(function (el) {
+        var p = document.createElement('p'); p.textContent = el.textContent; receipt.appendChild(p);
+      });
+      var ready = document.createElement('p'); ready.textContent = T.ready; receipt.appendChild(ready);
+      document.getElementById('bins').value = '${CONSTANTS.binsPerTrailer.value}';
+    } catch (_) {
+      receipt.textContent = T.uncertain + ' ';
+      var a = document.createElement('a'); a.href = '${API}?action=logs&event_type=barn_load';
+      a.textContent = T.check; a.target = '_blank'; a.rel = 'noopener'; receipt.appendChild(a);
+    } finally {
+      busy = false; controls.forEach(function (el) { el.disabled = false; });
+      if (follow) follow.disabled = false;
+      if (submittedMode === modeVersion) refresh();
+    }
+  });
+  refresh();
+  setInterval(refresh, 5000);
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', refresh);
+})();
+</script>`;
 }
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
@@ -3985,8 +4043,8 @@ ${crossNote}
 function crewFormBody(ui, current) {
   const fields = CREW_ROLES.map(r => `
   <label for="${r.key}">${ui.t(r.labelKey)} <span class="hint">${ui.t(r.whereKey)}</span></label>
-  <input id="${r.key}" name="${r.key}" type="number" min="0" max="99" inputmode="numeric"
-         value="${current && current[r.key] !== null ? current[r.key] : ''}">`).join('');
+  <div class="crew-stepper"><button type="button" data-field="${r.key}" data-step="-1" aria-label="${ui.lang === 'es' ? 'Reducir' : 'Decrease'} ${ui.t(r.labelKey)}">−</button><input id="${r.key}" name="${r.key}" type="number" min="0" max="99" inputmode="numeric"
+         value="${current && current[r.key] !== null ? current[r.key] : ''}"><button type="button" data-field="${r.key}" data-step="1" aria-label="${ui.lang === 'es' ? 'Aumentar' : 'Increase'} ${ui.t(r.labelKey)}">+</button></div>`).join('');
 
   const since = current
     ? `<p class="note">${ui.t('rosterSince', { t: escapeHtml(current.effective_from) })}</p>`
@@ -3996,13 +4054,14 @@ function crewFormBody(ui, current) {
 <h1>${ui.t('crew')}</h1>
 <p class="sub">${ui.t('crewSub')}</p>
 ${since}
-<form method="POST" action="${API}?action=crew_set&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+<form method="POST" action="${API}?action=crew_set&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
   ${fields}
   <label for="note">${ui.t('note')} <span class="hint">${ui.t('noteHint')}</span></label>
   <input id="note" name="note" maxlength="200" autocomplete="off">
   <button class="btn" type="submit">${ui.t('saveCrew')}</button>
 </form>
-<p class="note"><span class="hint">${ui.t('cuttersNotHere')}</span></p>`;
+<p class="note"><span class="hint">${ui.t('cuttersNotHere')}</span></p>
+<script>document.querySelectorAll('.crew-stepper button').forEach(function(b){b.addEventListener('click',function(){var input=document.getElementById(b.dataset.field);input.value=Math.max(0,Math.min(99,Number(input.value||0)+Number(b.dataset.step)));});});</script>`;
 }
 
 function crewConfirmBody(ui, counts, flash) {
@@ -4528,7 +4587,7 @@ function renderAverySheet(ui, sacks, opts = {}) {
   const nextSkip = (used % G.perSheet);
 
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>${G.name}</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${G.name}</title>
 <style>
   @page { size: letter portrait; margin: 0; }
   * { box-sizing: border-box; }
@@ -4583,8 +4642,10 @@ function renderAverySheet(ui, sacks, opts = {}) {
   .calnum { font-size: 28pt; font-weight: 700; color: #000; }
 
   .toolbar { padding: 14px; font: 14px system-ui; background: #fff; }
-  .toolbar a { color: #036; }
+  .toolbar a { color: #304e3c; display:inline-block; padding:10px 14px; border:1px solid #c5d0ba; border-radius:8px; text-decoration:none; margin:4px; }
+  @media screen { .toolbar{background:#edf1e4!important;color:#304e3c!important;padding:16px!important;line-height:1.8} .banner{border-radius:12px!important} }
   .toolbar .warn { color: #a33; font-weight: 600; }
+  @media screen and (max-width:600px) { .sheet { zoom: .42; } }
   @media screen { .sheet { margin: 12px auto; box-shadow: 0 1px 6px rgba(0,0,0,.3); } }
   @media print {
     .toolbar { display: none; }
@@ -4594,7 +4655,7 @@ function renderAverySheet(ui, sacks, opts = {}) {
   }
 </style></head>
 <body>
-<div class="toolbar">
+<div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>
   <strong>${G.name}</strong> &middot; ${calibrate ? 'calibration sheet' : `${sacks.length} ${ui.t('sack')}${skip ? ` · skipped ${skip}` : ''}`}
   &middot; <a href="javascript:window.print()">${ui.t('printTag')}</a>
   ${!calibrate && leftOver ? `&middot; <strong>${leftOver} slot(s) left on this sheet</strong> — keep it, next run use <code>&amp;skip=${nextSkip}</code>` : ''}
@@ -4760,7 +4821,8 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; font-weight: 700; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
-  .toolbar a { color: #036; }
+  .toolbar a { color: #304e3c; display:inline-block; padding:10px 14px; border:1px solid #c5d0ba; border-radius:8px; text-decoration:none; margin:4px; }
+  @media screen { .toolbar{background:#edf1e4!important;color:#304e3c!important;padding:16px!important;line-height:1.8} .banner{border-radius:12px!important} }
   /* Explanatory text for whoever opened the sheet — SCREEN ONLY. Left in the
      print flow it costs a label and, worse, pushes the first tag down so it
      straddles the page boundary: the Sour Lifter tag came out of a BIXOLON
@@ -4782,7 +4844,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   }
 </style></head>
 <body>
-<div class="toolbar">${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
+<div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${opts.banner || ''}
 ${labels}
 ${TAG_FIT_SCRIPT}
@@ -4954,51 +5016,193 @@ function hubBody(ui) {
   const L = (en, sp) => (es ? sp : en);
   const q = `lang=${ui.lang}`;
   const card = (href, title, desc, badge = '', primary = false) =>
-    `<a class="hubcard${primary ? ' primary' : ''}" href="${href}"><span class="ht">${title}</span><span class="hd">${desc}</span>${badge ? `<span class="hb">${badge}</span>` : ''}</a>`;
+    `<a class="hubcard${primary ? ' primary' : ''}" href="${href}"><span class="ht">${title}</span><span class="hd">${desc}</span>${badge ? `<span class="hb">${badge}</span>` : ''}<span class="hub-arrow" aria-hidden="true">↗</span></a>`;
   const scan = (title, desc, code) =>
     `<div class="hubcard scan"><span class="ht">${title}</span><span class="hd">${desc}</span><span class="hd"><code>${code}</code></span><span class="hb">${L('SCAN ONLY', 'SOLO ESCANEAR')}</span></div>`;
   const lane = (n, color, title, sub, cards) => `
-<section class="lane" style="--lane:${color}">
-  <div class="lane-head"><span class="lane-n">${n}</span><span class="lane-t">${title}</span><span class="lane-s">${sub}</span></div>
+<section class="lane" id="stage-${n}" style="--lane:${color}">
+  <div class="lane-head"><span class="lane-n">${n}</span><h2 class="lane-t">${title}</h2><span class="lane-s">${sub}</span></div>
   <div class="hubgrid">${cards.join('')}</div>
 </section>`;
   const PW = L('PASSWORD', 'CONTRASEÑA');
+  // One hue per stage, dark enough to read on the light ground. It marks the stage's
+  // number, a stripe on each of its cards, and its tab, so a stage is found by colour.
+  const LANE = ['#3f8a5c', '#b8841c', '#2d7f86', '#8a5aa0', '#4f6fa6'];
 
   return `
+<style>
+body:has(.harvest-hub) { background: #f6f5ef; color: #263f32; padding: 0; }
+body:has(.harvest-hub) > .lang { display: none; }
+body:has(.harvest-hub) > .testband { margin: 0; }
+.harvest-hub { --ink: #263f32; --muted: #5d6d61; max-width: 1200px; margin: auto; padding: 0 40px 30px; font-family: 'Quicksand', system-ui, sans-serif; }
+.harvest-hub * { box-sizing: border-box; }
+.hub-brand { display: flex; align-items: center; gap: 16px; padding: 22px 0; border-bottom: 1px solid #d8ded2; }
+.hub-brand img { width: 64px; height: 64px; object-fit: contain; }
+.hub-brand strong { display: block; font: 700 15px 'Karla', sans-serif; letter-spacing: .12em; }
+.hub-brand small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.hub-language { margin-left: auto; color: var(--ink); border: 1px solid #c4cebe; border-radius: 30px; padding: 12px 18px; text-decoration: none; font: 700 14px 'Karla', sans-serif; }
+.hub-intro { padding: 36px 0 26px; display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+.hub-eyebrow { color: #607451; font: 700 11px 'Karla', sans-serif; letter-spacing: .17em; text-transform: uppercase; margin: 0 0 12px; }
+.harvest-hub h1 { font: 700 clamp(36px, 5vw, 58px)/1.04 'Karla', sans-serif; letter-spacing: -.045em; margin: 0 0 12px; }
+.harvest-hub .sub { color: var(--muted); font-size: 15px; margin: 0; line-height: 1.6; }
+.hub-season { flex: none; font: 700 12px 'Karla', sans-serif; padding: 10px 14px; border: 1px solid #c9d2c1; border-radius: 30px; margin-bottom: 4px; }
+.hub-workbench { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-bottom: 30px; }
+.hub-start { border-radius: 18px; padding: 27px; background: #2e4b3b; color: #fff; position: relative; }
+.hub-start h2 { margin: 0 0 8px; color: #fff; font: 700 25px 'Karla',sans-serif; letter-spacing: -.02em; text-transform: none; }
+.hub-start p { margin: 0 0 23px; color: #dfebdf; font-size: 14px; line-height: 1.6; }
+.hub-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hub-actions a { display: flex; align-items: center; justify-content: space-between; gap: 22px; min-height: 49px; padding: 13px 18px; border-radius: 8px; font: 700 15px 'Karla',sans-serif; background: #ebc665; color: #263f32; text-decoration: none; }
+.hub-actions a + a { background: transparent; color: #fff; border: 1px solid #91a395; }
+.hub-lookup { background: #ecefe4; border: 1px solid #dbe1d2; padding: 27px; border-radius: 18px; }
+.harvest-hub .hub-lookup label { display: block; color: var(--ink); font: 700 23px 'Karla',sans-serif; margin-bottom: 8px; }
+.hub-lookup p { font-size: 14px; color: var(--muted); margin: 0 0 20px; line-height: 1.6; }
+.harvest-hub .hub-search { margin: 0; gap: 8px; }
+.harvest-hub .hub-search input { min-width: 0; height: 50px; border: 1px solid #b7c3ad; border-radius: 8px; background: #fff; color: var(--ink); font: 16px system-ui,sans-serif; margin: 0; }
+.harvest-hub .hub-search .btn { background: #2e4b3b; border-radius: 8px; font: 700 15px 'Karla',sans-serif; padding: 12px 20px; }
+.hub-nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 26px; border-bottom: 1px solid #d8ded2; margin-bottom: 30px; }
+.hub-nav a i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--lane); margin-right: 8px; vertical-align: 1px; }
+.hub-nav a { color: #455b48; text-decoration: none; padding: 12px 16px; background: #eaede3; border-radius: 7px; font: 700 14px 'Karla',sans-serif; }
+.hub-nav a span { opacity: .65; margin-right: 10px; font-size: 11px; }
+.harvest-hub .lane { border: 0; padding: 0; margin: 0 0 32px; scroll-margin-top: 20px; }
+.harvest-hub .lane-head { gap: 11px; align-items: center; margin-bottom: 14px; }
+.harvest-hub .lane-n { border-radius: 7px; width: 30px; height: 30px; background: var(--lane); color: #fff; font: 700 13px 'Karla',sans-serif; }
+.harvest-hub .lane-t { margin: 0; color: var(--ink); font: 700 23px 'Karla',sans-serif; letter-spacing: -.025em; text-transform: none; }
+.harvest-hub .lane-s { font-size: 13px; color: var(--muted); }
+.harvest-hub .lane-s::before { content: '·'; margin-right: 8px; opacity: .6; }
+.harvest-hub .hubgrid { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.harvest-hub #stage-1 .hubgrid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.harvest-hub .hubcard { min-height: 118px; position: relative; gap: 8px; padding: 18px 34px 18px 20px; background: #fff; border: 1px solid #d9dfd3; border-top: 4px solid var(--lane); border-radius: 12px; color: var(--ink); transition: background .15s, border-color .15s; }
+.harvest-hub a.hubcard:hover { background: #eef3e8; border-color: #7d9778; border-top-color: var(--lane); }
+.harvest-hub .hubcard .ht { font: 700 18px 'Karla',sans-serif; letter-spacing: -.015em; }
+.harvest-hub .hubcard .hd { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.harvest-hub .hubcard .hb { margin-top: auto; background: #edf0e7; color: #4b5c45; font: 700 11px 'Karla',sans-serif; padding: 5px 8px; }
+.harvest-hub .hubcard.scan { background: transparent; border-style: dashed; border-top-style: solid; }
+.harvest-hub .hubcard.scan .hb { background: #eee8d8; color: #796026; }
+.harvest-hub .hubcard code { font-size: 12px; color: #687a5d; }
+.harvest-hub a.hubcard.primary { border-color: #9fb496; border-top-color: var(--lane); background: #e9efdf; }
+.hub-arrow { position: absolute; right: 16px; top: 20px; color: #657b59; font: 20px system-ui,sans-serif; }
+.hub-footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 22px; border-top: 1px solid #d8ded2; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.harvest-hub :is(a, input, button):focus-visible { outline: 3px solid #9a6d16; outline-offset: 4px; }
+.hub-language:hover, .hub-nav a:hover { background: #dce5d2; }
+@media(max-width: 800px) {
+ .harvest-hub { padding: 0 22px 24px; }
+ .hub-workbench { grid-template-columns: 1fr; }
+ .harvest-hub .hubgrid, .harvest-hub #stage-1 .hubgrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .hub-intro { align-items: start; }
+ .hub-season { display: none; }
+}
+@media(max-width: 480px) {
+ .harvest-hub { padding: 0 16px 24px; }
+ .hub-brand { gap: 10px; padding: 16px 0; }
+ .hub-brand img { width: 46px; height: 46px; }
+ .hub-brand strong { font-size: 12px; letter-spacing: .06em; }
+ .hub-brand small { font-size: 11px; }
+ .hub-language { padding: 12px; font-size: 12px; }
+ .hub-intro { padding: 28px 0 22px; }
+ .hub-start, .hub-lookup { padding: 22px; }
+ .hub-actions a { flex: 1 1 auto; }
+ .hub-nav { gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px 26px; padding: 0 16px 20px; scrollbar-width: none; }
+ .hub-nav::-webkit-scrollbar { display: none; }
+ .hub-nav a { flex: none; font-size: 13px; padding: 13px 12px; }
+ .hub-nav a span { margin-right: 6px; }
+ .harvest-hub .hubgrid, .harvest-hub #stage-1 .hubgrid { grid-template-columns: 1fr; }
+ .harvest-hub .hubcard { min-height: 0; }
+ .harvest-hub .lane-s { font-size: 12px; }
+ .hub-footer { flex-direction: column; gap: 8px; }
+}
+</style>
+<main class="harvest-hub">
+<header class="hub-brand">
+ <img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="64" height="64">
+ <div><strong>ROGUE ORIGIN</strong><small>${L('From field to flower', 'Del campo a la flor')}</small></div>
+ <a class="hub-language" href="${escapeHtml(ui.toggle)}" lang="${es ? 'en' : 'es'}">${L('Español', 'English')}</a>
+</header>
+<div class="hub-intro"><div><p class="hub-eyebrow">${L('Rogue Family Farms · Harvest operations', 'Rogue Family Farms · Operaciones de cosecha')}</p>
 <h1>${L('Harvest tools', 'Herramientas de cosecha')}</h1>
-<p class="sub">${L('Field to sack, in the order the material moves.', 'Del campo a la bolsa, en el orden en que se mueve el material.')}</p>
-
-<form class="hub-search" method="GET" action="${API}">
-  <input type="hidden" name="action" value="find">
-  <input type="hidden" name="lang" value="${ui.lang}">
-  <input name="q" autocomplete="off" autocapitalize="off" autocorrect="off" required
-         placeholder="${L('Find a sack — e.g. RAINGQ-C2-3 or 7', 'Buscar bolsa — ej. RAINGQ-C2-3 o 7')}">
+<p class="sub">${L('From the first cut to the last sack. Your next step starts here.', 'Del primer corte a la última bolsa. Tu siguiente paso empieza aquí.')}</p></div>
+<span class="hub-season">${L('HARVEST', 'COSECHA')} ${getSeason()}</span></div>
+<p style="margin:0 0 22px"><a class="hub-language" style="display:inline-block;margin:0;background:#f4e6bd" href="${API}?action=practice&lang=${ui.lang}">${L('Try practice mode — nothing is saved →', 'Probar modo práctica — nada se guarda →')}</a></p>
+<div class="hub-workbench">
+ <section class="hub-start"><h2>${L('Keep the harvest moving.', 'Que la cosecha siga.')}</h2><p>${L('Bring a load in. Get the next bag tagged.', 'Recibe una carga. Etiqueta la siguiente bolsa.')}</p>
+ <div class="hub-actions"><a href="${API}?action=sack_print&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>
+ <section class="hub-lookup"><label for="hub-query">${L('Find a sack', 'Buscar bolsa')}</label><p id="hub-query-help">${L('Enter the code or number printed on the tag.', 'Ingresa el código o número impreso en la etiqueta.')}</p>
+ <form class="hub-search" method="GET" action="${API}">
+  <input type="hidden" name="action" value="find"><input type="hidden" name="lang" value="${ui.lang}">
+  <input id="hub-query" name="q" aria-describedby="hub-query-help" autocomplete="off" autocapitalize="off" autocorrect="off" required placeholder="${L('e.g. RAINGQ-C2-3 or 7', 'ej. RAINGQ-C2-3 o 7')}">
   <button class="btn" type="submit">${L('Find', 'Buscar')}</button>
-</form>
-${lane(1, '#4a9d6a', L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'), [
+ </form></section>
+</div>
+<nav class="hub-nav" aria-label="${L('Harvest stages', 'Etapas de cosecha')}">
+${[L('Field', 'Campo'), L('Barn', 'Bodega'), L('Takedown', 'Bajada'), L('Bags', 'Bolsas'), L('Oversight', 'Supervisión')].map((name, i) => `<a href="#stage-${i + 1}" style="--lane:${LANE[i]}"><i aria-hidden="true"></i><span>0${i + 1}</span>${name}</a>`).join('')}
+</nav>
+${lane(1, LANE[0], L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'), [
     scan(L('Zone sign', 'Letrero de zona'), L('Starts cutting a zone: cultivar and crew size.', 'Empieza a cortar una zona: cultivar y número de cortadores.'), '/z/Z8'),
     scan(L('Crew card', 'Tarjeta de cuadrilla'), L('Scan once per phone to set Crew A or B.', 'Escanéala una vez por teléfono: Cuadrilla A o B.'), '/c/A · /c/B'),
     scan(L('End of day', 'Fin del día'), L('Closes the zone that is open.', 'Cierra la zona que esté abierta.'), '/fin'),
     card(`${API}?action=print_codes&${q}`, L('Print signs &amp; cards', 'Imprimir letreros y tarjetas'), L('Every zone sign, crew card and barn code as QR codes.', 'Todos los letreros, tarjetas y códigos de bodega en QR.')),
   ])}
-${lane(2, '#e9c462', L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
+${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
     card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
     card(`${API}?action=crew&${q}`, L('Crew roster', 'Cuadrilla'), L('Drivers, hangers and water spiders on shift.', 'Choferes, colgadores y water spiders en turno.')),
   ])}
-${lane(3, '#8fc2a0', L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
+${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
   ])}
-${lane(4, '#c49bd6', L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a abrirlas'), [
+${lane(4, LANE[3], L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a abrirlas'), [
     card(`${API}?action=find&${q}`, L('Find a sack', 'Buscar bolsa'), L('Look up any tag by code or number; recent tags listed.', 'Busca cualquier etiqueta por código o número; muestra las recientes.')),
     scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
   ])}
-${lane(5, '#8fb3d9', L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
+${lane(5, LANE[4], L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
     card(`${API}?action=harvest_dash`, L('Harvest dashboard', 'Tablero de cosecha'), L('Rack board, storage, cycle times.', 'Racks, almacén, tiempos de ciclo.'), PW),
     card(`${API}?action=board_page`, L('Lot board', 'Tablero de lotes'), L('Every lot from untested to supersacked.', 'Cada lote, de sin probar a embolsado.'), PW),
-    card(`${API}?action=reconcile&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
-  ])}`;
+    card(`${API}?action=reconcile_page&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
+  ])}<footer class="hub-footer"><span>ROGUE FAMILY FARMS · ${L('Field to flower', 'Del campo a la flor')}</span><span>${L('Scan-only tools start from the printed QR code.', 'Las herramientas de escaneo se abren desde el código QR impreso.')}</span></footer></main>`;
+}
+
+function reconcileBody(ui) {
+  const es = ui.lang === 'es';
+  const L = (en, sp) => es ? sp : en;
+  const strings = {
+    loading: L('Checking inventory…', 'Revisando inventario…'),
+    failed: L('Could not load the comparison. Try again.', 'No se pudo cargar la comparación. Inténtalo de nuevo.'),
+    empty: L('No tagged bags for this season.', 'No hay bolsas etiquetadas esta temporada.'),
+    matched: L('Matched', 'Cuadra'), review: L('Review', 'Revisar'), unknown: L('Unavailable', 'No disponible'),
+    unavailable: L('Shopify could not be checked. Counts below are not a complete comparison.', 'No se pudo consultar Shopify. La comparación está incompleta.'),
+    unmatched: L('Shopify variants without tagged bags', 'Variantes de Shopify sin bolsas etiquetadas'),
+    unsynced: L('Opened bags awaiting inventory sync', 'Bolsas abiertas pendientes de sincronizar'),
+  };
+  return `<h1>${L('Do the counts match?', '¿Cuadran las cantidades?')}</h1>
+<p class="sub">${L('Unopened tagged bags compared with Shopify Super Sack inventory, per cut.', 'Bolsas etiquetadas sin abrir contra el inventario Super Sack de Shopify, por corte.')}</p>
+<form id="compareForm"><label for="compareSeason">${L('Season', 'Temporada')}</label><input id="compareSeason" type="number" min="2020" max="2100" value="${getSeason()}" required><button type="submit" class="btn">${L('Refresh comparison', 'Actualizar comparación')}</button></form>
+<p id="compareStatus" role="status" aria-live="polite"></p>
+<div class="reconcile-table"><table><thead><tr>${[L('Cultivar / cut', 'Cultivar / corte'), L('Unopened bags', 'Bolsas sin abrir'), 'Shopify', L('Difference', 'Diferencia'), L('Status', 'Estado')].map(x => `<th scope="col">${x}</th>`).join('')}</tr></thead><tbody id="compareRows"></tbody></table></div>
+<div id="compareExtra"></div><p class="note"><span class="hint">${L('Read-only. Positive difference means more tagged bags than Shopify units. Check the physical count before making adjustments.', 'Solo lectura. Una diferencia positiva indica más bolsas que unidades en Shopify. Revisa el conteo físico antes de ajustar.')}</span></p>
+<script>
+(function(){
+ var T=${JSON.stringify(strings)}, form=document.getElementById('compareForm'), status=document.getElementById('compareStatus');
+ var rows=document.getElementById('compareRows'), extra=document.getElementById('compareExtra');
+ async function load(){
+  if(!form.reportValidity())return;
+  var button=form.querySelector('button');button.disabled=true;status.textContent=T.loading;rows.replaceChildren();extra.replaceChildren();
+  try{
+   var r=await fetch('${API}?action=reconcile&season='+encodeURIComponent(document.getElementById('compareSeason').value),{cache:'no-store'});
+   if(!r.ok)throw new Error('load');var d=await r.json();if(!d.success||!Array.isArray(d.lines))throw new Error('data');
+   status.textContent=d.variants_error?T.unavailable:(!d.lines.length?T.empty:new Date(d.generated_at).toLocaleString('${es ? 'es-US' : 'en-US'}',{timeZone:'America/Los_Angeles'})+' Pacific');
+   var pending=0;
+   d.lines.forEach(function(l){
+    var tr=document.createElement('tr'), unavailable=!!d.variants_error||l.shopify_on_hand===null;
+    [l.cultivar+' / '+l.cut,l.unopened,unavailable?'—':l.shopify_on_hand,unavailable?'—':(l.drift>0?'+':'')+l.drift,unavailable?T.unknown:l.drift===0?T.matched:T.review].forEach(function(value){var td=document.createElement('td');td.textContent=value;tr.appendChild(td)});
+    rows.appendChild(tr);pending+=Number(l.opened_but_not_counted)||0;
+   });
+   if(pending){var p=document.createElement('p');p.className='notice';p.textContent=T.unsynced+': '+pending;extra.appendChild(p)}
+   if(Array.isArray(d.unmatched_variants)&&d.unmatched_variants.length){var h=document.createElement('h2');h.textContent=T.unmatched;extra.appendChild(h);d.unmatched_variants.forEach(function(v){var p=document.createElement('p');p.textContent=v.title+' · '+v.on_hand;extra.appendChild(p)})}
+  }catch(_){status.textContent=T.failed}finally{button.disabled=false}
+ }
+ form.addEventListener('submit',function(e){e.preventDefault();load()});load();
+})();
+</script>`;
 }
 
 function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
@@ -5014,11 +5218,12 @@ function sackFindBody(ui, { recent, missing, typed, ambiguous }) {
 ${missing ? `<p class="note">⚠️ ${ui.t('findNotFound', { id: escapeHtml(missing) })}</p>` : ''}
 ${ambiguous !== undefined && !missing ? `<p class="note">⚠️ ${ui.t('findAmbiguous', { n: ambiguous })}</p>` : ''}
 <p class="note">${ui.t('findHelp')}</p>
-<form method="GET" action="/api/harvest" onsubmit="this.querySelector('button').disabled=true">
+<form method="GET" action="/api/harvest" onsubmit="this.querySelector('button[type=submit]').disabled=true">
   <input type="hidden" name="action" value="find">
   <input type="hidden" name="lang" value="${ui.lang}">
+  <label for="q">${ui.t('findSack')}</label>
   <input id="q" name="q" autocomplete="off" autocapitalize="off" autocorrect="off"
-         inputmode="numeric" placeholder="${ui.t('findPlaceholder')}"
+         placeholder="${ui.t('findPlaceholder')}"
          value="${typed ? escapeHtml(String(typed)) : ''}" autofocus required>
   <button class="btn" type="submit">${ui.t('findGo')}</button>
 </form>
@@ -5055,7 +5260,7 @@ function sackDetailBody(ui, view, flash) {
     if (isNaN(da) || isNaN(db)) return null;
     return Math.max(0, Math.floor((db - da) / 86400000));
   };
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = pacificToday();
   const sinceCut = daysBetween(sack.harvest_date, todayIso);
   const rackDays = daysBetween(sack.harvest_date, sack.printed_at);        // cut → bagged
   const sackDays = daysBetween(sack.printed_at, sack.opened_at || todayIso); // bagged → opened / today
@@ -5107,7 +5312,7 @@ function sackDetailBody(ui, view, flash) {
 </div>
 ${canMove ? `<details class="batch">
   <summary>${ui.t('storeChange')}</summary>
-  <form method="POST" action="/api/harvest?action=sack_store&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+  <form method="POST" action="/api/harvest?action=sack_store&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
     <select name="storage" aria-label="${ui.t('locStored')}">${storageOptions(ui, sack.storage)}</select>
     <button class="btn" type="submit">${ui.t('storeSave')}</button>
@@ -5159,7 +5364,7 @@ ${canMove ? `<details class="batch">
   } else if (!opened) {
     weights = `<div class="card">
   <p class="note" style="margin:0 0 12px">${ui.t('notOpened')}</p>
-  <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+  <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
     <button class="bigbtn" type="submit">${ui.t('openSack')}</button>
   </form>
@@ -5264,7 +5469,7 @@ ${canMove ? `<details class="batch">
         <span class="hint">${escapeHtml(String(n.created_at).substring(0, 10))}${n.edited_at ? ` · ${ui.t('noteEdited', { d: escapeHtml(String(n.edited_at).substring(0, 10)) })}` : ''}</span>
         ${n.id ? `<details class="noteedit">
           <summary>${ui.t('editNote')}</summary>
-          <form method="POST" action="/api/harvest?action=sack_note_edit&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+          <form method="POST" action="/api/harvest?action=sack_note_edit&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
             <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
             <input type="hidden" name="note_id" value="${Number(n.id)}">
             <textarea name="note" maxlength="500" rows="2" required>${escapeHtml(n.note)}</textarea>
@@ -5277,6 +5482,7 @@ ${canMove ? `<details class="batch">
 <div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}">${ui.t('langOther')}</a></span></div>
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
+${notes.length ? `<div class="flash" style="margin-top:18px"><strong>${ui.t('secNotes')}</strong><br>${notes.map(n => escapeHtml(n.note)).join('<br>')}</div>` : ''}
 ${tiles}
 ${location}
 
@@ -5298,7 +5504,7 @@ ${areaRow}
 ${noteList}
 <details class="batch" id="addNoteBox">
   <summary>${ui.t('addNote')}</summary>
-  <form method="POST" action="/api/harvest?action=sack_note&lang=${ui.lang}" onsubmit="this.querySelector('button').disabled=true">
+  <form method="POST" action="/api/harvest?action=sack_note&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
     <input name="note" maxlength="500" autocomplete="off" placeholder="${ui.t('notePlaceholder')}" required>
     <button class="btn" type="submit">${ui.t('saveNote')}</button>
@@ -5306,6 +5512,6 @@ ${noteList}
 </details>
 
 </section>
-<div class="footer"><a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
+<div class="footer"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a> · <a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
 </div>`;
 }

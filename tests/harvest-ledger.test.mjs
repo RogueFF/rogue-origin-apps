@@ -170,17 +170,13 @@ test('a load for a just-closed zone lands on that lot, not on nothing', async ()
   assert.equal(bins, 20);
 });
 
-test('the intake form pre-selects the zone before, and asks for a check', async () => {
+test('unlabelled intake requires a zone choice instead of guessing from grace', async () => {
   const { sqlite, env, ctx } = freshDb();
   seedEnter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 45, closedMinAgo: 2 });
   seedEnter(sqlite, { zone: 'Z5', cultivar: 'Lifter', openedMinAgo: 2, closedMinAgo: null });
-
   const html = await intakeForm(env, ctx);
-  assert.match(html, /<option value="Z4" selected/);
-  assert.doesNotMatch(html, /<option value="Z5" selected/);
-  // Phrased as a choice: on a fast double move the suggestion can be wrong, and
-  // the barn is the only thing that can see which zone the trailer came from.
-  assert.match(html, /change it if not/);
+  assert.equal(/<option value="Z[45]" selected/.test(html), false);
+  assert.ok(html.includes('<option value="">Choose a zone</option>'));
 });
 
 test('an ordinary load goes to the open lot with no correction note', async () => {
@@ -208,8 +204,8 @@ test('the crew screens are Spanish by default', async () => {
   seedEnter(sqlite, { zone: 'Z5', cultivar: 'Lifter', openedMinAgo: 2, closedMinAgo: null });
 
   const html = await intakeForm(env, ctx, 'es');
-  assert.match(html, /Se preseleccionó <strong>Z4<\/strong>/);
-  assert.match(html, /cámbialo si no/);
+  assert.ok(html.includes('Elige una zona'));
+  assert.ok(html.includes('Elige tu recepción'));
 });
 
 // --- dry weight at takedown -------------------------------------------------
