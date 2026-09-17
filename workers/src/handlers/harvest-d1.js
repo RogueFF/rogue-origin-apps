@@ -5222,6 +5222,18 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 .harvest-hub .hub-search { margin: 0; gap: 8px; }
 .harvest-hub .hub-search input { min-width: 0; height: 50px; border: 1px solid #b7c3ad; border-radius: 8px; background: #fff; color: var(--ink); font: 16px system-ui,sans-serif; margin: 0; }
 .harvest-hub .hub-search .btn { background: #2e4b3b; border-radius: 8px; font: 700 15px 'Karla',sans-serif; padding: 12px 20px; }
+/* Practice sits above the real tools: it is where a new hire starts, and the
+   one thing on this page that cannot touch a record. */
+.hub-practice { display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 18px 20px;
+  border: 2px solid #c6a252; background: #fdf6e3; border-radius: 14px; color: var(--ink); text-decoration: none; }
+.hub-practice:hover { background: #f8eed6; }
+.hub-practice .hp-mark { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: #edc76b; color: #3d3116; font-size: 16px; }
+.hub-practice .hp-text { min-width: 0; }
+.hub-practice strong { display: block; font: 700 19px 'Karla', sans-serif; letter-spacing: -.015em; }
+.hub-practice small { display: block; margin-top: 4px; color: #6b6248; font-size: 14px; line-height: 1.5; }
+.hub-practice .hp-go { margin-left: auto; flex: none; color: #8a7433; font-size: 22px; }
+@media(max-width: 480px) { .hub-practice .hp-go { display: none; } }
 .hub-nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 26px; border-bottom: 1px solid #d8ded2; margin-bottom: 30px; }
 .hub-nav a i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--lane); margin-right: 8px; vertical-align: 1px; }
 .hub-nav a { color: #455b48; text-decoration: none; padding: 12px 16px; background: #eaede3; border-radius: 7px; font: 700 14px 'Karla',sans-serif; display: flex; align-items: center; min-height: 44px; }
@@ -5284,7 +5296,12 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 <h1>${L('Harvest tools', 'Herramientas de cosecha')}</h1>
 <p class="sub">${L('From the first cut to the last sack. Your next step starts here.', 'Del primer corte a la última bolsa. Tu siguiente paso empieza aquí.')}</p></div>
 <span class="hub-season">${L('HARVEST', 'COSECHA')} ${getSeason()}</span></div>
-<p style="margin:0 0 22px"><a class="hub-language" style="display:inline-block;margin:0;background:#f4e6bd" href="${API}?action=practice&lang=${ui.lang}">${L('Try practice mode — nothing is saved →', 'Probar modo práctica — nada se guarda →')}</a></p>
+<a class="hub-practice" href="${API}?action=practice&${q}">
+ <span class="hp-mark" aria-hidden="true">▶</span>
+ <span class="hp-text"><strong>${L('Practice mode', 'Modo práctica')}</strong>
+ <small>${L('Walk through the whole harvest — crew, trailers, tags, bags. Nothing is saved and no real numbers are used.', 'Recorre toda la cosecha — cuadrilla, cargas, etiquetas, bolsas. No se guarda nada y no se usan números reales.')}</small></span>
+ <span class="hp-go" aria-hidden="true">→</span>
+</a>
 <div class="hub-workbench">
  <section class="hub-start"><h2>${L('Keep the harvest moving.', 'Que la cosecha siga.')}</h2><p>${L('Bring a load in. Get the next bag tagged.', 'Recibe una carga. Etiqueta la siguiente bolsa.')}</p>
  <div class="hub-actions"><a href="${API}?action=sack_print&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>

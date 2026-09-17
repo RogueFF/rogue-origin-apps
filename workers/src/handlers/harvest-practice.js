@@ -14,7 +14,7 @@ export function practicePage(lang = 'en') {
 ${HARVEST_UI_STYLE}
 body{margin:0;font-family:system-ui,sans-serif;background:#f6f5ef;color:#263f32}.practice-banner{background:#f2cf78;color:#453419;text-align:center;padding:14px;font-weight:700;position:sticky;top:0;z-index:2}.harvest-screen{max-width:850px}button,input,select,textarea{font:inherit}.harvest-screen .practice-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}.practice-nav button{padding:12px;border:1px solid #bfccb2;border-radius:8px;background:white;color:#304e3c;cursor:pointer}.practice-nav button[aria-current=step]{background:#304e3c;color:white}.practice-card{background:#fff;border:1px solid #d5dfcb;border-radius:14px;padding:24px;margin:18px 0}.practice-card p{line-height:1.6}.practice-row{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}.practice-row>*{flex:1}.harvest-screen label{display:block;margin:14px 0 6px}.harvest-screen input,.harvest-screen select,.harvest-screen textarea{margin:0 0 14px}.harvest-screen .btn{display:inline-block;text-decoration:none;padding:14px 18px}.practice-card .btn{margin:6px 6px 6px 0}.practice-receipt{background:#e9efde;border-left:4px solid #638554;padding:16px;margin:18px 0}.practice-item{border-bottom:1px solid #d5dfcb;padding:15px 0}.practice-code{font:700 24px ui-monospace,monospace;overflow-wrap:anywhere}.practice-tag{border:2px dashed #283e30;padding:24px;background:white;color:black;max-width:400px;margin:20px auto}.practice-tag b{font-size:52px}.practice-step{color:#627256;font-size:13px}.practice-empty{color:#61725a}.practice-warning{background:#f7ecd0;padding:15px;border-radius:8px}.practice-table{width:100%;border-collapse:collapse}.practice-table td,.practice-table th{padding:12px;text-align:left;border-bottom:1px solid #d5dfcb}.practice-table-wrap{overflow:auto}#practice-status{min-height:24px;color:#365d36;font-weight:600}.harvest-header{flex-wrap:wrap}.harvest-header button{background:white;border:1px solid #becbb2;border-radius:8px;min-height:44px;padding:10px;color:#304e3c;cursor:pointer}@media print{body>*{display:none!important}body>.harvest-screen{display:block!important}.harvest-screen>*{display:none!important}.harvest-screen>#practice-app{display:block!important}#practice-app>*{display:none!important}#practice-app>.practice-tag{display:block!important}.practice-tag{break-inside:avoid}}@media(max-width:500px){.practice-card{padding:18px}.practice-nav button{font-size:13px}}
 .tutorial{border:2px solid #c6a252;background:#fff8e6;border-radius:14px;padding:22px;margin:20px 0}.tutorial h2{margin:8px 0 12px;font-size:24px}.tutorial p{line-height:1.6}.tutorial-actions{display:flex;gap:10px;flex-wrap:wrap}.tutorial-progress{font-size:12px;font-weight:700;letter-spacing:.06em;color:#76591c}.tutorial-task{padding:12px;border-left:3px solid #b28a31;background:#fff}.tutorial .btn{font-size:15px;min-height:44px}.tutorial-highlight{outline:3px solid #bc8d25!important;outline-offset:5px;scroll-margin-top:110px}@media(max-width:500px){.tutorial{padding:18px}}
-</style></head><body><div class="practice-banner">${es ? 'MODO PRÁCTICA · Nada se guarda · Sin inventario real' : 'PRACTICE MODE · Nothing is saved · No real inventory changes'}</div><main class="harvest-screen"><header class="harvest-header"><div><strong>ROGUE ORIGIN</strong><small>${es ? 'Recorrido de práctica' : 'Practice walkthrough'}</small></div><nav><button id="reset">${es ? 'Reiniciar práctica' : 'Reset practice'}</button><a href="/api/harvest?action=hub&lang=${es ? 'es' : 'en'}">${es ? 'Salir a herramientas reales' : 'Exit to live tools'}</a></nav></header><p>${es ? 'Todo ocurre solo en esta pestaña. Recargar, cerrar o reiniciar borra la práctica. Los escaneos se simulan con botones; no escanees los letreros reales durante la práctica.' : 'Everything happens only in this tab. Reloading, closing or resetting clears the practice. Buttons simulate scans; do not scan real signs during practice.'}</p><nav class="practice-nav" id="practice-nav" aria-label="${es ? 'Pasos de práctica' : 'Practice steps'}"></nav><section id="tutorial" class="tutorial" aria-label="${es ? 'Tutorial guiado' : 'Guided tutorial'}"></section><div id="practice-status" role="status" aria-live="polite"></div><section id="practice-app"></section></main><script>${clientScript}</script></body></html>`, {
+</style></head><body><div class="practice-banner" id="practice-banner">${es ? 'MODO PRÁCTICA · Nada se guarda · Sin inventario real' : 'PRACTICE MODE · Nothing is saved · No real inventory changes'}</div><main class="harvest-screen"><header class="harvest-header"><div><strong>ROGUE ORIGIN</strong><small id="practice-tagline">${es ? 'Recorrido de práctica' : 'Practice walkthrough'}</small></div><nav><button id="lang" lang="${es ? 'en' : 'es'}">${es ? 'English' : 'Español'}</button><button id="reset">${es ? 'Reiniciar práctica' : 'Reset practice'}</button><a id="exit" href="/api/harvest?action=hub&lang=${es ? 'es' : 'en'}">${es ? 'Salir a herramientas reales' : 'Exit to live tools'}</a></nav></header><p id="practice-intro">${es ? 'Todo ocurre solo en esta pestaña. Recargar, cerrar o reiniciar borra la práctica. Los escaneos se simulan con botones; no escanees los letreros reales durante la práctica.' : 'Everything happens only in this tab. Reloading, closing or resetting clears the practice. Buttons simulate scans; do not scan real signs during practice.'}</p><nav class="practice-nav" id="practice-nav" aria-label="${es ? 'Pasos de práctica' : 'Practice steps'}"></nav><section id="tutorial" class="tutorial" aria-label="${es ? 'Tutorial guiado' : 'Guided tutorial'}"></section><div id="practice-status" role="status" aria-live="polite"></div><section id="practice-app"></section></main><script>${clientScript}</script></body></html>`, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
       'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
@@ -23,13 +23,14 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f6f5ef;color:#263f32}
   });
 }
 
-function practiceClient(es) {
+function practiceClient(startEs) {
+  let es = startEs;
   const L = (en, sp) => es ? sp : en;
   const e = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fresh = () => ({ crew:'A', active:{A:null,B:null}, lots:[], loads:[], bags:[], roster:{drivers:2,hangers:4}, nextLot:1,nextBag:1,selectedLot:null,selectedBag:null, bay:'1',step:0 });
   let s = fresh();
   let guided = false, tutorialDone = false;
-  const stages = [L('1 · Crew & field','1 · Cuadrilla y campo'),L('2 · Barn intake','2 · Recepción'),L('3 · End of day','3 · Fin del día'),L('4 · Takedown & tags','4 · Bajada y etiquetas'),L('5 · Sack record','5 · Bolsa'),L('6 · Review','6 · Resumen')];
+  const stagesList = () => [L('1 · Crew & field','1 · Cuadrilla y campo'),L('2 · Barn intake','2 · Recepción'),L('3 · End of day','3 · Fin del día'),L('4 · Takedown & tags','4 · Bajada y etiquetas'),L('5 · Sack record','5 · Bolsa'),L('6 · Review','6 · Resumen')];
   const app = document.getElementById('practice-app');
   const button = (text,id,alt=false) => `<button type="button" class="btn${alt?' alt':''}" id="${id}">${text}</button>`;
   const bind = (id,fn) => {const el=document.getElementById(id);if(el)el.addEventListener('click',fn);};
@@ -40,14 +41,28 @@ function practiceClient(es) {
   const heading = (title,sub) => `<h1>${title}</h1><p class="sub">${sub}</p>`;
   const crewSelect = () => `<label for="crew">${L('Crew / matching barn','Cuadrilla / recepción correspondiente')}</label><select id="crew">${options(['A','B'],s.crew)}</select>`;
   const identity = x => `${e(x.cultivar)} · ${e(x.zone)} · ${L('Crew','Cuadrilla')} ${x.crew}`;
+  function drawChrome() {
+    document.documentElement.lang = es ? 'es' : 'en';
+    document.getElementById('practice-banner').textContent = L('PRACTICE MODE · Nothing is saved · No real inventory changes','MODO PRÁCTICA · Nada se guarda · Sin inventario real');
+    document.getElementById('practice-tagline').textContent = L('Practice walkthrough','Recorrido de práctica');
+    document.getElementById('practice-intro').textContent = L('Everything happens only in this tab. Reloading, closing or resetting clears the practice. Buttons simulate scans; do not scan real signs during practice.','Todo ocurre solo en esta pestaña. Recargar, cerrar o reiniciar borra la práctica. Los escaneos se simulan con botones; no escanees los letreros reales durante la práctica.');
+    document.getElementById('reset').textContent = L('Reset practice','Reiniciar práctica');
+    const lang = document.getElementById('lang');
+    lang.textContent = L('Español','English');
+    lang.lang = es ? 'en' : 'es';
+    const exit = document.getElementById('exit');
+    exit.textContent = L('Exit to live tools','Salir a herramientas reales');
+    exit.href = '/api/harvest?action=hub&lang=' + (es ? 'es' : 'en');
+  }
   function draw() {
-    document.getElementById('practice-nav').innerHTML=stages.map((name,i)=>`<button data-step="${i}" ${s.step===i?'aria-current="step"':''}>${name}</button>`).join('');
+    drawChrome();
+    document.getElementById('practice-nav').innerHTML=stagesList().map((name,i)=>`<button data-step="${i}" ${s.step===i?'aria-current="step"':''}>${name}</button>`).join('');
     document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{s.step=Number(b.dataset.step);msg('');draw();});
     [field,intake,dayEnd,takedown,sack,review][s.step]();
     renderTutorial();
     const crew=document.getElementById('crew');if(crew)crew.onchange=()=>{s.crew=crew.value;draw();};
   }
-  const lessons = [
+  const lessonList = () => [
     {title:L('Tell the system who is cutting','Indica quién está cortando'),
      why:L('In the field, the crew lead scans their Crew A or B card once on their phone. Scanning a zone sign then identifies where that crew is working. The cutter count records how many people are cutting, not the entire barn crew.','En el campo, el jefe escanea una vez la tarjeta A o B en su teléfono. El letrero de zona indica dónde trabaja la cuadrilla. El número de cortadores no incluye al personal de la bodega.'),
      task:L('Choose a crew, zone and cultivar. Set the cutter count, then press “Simulate zone scan”.','Elige cuadrilla, zona y cultivar. Indica cuántos cortan y pulsa “Simular escaneo de zona”.'),
@@ -77,10 +92,10 @@ function practiceClient(es) {
     const panel=document.getElementById('tutorial');
     document.querySelectorAll('.tutorial-highlight').forEach(el=>el.classList.remove('tutorial-highlight'));
     if(!guided){panel.innerHTML=`<h2>${tutorialDone?L('Tutorial complete','Tutorial terminado'):L('New here? Take a guided walkthrough.','¿Primera vez? Sigue el tutorial.')}</h2><p>${L('Six short steps explain what to do, why it matters and what to try. Your practice data stays temporary.','Seis pasos cortos explican qué hacer, por qué importa y qué probar. Los datos siguen siendo temporales.')}</p>${button(tutorialDone?L('Walk through again','Repetir tutorial'):L('Start tutorial','Iniciar tutorial'),'tutorial-start')}`;bind('tutorial-start',()=>{guided=true;tutorialDone=false;s.step=0;draw();});return;}
-    const lesson=lessons[s.step],done=lesson.done();
+    const lessons=lessonList(),lesson=lessons[s.step],done=lesson.done();
     panel.innerHTML=`<div class="tutorial-progress">${L('GUIDED TUTORIAL','TUTORIAL GUIADO')} · ${s.step+1} / 6</div><h2>${lesson.title}</h2><p>${lesson.why}</p><p class="tutorial-task"><strong>${L('Try it:','Pruébalo:')}</strong> ${lesson.task}</p><p class="hint">${lesson.tip}</p><p id="tutorial-completion" role="status">${done?L('✓ Ready for the next step.','✓ Listo para el siguiente paso.'):L('Complete the action below to continue.','Completa la acción de abajo para continuar.')}</p><div class="tutorial-actions">${s.step?button(L('← Back','← Atrás'),'tutorial-back',true):''}<button type="button" class="btn" id="tutorial-next" ${done?'':'disabled'}>${s.step===5?L('Finish tutorial','Terminar tutorial'):L('Next step →','Siguiente paso →')}</button>${button(L('Leave tutorial','Salir del tutorial'),'tutorial-leave',true)}</div>`;
     bind('tutorial-back',()=>{s.step--;draw();panel.scrollIntoView({block:'start'});});
-    bind('tutorial-next',()=>{if(!lessons[s.step].done())return;if(s.step===5){guided=false;tutorialDone=true;}else s.step++;draw();panel.scrollIntoView({block:'start'});});
+    bind('tutorial-next',()=>{if(!lessonList()[s.step].done())return;if(s.step===5){guided=false;tutorialDone=true;}else s.step++;draw();panel.scrollIntoView({block:'start'});});
     bind('tutorial-leave',()=>{guided=false;renderTutorial();});
     if(lesson.target)document.getElementById(lesson.target)?.classList.add('tutorial-highlight');
   }
@@ -123,6 +138,11 @@ function practiceClient(es) {
     document.getElementById('bag-picker').onchange=ev=>{s.selectedBag=Number(ev.target.value);draw();};bind('move-save',()=>{b.storage=document.getElementById('move').value;draw();msg(L('Practice location updated.','Ubicación de práctica actualizada.'));});bind('open',()=>{b.opened=true;draw();msg(L('Practice sack opened. Shopify was not contacted.','Bolsa de práctica abierta. No se contactó Shopify.'));});bind('note-save',()=>{const n=document.getElementById('note').value.trim();if(n)b.note=b.note?b.note+' / '+n:n;draw();});bind('print',()=>window.print());
   }
   function review(){const valid=s.bags.filter(b=>!b.voided);app.innerHTML=heading(L('Your practice harvest','Tu cosecha de práctica'),L('These numbers only describe this temporary walkthrough.','Estas cantidades solo describen este recorrido temporal.'))+`<div class="practice-card"><h2>${s.loads.length} ${L('trailers','cargas')} · ${s.loads.reduce((n,l)=>n+l.bins,0)} ${L('bins','cajas')}</h2><p>${valid.length} ${L('valid tags','etiquetas válidas')} · ${valid.filter(b=>b.opened).length} ${L('opened sacks','bolsas abiertas')} · ${s.bags.filter(b=>b.voided).length} ${L('voided tags','etiquetas anuladas')}</p><div class="practice-table-wrap"><table class="practice-table"><thead><tr><th>${L('Lot','Lote')}</th><th>${L('Loads','Cargas')}</th><th>${L('Unopened sacks','Bolsas sin abrir')}</th></tr></thead><tbody>${s.lots.map(x=>`<tr><td>${identity(x)}</td><td>${s.loads.filter(l=>l.lot===x.id).length}</td><td>${valid.filter(b=>b.lot===x.id&&!b.opened).length}</td></tr>`).join('')}</tbody></table></div><p class="practice-warning">${L('No live inventory, compliance records, notifications or Shopify data were read or changed. Use Reset practice to clear everything.','No se leyeron ni cambiaron inventarios, registros, notificaciones ni datos de Shopify. Usa Reiniciar práctica para borrar todo.')}</p></div>`;}
+  document.getElementById('lang').onclick=()=>{
+    es=!es;
+    try{history.replaceState(null,'','/api/harvest?action=practice&lang='+(es?'es':'en'));}catch(_){}
+    msg('');draw();
+  };
   document.getElementById('reset').onclick=()=>{s=fresh();tutorialDone=false;msg(L('Practice cleared. Start again.','Práctica borrada. Empieza de nuevo.'));draw();};
   draw();
 }

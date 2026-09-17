@@ -132,3 +132,45 @@ test('guided tutorial advances only after practice actions, in both languages', 
     }
   }finally{await browser.close()}
 });
+
+test('the language switch keeps the practice exactly where it is', async () => {
+  // Koa, 2026-09-17: the workers being sent this read Spanish; an English
+  // speaker looking over their shoulder should not have to restart the
+  // walkthrough to follow it.
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.setContent(await practicePage('es').text());
+
+    await page.locator('#scan').click();                       // one lot of practice state
+    await page.locator('[data-step="1"]').click();             // and a place in the walkthrough
+    const loads = await page.locator('#load').count();
+
+    await page.locator('#lang').click();
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+    assert.match(await page.locator('#practice-banner').textContent(), /PRACTICE MODE/);
+    assert.match(await page.locator('.practice-nav button[aria-current=step]').textContent(), /Barn intake/);
+    assert.equal(await page.locator('#load').count(), loads, 'still on the intake step, with its buttons');
+    assert.match(await page.locator('#practice-app').textContent(), /Following|No active zone/,
+      'the lot created in Spanish is still there');
+    assert.equal(await page.locator('#lang').textContent(), 'Español');
+    assert.match(await page.locator('#exit').getAttribute('href'), /lang=en/);
+
+    await page.locator('#lang').click();
+    assert.equal(await page.locator('html').getAttribute('lang'), 'es');
+    assert.match(await page.locator('#practice-intro').textContent(), /Todo ocurre solo en esta pestaña/);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('the tools home sends a new hire to practice before anything real', async () => {
+  const html = await handleHarvestD1(
+    new Request('https://x/api/harvest?action=hub&lang=es'), {}, {}).then(r => r.text());
+  const card = html.match(/<a class="hub-practice"[\s\S]*?<\/a>/);
+  assert.ok(card, 'practice is a card on the tools home, not a line of text');
+  assert.match(card[0], /action=practice&lang=es/);
+  assert.match(card[0], /Modo práctica/);
+  assert.ok(html.indexOf('class="hub-practice"') < html.indexOf('class="hub-workbench"'),
+    'and it sits above the real tools');
+});
