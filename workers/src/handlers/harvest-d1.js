@@ -3423,7 +3423,7 @@ function codeSheetBody(ui, packet = 'crew') {
 function renderPage(ui, title, bodyHtml, status = 200) {
   const lang = ui.lang;
   const working = !bodyHtml.includes('class="sd"') && !bodyHtml.includes('class="harvest-hub"') && !bodyHtml.includes('class="codesheet"');
-  const chrome = `<header class="harvest-header"><img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="54" height="54"><div><strong>ROGUE ORIGIN</strong><small>${lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</small></div><nav aria-label="${lang === 'es' ? 'Navegación' : 'Navigation'}"><a href="${API}?action=hub&lang=${lang}">${lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${escapeHtml(ui.toggle)}">${ui.t('langOther')}</a></nav></header>`;
+  const chrome = `<header class="harvest-header"><img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="54" height="54"><div><strong>ROGUE ORIGIN</strong><small>${lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</small></div><nav aria-label="${lang === 'es' ? 'Navegación' : 'Navigation'}"><a href="${API}?action=hub&lang=${lang}">${lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></nav></header>`;
   const html = `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -3713,10 +3713,54 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   ${SACK_DETAIL_STYLE}
   ${HARVEST_UI_STYLE}
 </style>
+<script>
+// Language without a reload: fetch the same page in the other language and
+// swap the body in. The response carries the language cookie, so the next scan
+// still comes back in the chosen language, and the URL is updated so a refresh
+// or a shared link keeps it. Falls back to ordinary navigation on any error —
+// the link works with this script broken or absent.
+(function () {
+  if (window.__langSwap) return;
+  window.__langSwap = true;
+  var busy = false;
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[data-lang-swap]');
+    if (!a || busy || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    busy = true;
+    var href = a.href, before = a.textContent;
+    a.textContent = '…';
+    fetch(href, { headers: { 'X-Lang-Swap': '1' } })
+      .then(function (r) { if (!r.ok) throw new Error('lang'); return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        // Long-running screens stop their timers before their nodes go.
+        window.dispatchEvent(new Event('harvest:swap'));
+        document.documentElement.lang = doc.documentElement.lang || document.documentElement.lang;
+        document.title = doc.title;
+        document.body.className = doc.body.className;
+        document.body.replaceChildren.apply(document.body, Array.prototype.map.call(doc.body.childNodes, function (n) {
+          return document.importNode(n, true);
+        }));
+        // A script inserted as markup does not run; re-create each one so the
+        // swapped-in screen is as alive as a freshly loaded one.
+        Array.prototype.forEach.call(document.body.querySelectorAll('script'), function (old) {
+          var s = document.createElement('script');
+          for (var i = 0; i < old.attributes.length; i++) s.setAttribute(old.attributes[i].name, old.attributes[i].value);
+          s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+        try { history.replaceState(null, '', href); } catch (_) { /* file:// and the like */ }
+        busy = false;
+      })
+      .catch(function () { a.textContent = before; busy = false; location.href = href; });
+  });
+})();
+</script>
 </head>
 <body${ui.isTest ? ' class="testmode"' : ''}>
 ${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
-<div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}">${ui.t('langOther')}</a></div>
+<div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}" data-lang-swap>${ui.t('langOther')}</a></div>
 ${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtml}
 </body>
 </html>`;
@@ -4116,7 +4160,8 @@ function barnLiveScript(ui, station) {
   });
   syncPicker();
   refresh();
-  setInterval(refresh, 5000);
+  var poll = setInterval(refresh, 5000);
+  window.addEventListener('harvest:swap', function () { clearInterval(poll); }, { once: true });
   window.addEventListener('focus', refresh);
   document.addEventListener('visibilitychange', refresh);
 })();
@@ -5179,7 +5224,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 .harvest-hub .hub-search .btn { background: #2e4b3b; border-radius: 8px; font: 700 15px 'Karla',sans-serif; padding: 12px 20px; }
 .hub-nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 26px; border-bottom: 1px solid #d8ded2; margin-bottom: 30px; }
 .hub-nav a i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--lane); margin-right: 8px; vertical-align: 1px; }
-.hub-nav a { color: #455b48; text-decoration: none; padding: 12px 16px; background: #eaede3; border-radius: 7px; font: 700 14px 'Karla',sans-serif; }
+.hub-nav a { color: #455b48; text-decoration: none; padding: 12px 16px; background: #eaede3; border-radius: 7px; font: 700 14px 'Karla',sans-serif; display: flex; align-items: center; min-height: 44px; }
 .hub-nav a span { opacity: .65; margin-right: 10px; font-size: 11px; }
 .harvest-hub .lane { border: 0; padding: 0; margin: 0 0 32px; scroll-margin-top: 20px; }
 .harvest-hub .lane-head { gap: 11px; align-items: center; margin-bottom: 14px; }
@@ -5193,7 +5238,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 .harvest-hub a.hubcard:hover { background: #eef3e8; border-color: #7d9778; border-top-color: var(--lane); }
 .harvest-hub .hubcard .ht { font: 700 18px 'Karla',sans-serif; letter-spacing: -.015em; }
 .harvest-hub .hubcard .hd { color: var(--muted); font-size: 13px; line-height: 1.6; }
-.harvest-hub .hubcard .hb { margin-top: auto; background: #edf0e7; color: #4b5c45; font: 700 11px 'Karla',sans-serif; padding: 5px 8px; }
+.harvest-hub .hubcard .hb { margin-top: auto; background: #edf0e7; color: #4b5c45; font: 700 12px 'Karla',sans-serif; padding: 5px 9px; }
 .harvest-hub .hubcard.scan { background: transparent; border-style: dashed; border-top-style: solid; }
 .harvest-hub .hubcard.scan .hb { background: #eee8d8; color: #796026; }
 .harvest-hub .hubcard code { font-size: 12px; color: #687a5d; }
@@ -5213,7 +5258,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
  .harvest-hub { padding: 0 16px 24px; }
  .hub-brand { gap: 10px; padding: 16px 0; }
  .hub-brand img { width: 46px; height: 46px; }
- .hub-brand strong { font-size: 12px; letter-spacing: .06em; }
+ .hub-brand strong { font-size: 13px; letter-spacing: .06em; }
  .hub-brand small { font-size: 11px; }
  .hub-language { padding: 12px; font-size: 12px; }
  .hub-intro { padding: 28px 0 22px; }
@@ -5233,7 +5278,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 <header class="hub-brand">
  <img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="64" height="64">
  <div><strong>ROGUE ORIGIN</strong><small>${L('From field to flower', 'Del campo a la flor')}</small></div>
- <a class="hub-language" href="${escapeHtml(ui.toggle)}" lang="${es ? 'en' : 'es'}">${L('Español', 'English')}</a>
+ <a class="hub-language" href="${escapeHtml(ui.toggle)}" lang="${es ? 'en' : 'es'}" data-lang-swap>${L('Español', 'English')}</a>
 </header>
 <div class="hub-intro"><div><p class="hub-eyebrow">${L('Rogue Family Farms · Harvest operations', 'Rogue Family Farms · Operaciones de cosecha')}</p>
 <h1>${L('Harvest tools', 'Herramientas de cosecha')}</h1>
@@ -5597,7 +5642,7 @@ ${canMove ? `<details class="batch">
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
   return `<div class="sd">
-<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}">${ui.t('langOther')}</a></span></div>
+<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></span></div>
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
 ${notes.length ? `<div class="flash" style="margin-top:18px"><strong>${ui.t('secNotes')}</strong><br>${notes.map(n => escapeHtml(n.note)).join('<br>')}</div>` : ''}
