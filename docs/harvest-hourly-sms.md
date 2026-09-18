@@ -270,8 +270,9 @@ curl -s "https://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?actio
 `date` defaults to today (Pacific). The response is
 `{ date, is_test, roster, pending_sms, barns: { upper: {...}, bottom: {...} } }`,
 each barn carrying
-`label`, `rows` (every row for the day), `total_racks`, `person_hours`,
-`racks_per_hanger_hour`, `missing_hours`, and `latest` (the newest `complete` row).
+`label`, `rows` (every row for the day), `total_racks`, `total_branches`,
+`person_hours`, `racks_per_hanger_hour`, `missing_hours`, and `latest` (the newest
+`complete` row).
 
 Two deliberately different denominators:
 
@@ -280,6 +281,13 @@ Two deliberately different denominators:
   never came in. If the two ever disagree, one of them stopped using `sumRacks`.
 - **`person_hours` and `racks_per_hanger_hour` cover `complete` rows only.** A rate
   needs a whole hour to divide by.
+
+`total_branches` is a `{min, typical, max}` estimate, not a count: a rack is seven
+hangers and a hanger takes 7–9 branches **on either side**, so one rack is 98–126
+branches (`workers/src/lib/rack-facts.js`). The dashboard renders it as
+`≈2,646–3,402 branches` beside the rack total — anything built on it has to keep the
+range and the `≈`. If a reported "rack" turns out to be something other than one
+stick, `HANGERS_PER_RACK` is the only line to change.
 
 `pending_sms` is the **queue depth right now**, not a count for the date being read —
 `harvest_sms_inbox` has no `harvest_date`, and what the number reports is "texts

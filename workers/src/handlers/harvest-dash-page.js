@@ -238,6 +238,13 @@ ${OFFICE_UI_STYLE}
   var esc = function (s) { return String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var num = function (n) { return n == null ? '—' : String(n); };
+  // A {min,typical,max} estimate off the barn's rack anatomy. Written as a
+  // range with a leading ≈ so it never reads as something anybody counted.
+  var band = function (b, unit) {
+    if (!b) return '—';
+    var n = function (x) { return x.toLocaleString('en-US'); };
+    return '≈' + (b.min === b.max ? n(b.min) : n(b.min) + '–' + n(b.max)) + (unit ? ' ' + unit : '');
+  };
 
   // ── test mode ───────────────────────────────────────────────────────
   //
@@ -475,7 +482,9 @@ ${OFFICE_UI_STYLE}
           '</td><td>' + esc(num(r.drivers)) + '</td><td>' + esc(num(r.hangers)) + '</td><td>' + esc(num(r.hanging_water_spiders)) +
           '</td><td>' + esc(num(r.racks)) + '</td><td>' + esc(r.notes || '') + '</td></tr>';
       }).join('');
-      return '<h3 class="subhead">' + esc(x.label) + ' — ' + esc(num(x.total_racks)) + ' racks · ' + esc(num(x.person_hours)) + ' person-hrs · ' +
+      return '<h3 class="subhead">' + esc(x.label) + ' — ' + esc(num(x.total_racks)) + ' racks' +
+        (x.total_branches ? ' <span class="muted">(' + esc(band(x.total_branches, 'branches')) + ')</span>' : '') +
+        ' · ' + esc(num(x.person_hours)) + ' person-hrs · ' +
         (x.racks_per_hanger_hour == null ? '—' : esc(x.racks_per_hanger_hour)) + ' racks/hanger-hr' +
         (x.missing_hours.length ? ' · missing ' + esc(x.missing_hours.join(', ')) : '') + '</h3>' +
         (x.rows.length
