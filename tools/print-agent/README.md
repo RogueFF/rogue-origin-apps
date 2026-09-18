@@ -162,9 +162,17 @@ the exact 4 × 2 page, and `renderSaneEnough` now fails the job if a render is
 ever more than 5 % off — a page that did not lay out as a tag must not become a
 physical object tied to a sack.
 
-**NOT yet proven — the `PrintDocument` half**, i.e. dots actually hitting a
-label. It re-implements a technique proven ad-hoc on the Zebra ZP 450 on
-2026-09-10 that was never saved as a script. Nothing has been sent to a printer.
+**Proven 2026-09-18 — the `PrintDocument` half, at the software level.** The
+rendered bitmap was sent through `print-image.ps1` to the real **Zebra ZP 450**
+(USB008): the script returned `printed`, the job left the spooler, and the
+printer stayed `Normal` — no error, which matters given the LPT1 trap that once
+made every Zebra job read Error.
+
+**Still needs a human's eyes: whether the physical tag is CORRECT.** A job that
+spools cleanly is not a tag that is the right size, dark enough, and aligned on
+the stock. Compare a printed example tag against a known-good one before
+trusting the agent with a takedown — and on the Rollo, repeat it, because
+darkness on synthetic stock is set in the Rollo Portal, not the Windows driver.
 
 First run, in this order:
 
