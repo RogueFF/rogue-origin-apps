@@ -148,15 +148,23 @@ a tag.
 
 ## What is proven, and what is not
 
-**Proven — `node --test`, 40 tests (133 in the full suite):** the queue (enqueue
+**Proven — `node --test`, 44 tests (137 in the full suite):** the queue (enqueue
 in-transaction, claim, ack, heartbeat, `print_via` resolution, the auth gate,
 reprint, per-sack status, stale-claim requeue) and the agent's decisions (label
-URL escaping, 812 × 406 dots at 203 dpi, backoff growth and cap).
+URL escaping, 812 × 406 dots at 203 dpi, backoff growth and cap, render
+sanity bounds).
 
-**NOT yet proven — the render → `PrintDocument` leg.** It re-implements a
-technique proven ad-hoc on the Zebra ZP 450 on 2026-09-10, but that proof was
-never saved as a script, and this has not been run against a physical printer.
-**It needs the printer on the barn Wi-Fi with the barn PC to verify.**
+**Proven 2026-09-18 — the RENDER half.** Run against the live API on the barn
+PC: the real `sack_label` page renders with the QR resolved and the design
+intact, at 812 × 408 dots against a 812 × 406 target (the label lays out about
+one CSS pixel taller than 2 in). That overshoot is absorbed by the 1:1 blit onto
+the exact 4 × 2 page, and `renderSaneEnough` now fails the job if a render is
+ever more than 5 % off — a page that did not lay out as a tag must not become a
+physical object tied to a sack.
+
+**NOT yet proven — the `PrintDocument` half**, i.e. dots actually hitting a
+label. It re-implements a technique proven ad-hoc on the Zebra ZP 450 on
+2026-09-10 that was never saved as a script. Nothing has been sent to a printer.
 
 First run, in this order:
 

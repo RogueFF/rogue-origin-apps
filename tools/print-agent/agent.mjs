@@ -33,7 +33,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { labelUrl, tagRender, nextBackoff } from './lib.mjs';
+import { labelUrl, tagRender, nextBackoff, renderSaneEnough } from './lib.mjs';
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +104,20 @@ async function printTag(browser, sackId, workDir, printerName) {
 
     const file = path.join(workDir, `${sackId.replace(/[^\w.-]/g, '_')}.png`);
     await label.screenshot({ path: file, scale: 'device' });
+
+    // Sanity-check the geometry before it becomes a physical object. A dot or
+    // two of overshoot is normal and absorbed by the blit; anything larger
+    // means the page did not lay out as a tag (stylesheet missing, error page)
+    // and must not end up wire-tied to a sack.
+    const box = await label.boundingBox();
+    const got = {
+      widthPx: Math.round((box?.width || 0) * r.deviceScaleFactor),
+      heightPx: Math.round((box?.height || 0) * r.deviceScaleFactor),
+    };
+    if (!renderSaneEnough(got, r)) {
+      throw new Error(
+        `tag rendered ${got.widthPx}x${got.heightPx}, expected ~${r.widthPx}x${r.heightPx} — refusing to print`);
+    }
 
     // System.Drawing is Windows-only and has no Node binding worth the weight,
     // so the print leg is PowerShell. It does a 1:1 blit — see print-image.ps1.

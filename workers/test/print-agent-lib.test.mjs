@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { labelUrl, tagRender, nextBackoff } from '../../tools/print-agent/lib.mjs';
+import { labelUrl, tagRender, nextBackoff, renderSaneEnough } from '../../tools/print-agent/lib.mjs';
 
 // ---------------------------------------------------------------------------
 // labelUrl — the agent renders the SAME page the browser would have printed,
@@ -68,4 +68,26 @@ test('nextBackoff is capped so the agent always recovers promptly', () => {
 
 test('nextBackoff on the first failure is short enough to be invisible', () => {
   assert.ok(nextBackoff(1) <= 2000);
+});
+
+// ---------------------------------------------------------------------------
+// renderSaneEnough — the rendered PNG is blitted onto the exact 4x2 page, so a
+// dot or two of overshoot is absorbed. A LARGE deviation means the page did not
+// lay out as a tag at all, and must not be printed and wire-tied to a sack.
+// ---------------------------------------------------------------------------
+
+test('renderSaneEnough accepts the real measured render (812x408 against 812x406)', () => {
+  assert.equal(renderSaneEnough({ widthPx: 812, heightPx: 408 }, tagRender(203)), true);
+});
+
+test('renderSaneEnough accepts an exact render', () => {
+  assert.equal(renderSaneEnough({ widthPx: 812, heightPx: 406 }, tagRender(203)), true);
+});
+
+test('renderSaneEnough rejects a render that is half the tag', () => {
+  assert.equal(renderSaneEnough({ widthPx: 406, heightPx: 203 }, tagRender(203)), false);
+});
+
+test('renderSaneEnough rejects a collapsed layout', () => {
+  assert.equal(renderSaneEnough({ widthPx: 812, heightPx: 0 }, tagRender(203)), false);
 });
