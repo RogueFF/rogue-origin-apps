@@ -224,6 +224,7 @@ ${OFFICE_UI_STYLE}
     </header>
 
     <div class="strip" id="strip"></div>
+    <div id="testmode"></div>
     <div id="cards"></div>
   </div>
 
@@ -237,6 +238,52 @@ ${OFFICE_UI_STYLE}
   var esc = function (s) { return String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var num = function (n) { return n == null ? '—' : String(n); };
+
+  // ── test mode ───────────────────────────────────────────────────────
+  //
+  // The one control on this page that writes. It decides whether what the crew
+  // does today is a record or a rehearsal, so it states the current answer
+  // plainly, says where the answer comes from, and asks before flipping.
+  function drawTestMode(d, pw) {
+    var on = !!d.test_mode;
+    var rows = d.test_rows || { scans: 0, sacks: 0 };
+    var left = rows.scans + rows.sacks;
+    $('testmode').innerHTML =
+      '<section class="card"><h2>' + (on ? '⚠ Test mode is ON' : 'Test mode is off') + '</h2>' +
+      '<p>' + (on
+        ? 'Nothing the crew does is kept: new scans, trailers and tags are marked as test data, Shopify is not touched, and a real bag cannot be changed at all.'
+        : 'Every scan, trailer and tag is a real record, and printing a tag moves the Shopify count.') +
+      '</p><p class="muted">From the ' + (d.source === 'setting' ? 'switch below' : 'deployed setting') +
+      (d.changed_at ? ', changed ' + d.changed_at + ' UTC' : '') + '.' +
+      (left ? ' There are ' + rows.scans + ' test scans and ' + rows.sacks + ' test tags in the database.' : '') +
+      '</p><div class="row"><button class="ghost" id="tmBtn">' +
+      (on ? 'Turn test mode OFF — start recording for real' : 'Turn test mode ON — stop recording') +
+      '</button><span id="tmMsg" class="muted"></span></div></section>';
+    $('tmBtn').addEventListener('click', function () {
+      var next = !on;
+      var ask = next
+        ? 'Turn test mode ON?\n\nFrom now until you turn it off, nothing the crew does is recorded for real.'
+        : 'Turn test mode OFF?\n\nFrom now on every scan and tag is a real record, and tags move the Shopify count.';
+      if (!confirm(ask)) return;
+      $('tmBtn').disabled = true;
+      $('tmMsg').textContent = 'Saving…';
+      fetch(API + '?action=test_mode', {
+        method: 'POST',
+        headers: { authorization: pw, 'content-type': 'application/json' },
+        body: JSON.stringify({ on: next })
+      })
+        .then(function (r) { if (!r.ok) throw new Error('Could not change it (' + r.status + ').'); return r.json(); })
+        .then(function () { loadTestMode(pw); $('tmMsg').textContent = 'Saved. The crew screens follow within a few seconds.'; })
+        .catch(function (e) { $('tmBtn').disabled = false; $('tmMsg').textContent = e.message; });
+    });
+  }
+
+  function loadTestMode(pw) {
+    return fetch(API + '?action=test_mode', { headers: { authorization: pw } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j) drawTestMode(j.data || j, pw); })
+      .catch(function () { /* the rest of the page still works */ });
+  }
 
   // ── data ────────────────────────────────────────────────────────────
   function load(pw) {
@@ -252,6 +299,7 @@ ${OFFICE_UI_STYLE}
         try { sessionStorage.setItem('rf_dash_pw', pw); } catch (e) {}
         render(j, false);
         loadHourly(pw);
+        loadTestMode(pw);
       })
       .catch(function (e) { $('err').textContent = e.message; })
       .then(function () { $('go').disabled = false; });

@@ -48,7 +48,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql',
 ];
 
 function freshDb() {
@@ -442,4 +442,43 @@ test('in test mode, every write to a real bag or lot is refused — the row is u
   // And a test lot of its own still works normally.
   const testLot = seedSession(sqlite, { cultivar: 'Sour Lifter' });
   assert.equal((await json('sack_alloc', { session_id: testLot, cultivar: 'Sour Lifter', qty: 1 })).success, true);
+});
+
+test('test mode can be flipped from the dashboard, and the setting outranks the deployment', async () => {
+  // Koa, 2026-09-18: "is there a button i can use to turn test mode on/off?"
+  const { sqlite, env, ctx } = freshDb();
+  const live = { ...env, HARVEST_TEST_MODE: 'false', ORDERS_PASSWORD: 'pw' };   // deployed live
+  const call = (method, body, auth = 'pw') => handleHarvestD1(new Request('https://x/api/harvest?action=test_mode', {
+    method,
+    headers: { ...(auth ? { authorization: auth } : {}), 'content-type': 'application/json' },
+    body: method === 'POST' ? JSON.stringify(body) : undefined,
+  }), live, ctx).then(async r => ({ status: r.status, body: await r.json().catch(() => null) }))
+    .catch(e => ({ status: e.statusCode || 500, body: { success: false, error: e.message } }));
+
+  const first = await call('GET');
+  assert.equal(first.body.data?.test_mode ?? first.body.test_mode, false);
+  assert.match(first.body.data?.source ?? first.body.source, /deployed/);
+
+  assert.notEqual((await call('POST', { on: true }, null)).status, 200, 'the switch is password-gated');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM harvest_settings").get().n, 0);
+
+  assert.equal((await call('POST', { on: true })).status, 200);
+  assert.equal(sqlite.prepare("SELECT value FROM harvest_settings WHERE key='test_mode'").get().value, 'true');
+
+  // The setting, not wrangler.toml, is what the crew screens now follow.
+  const after = await call('GET');
+  assert.equal(after.body.data?.test_mode ?? after.body.test_mode, true);
+  assert.match(after.body.data?.source ?? after.body.source, /setting/);
+
+  const tagged = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_alloc', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ session_id: seedSession(sqlite), cultivar: 'Sour Lifter', qty: 1 }),
+  }), live, ctx).then(r => r.json());
+  assert.equal(tagged.success, true);
+  assert.equal(sqlite.prepare('SELECT is_test FROM harvest_sacks ORDER BY id DESC LIMIT 1').get().is_test, 1,
+    'a tag printed while the switch is on is test data, even on a live deployment');
+
+  await call('POST', { on: false });
+  const back = await call('GET');
+  assert.equal(back.body.data?.test_mode ?? back.body.test_mode, false, 'and it flips back');
 });
