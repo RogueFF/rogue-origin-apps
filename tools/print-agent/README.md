@@ -94,6 +94,40 @@ variables so the task inherits them.
 **Leave the barn PC awake.** Settings → System → Power → Screen and sleep →
 *Sleep: Never*. A sleeping PC is a stopped agent.
 
+### Falling back to the Zebra
+
+**The old Zebra stays installed and is the spare.** Three ways back to it, in
+increasing order of how much is broken:
+
+**1. Switch which printer the agent drives** — one line, from anywhere, no trip
+to the barn and no restart. The agent picks it up on its next poll:
+
+```sql
+INSERT INTO harvest_settings (key, value)
+VALUES ('print_printer', 'Zebra  ZP 450-200 dpi')
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+```
+
+(Two spaces in that name. That is genuinely how the Zebra driver installs.)
+
+**2. Turn the agent off entirely** — back to the browser printing exactly as it
+does today, crew picking the destination in Chrome's dialog:
+
+```sql
+UPDATE harvest_settings SET value = 'browser' WHERE key = 'print_mode';
+```
+
+**3. Do nothing.** If the agent stops or the PC sleeps, `resolvePrintVia` sees no
+heartbeat and **falls back to the browser on its own**. Tags keep printing from
+the barn PC. This needs no intervention and is why a dead agent cannot swallow
+a tag.
+
+> ⚠️ **If you ever set Chrome's `--kiosk-printing`** (still open on the harvest
+> checklist), there is no dialog and jobs go to Chrome's *default* printer. With
+> two printers installed, make sure that default is the one you mean — otherwise
+> the browser fallback silently prints to the wrong machine, which is the exact
+> failure the SOP already warns about.
+
 ---
 
 ## How it behaves when things go wrong
@@ -105,6 +139,8 @@ variables so the task inherits them.
 | Reprint in agent mode | Goes through the queue (`print_reprint`), not a browser link — a browser link is the path WebKit breaks on iPhone, and a jam is the most time-critical recovery there is. Same serial, no new sack row. |
 | QR image fails to load | The agent **refuses to print** rather than emitting a tag with a blank square. A tag that did not print is recoverable; one that printed wrong gets wire-tied to a sack and found weeks later at scan time. |
 | Agent crashed mid-job | Its rows sit `claimed` and would never print. Every pull requeues claims older than 5 minutes. |
+| Rollo dies mid-takedown | Point the agent at the spare Zebra with one settings line — see *Falling back to the Zebra*. No restart, no trip to the barn PC. |
+| Reprint on a freshly loaded screen | The client always asks the server which way to print rather than answering from a page variable. A screen that has allocated nothing has no local answer worth trusting, and guessing would send jam recovery down the iPhone-broken path. |
 | Barn internet drops | The agent backs off (0.5 s doubling, capped at 30 s) and resumes on its own. The crew screen would not load either, which is a pre-existing gap. |
 | Two tags from one tap | Should be impossible: `sack_alloc` returns `print_via` **per allocation**, and the browser skips its iframe when the server says `agent`. A page loaded an hour ago still obeys the server's answer for *that* tap. |
 
@@ -112,7 +148,7 @@ variables so the task inherits them.
 
 ## What is proven, and what is not
 
-**Proven — `node --test`, 37 tests (130 in the full suite):** the queue (enqueue
+**Proven — `node --test`, 40 tests (133 in the full suite):** the queue (enqueue
 in-transaction, claim, ack, heartbeat, `print_via` resolution, the auth gate,
 reprint, per-sack status, stale-claim requeue) and the agent's decisions (label
 URL escaping, 812 × 406 dots at 203 dpi, backoff growth and cap).

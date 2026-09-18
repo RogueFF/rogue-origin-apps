@@ -68,7 +68,7 @@ import { withinBarnGrace } from '../lib/barn-attribution.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
   resolvePrintVia, requireAgentAuth, PULL_LIMIT,
-  enqueueReprint, jobStatusFor, requeueStale,
+  enqueueReprint, jobStatusFor, requeueStale, resolvePrinter,
 } from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
@@ -1650,7 +1650,9 @@ async function handlePrintPull(db, env, body) {
     limit: Math.min(parseInt(body.limit, 10) || PULL_LIMIT, PULL_LIMIT),
     isTest,
   });
-  return successResponse({ success: true, jobs });
+  // The printer name comes down with the work, so swapping to the spare Zebra
+  // is one settings line rather than a trip to the barn PC to edit env vars.
+  return successResponse({ success: true, jobs, printer: await resolvePrinter(db) });
 }
 
 /** The agent reports what physically happened. */
@@ -1701,8 +1703,17 @@ async function handlePrintReprint(db, env, body) {
   if (!sackId) throw createError('VALIDATION_ERROR', 'Missing sack_id.');
   const sack = await queryOne(db, `SELECT sack_id FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
   if (!sack) throw createError('NOT_FOUND', `No such tag: ${sackId}`);
-  await enqueueReprint(db, { sackId, isTest: isTestMode(env) ? 1 : 0 });
-  return successResponse({ success: true, sack_id: sackId, print_via: await resolvePrintVia(db) });
+
+  // THE SERVER DECIDES, and only queues when the agent will actually print.
+  // The client must not answer this from a variable it set at its last
+  // allocation: a screen freshly loaded in agent mode has allocated nothing, so
+  // a page-held default would send the crew's jam recovery down the browser
+  // path — the one WebKit breaks on iPhone — at the worst possible moment.
+  const printVia = await resolvePrintVia(db);
+  if (printVia === 'agent') {
+    await enqueueReprint(db, { sackId, isTest: isTestMode(env) ? 1 : 0 });
+  }
+  return successResponse({ success: true, sack_id: sackId, print_via: printVia });
 }
 
 /**
@@ -4747,7 +4758,6 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var actions = document.getElementById('lastActions');
   var reprint = document.getElementById('reprintLink');
   var agentMsg = document.getElementById('agentMsg');
-  var lastPrintVia = 'browser';
   var voidLink = document.getElementById('voidLink');
   var noteBox = document.getElementById('nextNote');
   var noteText = document.getElementById('noteText');
@@ -4850,7 +4860,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
-        lastPrintVia = d.print_via; print(d.ids, d.print_via); refresh(d);
+        print(d.ids, d.print_via); refresh(d);
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
@@ -4877,22 +4887,20 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     e.preventDefault();
     if (!lastId) return;
     // A jam is the most time-critical recovery there is, so it must work on
-    // every handset. The old plain link was a BROWSER print — the path WebKit
-    // breaks on iPhone — so in agent mode it goes through the queue instead.
-    if (lastPrintVia === 'agent') {
-      fetch('${API}?action=print_reprint', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sack_id: lastId }),
+    // every handset. ALWAYS ask the server which way to print — this page may
+    // have been loaded without allocating anything, so there is no local answer
+    // that can be trusted, and guessing 'browser' is the path WebKit breaks.
+    fetch('${API}?action=print_reprint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sack_id: lastId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) throw new Error(d.error || 'Reprint failed');
+        if (d.print_via === 'agent') watchPrint([lastId]);
+        else print([lastId], 'browser');
       })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (!d.success) throw new Error(d.error || 'Reprint failed');
-          watchPrint([lastId]);
-        })
-        .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
-      return;
-    }
-    print([lastId], 'browser');
+      .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
   });
 
   voidLink.addEventListener('click', function (e) {

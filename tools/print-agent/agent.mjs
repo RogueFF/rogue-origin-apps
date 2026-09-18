@@ -77,7 +77,7 @@ async function api(action, body) {
  * The page is the real `sack_label` page — the same one the browser would have
  * printed — so there is never a second tag design to keep in sync.
  */
-async function printTag(browser, sackId, workDir) {
+async function printTag(browser, sackId, workDir, printerName) {
   const r = tagRender(DPI);
   const page = await browser.newPage({
     viewport: { width: r.viewportWidth, height: r.viewportHeight },
@@ -111,7 +111,7 @@ async function printTag(browser, sackId, workDir) {
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
       '-File', path.join(HERE, 'print-image.ps1'),
       '-ImagePath', file,
-      '-PrinterName', PRINTER,
+      '-PrinterName', printerName,
       '-PaperWidth', '400', '-PaperHeight', '200',
     ], { timeout: 60000 });
     if (!String(stdout).includes('printed')) {
@@ -128,6 +128,7 @@ async function main() {
   const workDir = await mkdtemp(path.join(tmpdir(), 'harvest-tags-'));
   let failures = 0;
   let stopping = false;
+  let lastTarget = PRINTER;
 
   const stop = async () => {
     if (stopping) return;
@@ -144,12 +145,21 @@ async function main() {
     try {
       // The pull doubles as the heartbeat: an agent asking for work is alive by
       // definition, so it can never be printing and reading "offline" at once.
-      const { jobs } = await api('print_pull', {});
+      const { jobs, printer } = await api('print_pull', {});
       failures = 0;
+
+      // The farm can point the agent at a different queue without touching this
+      // PC — so when the Rollo dies mid-takedown the spare Zebra is one settings
+      // line away, not a walk to the barn and a service restart.
+      const target = printer || PRINTER;
+      if (target !== lastTarget) {
+        log(`printing to "${target}"`);
+        lastTarget = target;
+      }
 
       for (const job of jobs || []) {
         try {
-          await printTag(browser, job.sack_id, workDir);
+          await printTag(browser, job.sack_id, workDir, target);
           await api('print_ack', { job_id: job.id, ok: true });
           log(`printed ${job.sack_id} (job ${job.id})`);
         } catch (e) {
