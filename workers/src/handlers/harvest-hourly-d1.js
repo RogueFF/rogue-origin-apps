@@ -39,6 +39,7 @@ import {
   normalizeNotes, tickDecision, shouldAutoStop, STOP_HOUR,
   gsmSafe, smsSegments, buildPollContext,
 } from '../lib/harvest-hourly.js';
+import { branchesForRacks } from '../lib/rack-facts.js';
 
 export const HOURLY_ACTIONS = new Set([
   'hourly', 'foremen', 'foreman_set', 'hourly_simulate', 'hourly_test',
@@ -976,6 +977,10 @@ async function readDay(db, env, date) {
       label: BARN_LABELS[barn],
       rows: mine,
       total_racks: sumRacks(mine),
+      // What that rack total actually holds. An estimate off the barn's own
+      // anatomy (rack-facts.js), not a count — every screen showing it has to
+      // say so.
+      total_branches: branchesForRacks(sumRacks(mine)),
       person_hours: personHours,
       racks_per_hanger_hour: hangerHours ? Math.round((sum('racks') / hangerHours) * 100) / 100 : null,
       missing_hours: mine.filter(r => r.status === 'missing').map(r => r.hour_start),
