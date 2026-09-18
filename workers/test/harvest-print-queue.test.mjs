@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline, resolvePrintVia,
-  AGENT_STALE_SECONDS, requireAgentAuth,
+  AGENT_STALE_SECONDS, requireAgentAuth, enqueueReprint, jobStatusFor, requeueStale,
 } from '../src/lib/print-queue.js';
 
 /**
@@ -204,4 +204,59 @@ test('requireAgentAuth refuses to run at all when no secret is configured', () =
     /not configured/i,
     'an unset secret must close the door, never open it to everyone',
   );
+});
+
+// ---------------------------------------------------------------------------
+// enqueueReprint — the jam path. Same serial, NO new sack row.
+// A reprint that still went through the browser would be broken on iPhone in
+// agent mode, which is the crew's most time-critical failure path.
+// ---------------------------------------------------------------------------
+
+test('enqueueReprint queues a job marked reprint', async () => {
+  const db = fakeDb([{ changes: 1 }]);
+  await enqueueReprint(db, { sackId: '26-SLIFT-142', isTest: 0 });
+  const ins = db.matching('INSERT INTO harvest_print_queue')[0];
+  assert.ok(ins.params.includes('reprint'));
+  assert.ok(ins.params.includes('26-SLIFT-142'));
+});
+
+test('enqueueReprint never touches harvest_sacks — a jam is not a new bag', async () => {
+  const db = fakeDb([{ changes: 1 }]);
+  await enqueueReprint(db, { sackId: '26-SLIFT-142', isTest: 0 });
+  assert.equal(db.matching('harvest_sacks').length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// jobStatusFor — what the crew screen polls before it shows a tick.
+// Without this the screen says "printed" on the strength of a queue insert.
+// ---------------------------------------------------------------------------
+
+test('jobStatusFor reports the latest job state per sack', async () => {
+  const db = fakeDb([[{ sack_id: '26-SLIFT-1', status: 'done', error: null }]]);
+  const st = await jobStatusFor(db, ['26-SLIFT-1']);
+  assert.equal(st['26-SLIFT-1'].status, 'done');
+});
+
+test('jobStatusFor carries the failure reason through to the screen', async () => {
+  const db = fakeDb([[{ sack_id: '26-SLIFT-1', status: 'failed', error: 'out of labels' }]]);
+  const st = await jobStatusFor(db, ['26-SLIFT-1']);
+  assert.equal(st['26-SLIFT-1'].error, 'out of labels');
+});
+
+test('jobStatusFor on no ids queries nothing', async () => {
+  const db = fakeDb([]);
+  assert.deepEqual(await jobStatusFor(db, []), {});
+  assert.equal(db.calls.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// requeueStale — an agent that crashed mid-job leaves rows claimed forever
+// ---------------------------------------------------------------------------
+
+test('requeueStale returns claimed jobs to pending so they print after a crash', async () => {
+  const db = fakeDb([{ changes: 2 }]);
+  await requeueStale(db);
+  const up = db.matching('UPDATE harvest_print_queue')[0];
+  assert.match(up.sql, /status = 'pending'/);
+  assert.match(up.sql, /'claimed'/);
 });

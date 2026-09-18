@@ -101,7 +101,10 @@ variables so the task inherits them.
 | Situation | What happens |
 |---|---|
 | Agent stopped / PC asleep | `resolvePrintVia` sees no recent heartbeat and **falls back to the browser**. Tags still print from the barn PC's Chrome. Nothing is swallowed. |
-| Printer jammed or offline | The job is acked as **failed with the reason**, so the screen can say so. The serial is already spent — reprint it (same serial) rather than allocating a new tag. |
+| Printer jammed or offline | The job is acked as **failed with the reason**, and the crew screen polls for that and shows it — *"⚠ Tag 26-SLIFT-142 did not print: … — use Reprint"*. The serial is already spent, so **Reprint** (same serial) is the recovery, never a new tag. |
+| Reprint in agent mode | Goes through the queue (`print_reprint`), not a browser link — a browser link is the path WebKit breaks on iPhone, and a jam is the most time-critical recovery there is. Same serial, no new sack row. |
+| QR image fails to load | The agent **refuses to print** rather than emitting a tag with a blank square. A tag that did not print is recoverable; one that printed wrong gets wire-tied to a sack and found weeks later at scan time. |
+| Agent crashed mid-job | Its rows sit `claimed` and would never print. Every pull requeues claims older than 5 minutes. |
 | Barn internet drops | The agent backs off (0.5 s doubling, capped at 30 s) and resumes on its own. The crew screen would not load either, which is a pre-existing gap. |
 | Two tags from one tap | Should be impossible: `sack_alloc` returns `print_via` **per allocation**, and the browser skips its iframe when the server says `agent`. A page loaded an hour ago still obeys the server's answer for *that* tap. |
 
@@ -109,9 +112,10 @@ variables so the task inherits them.
 
 ## What is proven, and what is not
 
-**Proven — `node --test`, 31 tests:** the queue (enqueue in-transaction, claim,
-ack, heartbeat, `print_via` resolution, the auth gate) and the agent's decisions
-(label URL, 812 × 406 dots at 203 dpi, backoff).
+**Proven — `node --test`, 37 tests (130 in the full suite):** the queue (enqueue
+in-transaction, claim, ack, heartbeat, `print_via` resolution, the auth gate,
+reprint, per-sack status, stale-claim requeue) and the agent's decisions (label
+URL escaping, 812 × 406 dots at 203 dpi, backoff growth and cap).
 
 **NOT yet proven — the render → `PrintDocument` leg.** It re-implements a
 technique proven ad-hoc on the Zebra ZP 450 on 2026-09-10, but that proof was

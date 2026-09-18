@@ -68,6 +68,7 @@ import { withinBarnGrace } from '../lib/barn-attribution.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
   resolvePrintVia, requireAgentAuth, PULL_LIMIT,
+  enqueueReprint, jobStatusFor, requeueStale,
 } from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
@@ -330,6 +331,10 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handlePrintHeartbeat(db, env, body);
     case 'print_status':
       return await handlePrintStatus(db);
+    case 'print_reprint':
+      return await handlePrintReprint(db, env, body);
+    case 'print_check':
+      return await handlePrintCheck(db, body);
     case 'test_mode':
       return await handleTestMode(request, db, env, body);
     case 'sack_void':
@@ -1636,12 +1641,16 @@ async function handlePrintPull(db, env, body) {
   // definition alive, so there is no window where it is printing but reads
   // offline to sack_alloc.
   await recordHeartbeat(db, agentId, String(body.printer || '').substring(0, 120) || null);
+  // An agent that crashed mid-job, or a barn PC that rebooted, leaves rows
+  // claimed forever — pullJobs only takes 'pending'. Those tags would never
+  // print and nobody would be told, so reclaim them on the way past.
+  await requeueStale(db);
   const jobs = await pullJobs(db, {
     agentId,
     limit: Math.min(parseInt(body.limit, 10) || PULL_LIMIT, PULL_LIMIT),
     isTest,
   });
-  return successResponse({ success: true, jobs, label_url: `${API}?action=sack_label&ids=` });
+  return successResponse({ success: true, jobs });
 }
 
 /** The agent reports what physically happened. */
@@ -1677,6 +1686,35 @@ async function handlePrintStatus(db) {
   return successResponse({
     success: true, agent_online: online, print_via: via, pending: pending?.n || 0,
   });
+}
+
+/**
+ * Queue a reprint — the jam path, from the crew screen.
+ *
+ * Same serial, no new sack row. This is a POST rather than the old plain link
+ * to the label page because that link was a BROWSER print, which in agent mode
+ * on an iPhone is exactly the path WebKit breaks. Reprint is the crew's most
+ * time-critical recovery; it must work on every handset.
+ */
+async function handlePrintReprint(db, env, body) {
+  const sackId = String(body.sack_id || '').trim().substring(0, 40);
+  if (!sackId) throw createError('VALIDATION_ERROR', 'Missing sack_id.');
+  const sack = await queryOne(db, `SELECT sack_id FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!sack) throw createError('NOT_FOUND', `No such tag: ${sackId}`);
+  await enqueueReprint(db, { sackId, isTest: isTestMode(env) ? 1 : 0 });
+  return successResponse({ success: true, sack_id: sackId, print_via: await resolvePrintVia(db) });
+}
+
+/**
+ * Did these tags actually come out? Polled by the crew screen in agent mode.
+ *
+ * The screen must not show a tick on the strength of a queue insert: the serial
+ * is already spent and the Shopify count already moved, so "queued" and
+ * "printed" are very different facts to a person standing at a printer.
+ */
+async function handlePrintCheck(db, body) {
+  const ids = Array.isArray(body.ids) ? body.ids.slice(0, 40).map(String) : [];
+  return successResponse({ success: true, status: await jobStatusFor(db, ids) });
 }
 
 /**
@@ -4654,6 +4692,9 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
     <a id="voidLink" class="mini danger" href="#">${ui.t('void')}</a>
   </div>
   <div id="noteMsg" class="last" hidden></div>
+  <!-- Agent mode only: the crew no longer watches a tag appear, so the screen
+       says whether one actually did. Stays hidden while the browser prints. -->
+  <div id="agentMsg" class="hcstat" hidden></div>
 </div>
 
 <details class="batch">
@@ -4689,6 +4730,14 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
     printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
+    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
+    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
+    printAgentFailed: ui.lang === 'es'
+      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
+      : '⚠ Tag {id} did not print: {e} — use Reprint',
+    printAgentSlow: ui.lang === 'es'
+      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
+      : '⚠ No answer from the printer. Check the barn PC.',
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -4697,6 +4746,8 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var lastEl = document.getElementById('last');
   var actions = document.getElementById('lastActions');
   var reprint = document.getElementById('reprintLink');
+  var agentMsg = document.getElementById('agentMsg');
+  var lastPrintVia = 'browser';
   var voidLink = document.getElementById('voidLink');
   var noteBox = document.getElementById('nextNote');
   var noteText = document.getElementById('noteText');
@@ -4739,8 +4790,50 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   // response. NOT a page-level flag — this page can have been open for an hour,
   // and a stale decision would print the tag twice (iframe here AND the agent).
   function print(ids, via) {
-    if (via === 'agent') return;   // queued server-side; the barn PC prints it
+    if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
     frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+  }
+
+  // In agent mode the crew no longer watches a tag appear as confirmation, so
+  // the screen has to supply it. Queued is NOT printed: the serial is already
+  // spent and the Shopify count already moved, so showing a tick on the
+  // strength of an enqueue would hide exactly the failure the ack exists for.
+  function watchPrint(ids) {
+    var tries = 0;
+    agentMsg.hidden = false;
+    agentMsg.className = 'hcstat';
+    agentMsg.textContent = T.printingOnAgent;
+    (function poll() {
+      tries += 1;
+      fetch('${API}?action=print_check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var st = (d && d.status) || {};
+          var states = ids.map(function (id) { return (st[id] || {}).status; });
+          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
+          if (failed.length) {
+            agentMsg.className = 'hcstat bad';
+            agentMsg.textContent = T.printAgentFailed
+              .replace('{id}', failed[0])
+              .replace('{e}', (st[failed[0]] || {}).error || '');
+            return;
+          }
+          if (states.every(function (x) { return x === 'done'; })) {
+            agentMsg.className = 'hcstat ok';
+            agentMsg.textContent = T.printedOnAgent;
+            return;
+          }
+          // ~30s. Long enough for a rack of tags, short enough that a stopped
+          // agent is noticed while the crew is still at the printer.
+          if (tries < 40) return setTimeout(poll, 750);
+          agentMsg.className = 'hcstat bad';
+          agentMsg.textContent = T.printAgentSlow;
+        })
+        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
+    })();
   }
 
   function alloc(qty) {
@@ -4757,7 +4850,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
-        print(d.ids, d.print_via); refresh(d);
+        lastPrintVia = d.print_via; print(d.ids, d.print_via); refresh(d);
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
@@ -4782,7 +4875,24 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
 
   reprint.addEventListener('click', function (e) {
     e.preventDefault();
-    if (lastId) print([lastId]);
+    if (!lastId) return;
+    // A jam is the most time-critical recovery there is, so it must work on
+    // every handset. The old plain link was a BROWSER print — the path WebKit
+    // breaks on iPhone — so in agent mode it goes through the queue instead.
+    if (lastPrintVia === 'agent') {
+      fetch('${API}?action=print_reprint', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sack_id: lastId }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.success) throw new Error(d.error || 'Reprint failed');
+          watchPrint([lastId]);
+        })
+        .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
+      return;
+    }
+    print([lastId], 'browser');
   });
 
   voidLink.addEventListener('click', function (e) {
