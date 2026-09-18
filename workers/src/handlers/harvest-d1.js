@@ -1304,6 +1304,20 @@ async function handleSackSession(ui, db, env, input) {
     sackSessionBody(ui, { lot, cultivar, stats, bay, storage, finishedAt, variantCheck }));
 }
 
+/**
+ * Refuse a write to a REAL row while the system is in test mode.
+ *
+ * Test mode marks what it creates as test data and skips Shopify, but a row
+ * that already exists carries its own flag — and a real tag scanned on a test
+ * day is exactly the case this exists for: the bag is real, its number is
+ * spent, and voiding or opening it is not a rehearsal. The read is untouched,
+ * so the page still shows the bag; only the write is refused.
+ */
+function refuseRealInTest(ui, env, row) {
+  if (!row || !isTestMode(env)) return;
+  if (Number(row.is_test) === 0) throw createError('VALIDATION_ERROR', ui.t('testRealRow'));
+}
+
 async function requireLot(db, sessionId) {
   const lot = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
   if (!lot) throw createError('NOT_FOUND', `No harvest lot found for session ${sessionId}.`);
@@ -1362,6 +1376,7 @@ async function handleLotFinish(ui, db, env, ctx, body) {
   const reopen = String(body.reopen ?? '') === '1';
 
   const lot = await requireLot(db, sessionId);
+  refuseRealInTest(ui, env, lot);
   const f = lotSessionsWhere(lot);
   // Stamps only the sessions still open, so pressing Finished twice keeps the
   // first time; a reopen clears every one.
@@ -1437,6 +1452,8 @@ async function handleSackAlloc(db, env, ctx, body) {
   }
 
   const lot = await requireLot(db, sessionId);
+  // Test mode never adds to a real lot: those tags would hang off real bins.
+  refuseRealInTest(makeUi(new Request('https://x/')), env, lot);
   // A finished lot takes no more tags until it is reopened. The session screen
   // disables PRINT TAG, but a second phone still on the old page must not
   // spend a serial on a closed lot — so the server refuses, before allocating.
@@ -1537,6 +1554,7 @@ async function handleSackVoid(db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
   const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
   if (!sack) throw createError('NOT_FOUND', `No sack found with ID "${sackId}".`);
+  refuseRealInTest(makeUi(new Request('https://x/')), env, sack);
   if (sack.opened_at) {
     throw createError('VALIDATION_ERROR', `Sack ${sackId} already has weights recorded — it can't be voided.`);
   }
@@ -1658,6 +1676,7 @@ async function handleSackLabel(ui, db, env, params) {
 
 async function handleSackWeigh(ui, db, env, ctx, body) {
   const sackId = String(body.sack_id || '').trim();
+  refuseRealInTest(ui, env, await queryOne(db, `SELECT is_test FROM harvest_sacks WHERE sack_id = ?`, [sackId]));
   const tops = parseFloat(body.tops_lbs);
   const smalls = parseFloat(body.smalls_lbs);
 
@@ -2024,6 +2043,7 @@ async function handleSackOpen(ui, db, env, ctx, body) {
   // Real first, same as the scan: pressing OPEN SACK on a number the season has
   // since printed must open THAT bag, not silently no-op against an example.
   const view = await getSackView(db, sackId);
+  refuseRealInTest(ui, env, view?.sack);
   if (!view) {
     const demoOpen = demoKey(sackId);
     if (demoOpen) {
@@ -2263,6 +2283,7 @@ async function handleSackNote(ui, db, env, ctx, body) {
   if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
 
   const view = await getSackView(db, sackId);
+  refuseRealInTest(ui, env, view?.sack);
   if (!view) {
     const demoNote = demoKey(sackId);
     if (demoNote) {
@@ -2303,6 +2324,7 @@ async function handleSackNoteEdit(ui, db, env, ctx, body) {
   const note = String(body.note || '').trim().substring(0, 500);
   if (!note) throw createError('VALIDATION_ERROR', ui.t('noteEmpty'));
 
+  refuseRealInTest(ui, env, await queryOne(db, `SELECT is_test FROM harvest_sacks WHERE sack_id = ?`, [sackId]));
   const row = Number.isInteger(noteId)
     ? await queryOne(db, `SELECT id, note FROM harvest_sack_notes WHERE id = ? AND sack_id = ?`, [noteId, sackId])
     : null;
@@ -2337,6 +2359,7 @@ async function handleSackStore(ui, db, env, ctx, body) {
   const storage = parseStorage(body.storage, ui);
 
   const view = await getSackView(db, sackId);
+  refuseRealInTest(ui, env, view?.sack);
   if (!view) {
     const demo = demoKey(sackId);
     if (demo) {
