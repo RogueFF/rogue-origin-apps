@@ -130,6 +130,36 @@ a tag.
 
 ---
 
+## Speed — measured, 2026-09-18
+
+**~7 seconds from tapping PRINT TAG to a tag in your hand**, measured end to end
+on the ZP 450 (queue row `created_at` → `done_at`):
+
+| Stage | Time |
+|---|---|
+| Waiting to be claimed (poll interval) | ~2 s |
+| Render the page at 203 dpi | ~1.6 s |
+| PowerShell spawn + `PrintDocument` | ~3.4 s |
+
+**Compare it to the right thing.** This is slower than the barn PC's browser
+print, which is near-instant — but that was never the alternative. The
+alternative for a crew member holding a phone is *walking to the barn PC*, or on
+an iPhone, not printing at all. Seven seconds beats both.
+
+Still, it is dead time per bag on a per-bag job. Worth shaving if it grates:
+
+- **Poll every 500 ms** instead of 1500 ms → saves ~1 s.
+- **Drop `waitUntil: 'networkidle'`** for `'load'`. It is redundant — the QR is
+  already explicitly checked for `naturalWidth > 0`, which is the only network
+  resource that matters → saves ~1 s.
+- **Stop spawning `powershell.exe` per job** (~3.4 s, the largest single cost).
+  A long-lived PowerShell process fed job paths on stdin would cut most of it.
+  The most work of the three, and the biggest win.
+
+Untouched, that is ~7 s; the first two changes alone get it to ~5 s.
+
+---
+
 ## How it behaves when things go wrong
 
 | Situation | What happens |
