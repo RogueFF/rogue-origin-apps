@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline, resolvePrintVia,
   AGENT_STALE_SECONDS, requireAgentAuth, enqueueReprint, jobStatusFor, requeueStale,
+  resolvePrinter,
 } from '../src/lib/print-queue.js';
 
 /**
@@ -259,4 +260,26 @@ test('requeueStale returns claimed jobs to pending so they print after a crash',
   const up = db.matching('UPDATE harvest_print_queue')[0];
   assert.match(up.sql, /status = 'pending'/);
   assert.match(up.sql, /'claimed'/);
+});
+
+// ---------------------------------------------------------------------------
+// resolvePrinter — which physical queue the agent should print to.
+// Lives in the DB so a dead printer can be swapped for the spare with one
+// line, instead of walking to the barn PC to edit env vars and restart.
+// ---------------------------------------------------------------------------
+
+test('resolvePrinter returns the configured printer', async () => {
+  const db = fakeDb([{ value: 'Zebra  ZP 450-200 dpi' }]);
+  assert.equal(await resolvePrinter(db), 'Zebra  ZP 450-200 dpi');
+});
+
+test('resolvePrinter returns null when unset, so the agent keeps its own default', async () => {
+  const db = fakeDb([null]);
+  assert.equal(await resolvePrinter(db), null);
+});
+
+test('resolvePrinter preserves the exact queue name including double spaces', async () => {
+  const db = fakeDb([{ value: 'Zebra  ZP 450-200 dpi' }]);
+  const name = await resolvePrinter(db);
+  assert.ok(name.includes('Zebra  ZP'), 'the Zebra driver really does install with two spaces');
 });

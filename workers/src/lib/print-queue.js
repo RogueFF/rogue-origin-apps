@@ -239,3 +239,26 @@ export async function requeueStale(db, olderThanSeconds = 300) {
       AND claimed_at < datetime('now', ?)
   `, [`-${Math.max(60, olderThanSeconds)} seconds`]);
 }
+
+/**
+ * Which physical queue the agent should print to, if the farm has said.
+ *
+ * Kept in the database rather than only in the agent's environment so a dead
+ * printer can be swapped for the spare with ONE line, from anywhere — instead
+ * of walking to the barn PC mid-takedown to edit environment variables and
+ * restart a service. The old Zebra stays installed and is exactly that spare:
+ *
+ *   INSERT INTO harvest_settings (key, value)
+ *   VALUES ('print_printer', 'Zebra  ZP 450-200 dpi')
+ *     ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+ *
+ * Returns null when unset, and the agent then keeps its own HARVEST_PRINTER.
+ * Note the Zebra driver really does install with TWO spaces in its name.
+ */
+export async function resolvePrinter(db) {
+  const row = await queryOne(db, `
+    SELECT value FROM harvest_settings WHERE key = 'print_printer'
+  `);
+  const name = row && typeof row.value === 'string' ? row.value : '';
+  return name.trim() ? name : null;
+}
