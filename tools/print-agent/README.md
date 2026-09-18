@@ -168,11 +168,14 @@ rendered bitmap was sent through `print-image.ps1` to the real **Zebra ZP 450**
 printer stayed `Normal` — no error, which matters given the LPT1 trap that once
 made every Zebra job read Error.
 
-**Still needs a human's eyes: whether the physical tag is CORRECT.** A job that
-spools cleanly is not a tag that is the right size, dark enough, and aligned on
-the stock. Compare a printed example tag against a known-good one before
-trusting the agent with a takedown — and on the Rollo, repeat it, because
-darkness on synthetic stock is set in the Rollo Portal, not the Windows driver.
+**Physical output confirmed by Koa, 2026-09-18: "looks good."** So the chain is
+proven end to end on real hardware — live API → Playwright render at 203 dpi →
+PNG → `PrintDocument` → Zebra ZP 450 → a correct tag on real stock.
+
+**Repeat this check on the Rollo**, once per printer. A correct tag on the Zebra
+does not prove one on the Rollo: darkness on synthetic stock is set in the
+**Rollo Portal**, not the Windows driver, and the label size is learned from the
+green `r` button rather than a driver setting.
 
 First run, in this order:
 
