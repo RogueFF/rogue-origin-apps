@@ -182,3 +182,60 @@ export function requireAgentAuth(env, body = {}) {
   }
   return true;
 }
+
+/**
+ * Queue a reprint — the jam path.
+ *
+ * SAME serial, NO new sack row: a jam is not a new bag, and a reprint must
+ * never read as a second bag in any count. Written directly rather than as
+ * statements because there is no sack transaction to ride along with.
+ *
+ * This exists because the old reprint control was a plain link to the label
+ * page, i.e. a browser print. In agent mode on an iPhone that is exactly the
+ * path WebKit breaks — so without this, the crew's most time-critical recovery
+ * would silently stop working on half the fleet the moment printing flipped.
+ */
+export async function enqueueReprint(db, { sackId, isTest = 0 }) {
+  return execute(db, `
+    INSERT INTO harvest_print_queue (sack_id, reason, status, is_test)
+    VALUES (?, ?, 'pending', ?)
+  `, [sackId, 'reprint', isTest ? 1 : 0]);
+}
+
+/**
+ * Latest job state per sack — what the crew screen polls before it shows a tick.
+ *
+ * Without this the screen would say "printed" on the strength of a queue insert,
+ * which is the exact failure the ack exists to prevent: a serial spent, a
+ * Shopify count moved, and no tag anywhere.
+ */
+export async function jobStatusFor(db, sackIds) {
+  if (!Array.isArray(sackIds) || sackIds.length === 0) return {};
+  const ph = sackIds.map(() => '?').join(',');
+  const rows = await query(db, `
+    SELECT q.sack_id, q.status, q.error
+    FROM harvest_print_queue q
+    WHERE q.sack_id IN (${ph})
+      AND q.id = (SELECT MAX(id) FROM harvest_print_queue WHERE sack_id = q.sack_id)
+  `, sackIds);
+  const out = {};
+  for (const r of rows || []) out[r.sack_id] = { status: r.status, error: r.error };
+  return out;
+}
+
+/**
+ * Return long-claimed jobs to pending.
+ *
+ * An agent that crashed, or a barn PC that rebooted, leaves its claimed rows
+ * claimed forever — `pullJobs` only takes 'pending', so those tags would never
+ * print and nobody would be told. Over a season this will happen.
+ */
+export async function requeueStale(db, olderThanSeconds = 300) {
+  return execute(db, `
+    UPDATE harvest_print_queue
+    SET status = 'pending', claimed_at = NULL, claimed_by = NULL
+    WHERE status = 'claimed'
+      AND claimed_at IS NOT NULL
+      AND claimed_at < datetime('now', ?)
+  `, [`-${Math.max(60, olderThanSeconds)} seconds`]);
+}

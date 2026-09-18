@@ -91,6 +91,17 @@ async function printTag(browser, sackId, workDir) {
     const label = page.locator('.label').first();
     await label.waitFor({ state: 'visible', timeout: 15000 });
 
+    // The QR is fetched from api.qrserver.com at render time. `networkidle`
+    // does NOT mean the image resolved — a 404 or a slow response still
+    // screenshots, and the result is a clean-looking tag with a blank square
+    // that gets wire-tied to a sack and discovered at scan time, in a barn,
+    // weeks later. Fail the job instead: a tag that did not print is
+    // recoverable, a tag that printed wrong is not.
+    const qrOk = await label.locator('img.qr').first()
+      .evaluate(img => img.complete && img.naturalWidth > 0)
+      .catch(() => false);
+    if (!qrOk) throw new Error('QR image did not load — refusing to print a tag with a blank QR');
+
     const file = path.join(workDir, `${sackId.replace(/[^\w.-]/g, '_')}.png`);
     await label.screenshot({ path: file, scale: 'device' });
 
