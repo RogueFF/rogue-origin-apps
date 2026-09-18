@@ -389,3 +389,57 @@ test('a missing lot is refused with an error page, not a stamp', async () => {
   assert.ok(missing.status >= 400);
   assert.ok(Object.values(stamps(sqlite)).every(v => v === null));
 });
+
+// ─── test mode never touches a real row ──────────────────────────────────────
+
+test('in test mode, every write to a real bag or lot is refused — the row is untouched', async () => {
+  // Koa, 2026-09-18: turning test mode on for a day of practice, "we also need
+  // to preserve the rainbow GMO data though". Test mode marks what it CREATES
+  // as test data, but a real tag scanned on a test day would otherwise be
+  // voided, opened or re-stored for real.
+  const { sqlite, env, ctx } = freshDb();          // HARVEST_TEST_MODE: 'true'
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, is_test)
+    VALUES ('enter', 'Z8', 'Rainbow GMO Quik', ?, 1, datetime('now','-12 days'), datetime('now','-11 days'), 0)
+  `).run(SEASON);
+  const realLot = Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
+  sqlite.prepare(`
+    INSERT INTO harvest_sacks (sack_id, season, serial, cultivar_code, zone, cultivar, cut_number,
+                               zone_session_id, storage, printed_at, is_test)
+    VALUES ('26-RAINGQ-7', ?, 7, 'RAINGQ', 'Z8', 'Rainbow GMO Quik', 1, ?, 'Supermarket', datetime('now','-2 days'), 0)
+  `).run(SEASON, realLot);
+  const before = sqlite.prepare("SELECT * FROM harvest_sacks WHERE sack_id = '26-RAINGQ-7'").get();
+
+  const form = (action, fields) => handleHarvestD1(new Request(`https://x/api/harvest?action=${action}&lang=en`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields).toString(),
+  }), env, ctx).then(async r => ({ status: r.status, html: await r.text() }));
+  const json = (action, body) => handleHarvestD1(new Request(`https://x/api/harvest?action=${action}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }), env, ctx).then(r => r.json()).catch(e => ({ success: false, error: e.message }));
+
+  const store = await form('sack_store', { sack_id: '26-RAINGQ-7', storage: '4' });
+  assert.ok(store.status >= 400);
+  assert.match(store.html, /real bag/i);
+  assert.ok((await form('sack_note', { sack_id: '26-RAINGQ-7', note: 'x' })).status >= 400);
+  assert.ok((await form('sack_open', { sack_id: '26-RAINGQ-7' })).status >= 400);
+  assert.ok((await form('sack_weigh', { sack_id: '26-RAINGQ-7', tops_lbs: '20', smalls_lbs: '10' })).status >= 400);
+  assert.ok((await form('lot_finish', { session_id: String(realLot) })).status >= 400);
+  assert.equal((await json('sack_void', { sack_id: '26-RAINGQ-7' })).success, false);
+  assert.equal((await json('sack_alloc', { session_id: realLot, cultivar: 'Rainbow GMO Quik', qty: 1 })).success, false);
+
+  assert.deepEqual(sqlite.prepare("SELECT * FROM harvest_sacks WHERE sack_id = '26-RAINGQ-7'").get(), before);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM harvest_sacks').get().n, 1, 'no test tag on a real lot');
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM harvest_sack_notes').get().n, 0);
+  assert.equal(sqlite.prepare("SELECT takedown_done_at FROM harvest_scan_log WHERE id = ?").get(realLot).takedown_done_at, null);
+
+  // Reading it is still fine: the bag's page has to work when a tag is scanned.
+  const { handleSackScan } = await import(
+    join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///'));
+  const page = await handleSackScan(new Request('https://x/s/26-RAINGQ-7?lang=en'), env, ctx).then(r => r.text());
+  assert.match(page, /Rainbow GMO Quik/);
+
+  // And a test lot of its own still works normally.
+  const testLot = seedSession(sqlite, { cultivar: 'Sour Lifter' });
+  assert.equal((await json('sack_alloc', { session_id: testLot, cultivar: 'Sour Lifter', qty: 1 })).success, true);
+});
