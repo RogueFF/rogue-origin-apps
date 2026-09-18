@@ -65,6 +65,10 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
+import {
+  enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
+  resolvePrintVia, requireAgentAuth, PULL_LIMIT,
+} from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -318,6 +322,14 @@ export async function handleHarvestD1(request, env, ctx) {
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
+    case 'print_pull':
+      return await handlePrintPull(db, env, body);
+    case 'print_ack':
+      return await handlePrintAck(db, env, body);
+    case 'print_heartbeat':
+      return await handlePrintHeartbeat(db, env, body);
+    case 'print_status':
+      return await handlePrintStatus(db);
     case 'test_mode':
       return await handleTestMode(request, db, env, body);
     case 'sack_void':
@@ -1558,6 +1570,11 @@ async function handleSackAlloc(db, env, ctx, body) {
       params: [ids[0], note, isTest],
     });
   }
+
+  // One print job per tag, in the SAME batch as the sacks. A job must not be
+  // able to exist for a tag that was not allocated, nor survive an allocation
+  // that failed — the same rule the note above follows.
+  statements.push(...enqueueStatements({ sackIds: ids, isTest }));
   await transaction(db, statements);
 
   const stats = await getLotTagStats(db, sessionId, isTest);
@@ -1588,8 +1605,78 @@ async function handleSackAlloc(db, env, ctx, body) {
     text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.${note ? `\n📝 ${note}` : ''}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
+  // Resolved HERE, per allocation, and handed to the client with the ids —
+  // never baked into the page. A phone can sit on a loaded takedown screen for
+  // an hour; if it decided from render-time state it would print via its iframe
+  // while the agent printed the same job. Two tags, one serial, mid-rack.
+  const printVia = await resolvePrintVia(db);
+
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
-    note_on: note ? ids[0] : null });
+    note_on: note ? ids[0] : null, print_via: printVia });
+}
+
+/* ---------------------------------------------------------------------------
+ * Print agent endpoints
+ *
+ * The barn PC runs an agent that drains the print queue and drives the printer,
+ * so the crew can print from ANY phone — iOS included, where WebKit ignores
+ * `@page` and the 4x2 tag cannot be printed from the browser at all.
+ * See wiki/operations/plans/2026-09-18-wireless-tag-printer.md
+ *
+ * These are machine-to-machine and carry their own shared secret, not the crew
+ * password (requireAgentAuth). All are POST.
+ * ------------------------------------------------------------------------- */
+
+/** The agent asks for work. Claims what it returns, so a job goes out once. */
+async function handlePrintPull(db, env, body) {
+  requireAgentAuth(env, body);
+  const agentId = String(body.agent_id || 'barn-pc').substring(0, 60);
+  const isTest = isTestMode(env) ? 1 : 0;
+  // The heartbeat rides the pull: an agent that is asking for work is by
+  // definition alive, so there is no window where it is printing but reads
+  // offline to sack_alloc.
+  await recordHeartbeat(db, agentId, String(body.printer || '').substring(0, 120) || null);
+  const jobs = await pullJobs(db, {
+    agentId,
+    limit: Math.min(parseInt(body.limit, 10) || PULL_LIMIT, PULL_LIMIT),
+    isTest,
+  });
+  return successResponse({ success: true, jobs, label_url: `${API}?action=sack_label&ids=` });
+}
+
+/** The agent reports what physically happened. */
+async function handlePrintAck(db, env, body) {
+  requireAgentAuth(env, body);
+  const jobId = parseInt(body.job_id, 10);
+  if (!Number.isInteger(jobId) || jobId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing job_id.');
+  }
+  const ok = body.ok === true || body.ok === 'true' || body.ok === 1 || body.ok === '1';
+  await ackJob(db, { jobId, ok, error: body.error });
+  return successResponse({ success: true });
+}
+
+/** Keeps the agent trusted between racks, when nothing is printing. */
+async function handlePrintHeartbeat(db, env, body) {
+  requireAgentAuth(env, body);
+  const agentId = String(body.agent_id || 'barn-pc').substring(0, 60);
+  await recordHeartbeat(db, agentId, String(body.printer || '').substring(0, 120) || null);
+  return successResponse({ success: true });
+}
+
+/**
+ * Is an agent alive, and which way will the next tag print? Unauthenticated on
+ * purpose: it exposes no tag data, and the crew screen needs it to warn BEFORE
+ * a serial is spent.
+ */
+async function handlePrintStatus(db) {
+  const [online, via] = await Promise.all([agentOnline(db), resolvePrintVia(db)]);
+  const pending = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_print_queue WHERE status IN ('pending', 'claimed')
+  `);
+  return successResponse({
+    success: true, agent_online: online, print_via: via, pending: pending?.n || 0,
+  });
 }
 
 /**
@@ -4648,7 +4735,13 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     }
   }
 
-  function print(ids) { frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
+  // Who prints: the server decides, per allocation, and says so in the alloc
+  // response. NOT a page-level flag — this page can have been open for an hour,
+  // and a stale decision would print the tag twice (iframe here AND the agent).
+  function print(ids, via) {
+    if (via === 'agent') return;   // queued server-side; the barn PC prints it
+    frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+  }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
@@ -4664,7 +4757,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
-        print(d.ids); refresh(d);
+        print(d.ids, d.print_via); refresh(d);
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
