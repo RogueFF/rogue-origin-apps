@@ -210,6 +210,7 @@ const HTML_ACTIONS = new Set([
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
 export async function handleCrewScan(request, env, ctx) {
+  env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     return await handleCrewTag(ui, request);
@@ -225,6 +226,7 @@ export async function handleHarvestD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
   if (action === 'practice') return practicePage(pickLang(request));
+  env = await withSettings(env);
   const params = getQueryParams(request);
   const db = env.DB;
   const ui = makeUi(request, env);
@@ -316,6 +318,8 @@ export async function handleHarvestD1(request, env, ctx) {
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
+    case 'test_mode':
+      return await handleTestMode(request, db, env, body);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
     default:
@@ -331,6 +335,7 @@ export async function handleHarvestD1(request, env, ctx) {
  * anywhere else in the system — and the URL can't be changed after printing.
  */
 export async function handleZoneScan(request, env, ctx) {
+  env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     const url = new URL(request.url);
@@ -384,6 +389,7 @@ export async function handleZoneScan(request, env, ctx) {
  * lower-version QR with bigger modules.
  */
 export async function handleDayEndScan(request, env, ctx) {
+  env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     return await handleDayEnd(ui, env.DB, env, ctx);
@@ -394,6 +400,7 @@ export async function handleDayEndScan(request, env, ctx) {
 }
 
 export async function handleBarnScan(request, env, ctx) {
+  env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     const station = pickStation(request);
@@ -414,6 +421,7 @@ export async function handleBarnScan(request, env, ctx) {
  * bigger modules, which is what survives a scuffed label in barn lighting.
  */
 export async function handleSackScan(request, env, ctx) {
+  env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     const url = new URL(request.url);
@@ -445,6 +453,44 @@ export async function handleSackScan(request, env, ctx) {
 // this graduates to the real October build — no code change needed.
 function isTestMode(env) {
   return env.HARVEST_TEST_MODE !== 'false';
+}
+
+/**
+ * Test mode is a setting the farm can flip, falling back to the deployed value.
+ *
+ * Read once per request and hung on a copy of env, so every isTestMode(env)
+ * below stays synchronous — the alternative was threading a promise through
+ * about forty call sites for a flag that changes twice a season.
+ *
+ * Cached for a few seconds per isolate: the crew screens poll, and a flip that
+ * takes a few seconds to reach a phone is not worth a database read on every
+ * scan. An unreadable settings table is not an emergency — the deployed value
+ * stands, which is the behaviour this had before the table existed.
+ */
+let testFlagCache = { at: 0, value: null };
+const TEST_FLAG_TTL_MS = 5000;
+
+async function withSettings(env) {
+  if (!env?.DB) return env;
+  const now = Date.now();
+  if (now - testFlagCache.at > TEST_FLAG_TTL_MS) {
+    try {
+      const row = await queryOne(env.DB, `SELECT value FROM harvest_settings WHERE key = 'test_mode'`);
+      testFlagCache = { at: now, value: row ? String(row.value) : null };
+    } catch { testFlagCache = { at: now, value: null }; }
+  }
+  if (testFlagCache.value === null) return env;
+  return { ...env, HARVEST_TEST_MODE: testFlagCache.value === 'true' ? 'true' : 'false' };
+}
+
+/** Flip it, and let the next request on every isolate see the change. */
+async function setTestMode(db, on, who) {
+  await execute(db, `
+    INSERT INTO harvest_settings (key, value, updated_at, updated_by)
+    VALUES ('test_mode', ?, datetime('now'), ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+  `, [on ? 'true' : 'false', who || null]);
+  testFlagCache = { at: 0, value: null };
 }
 
 function getSeason() {
@@ -1544,6 +1590,36 @@ async function handleSackAlloc(db, env, ctx, body) {
 
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
     note_on: note ? ids[0] : null });
+}
+
+/**
+ * Read or flip test mode (Koa, 2026-09-18). Password-gated like every other
+ * number on the dashboard: this decides whether the season's records are real.
+ *
+ * GET reports the state and where it came from; POST { on: true|false } sets
+ * the override row. Flipping it OFF does not delete anything — the test rows
+ * stay until someone clears them, which is deliberate: they are the evidence
+ * of what a test day did.
+ */
+async function handleTestMode(request, db, env, body) {
+  requireAuth(request, body, env, 'harvest-test-mode');
+  if (request.method === 'POST' && body.on !== undefined) {
+    const on = body.on === true || body.on === 'true' || body.on === 1 || body.on === '1';
+    await setTestMode(db, on, 'dashboard');
+    return successResponse({ success: true, test_mode: on, source: 'setting' });
+  }
+  const row = await queryOne(db, `SELECT value, updated_at FROM harvest_settings WHERE key = 'test_mode'`);
+  const counts = await queryOne(db, `
+    SELECT (SELECT COUNT(*) FROM harvest_scan_log WHERE is_test = 1) AS scans,
+           (SELECT COUNT(*) FROM harvest_sacks WHERE is_test = 1) AS sacks
+  `);
+  return successResponse({
+    success: true,
+    test_mode: isTestMode(env),
+    source: row ? 'setting' : 'deployed default',
+    changed_at: row ? row.updated_at : null,
+    test_rows: { scans: counts?.scans || 0, sacks: counts?.sacks || 0 },
+  });
 }
 
 /**
