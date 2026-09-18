@@ -59,3 +59,25 @@ export function nextBackoff(failures) {
   const ms = 500 * Math.pow(2, Math.max(0, failures - 1));
   return Math.min(ms, 30000);
 }
+
+/**
+ * Is this rendered image plausibly a tag?
+ *
+ * The screenshot is blitted onto the exact 4x2 page by print-image.ps1, so a
+ * dot or two of overshoot is absorbed with no visible effect. Measured on the
+ * real page 2026-09-18: the target is 812 x 406 at 203 dpi and the label
+ * actually renders 812 x 408 — the element lays out about one CSS pixel taller
+ * than 2in. Harmless, and normalized by the blit.
+ *
+ * A LARGE deviation is different: it means the page did not lay out as a tag at
+ * all (a stylesheet that did not load, a changed layout, an error page). That
+ * must not be printed, because the output gets wire-tied to a sack and is only
+ * discovered weeks later at scan time.
+ */
+export function renderSaneEnough(actual, expected, tolerance = 0.05) {
+  if (!actual || !expected) return false;
+  if (!(actual.widthPx > 0) || !(actual.heightPx > 0)) return false;
+  const off = (a, b) => Math.abs(a - b) / b;
+  return off(actual.widthPx, expected.widthPx) <= tolerance
+      && off(actual.heightPx, expected.heightPx) <= tolerance;
+}
