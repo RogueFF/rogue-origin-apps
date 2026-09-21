@@ -65,6 +65,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
+import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
   resolvePrintVia, requireAgentAuth, PULL_LIMIT,
@@ -4893,9 +4894,30 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   // Who prints: the server decides, per allocation, and says so in the alloc
   // response. NOT a page-level flag — this page can have been open for an hour,
   // and a stale decision would print the tag twice (iframe here AND the agent).
+  // WebKit scopes window.print() to the TOP-LEVEL document, not the iframe that
+  // called it — so on an iPhone the hidden-iframe trick prints the takedown
+  // screen instead of the tag (Koa, 2026-09-21, in Chrome on iOS; Chrome there
+  // is WebKit underneath, so this is not Safari-only). Desktop Chrome scopes it
+  // to the frame, which is why the barn PC has always worked.
+  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
+  var topLevelPrint = iframePrintUnreliable(
+    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+
   function print(ids, via) {
     if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
-    frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    if (topLevelPrint) {
+      // A new tab, so window.print() runs at top level where WebKit will honour
+      // it. Opened from the button's own click handler, so it counts as
+      // user-initiated and is not treated as a popup. The takedown screen stays
+      // loaded underneath with its lot, bay and count intact.
+      var w = window.open(url, '_blank');
+      // Blocked anyway (a locked-down browser): navigate rather than silently
+      // printing nothing. The label page carries a link back to the lot.
+      if (!w) window.location.href = url;
+      return;
+    }
+    frame.src = url;
   }
 
   // In agent mode the crew no longer watches a tag appear as confirmation, so
