@@ -66,6 +66,7 @@ import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
 import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
+import { qrDataUri } from '../lib/qr.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
   resolvePrintVia, requireAgentAuth, PULL_LIMIT,
@@ -2706,9 +2707,22 @@ function qrUrlFor(sackId) {
   return qrImageUrl(`${PUBLIC_BASE}/s/${sackId}`, 203);
 }
 
-/** Same QR service the sack tags use, at whatever pixel size the paper wants. */
+/**
+ * The QR for a printed page, as an inline `data:` URI.
+ *
+ * This used to be `api.qrserver.com`. Measured 2026-09-21, that fetch cost
+ * **0.62-0.84 s** against **0.16-0.24 s** for the whole label page — and since
+ * the label waits for every image before printing (printing early yields blank
+ * squares), it WAS the delay the crew felt on every bag. It also put tag
+ * printing at the mercy of an unrelated company mid-harvest.
+ *
+ * `px` is now ignored: the QR is SVG, so it is resolution-independent and each
+ * page's CSS sizes it. The parameter is kept so the call sites read the same,
+ * and because the number still documents the intended print size.
+ */
+// eslint-disable-next-line no-unused-vars
 function qrImageUrl(target, px) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=0&data=${encodeURIComponent(target)}`;
+  return qrDataUri(target);
 }
 
 // ─── JSON ACTIONS ───────────────────────────────────────
