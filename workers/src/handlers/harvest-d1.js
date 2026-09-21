@@ -207,7 +207,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'barn_intake', 'barn_log',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -251,6 +251,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
+        case 'cultivar_fix':
+          return await handleCultivarFix(ui, db, env, ctx, params);
         case 'barn_intake':
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
@@ -371,23 +373,12 @@ export async function handleZoneScan(request, env, ctx) {
     const params = { zone };
     const picked = url.searchParams.get('cultivar');
     if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
+    if (picked) params.cultivar = picked;
 
-    const options = cultivarsFor(zone);
-    if (isMultiCultivar(zone) && !picked) {
-      // Trial / split zone: a lot is zone x cultivar x cut, so we can't open a
-      // session until we know which cultivar is being cut. One sign per zone
-      // with a picker beats a separate QR per cultivar — no wrong code to scan.
-      return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
-    }
-    if (picked) {
-      if (!options.includes(picked)) {
-        throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
-      }
-      params.cultivar = picked;
-    } else {
-      params.cultivar = options[0] || null;   // single-cultivar zone: auto-fill
-    }
-
+    // One set of rules, in handleEnter: a trial / split zone with no pick gets
+    // the picker back (one sign per zone beats a separate QR per cultivar — no
+    // wrong code to scan), a single-cultivar zone auto-fills, and a cultivar
+    // that isn't planted here is refused. They used to live in both places.
     return await handleEnter(ui, env.DB, env, ctx, params);
   } catch (e) {
     const { message, status } = formatError(e);
@@ -726,7 +717,23 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
   // the planting record. A lot is zone x cultivar x cut throughout.
-  const cultivar = params.cultivar || cultivarsFor(zone)[0] || null;
+  //
+  // NEVER GUESS IN A ZONE THAT HOLDS MORE THAN ONE. This used to fall back to
+  // the first name on the zone's list, which is only ever right by luck: a lot
+  // is zone x cultivar x cut, so a guessed cultivar is a guessed lot, and every
+  // sack hung off it inherits the guess under a plausible-looking name. The
+  // scan path asks already; this guard is for ?action=enter, which reaches this
+  // function with whatever the query string happened to carry. Asking again
+  // costs a tap. Guessing costs a lot nobody can tell apart from a real one.
+  const options = cultivarsFor(zone);
+  const picked = String(params.cultivar ?? '').trim();
+  if (picked && !options.includes(picked)) {
+    throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
+  }
+  if (!picked && isMultiCultivar(zone)) {
+    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
+  }
+  const cultivar = picked || options[0] || null;
 
   // Idempotency guard: a phone refresh/back-button/link-preview re-hitting
   // the same zone's URL moments later shouldn't open a second session. Keyed on
@@ -886,7 +893,71 @@ async function handleHeadcount(ui, db, env, ctx, params) {
     text: `👥 ${count} cutter${count === 1 ? '' : 's'} in *${session.zone}* (cut ${session.cut_number})`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('crew'), headcountBody(ui, { zone: session.zone, cutNumber: session.cut_number, sessionId, count }));
+  return renderPage(ui, ui.t('crew'), headcountBody(ui, {
+    zone: session.zone, cutNumber: session.cut_number, sessionId, count, cultivar: session.cultivar,
+  }));
+}
+
+/**
+ * Fix the cultivar on the lot just opened — the receipt's "wrong cultivar?".
+ *
+ * Koa, 2026-09-21, after two R1 lots recorded a cultivar nobody cut. The pick
+ * is one tap among seven on a phone in a field, and the only thing separating a
+ * mis-tap from a real lot is that somebody notices. So: correct it in place,
+ * the same way the headcount grid already lets a wrong count be re-tapped.
+ *
+ * IN PLACE, NOT A NEW SESSION. Re-scanning the sign would close this lot and
+ * open another, leaving a minutes-long phantom lot in the timeline with barn
+ * loads possibly already attached to it. The correction moves this row instead,
+ * and the loads follow it, which is what actually happened in the field.
+ *
+ * Refused once tags exist: a printed tag carries the cultivar name on it, so at
+ * that point paper and database disagree and only voiding can settle it.
+ */
+async function handleCultivarFix(ui, db, env, ctx, params) {
+  const sessionId = parseInt(params.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing or invalid session_id.');
+  }
+  const session = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
+  if (!session) throw createError('NOT_FOUND', ui.t('noSessionFound', { id: sessionId }));
+  refuseRealInTest(ui, env, session);
+  if (session.closed_at) throw createError('VALIDATION_ERROR', ui.t('fixLotClosed'));
+
+  const zone = session.zone;
+  const options = cultivarsFor(zone);
+  const cultivar = String(params.cultivar ?? '').trim();
+  if (!options.includes(cultivar)) {
+    throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: cultivar, zone }));
+  }
+
+  const tags = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id = ? AND voided_at IS NULL
+  `, [sessionId]);
+  if (tags && tags.n > 0) {
+    throw createError('VALIDATION_ERROR', ui.t('fixHasTags', { n: tags.n }));
+  }
+
+  const was = session.cultivar;
+  // The cut number is a property of zone x cultivar, so it is re-derived for
+  // the cultivar this lot turned out to be — not carried over from the wrong one.
+  const cutNumber = was === cultivar ? session.cut_number : await computeCutNumber(
+    db, zone, cultivar, session.season, Number(session.is_test) ? 1 : 0, null);
+  await execute(db, `UPDATE harvest_scan_log SET cultivar = ?, cut_number = ? WHERE id = ?`,
+    [cultivar, cutNumber, sessionId]);
+
+  if (was !== cultivar) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ Corrected *${zone}* — ${was || '?'} → *${cultivar}* (Cut ${cutNumber})`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+
+  return renderPage(ui, ui.t('cultivarFixed', { cv: cultivar }), enterBody(ui, {
+    zone, cultivar, cutNumber, sessionId, prevZone: null,
+    flash: ui.t('cultivarFixed', { cv: cultivar }),
+    headcount: session.headcount,
+  }));
 }
 
 // ─── CREW CARD ──────────────────────────────────────────
@@ -4140,16 +4211,38 @@ function cultivarPickerBody(ui, zone, options) {
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null }) {
   return `
-<h1>${ui.t('entered', { zone })}</h1>
+<h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
 <p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
+<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
 <div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
+}
+
+/**
+ * Folded shut, because the pick is usually right and the cutters' next tap is
+ * the headcount directly above it. Open, it is the same grid as the picker with
+ * the current lot marked, so the fix reads as "change this" rather than "start
+ * something". Nothing to show in a zone that holds one cultivar.
+ */
+function cultivarFixBlock(ui, zone, sessionId, current) {
+  if (!isMultiCultivar(zone)) return '';
+  const buttons = cultivarsFor(zone).map(cv => {
+    const on = cv === current;
+    return `<a class="btn${on ? ' sel' : ''}" aria-pressed="${on}"`
+      + ` href="${API}?lang=${ui.lang}&action=cultivar_fix&session_id=${sessionId}`
+      + `&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`;
+  }).join('');
+  return `
+<details class="cvfix">
+  <summary>${ui.t('wrongCultivar')}</summary>
+  <div class="cvgrid">${buttons}</div>
+</details>`;
 }
 
 function alreadyEnteredBody(ui, active) {
@@ -4163,7 +4256,7 @@ function alreadyEnteredBody(ui, active) {
 ${headcountScript(ui)}`;
 }
 
-function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
+function headcountBody(ui, { zone, cutNumber, sessionId, count, cultivar = null }) {
   // The no-JS landing page. The grid now carries `count`, so even here the
   // number that was set is visibly the one selected rather than being asserted
   // only by the headline.
@@ -4173,6 +4266,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <p class="note">${ui.t('wrongNumber')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId, count)}</div>
 <div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=status">${ui.t('viewStatus')}</a></div>
 ${headcountScript(ui)}`;
 }
