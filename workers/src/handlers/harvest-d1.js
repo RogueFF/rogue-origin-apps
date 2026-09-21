@@ -1955,7 +1955,14 @@ async function handleSackLabel(ui, db, env, params) {
 
   // ?preview=1 renders without firing the print dialog — for eyeballing a
   // label (or checking a long cultivar name fits) before committing paper.
-  return renderLabelSheet(ui, sacks, null, { autoPrint: params.preview !== '1' });
+  // ?popup=1 — opened as a throwaway print tab by the takedown screen on iOS,
+  // where a hidden iframe cannot print (WebKit scopes window.print() to the top
+  // document). It closes itself once printing is done so the crew lands back on
+  // the takedown screen instead of piling up tabs, one per sack, all day.
+  return renderLabelSheet(ui, sacks, null, {
+    autoPrint: params.preview !== '1',
+    popup: String(params.popup || '') === '1',
+  });
 }
 
 async function handleSackWeigh(ui, db, env, ctx, body) {
@@ -4907,11 +4914,16 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
     var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
     if (topLevelPrint) {
-      // A new tab, so window.print() runs at top level where WebKit will honour
-      // it. Opened from the button's own click handler, so it counts as
+      // A separate tab, so window.print() runs at top level where WebKit will
+      // honour it. Opened from the button's own click handler, so it counts as
       // user-initiated and is not treated as a popup. The takedown screen stays
       // loaded underneath with its lot, bay and count intact.
-      var w = window.open(url, '_blank');
+      //
+      // NAMED, not '_blank': every tag reuses this one tab instead of opening a
+      // fresh one per sack. popup=1 tells the label page to close itself when
+      // printing is done, so the crew lands back here rather than closing a tab
+      // per bag all day (Koa, 2026-09-21).
+      var w = window.open(url + '&popup=1', 'rf_tag_print');
       // Blocked anyway (a locked-down browser): navigate rather than silently
       // printing nothing. The label page carries a link back to the lot.
       if (!w) window.location.href = url;
@@ -5410,6 +5422,12 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; font-weight: 700; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
+  /* Way back to the takedown screen if the browser will not close this tab.
+     Screen-only: it must never cost a label. */
+  #doneBtn { display: block; margin: 16px auto; padding: 18px 24px; font-size: 20px;
+             font-weight: 700; background: #2f7a4f; color: #fff; border: 0;
+             border-radius: 12px; min-width: 80%; }
+  @media print { #doneBtn { display: none !important; } }
   .toolbar a { color: #304e3c; display:inline-block; padding:10px 14px; border:1px solid #c5d0ba; border-radius:8px; text-decoration:none; margin:4px; }
   @media screen { .toolbar{background:#edf1e4!important;color:#304e3c!important;padding:16px!important;line-height:1.8} .banner{border-radius:12px!important} }
   /* Explanatory text for whoever opened the sheet — SCREEN ONLY. Left in the
@@ -5436,6 +5454,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 <div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${opts.banner || ''}
 ${labels}
+${opts.popup ? `<button type="button" id="doneBtn" hidden>${ui.lang === 'es' ? '← Volver e imprimir la siguiente' : '← Back for the next tag'}</button>` : ''}
 ${TAG_FIT_SCRIPT}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
@@ -5448,6 +5467,33 @@ ${autoPrint ? `<script>
       img.addEventListener('load', function () { if (--left === 0) window.print(); });
       img.addEventListener('error', function () { if (--left === 0) window.print(); });
     });
+  })();
+</script>` : ''}${opts.popup ? `<script>
+  // Opened as a print tab by the takedown screen. Get the crew back to that
+  // screen without making them close a tab per sack (Koa, 2026-09-21: "when i
+  // want to print the next tag, i have to close back and go to the previous
+  // page"). A script-opened window may close itself, which is why this only
+  // ever runs with popup=1.
+  (function () {
+    var closed = false;
+    function done() {
+      if (closed) return;
+      closed = true;
+      window.close();
+      // If the browser refuses to close it, the button below is the way back —
+      // never leave the crew on a dead-end page mid-takedown.
+      var b = document.getElementById('doneBtn');
+      if (b) b.hidden = false;
+    }
+    window.addEventListener('afterprint', done);
+    // afterprint is not reliable on every WebKit build, so a timer backstops it.
+    // Generous: it must not fire while the print sheet is still open.
+    setTimeout(function () {
+      var b = document.getElementById('doneBtn');
+      if (b) b.hidden = false;
+    }, 4000);
+    var btn = document.getElementById('doneBtn');
+    if (btn) btn.addEventListener('click', function (e) { e.preventDefault(); done(); });
   })();
 </script>` : ''}
 </body></html>`;
