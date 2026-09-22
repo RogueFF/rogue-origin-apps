@@ -69,7 +69,7 @@ function freshDb() {
   // statements sitting around them.
   for (const f of MIGRATIONS) {
     const stripped = readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
-      .split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+      .split(/\r?\n/).map(l => l.replace(/--.*$/, '')).join('\n');
     for (const stmt of stripped.split(';')) {
       const t = stmt.trim();
       if (t) sqlite.exec(t);

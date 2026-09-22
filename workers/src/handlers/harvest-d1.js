@@ -69,6 +69,9 @@ import { withinBarnGrace } from '../lib/barn-attribution.js';
 import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import {
+  IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
+} from '../lib/inventory-debt.js';
+import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
   resolvePrintVia, requireAgentAuth, PULL_LIMIT,
   enqueueReprint, jobStatusFor, requeueStale, resolvePrinter,
@@ -733,12 +736,12 @@ function pacificToday() {
  * change and failed on the way back; replaying that subtracts twice, and a
  * double subtraction reads exactly like an honest count.
  */
-const IN_FLIGHT = 'in flight since ';
+// IN_FLIGHT / inFlight now live in lib/inventory-debt.js, so the sweep and the
+// screens cannot drift on what 'unknown' means. See that file for the why.
 
 /** A query-string or JSON flag: `?apply=1`, `{ apply: true }`, `apply=yes`. */
 const truthy = (v) => v === true || v === 1 || /^(1|true|yes|on)$/i.test(String(v ?? ''));
 
-const inFlight = (what) => `${IN_FLIGHT}${new Date().toISOString()} (${what})`;
 
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
 
@@ -1847,6 +1850,22 @@ async function handlePrintCheck(db, body) {
 }
 
 /**
+ * The outstanding inventory debts, for a screen to show.
+ *
+ * Same rows the sweep repairs, through the same SQL — a screen that could
+ * disagree with the repair tool would teach the crew to ignore it.
+ */
+async function loadInventoryDebts(db, env) {
+  const rows = await query(db, `
+    SELECT sack_id, voided_at, shopify_added_at, shopify_add_error
+    FROM harvest_sacks
+    WHERE is_test = ? AND (${DEBT_SQL})
+    ORDER BY printed_at DESC
+  `, [isTestMode(env) ? 1 : 0]);
+  return summariseDebts(rows);
+}
+
+/**
  * What the inventory owes, and a way to pay it — `?action=inventory_sweep`.
  *
  * Every row that failed above is left retryable on purpose, so something has to
@@ -1871,18 +1890,16 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
     SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
            shopify_added_at, shopify_add_error, voided_at
     FROM harvest_sacks
-    WHERE is_test = ?
-      AND ((voided_at IS NOT NULL AND shopify_added_at IS NOT NULL)
-        OR (voided_at IS NULL AND shopify_added_at IS NULL AND shopify_add_error IS NOT NULL))
+    WHERE is_test = ? AND (${DEBT_SQL})
     ORDER BY printed_at
   `, [isTest]);
 
   const out = [];
   for (const row of rows) {
-    const delta = row.voided_at ? -1 : 1;
-    const unknown = String(row.shopify_add_error || '').startsWith(IN_FLIGHT);
+    const { owes: delta, state } = classifyDebt(row);
+    const unknown = state === 'unknown';
     const item = {
-      sack_id: row.sack_id, owes: delta, state: unknown ? 'unknown' : 'failed',
+      sack_id: row.sack_id, owes: delta, state,
       error: row.shopify_add_error, acted: false, ok: null,
     };
     if (apply && (!unknown || force)) {
@@ -3226,6 +3243,11 @@ async function getReconcile(db, env, params) {
       .filter(v => String(v.title || '').startsWith(`${season} -`))
       .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
       .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
+    // Tags whose Shopify write never settled. Reconcile compares tagged bags
+    // against the Shopify count, so a debt here is the difference — and until
+    // 2026-09-22 it was invisible on every screen while the sweep endpoint sat
+    // there knowing about it.
+    inventory_debts: await loadInventoryDebts(db, env),
   });
 }
 
@@ -3752,6 +3774,9 @@ async function getMetrics(request, db, env, params, body) {
     constants: roll.constants,
     totals: roll.totals,
     lots: roll.lots,
+    // Same rows the reconcile screen and the sweep see. On the dashboard so a
+    // debt is noticed during the day rather than only at day end.
+    inventory_debts: await loadInventoryDebts(db, env),
     ...metrics,
   });
 }
@@ -3996,6 +4021,19 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .batchrow input { margin: 0; max-width: 110px; }
   .batchrow .btn { margin: 0; white-space: nowrap; padding: 12px 18px; font-size: 1rem; }
   .hint { color: #9fc2ac; font-size: 0.85rem; font-weight: normal; }
+  /* Inventory writes that never settled. Amber, not red, as a whole: most are
+     retryable. The UNKNOWN line inside goes red because it is the one nobody
+     may replay blindly — the call may have landed, and replaying doubles the
+     count, which reads exactly like an honest number. */
+  .debt { border: 2px solid #e0a53a; background: #2b2417; border-radius: 12px;
+          padding: 16px 18px; margin: 14px 0; color: #f6e9cf; }
+  .debt strong { display: block; font-size: 1.1rem; margin-bottom: 8px; }
+  .debt-row { margin: 4px 0; }
+  .debt-row.bad { color: #ffb3b3; font-weight: 700; }
+  .debt-ids { margin-top: 10px; line-height: 1.9; }
+  .debt-ids code { background: #1b2b20; border: 1px solid #3a5946; border-radius: 6px;
+                   padding: 2px 7px; font-size: 0.9rem; }
+  .debt-why { margin-top: 10px; color: #cfe3d6; font-size: 0.9rem; }
   h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em;
        color: #7fae91; margin: 22px 0 8px; font-weight: 700; }
   .kv { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0;
@@ -5992,15 +6030,37 @@ function reconcileBody(ui) {
     unavailable: L('Shopify could not be checked. Counts below are not a complete comparison.', 'No se pudo consultar Shopify. La comparación está incompleta.'),
     unmatched: L('Shopify variants without tagged bags', 'Variantes de Shopify sin bolsas etiquetadas'),
     unsynced: L('Opened bags awaiting inventory sync', 'Bolsas abiertas pendientes de sincronizar'),
+    debtTitle: L('Inventory writes that never settled', 'Escrituras de inventario sin confirmar'),
+    debtFailed: L('{n} can be retried', '{n} se pueden reintentar'),
+    debtUnknown: L('{n} unknown — check Shopify by hand before retrying',
+                   '{n} desconocidas — revisa Shopify a mano antes de reintentar'),
+    debtWhy: L('These tags are part of any difference above.',
+               'Estas etiquetas son parte de cualquier diferencia de arriba.'),
+    debtMore: L('…and {n} more', '…y {n} más'),
   };
   return `<h1>${L('Do the counts match?', '¿Cuadran las cantidades?')}</h1>
 <p class="sub">${L('Unopened tagged bags compared with Shopify Super Sack inventory, per cut.', 'Bolsas etiquetadas sin abrir contra el inventario Super Sack de Shopify, por corte.')}</p>
 <form id="compareForm"><label for="compareSeason">${L('Season', 'Temporada')}</label><input id="compareSeason" type="number" min="2020" max="2100" value="${getSeason()}" required><button type="submit" class="btn">${L('Refresh comparison', 'Actualizar comparación')}</button></form>
 <p id="compareStatus" role="status" aria-live="polite"></p>
 <div class="reconcile-table"><table><thead><tr>${[L('Cultivar / cut', 'Cultivar / corte'), L('Unopened bags', 'Bolsas sin abrir'), 'Shopify', L('Difference', 'Diferencia'), L('Status', 'Estado')].map(x => `<th scope="col">${x}</th>`).join('')}</tr></thead><tbody id="compareRows"></tbody></table></div>
+<div id="inventoryDebt" hidden></div>
 <div id="compareExtra"></div><p class="note"><span class="hint">${L('Read-only. Positive difference means more tagged bags than Shopify units. Check the physical count before making adjustments.', 'Solo lectura. Una diferencia positiva indica más bolsas que unidades en Shopify. Revisa el conteo físico antes de ajustar.')}</span></p>
 <script>
 (function(){
+ function renderDebt(s){
+   var box=document.getElementById('inventoryDebt');
+   if(!box||!s||!s.show){if(box){box.hidden=true;}return;}
+   // Unknown first and in red: that is the one nobody may retry blindly,
+   // because the call may have landed and replaying it doubles the count.
+   var bits=[];
+   if(s.unknown)bits.push('<div class="debt-row bad">'+T.debtUnknown.replace('{n}',s.unknown)+'</div>');
+   if(s.failed)bits.push('<div class="debt-row">'+T.debtFailed.replace('{n}',s.failed)+'</div>');
+   var ids=s.items.map(function(i){return '<code>'+i.sack_id+'</code>';}).join(' ');
+   if(s.total>s.items.length)ids+=' '+T.debtMore.replace('{n}',s.total-s.items.length);
+   box.innerHTML='<div class="debt"><strong>'+T.debtTitle+' — '+s.total+'</strong>'+bits.join('')+
+     '<div class="debt-ids">'+ids+'</div><div class="debt-why">'+T.debtWhy+'</div></div>';
+   box.hidden=false;
+ }
  var T=${JSON.stringify(strings)}, form=document.getElementById('compareForm'), status=document.getElementById('compareStatus');
  var rows=document.getElementById('compareRows'), extra=document.getElementById('compareExtra');
  async function load(){
@@ -6010,6 +6070,7 @@ function reconcileBody(ui) {
    var r=await fetch('${API}?action=reconcile&season='+encodeURIComponent(document.getElementById('compareSeason').value),{cache:'no-store'});
    if(!r.ok)throw new Error('load');var d=await r.json();if(!d.success||!Array.isArray(d.lines))throw new Error('data');
    status.textContent=d.variants_error?T.unavailable:(!d.lines.length?T.empty:new Date(d.generated_at).toLocaleString('${es ? 'es-US' : 'en-US'}',{timeZone:'America/Los_Angeles'})+' Pacific');
+   renderDebt(d.inventory_debts);
    var pending=0;
    d.lines.forEach(function(l){
     var tr=document.createElement('tr'), unavailable=!!d.variants_error||l.shopify_on_hand===null;
