@@ -43,8 +43,27 @@ test('a real Mac is NOT treated as iOS', () => {
   );
 });
 
-test('Android Chrome keeps the iframe — it scopes print correctly', () => {
-  assert.equal(unreliable(ANDROID_CHROME, 'Linux armv8l', 5), false);
+test('Android Chrome needs a top-level print too', () => {
+  assert.equal(
+    unreliable(ANDROID_CHROME, 'Linux armv8l', 5), true,
+    'Koa, 2026-09-22: pressing PRINT TAG on Android did nothing at all — the '
+    + 'hidden 0x0 offscreen iframe never printed, while the serial was still spent',
+  );
+});
+
+test('any mobile browser gets the top-level path, not just ones we have met', () => {
+  const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:127.0) Gecko/127.0 Firefox/127.0';
+  const SAMSUNG_INTERNET = 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36';
+  assert.equal(unreliable(FIREFOX_ANDROID, 'Linux armv8l', 5), true);
+  assert.equal(unreliable(SAMSUNG_INTERNET, 'Linux armv8l', 5), true);
+});
+
+test('a touchscreen Windows laptop is NOT mistaken for a phone', () => {
+  const WIN_TOUCH = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  assert.equal(
+    unreliable(WIN_TOUCH, 'Win32', 10), false,
+    'touch points alone must not demote a desktop off the proven iframe path',
+  );
 });
 
 test('desktop Chrome keeps the iframe — this is the proven barn PC path', () => {
