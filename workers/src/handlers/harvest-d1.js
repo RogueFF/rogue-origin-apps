@@ -1,4 +1,5 @@
 import { practicePage } from './harvest-practice.js';
+import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew-hourly.js';
 /**
  * Harvest Zone-Entry & Barn-Intake API Handler — D1
  *
@@ -282,10 +283,20 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
           return await handleSackWeigh(ui, db, env, ctx, body);
-        case 'crew':
-          return await handleCrewForm(ui, db, env);
-        case 'crew_set':
-          return await handleCrewSet(ui, db, env, ctx, body);
+        case 'crew': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const data = await loadCrewHourly(db, env, params, isTest);
+          return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data));
+        }
+        case 'crew_set': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const saved = await submitCrewHourly(db, env, body, isTest);
+          const data = await loadCrewHourly(db, env, { barn: saved.row.barn, hour: saved.row.hour_start }, isTest);
+          const flash = ui.lang === 'es'
+            ? `Guardado ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Arriba' : 'Abajo'}`
+            : `Saved ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Upper' : 'Bottom'}`;
+          return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data, flash));
+        }
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
         case 'sack_note_edit':
@@ -5931,7 +5942,7 @@ ${lane(1, LANE[0], L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'
   ])}
 ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
     card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
-    card(`${API}?action=crew&${q}`, L('Crew roster', 'Cuadrilla'), L('Drivers, hangers and water spiders on shift.', 'Choferes, colgadores y water spiders en turno.')),
+    card(`${API}?action=crew&${q}`, L('Hourly crew report', 'Reporte por hora'), L('On the hour: who is working and how many sticks went up.', 'Cada hora: quién está trabajando y cuántos palos se colgaron.')),
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
