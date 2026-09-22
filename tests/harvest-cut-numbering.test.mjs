@@ -159,7 +159,10 @@ test('the tag prints the cut large beside the number, and not again in the small
   await alloc(env, ctx, { session_id: seedLot(sqlite, { cut: 2 }), cultivar: 'Rainbow GMO Quik', qty: 1, bay: 8 });
   const { html } = await get(env, ctx, `action=sack_label&id=${YY}-RAINGQ-C2-1`);
   assert.match(html, /<div class="bagno"[^>]*>#1<\/div>\s*<div class="cutbox"><span class="ord">2ND<\/span><span class="cw">CUT<\/span><\/div>/);
-  assert.match(html, new RegExp(`%2Fs%2F${YY}-RAINGQ-C2-1"`), 'the QR opens the second-cut bag');
+  // The QR is generated locally and inlined, so the target no longer appears
+  // percent-encoded in the src — it rides in data-qr.
+  assert.match(html, new RegExp(`data-qr="[^"]*/s/${YY}-RAINGQ-C2-1"`),
+    'the QR opens the second-cut bag');
   const meta = html.match(/<div class="meta">([^<]*)<\/div>/)[1];
   assert.doesNotMatch(meta, /Cut/, 'the cut is in the box, not repeated small');
   assert.match(meta, /Z8 · Bay 8/);
