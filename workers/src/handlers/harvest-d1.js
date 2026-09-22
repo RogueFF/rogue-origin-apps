@@ -341,6 +341,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handlePrintCheck(db, body);
     case 'test_mode':
       return await handleTestMode(request, db, env, body);
+    case 'inventory_sweep':
+      return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
     default:
@@ -698,6 +700,34 @@ export function pacificDayRange(day) {
 function pacificToday() {
   return pacificDay(new Date());
 }
+
+/**
+ * Inventory bookkeeping that survives its own failure.
+ *
+ * A tag's +1 and a void's -1 both run in waitUntil, after the crew already has
+ * their answer, against a Google Apps Script that can return an HTML error page
+ * or simply never answer. Three states have to stay apart afterwards, because
+ * the only way to tell them apart later is what the row says:
+ *
+ *   counted   shopify_added_at set,   no error        — Shopify holds the +1
+ *   failed    marker unchanged,       error recorded  — safe to retry
+ *   unknown   marker unchanged,       IN_FLIGHT       — started, never answered
+ *
+ * IN_FLIGHT is written BEFORE the call, which is the whole trick: a background
+ * job that dies mid-call writes nothing, so without a mark laid down first it
+ * is indistinguishable from one that never ran. On 2026-09-22 that cost an hour
+ * of picking through rows to work out which tags Shopify still counted.
+ *
+ * An unknown row is NOT retried automatically. The script may have applied the
+ * change and failed on the way back; replaying that subtracts twice, and a
+ * double subtraction reads exactly like an honest count.
+ */
+const IN_FLIGHT = 'in flight since ';
+
+/** A query-string or JSON flag: `?apply=1`, `{ apply: true }`, `apply=yes`. */
+const truthy = (v) => v === true || v === 1 || /^(1|true|yes|on)$/i.test(String(v ?? ''));
+
+const inFlight = (what) => `${IN_FLIGHT}${new Date().toISOString()} (${what})`;
 
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
 
@@ -1662,13 +1692,17 @@ async function handleSackAlloc(db, env, ctx, body) {
   // inside waitUntil: printing must not wait on, or fail because of, an
   // external call — the crew is standing at the printer.
   if (!isTestMode(env)) {
+    const ph = ids.map(() => '?').join(',');
     ctx.waitUntil((async () => {
+      // Claim the attempt first — see IN_FLIGHT. If this job is evicted between
+      // here and the answer, the row says so instead of saying nothing.
+      await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id IN (${ph})`,
+        [inFlight('add'), ...ids]);
       const r = await adjustSupersackCount(env, {
         db,
         season, cultivar, zone: lot.zone, cut: lot.cut_number, delta: qty,
         note: `[Harvest] ${qty} tag${qty === 1 ? '' : 's'} printed — ${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''} (${lot.zone} cut ${lot.cut_number})`,
       });
-      const ph = ids.map(() => '?').join(',');
       await execute(db, `
         UPDATE harvest_sacks
         SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
@@ -1802,6 +1836,83 @@ async function handlePrintCheck(db, body) {
 }
 
 /**
+ * What the inventory owes, and a way to pay it — `?action=inventory_sweep`.
+ *
+ * Every row that failed above is left retryable on purpose, so something has to
+ * find them. Two debts exist:
+ *
+ *   owed -1   a voided tag Shopify still counts
+ *   owed +1   a printed, unvoided tag that never reached Shopify
+ *
+ * Reports by default. `apply` replays the DEFINITE failures — the ones where
+ * the script answered and said no. Rows stuck IN_FLIGHT are listed but not
+ * touched: nobody knows whether that call landed, and replaying a call that
+ * did land moves the count the wrong way just as silently. Check the variant in
+ * Shopify, then `force` them.
+ */
+async function handleInventorySweep(request, db, env, ctx, body, params) {
+  requireAuth(request, body, env, 'harvest-inventory-sweep');
+  const apply = truthy(body.apply ?? params.apply);
+  const force = truthy(body.force ?? params.force);
+  const isTest = isTestMode(env) ? 1 : 0;
+
+  const rows = await query(db, `
+    SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
+           shopify_added_at, shopify_add_error, voided_at
+    FROM harvest_sacks
+    WHERE is_test = ?
+      AND ((voided_at IS NOT NULL AND shopify_added_at IS NOT NULL)
+        OR (voided_at IS NULL AND shopify_added_at IS NULL AND shopify_add_error IS NOT NULL))
+    ORDER BY printed_at
+  `, [isTest]);
+
+  const out = [];
+  for (const row of rows) {
+    const delta = row.voided_at ? -1 : 1;
+    const unknown = String(row.shopify_add_error || '').startsWith(IN_FLIGHT);
+    const item = {
+      sack_id: row.sack_id, owes: delta, state: unknown ? 'unknown' : 'failed',
+      error: row.shopify_add_error, acted: false, ok: null,
+    };
+    if (apply && (!unknown || force)) {
+      const r = await adjustSupersackCount(env, {
+        db,
+        season: row.season, cultivar: row.cultivar, zone: row.zone, cut: row.cut_number,
+        variantId: delta < 0 ? row.shopify_variant_id : null, delta,
+        note: `[Harvest] sweep ${delta < 0 ? 'rollback' : 'add'} — ${row.sack_id}`,
+      });
+      item.acted = true;
+      item.ok = r.ok;
+      item.error = r.ok ? null : r.error;
+      if (r.ok && delta < 0) {
+        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?`, [row.sack_id]);
+      } else if (r.ok) {
+        await execute(db, `
+          UPDATE harvest_sacks
+          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+          WHERE sack_id = ?
+        `, [new Date().toISOString(), r.variantId, row.sack_id]);
+      } else {
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+          [`sweep failed: ${r.error}`, row.sack_id]);
+      }
+    }
+    out.push(item);
+  }
+
+  return successResponse({
+    success: true,
+    applied: apply,
+    forced: force,
+    owed_minus: out.filter(o => o.owes < 0).length,
+    owed_plus: out.filter(o => o.owes > 0).length,
+    unknown: out.filter(o => o.state === 'unknown').length,
+    note: 'A row marked unknown started a call that never answered — it may or may not have landed. Check the variant in Shopify before forcing it.',
+    rows: out,
+  });
+}
+
+/**
  * Read or flip test mode (Koa, 2026-09-18). Password-gated like every other
  * number on the dashboard: this decides whether the season's records are real.
  *
@@ -1862,6 +1973,8 @@ async function handleSackVoid(db, env, ctx, body) {
   // undo it if the add actually landed.
   if (!isTestMode(env) && sack.shopify_added_at) {
     ctx.waitUntil((async () => {
+      await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+        [inFlight('void rollback'), sackId]);
       const r = await adjustSupersackCount(env, {
         db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
@@ -1869,10 +1982,19 @@ async function handleSackVoid(db, env, ctx, body) {
         variantId: sack.shopify_variant_id, delta: -1,
         note: `[Harvest] ${sackId} voided — tag retired with no sack`,
       });
-      await execute(db, `
-        UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = ? WHERE sack_id = ?
-      `, [r.ok ? null : `void rollback failed: ${r.error}`, sackId]);
-      if (!r.ok) console.error(`[harvest][inventory] void ${sackId}: ${r.error}`);
+      // THE MARKER ONLY CLEARS ON SUCCESS. Clearing it on failure was the
+      // second half of the 2026-09-22 mess: shopify_added_at is the record that
+      // Shopify still holds this tag's +1, and dropping it on a failed rollback
+      // threw away both the truth and the only handle a retry has.
+      if (r.ok) {
+        await execute(db, `
+          UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?
+        `, [sackId]);
+      } else {
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+          [`void rollback failed: ${r.error}`, sackId]);
+        console.error(`[harvest][inventory] void ${sackId}: ${r.error}`);
+      }
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
 
