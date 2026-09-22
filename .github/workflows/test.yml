@@ -18,6 +18,15 @@ jobs:
         # dependency cannot drift under CI between runs.
         run: npm ci --no-audit --no-fund
 
+      # Several tests under tests/ drive a real browser (the practice tutorial,
+      # and the intake flow). `npm ci` installs the Playwright PACKAGE but not
+      # the browser binaries, so without this the suite fails with
+      # "Executable doesn't exist at .../chromium_headless_shell-…" whenever the
+      # runner's cache does not happen to hold the right build. That is why this
+      # workflow has passed and failed on identical code.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       - name: Lint
         # eslint exits non-zero on errors only, so the ~115 remaining warnings
         # (unused vars, prefer-const) do not fail the build. Errors do.
