@@ -1,4 +1,5 @@
 import { practicePage } from './harvest-practice.js';
+import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew-hourly.js';
 /**
  * Harvest Zone-Entry & Barn-Intake API Handler — D1
  *
@@ -65,6 +66,13 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
+import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
+import { qrDataUri } from '../lib/qr.js';
+import {
+  enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
+  resolvePrintVia, requireAgentAuth, PULL_LIMIT,
+  enqueueReprint, jobStatusFor, requeueStale, resolvePrinter,
+} from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
@@ -202,7 +210,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'barn_intake', 'barn_log',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -246,6 +254,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
+        case 'cultivar_fix':
+          return await handleCultivarFix(ui, db, env, ctx, params);
         case 'barn_intake':
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
@@ -273,10 +283,20 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
           return await handleSackWeigh(ui, db, env, ctx, body);
-        case 'crew':
-          return await handleCrewForm(ui, db, env);
-        case 'crew_set':
-          return await handleCrewSet(ui, db, env, ctx, body);
+        case 'crew': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const data = await loadCrewHourly(db, env, params, isTest);
+          return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data));
+        }
+        case 'crew_set': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const saved = await submitCrewHourly(db, env, body, isTest);
+          const data = await loadCrewHourly(db, env, { barn: saved.row.barn, hour: saved.row.hour_start }, isTest);
+          const flash = ui.lang === 'es'
+            ? `Guardado ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Arriba' : 'Abajo'}`
+            : `Saved ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Upper' : 'Bottom'}`;
+          return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data, flash));
+        }
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
         case 'sack_note_edit':
@@ -318,8 +338,22 @@ export async function handleHarvestD1(request, env, ctx) {
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
+    case 'print_pull':
+      return await handlePrintPull(db, env, body);
+    case 'print_ack':
+      return await handlePrintAck(db, env, body);
+    case 'print_heartbeat':
+      return await handlePrintHeartbeat(db, env, body);
+    case 'print_status':
+      return await handlePrintStatus(db);
+    case 'print_reprint':
+      return await handlePrintReprint(db, env, body);
+    case 'print_check':
+      return await handlePrintCheck(db, body);
     case 'test_mode':
       return await handleTestMode(request, db, env, body);
+    case 'inventory_sweep':
+      return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
     default:
@@ -354,23 +388,12 @@ export async function handleZoneScan(request, env, ctx) {
     const params = { zone };
     const picked = url.searchParams.get('cultivar');
     if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
+    if (picked) params.cultivar = picked;
 
-    const options = cultivarsFor(zone);
-    if (isMultiCultivar(zone) && !picked) {
-      // Trial / split zone: a lot is zone x cultivar x cut, so we can't open a
-      // session until we know which cultivar is being cut. One sign per zone
-      // with a picker beats a separate QR per cultivar — no wrong code to scan.
-      return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
-    }
-    if (picked) {
-      if (!options.includes(picked)) {
-        throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
-      }
-      params.cultivar = picked;
-    } else {
-      params.cultivar = options[0] || null;   // single-cultivar zone: auto-fill
-    }
-
+    // One set of rules, in handleEnter: a trial / split zone with no pick gets
+    // the picker back (one sign per zone beats a separate QR per cultivar — no
+    // wrong code to scan), a single-cultivar zone auto-fills, and a cultivar
+    // that isn't planted here is refused. They used to live in both places.
     return await handleEnter(ui, env.DB, env, ctx, params);
   } catch (e) {
     const { message, status } = formatError(e);
@@ -689,6 +712,34 @@ function pacificToday() {
   return pacificDay(new Date());
 }
 
+/**
+ * Inventory bookkeeping that survives its own failure.
+ *
+ * A tag's +1 and a void's -1 both run in waitUntil, after the crew already has
+ * their answer, against a Google Apps Script that can return an HTML error page
+ * or simply never answer. Three states have to stay apart afterwards, because
+ * the only way to tell them apart later is what the row says:
+ *
+ *   counted   shopify_added_at set,   no error        — Shopify holds the +1
+ *   failed    marker unchanged,       error recorded  — safe to retry
+ *   unknown   marker unchanged,       IN_FLIGHT       — started, never answered
+ *
+ * IN_FLIGHT is written BEFORE the call, which is the whole trick: a background
+ * job that dies mid-call writes nothing, so without a mark laid down first it
+ * is indistinguishable from one that never ran. On 2026-09-22 that cost an hour
+ * of picking through rows to work out which tags Shopify still counted.
+ *
+ * An unknown row is NOT retried automatically. The script may have applied the
+ * change and failed on the way back; replaying that subtracts twice, and a
+ * double subtraction reads exactly like an honest count.
+ */
+const IN_FLIGHT = 'in flight since ';
+
+/** A query-string or JSON flag: `?apply=1`, `{ apply: true }`, `apply=yes`. */
+const truthy = (v) => v === true || v === 1 || /^(1|true|yes|on)$/i.test(String(v ?? ''));
+
+const inFlight = (what) => `${IN_FLIGHT}${new Date().toISOString()} (${what})`;
+
 // ─── ZONE-ENTRY (cutters) ───────────────────────────────
 
 async function handleEnter(ui, db, env, ctx, params) {
@@ -709,7 +760,23 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
   // the planting record. A lot is zone x cultivar x cut throughout.
-  const cultivar = params.cultivar || cultivarsFor(zone)[0] || null;
+  //
+  // NEVER GUESS IN A ZONE THAT HOLDS MORE THAN ONE. This used to fall back to
+  // the first name on the zone's list, which is only ever right by luck: a lot
+  // is zone x cultivar x cut, so a guessed cultivar is a guessed lot, and every
+  // sack hung off it inherits the guess under a plausible-looking name. The
+  // scan path asks already; this guard is for ?action=enter, which reaches this
+  // function with whatever the query string happened to carry. Asking again
+  // costs a tap. Guessing costs a lot nobody can tell apart from a real one.
+  const options = cultivarsFor(zone);
+  const picked = String(params.cultivar ?? '').trim();
+  if (picked && !options.includes(picked)) {
+    throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
+  }
+  if (!picked && isMultiCultivar(zone)) {
+    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
+  }
+  const cultivar = picked || options[0] || null;
 
   // Idempotency guard: a phone refresh/back-button/link-preview re-hitting
   // the same zone's URL moments later shouldn't open a second session. Keyed on
@@ -869,7 +936,71 @@ async function handleHeadcount(ui, db, env, ctx, params) {
     text: `👥 ${count} cutter${count === 1 ? '' : 's'} in *${session.zone}* (cut ${session.cut_number})`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('crew'), headcountBody(ui, { zone: session.zone, cutNumber: session.cut_number, sessionId, count }));
+  return renderPage(ui, ui.t('crew'), headcountBody(ui, {
+    zone: session.zone, cutNumber: session.cut_number, sessionId, count, cultivar: session.cultivar,
+  }));
+}
+
+/**
+ * Fix the cultivar on the lot just opened — the receipt's "wrong cultivar?".
+ *
+ * Koa, 2026-09-21, after two R1 lots recorded a cultivar nobody cut. The pick
+ * is one tap among seven on a phone in a field, and the only thing separating a
+ * mis-tap from a real lot is that somebody notices. So: correct it in place,
+ * the same way the headcount grid already lets a wrong count be re-tapped.
+ *
+ * IN PLACE, NOT A NEW SESSION. Re-scanning the sign would close this lot and
+ * open another, leaving a minutes-long phantom lot in the timeline with barn
+ * loads possibly already attached to it. The correction moves this row instead,
+ * and the loads follow it, which is what actually happened in the field.
+ *
+ * Refused once tags exist: a printed tag carries the cultivar name on it, so at
+ * that point paper and database disagree and only voiding can settle it.
+ */
+async function handleCultivarFix(ui, db, env, ctx, params) {
+  const sessionId = parseInt(params.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing or invalid session_id.');
+  }
+  const session = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
+  if (!session) throw createError('NOT_FOUND', ui.t('noSessionFound', { id: sessionId }));
+  refuseRealInTest(ui, env, session);
+  if (session.closed_at) throw createError('VALIDATION_ERROR', ui.t('fixLotClosed'));
+
+  const zone = session.zone;
+  const options = cultivarsFor(zone);
+  const cultivar = String(params.cultivar ?? '').trim();
+  if (!options.includes(cultivar)) {
+    throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: cultivar, zone }));
+  }
+
+  const tags = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id = ? AND voided_at IS NULL
+  `, [sessionId]);
+  if (tags && tags.n > 0) {
+    throw createError('VALIDATION_ERROR', ui.t('fixHasTags', { n: tags.n }));
+  }
+
+  const was = session.cultivar;
+  // The cut number is a property of zone x cultivar, so it is re-derived for
+  // the cultivar this lot turned out to be — not carried over from the wrong one.
+  const cutNumber = was === cultivar ? session.cut_number : await computeCutNumber(
+    db, zone, cultivar, session.season, Number(session.is_test) ? 1 : 0, null);
+  await execute(db, `UPDATE harvest_scan_log SET cultivar = ?, cut_number = ? WHERE id = ?`,
+    [cultivar, cutNumber, sessionId]);
+
+  if (was !== cultivar) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ Corrected *${zone}* — ${was || '?'} → *${cultivar}* (Cut ${cutNumber})`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+
+  return renderPage(ui, ui.t('cultivarFixed', { cv: cultivar }), enterBody(ui, {
+    zone, cultivar, cutNumber, sessionId, prevZone: null,
+    flash: ui.t('cultivarFixed', { cv: cultivar }),
+    headcount: session.headcount,
+  }));
 }
 
 // ─── CREW CARD ──────────────────────────────────────────
@@ -1558,6 +1689,11 @@ async function handleSackAlloc(db, env, ctx, body) {
       params: [ids[0], note, isTest],
     });
   }
+
+  // One print job per tag, in the SAME batch as the sacks. A job must not be
+  // able to exist for a tag that was not allocated, nor survive an allocation
+  // that failed — the same rule the note above follows.
+  statements.push(...enqueueStatements({ sackIds: ids, isTest }));
   await transaction(db, statements);
 
   const stats = await getLotTagStats(db, sessionId, isTest);
@@ -1567,13 +1703,17 @@ async function handleSackAlloc(db, env, ctx, body) {
   // inside waitUntil: printing must not wait on, or fail because of, an
   // external call — the crew is standing at the printer.
   if (!isTestMode(env)) {
+    const ph = ids.map(() => '?').join(',');
     ctx.waitUntil((async () => {
+      // Claim the attempt first — see IN_FLIGHT. If this job is evicted between
+      // here and the answer, the row says so instead of saying nothing.
+      await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id IN (${ph})`,
+        [inFlight('add'), ...ids]);
       const r = await adjustSupersackCount(env, {
         db,
         season, cultivar, zone: lot.zone, cut: lot.cut_number, delta: qty,
         note: `[Harvest] ${qty} tag${qty === 1 ? '' : 's'} printed — ${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''} (${lot.zone} cut ${lot.cut_number})`,
       });
-      const ph = ids.map(() => '?').join(',');
       await execute(db, `
         UPDATE harvest_sacks
         SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
@@ -1588,8 +1728,199 @@ async function handleSackAlloc(db, env, ctx, body) {
     text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.${note ? `\n📝 ${note}` : ''}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
+  // Resolved HERE, per allocation, and handed to the client with the ids —
+  // never baked into the page. A phone can sit on a loaded takedown screen for
+  // an hour; if it decided from render-time state it would print via its iframe
+  // while the agent printed the same job. Two tags, one serial, mid-rack.
+  const printVia = await resolvePrintVia(db);
+
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
-    note_on: note ? ids[0] : null });
+    note_on: note ? ids[0] : null, print_via: printVia });
+}
+
+/* ---------------------------------------------------------------------------
+ * Print agent endpoints
+ *
+ * The barn PC runs an agent that drains the print queue and drives the printer,
+ * so the crew can print from ANY phone — iOS included, where WebKit ignores
+ * `@page` and the 4x2 tag cannot be printed from the browser at all.
+ * See wiki/operations/plans/2026-09-18-wireless-tag-printer.md
+ *
+ * These are machine-to-machine and carry their own shared secret, not the crew
+ * password (requireAgentAuth). All are POST.
+ * ------------------------------------------------------------------------- */
+
+/** The agent asks for work. Claims what it returns, so a job goes out once. */
+async function handlePrintPull(db, env, body) {
+  requireAgentAuth(env, body);
+  const agentId = String(body.agent_id || 'barn-pc').substring(0, 60);
+  const isTest = isTestMode(env) ? 1 : 0;
+  // The heartbeat rides the pull: an agent that is asking for work is by
+  // definition alive, so there is no window where it is printing but reads
+  // offline to sack_alloc.
+  await recordHeartbeat(db, agentId, String(body.printer || '').substring(0, 120) || null);
+  // An agent that crashed mid-job, or a barn PC that rebooted, leaves rows
+  // claimed forever — pullJobs only takes 'pending'. Those tags would never
+  // print and nobody would be told, so reclaim them on the way past.
+  await requeueStale(db);
+  const jobs = await pullJobs(db, {
+    agentId,
+    limit: Math.min(parseInt(body.limit, 10) || PULL_LIMIT, PULL_LIMIT),
+    isTest,
+  });
+  // The printer name comes down with the work, so swapping to the spare Zebra
+  // is one settings line rather than a trip to the barn PC to edit env vars.
+  return successResponse({ success: true, jobs, printer: await resolvePrinter(db) });
+}
+
+/** The agent reports what physically happened. */
+async function handlePrintAck(db, env, body) {
+  requireAgentAuth(env, body);
+  const jobId = parseInt(body.job_id, 10);
+  if (!Number.isInteger(jobId) || jobId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing job_id.');
+  }
+  const ok = body.ok === true || body.ok === 'true' || body.ok === 1 || body.ok === '1';
+  await ackJob(db, { jobId, ok, error: body.error });
+  return successResponse({ success: true });
+}
+
+/** Keeps the agent trusted between racks, when nothing is printing. */
+async function handlePrintHeartbeat(db, env, body) {
+  requireAgentAuth(env, body);
+  const agentId = String(body.agent_id || 'barn-pc').substring(0, 60);
+  await recordHeartbeat(db, agentId, String(body.printer || '').substring(0, 120) || null);
+  return successResponse({ success: true });
+}
+
+/**
+ * Is an agent alive, and which way will the next tag print? Unauthenticated on
+ * purpose: it exposes no tag data, and the crew screen needs it to warn BEFORE
+ * a serial is spent.
+ */
+async function handlePrintStatus(db) {
+  const [online, via] = await Promise.all([agentOnline(db), resolvePrintVia(db)]);
+  const pending = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_print_queue WHERE status IN ('pending', 'claimed')
+  `);
+  return successResponse({
+    success: true, agent_online: online, print_via: via, pending: pending?.n || 0,
+  });
+}
+
+/**
+ * Queue a reprint — the jam path, from the crew screen.
+ *
+ * Same serial, no new sack row. This is a POST rather than the old plain link
+ * to the label page because that link was a BROWSER print, which in agent mode
+ * on an iPhone is exactly the path WebKit breaks. Reprint is the crew's most
+ * time-critical recovery; it must work on every handset.
+ */
+async function handlePrintReprint(db, env, body) {
+  const sackId = String(body.sack_id || '').trim().substring(0, 40);
+  if (!sackId) throw createError('VALIDATION_ERROR', 'Missing sack_id.');
+  const sack = await queryOne(db, `SELECT sack_id FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!sack) throw createError('NOT_FOUND', `No such tag: ${sackId}`);
+
+  // THE SERVER DECIDES, and only queues when the agent will actually print.
+  // The client must not answer this from a variable it set at its last
+  // allocation: a screen freshly loaded in agent mode has allocated nothing, so
+  // a page-held default would send the crew's jam recovery down the browser
+  // path — the one WebKit breaks on iPhone — at the worst possible moment.
+  const printVia = await resolvePrintVia(db);
+  if (printVia === 'agent') {
+    await enqueueReprint(db, { sackId, isTest: isTestMode(env) ? 1 : 0 });
+  }
+  return successResponse({ success: true, sack_id: sackId, print_via: printVia });
+}
+
+/**
+ * Did these tags actually come out? Polled by the crew screen in agent mode.
+ *
+ * The screen must not show a tick on the strength of a queue insert: the serial
+ * is already spent and the Shopify count already moved, so "queued" and
+ * "printed" are very different facts to a person standing at a printer.
+ */
+async function handlePrintCheck(db, body) {
+  const ids = Array.isArray(body.ids) ? body.ids.slice(0, 40).map(String) : [];
+  return successResponse({ success: true, status: await jobStatusFor(db, ids) });
+}
+
+/**
+ * What the inventory owes, and a way to pay it — `?action=inventory_sweep`.
+ *
+ * Every row that failed above is left retryable on purpose, so something has to
+ * find them. Two debts exist:
+ *
+ *   owed -1   a voided tag Shopify still counts
+ *   owed +1   a printed, unvoided tag that never reached Shopify
+ *
+ * Reports by default. `apply` replays the DEFINITE failures — the ones where
+ * the script answered and said no. Rows stuck IN_FLIGHT are listed but not
+ * touched: nobody knows whether that call landed, and replaying a call that
+ * did land moves the count the wrong way just as silently. Check the variant in
+ * Shopify, then `force` them.
+ */
+async function handleInventorySweep(request, db, env, ctx, body, params) {
+  requireAuth(request, body, env, 'harvest-inventory-sweep');
+  const apply = truthy(body.apply ?? params.apply);
+  const force = truthy(body.force ?? params.force);
+  const isTest = isTestMode(env) ? 1 : 0;
+
+  const rows = await query(db, `
+    SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
+           shopify_added_at, shopify_add_error, voided_at
+    FROM harvest_sacks
+    WHERE is_test = ?
+      AND ((voided_at IS NOT NULL AND shopify_added_at IS NOT NULL)
+        OR (voided_at IS NULL AND shopify_added_at IS NULL AND shopify_add_error IS NOT NULL))
+    ORDER BY printed_at
+  `, [isTest]);
+
+  const out = [];
+  for (const row of rows) {
+    const delta = row.voided_at ? -1 : 1;
+    const unknown = String(row.shopify_add_error || '').startsWith(IN_FLIGHT);
+    const item = {
+      sack_id: row.sack_id, owes: delta, state: unknown ? 'unknown' : 'failed',
+      error: row.shopify_add_error, acted: false, ok: null,
+    };
+    if (apply && (!unknown || force)) {
+      const r = await adjustSupersackCount(env, {
+        db,
+        season: row.season, cultivar: row.cultivar, zone: row.zone, cut: row.cut_number,
+        variantId: delta < 0 ? row.shopify_variant_id : null, delta,
+        note: `[Harvest] sweep ${delta < 0 ? 'rollback' : 'add'} — ${row.sack_id}`,
+      });
+      item.acted = true;
+      item.ok = r.ok;
+      item.error = r.ok ? null : r.error;
+      if (r.ok && delta < 0) {
+        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?`, [row.sack_id]);
+      } else if (r.ok) {
+        await execute(db, `
+          UPDATE harvest_sacks
+          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+          WHERE sack_id = ?
+        `, [new Date().toISOString(), r.variantId, row.sack_id]);
+      } else {
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+          [`sweep failed: ${r.error}`, row.sack_id]);
+      }
+    }
+    out.push(item);
+  }
+
+  return successResponse({
+    success: true,
+    applied: apply,
+    forced: force,
+    owed_minus: out.filter(o => o.owes < 0).length,
+    owed_plus: out.filter(o => o.owes > 0).length,
+    unknown: out.filter(o => o.state === 'unknown').length,
+    note: 'A row marked unknown started a call that never answered — it may or may not have landed. Check the variant in Shopify before forcing it.',
+    rows: out,
+  });
 }
 
 /**
@@ -1653,6 +1984,8 @@ async function handleSackVoid(db, env, ctx, body) {
   // undo it if the add actually landed.
   if (!isTestMode(env) && sack.shopify_added_at) {
     ctx.waitUntil((async () => {
+      await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+        [inFlight('void rollback'), sackId]);
       const r = await adjustSupersackCount(env, {
         db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
@@ -1660,10 +1993,19 @@ async function handleSackVoid(db, env, ctx, body) {
         variantId: sack.shopify_variant_id, delta: -1,
         note: `[Harvest] ${sackId} voided — tag retired with no sack`,
       });
-      await execute(db, `
-        UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = ? WHERE sack_id = ?
-      `, [r.ok ? null : `void rollback failed: ${r.error}`, sackId]);
-      if (!r.ok) console.error(`[harvest][inventory] void ${sackId}: ${r.error}`);
+      // THE MARKER ONLY CLEARS ON SUCCESS. Clearing it on failure was the
+      // second half of the 2026-09-22 mess: shopify_added_at is the record that
+      // Shopify still holds this tag's +1, and dropping it on a failed rollback
+      // threw away both the truth and the only handle a retry has.
+      if (r.ok) {
+        await execute(db, `
+          UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?
+        `, [sackId]);
+      } else {
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+          [`void rollback failed: ${r.error}`, sackId]);
+        console.error(`[harvest][inventory] void ${sackId}: ${r.error}`);
+      }
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
 
@@ -1747,7 +2089,14 @@ async function handleSackLabel(ui, db, env, params) {
 
   // ?preview=1 renders without firing the print dialog — for eyeballing a
   // label (or checking a long cultivar name fits) before committing paper.
-  return renderLabelSheet(ui, sacks, null, { autoPrint: params.preview !== '1' });
+  // ?popup=1 — opened as a throwaway print tab by the takedown screen on iOS,
+  // where a hidden iframe cannot print (WebKit scopes window.print() to the top
+  // document). It closes itself once printing is done so the crew lands back on
+  // the takedown screen instead of piling up tabs, one per sack, all day.
+  return renderLabelSheet(ui, sacks, null, {
+    autoPrint: params.preview !== '1',
+    popup: String(params.popup || '') === '1',
+  });
 }
 
 async function handleSackWeigh(ui, db, env, ctx, body) {
@@ -2491,9 +2840,41 @@ function qrUrlFor(sackId) {
   return qrImageUrl(`${PUBLIC_BASE}/s/${sackId}`, 203);
 }
 
-/** Same QR service the sack tags use, at whatever pixel size the paper wants. */
+/**
+ * The QR for a printed page, as an inline `data:` URI.
+ *
+ * This used to be `api.qrserver.com`. Measured 2026-09-21, that fetch cost
+ * **0.62-0.84 s** against **0.16-0.24 s** for the whole label page — and since
+ * the label waits for every image before printing (printing early yields blank
+ * squares), it WAS the delay the crew felt on every bag. It also put tag
+ * printing at the mercy of an unrelated company mid-harvest.
+ *
+ * `px` is now ignored: the QR is SVG, so it is resolution-independent and each
+ * page's CSS sizes it. The parameter is kept so the call sites read the same,
+ * and because the number still documents the intended print size.
+ */
+// eslint-disable-next-line no-unused-vars
 function qrImageUrl(target, px) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=0&data=${encodeURIComponent(target)}`;
+  return qrDataUri(target);
+}
+
+/**
+ * A QR image, with the URL it encodes carried alongside it in `data-qr`.
+ *
+ * The target used to be readable straight out of the `src`, because the src was
+ * a qrserver URL with `?data=<the target>`. Inlining the QR removed that, and
+ * with it the ability to ask a rendered page "what will a phone camera actually
+ * open?" — which is the single worst thing to get wrong here: a bad URL survives
+ * printing, laminating and staking, and only surfaces when someone scans it in a
+ * field in October.
+ *
+ * So the target rides along explicitly. Tests assert both that `data-qr` is the
+ * intended URL AND that `src` equals `qrDataUri(data-qr)`, which together are
+ * stronger than the old string match: they check the intent and that the image
+ * really encodes it.
+ */
+function qrImg(target, cls = 'qr', alt = '') {
+  return `<img class="${cls}" src="${qrDataUri(target)}" data-qr="${escapeHtml(target)}" alt="${escapeHtml(alt)}">`;
 }
 
 // ─── JSON ACTIONS ───────────────────────────────────────
@@ -3396,7 +3777,7 @@ function codeSheetBody(ui, packet = 'crew') {
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">CUADRILLA ${crew}</div>
     <div class="sub">Crew ${crew}</div>
-    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/c/${crew}`, 420)}" alt="">
+    ${qrImg(`${PUBLIC_BASE}/c/${crew}`)}
     <div class="how">Escanéalo <strong>una vez</strong> con el teléfono del jefe de cuadrilla.
       Después dirá &ldquo;Cuadrilla ${crew}&rdquo; en cada pantalla.</div>
     <div class="how en">Scan <strong>once</strong> on the crew lead's phone. Every screen then says Crew ${crew}.</div>
@@ -3408,7 +3789,7 @@ function codeSheetBody(ui, packet = 'crew') {
   <div class="kicker">Rogue Family Farms · 2026</div>
   <div class="big">RECEPCIÓN ${n}</div>
   <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
-  <img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/b/${n}`, 900)}" alt="">
+  ${qrImg(`${PUBLIC_BASE}/b/${n}`, 'qr big-qr')}
   <div class="how">Abre la recepción. Registra cada carga sin salir de la pantalla.</div>
   <div class="how en">Open intake once. Log each trailer without leaving the screen.</div>
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
@@ -3422,7 +3803,7 @@ function codeSheetBody(ui, packet = 'crew') {
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">FIN DEL DÍA</div>
     <div class="sub">End of day</div>
-    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/fin`, 420)}" alt="">
+    ${qrImg(`${PUBLIC_BASE}/fin`)}
     <div class="how">Escanéalo <strong>al terminar el día</strong>, con el mismo teléfono
       que abrió la zona. Cierra la zona de tu cuadrilla.</div>
     <div class="how en">Scan at the <strong>end of the day</strong>, on the phone that opened the
@@ -3432,7 +3813,7 @@ function codeSheetBody(ui, packet = 'crew') {
 
   const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
   const zones = [...VALID_ZONES].filter(isHarvestTracked).sort((a,b) => a.localeCompare(b,'en',{numeric:true}));
-  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div><img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/z/${z}`, 900)}" alt="QR ${z}"><div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
 
   return `
 <style>
@@ -4004,16 +4385,38 @@ function cultivarPickerBody(ui, zone, options) {
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone }) {
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null }) {
   return `
-<h1>${ui.t('entered', { zone })}</h1>
+<h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
 <p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
 <p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, zone, sessionId)}</div>
+<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
 <div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
+}
+
+/**
+ * Folded shut, because the pick is usually right and the cutters' next tap is
+ * the headcount directly above it. Open, it is the same grid as the picker with
+ * the current lot marked, so the fix reads as "change this" rather than "start
+ * something". Nothing to show in a zone that holds one cultivar.
+ */
+function cultivarFixBlock(ui, zone, sessionId, current) {
+  if (!isMultiCultivar(zone)) return '';
+  const buttons = cultivarsFor(zone).map(cv => {
+    const on = cv === current;
+    return `<a class="btn${on ? ' sel' : ''}" aria-pressed="${on}"`
+      + ` href="${API}?lang=${ui.lang}&action=cultivar_fix&session_id=${sessionId}`
+      + `&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`;
+  }).join('');
+  return `
+<details class="cvfix">
+  <summary>${ui.t('wrongCultivar')}</summary>
+  <div class="cvgrid">${buttons}</div>
+</details>`;
 }
 
 function alreadyEnteredBody(ui, active) {
@@ -4027,7 +4430,7 @@ function alreadyEnteredBody(ui, active) {
 ${headcountScript(ui)}`;
 }
 
-function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
+function headcountBody(ui, { zone, cutNumber, sessionId, count, cultivar = null }) {
   // The no-JS landing page. The grid now carries `count`, so even here the
   // number that was set is visibly the one selected rather than being asserted
   // only by the headline.
@@ -4037,6 +4440,7 @@ function headcountBody(ui, { zone, cutNumber, sessionId, count }) {
 <p class="note">${ui.t('wrongNumber')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId, count)}</div>
 <div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=status">${ui.t('viewStatus')}</a></div>
 ${headcountScript(ui)}`;
 }
@@ -4567,6 +4971,9 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
     <a id="voidLink" class="mini danger" href="#">${ui.t('void')}</a>
   </div>
   <div id="noteMsg" class="last" hidden></div>
+  <!-- Agent mode only: the crew no longer watches a tag appear, so the screen
+       says whether one actually did. Stays hidden while the browser prints. -->
+  <div id="agentMsg" class="hcstat" hidden></div>
 </div>
 
 <details class="batch">
@@ -4602,6 +5009,14 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
     printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
+    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
+    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
+    printAgentFailed: ui.lang === 'es'
+      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
+      : '⚠ Tag {id} did not print: {e} — use Reprint',
+    printAgentSlow: ui.lang === 'es'
+      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
+      : '⚠ No answer from the printer. Check the barn PC.',
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -4610,6 +5025,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var lastEl = document.getElementById('last');
   var actions = document.getElementById('lastActions');
   var reprint = document.getElementById('reprintLink');
+  var agentMsg = document.getElementById('agentMsg');
   var voidLink = document.getElementById('voidLink');
   var noteBox = document.getElementById('nextNote');
   var noteText = document.getElementById('noteText');
@@ -4648,7 +5064,81 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     }
   }
 
-  function print(ids) { frame.src = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(',')); }
+  // Who prints: the server decides, per allocation, and says so in the alloc
+  // response. NOT a page-level flag — this page can have been open for an hour,
+  // and a stale decision would print the tag twice (iframe here AND the agent).
+  // WebKit scopes window.print() to the TOP-LEVEL document, not the iframe that
+  // called it — so on an iPhone the hidden-iframe trick prints the takedown
+  // screen instead of the tag (Koa, 2026-09-21, in Chrome on iOS; Chrome there
+  // is WebKit underneath, so this is not Safari-only). Desktop Chrome scopes it
+  // to the frame, which is why the barn PC has always worked.
+  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
+  var topLevelPrint = iframePrintUnreliable(
+    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+
+  function print(ids, via) {
+    if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
+    var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    if (topLevelPrint) {
+      // A separate tab, so window.print() runs at top level where WebKit will
+      // honour it. Opened from the button's own click handler, so it counts as
+      // user-initiated and is not treated as a popup. The takedown screen stays
+      // loaded underneath with its lot, bay and count intact.
+      //
+      // NAMED, not '_blank': every tag reuses this one tab instead of opening a
+      // fresh one per sack. popup=1 tells the label page to close itself when
+      // printing is done, so the crew lands back here rather than closing a tab
+      // per bag all day (Koa, 2026-09-21).
+      var w = window.open(url + '&popup=1', 'rf_tag_print');
+      // Blocked anyway (a locked-down browser): navigate rather than silently
+      // printing nothing. The label page carries a link back to the lot.
+      if (!w) window.location.href = url;
+      return;
+    }
+    frame.src = url;
+  }
+
+  // In agent mode the crew no longer watches a tag appear as confirmation, so
+  // the screen has to supply it. Queued is NOT printed: the serial is already
+  // spent and the Shopify count already moved, so showing a tick on the
+  // strength of an enqueue would hide exactly the failure the ack exists for.
+  function watchPrint(ids) {
+    var tries = 0;
+    agentMsg.hidden = false;
+    agentMsg.className = 'hcstat';
+    agentMsg.textContent = T.printingOnAgent;
+    (function poll() {
+      tries += 1;
+      fetch('${API}?action=print_check', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ids }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var st = (d && d.status) || {};
+          var states = ids.map(function (id) { return (st[id] || {}).status; });
+          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
+          if (failed.length) {
+            agentMsg.className = 'hcstat bad';
+            agentMsg.textContent = T.printAgentFailed
+              .replace('{id}', failed[0])
+              .replace('{e}', (st[failed[0]] || {}).error || '');
+            return;
+          }
+          if (states.every(function (x) { return x === 'done'; })) {
+            agentMsg.className = 'hcstat ok';
+            agentMsg.textContent = T.printedOnAgent;
+            return;
+          }
+          // ~30s. Long enough for a rack of tags, short enough that a stopped
+          // agent is noticed while the crew is still at the printer.
+          if (tries < 40) return setTimeout(poll, 750);
+          agentMsg.className = 'hcstat bad';
+          agentMsg.textContent = T.printAgentSlow;
+        })
+        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
+    })();
+  }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
@@ -4664,7 +5154,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
-        print(d.ids); refresh(d);
+        print(d.ids, d.print_via); refresh(d);
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
@@ -4689,7 +5179,22 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
 
   reprint.addEventListener('click', function (e) {
     e.preventDefault();
-    if (lastId) print([lastId]);
+    if (!lastId) return;
+    // A jam is the most time-critical recovery there is, so it must work on
+    // every handset. ALWAYS ask the server which way to print — this page may
+    // have been loaded without allocating anything, so there is no local answer
+    // that can be trusted, and guessing 'browser' is the path WebKit breaks.
+    fetch('${API}?action=print_reprint', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sack_id: lastId }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) throw new Error(d.error || 'Reprint failed');
+        if (d.print_via === 'agent') watchPrint([lastId]);
+        else print([lastId], 'browser');
+      })
+      .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
   });
 
   voidLink.addEventListener('click', function (e) {
@@ -4781,7 +5286,7 @@ function labelInner(s) {
   const cutBox = ord ? `<div class="cutbox"><span class="ord">${ord}</span><span class="cw">CUT</span></div>` : '';
   return `
     <div class="qrwrap">
-      <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
+      ${qrImg(`${PUBLIC_BASE}/s/${s.qr_id || s.sack_id}`)}
       ${exampleBar}
     </div>
     <div class="txt">
@@ -5083,6 +5588,13 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .meta { font-size: 10.5pt; margin-top: 0.04in; white-space: nowrap; font-weight: 700; }
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
+  /* Way back to the takedown screen if the browser will not close this tab.
+     Screen-only — it must never cost a label. Hidden in the ONE @media print
+     block below, not a second one: a stray print block ahead of it shadows the
+     real one for anything reading the first match. */
+  #doneBtn { display: block; margin: 16px auto; padding: 18px 24px; font-size: 20px;
+             font-weight: 700; background: #2f7a4f; color: #fff; border: 0;
+             border-radius: 12px; min-width: 80%; }
   .toolbar a { color: #304e3c; display:inline-block; padding:10px 14px; border:1px solid #c5d0ba; border-radius:8px; text-decoration:none; margin:4px; }
   @media screen { .toolbar{background:#edf1e4!important;color:#304e3c!important;padding:16px!important;line-height:1.8} .banner{border-radius:12px!important} }
   /* Explanatory text for whoever opened the sheet — SCREEN ONLY. Left in the
@@ -5099,6 +5611,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   }
   @media print {
     .toolbar, .banner { display: none; }
+    #doneBtn { display: none; }
     body { background: #fff; }
     .label, .page { margin: 0; page-break-after: always; box-shadow: none; }
     .label:last-child, .page:last-child { page-break-after: auto; }
@@ -5109,6 +5622,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
 <div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${opts.banner || ''}
 ${labels}
+${opts.popup ? `<button type="button" id="doneBtn" hidden>${ui.lang === 'es' ? '← Volver e imprimir la siguiente' : '← Back for the next tag'}</button>` : ''}
 ${TAG_FIT_SCRIPT}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
@@ -5121,6 +5635,33 @@ ${autoPrint ? `<script>
       img.addEventListener('load', function () { if (--left === 0) window.print(); });
       img.addEventListener('error', function () { if (--left === 0) window.print(); });
     });
+  })();
+</script>` : ''}${opts.popup ? `<script>
+  // Opened as a print tab by the takedown screen. Get the crew back to that
+  // screen without making them close a tab per sack (Koa, 2026-09-21: "when i
+  // want to print the next tag, i have to close back and go to the previous
+  // page"). A script-opened window may close itself, which is why this only
+  // ever runs with popup=1.
+  (function () {
+    var closed = false;
+    function done() {
+      if (closed) return;
+      closed = true;
+      window.close();
+      // If the browser refuses to close it, the button below is the way back —
+      // never leave the crew on a dead-end page mid-takedown.
+      var b = document.getElementById('doneBtn');
+      if (b) b.hidden = false;
+    }
+    window.addEventListener('afterprint', done);
+    // afterprint is not reliable on every WebKit build, so a timer backstops it.
+    // Generous: it must not fire while the print sheet is still open.
+    setTimeout(function () {
+      var b = document.getElementById('doneBtn');
+      if (b) b.hidden = false;
+    }, 4000);
+    var btn = document.getElementById('doneBtn');
+    if (btn) btn.addEventListener('click', function (e) { e.preventDefault(); done(); });
   })();
 </script>` : ''}
 </body></html>`;
@@ -5422,7 +5963,7 @@ ${lane(1, LANE[0], L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'
   ])}
 ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
     card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
-    card(`${API}?action=crew&${q}`, L('Crew roster', 'Cuadrilla'), L('Drivers, hangers and water spiders on shift.', 'Choferes, colgadores y water spiders en turno.')),
+    card(`${API}?action=crew&${q}`, L('Hourly crew report', 'Reporte por hora'), L('On the hour: who is working and how many sticks went up.', 'Cada hora: quién está trabajando y cuántos palos se colgaron.')),
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
