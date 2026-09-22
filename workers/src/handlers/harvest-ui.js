@@ -53,6 +53,13 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .footer{padding-top:22px;border-top:1px solid #d9dfd1;font-size:14px;line-height:2}
 .harvest-screen .footer a{color:#42623e;display:inline-block;min-height:44px;padding:4px 0}
 .harvest-screen .cvgrid a{background:white;color:#304e3c;border:1px solid #d4ddcb;text-align:left}
+.harvest-screen .crew-stepper.big input{font-size:30px;font-weight:700}
+.hourly-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.hourly-log{width:100%;border-collapse:collapse;margin:10px 0 4px;font-size:14px;white-space:nowrap}
+.hourly-log th{text-align:left;font-size:12px;color:#5d6f57;font-weight:700;padding:6px 8px;border-bottom:1px solid #d5dfd4}
+.hourly-log td{padding:8px;border-bottom:1px solid #e6ebe1}
+.hourly-log tr:nth-child(even) td{background:#f4f7f0}
+.hourly-log td.sticks{font-weight:700;font-size:16px;color:#2e4b3b}
 .harvest-screen .cvgrid a.sel{background:#edc76b;border-color:#af882f}
 .harvest-screen .cvfix{margin:20px 0 4px}
 .harvest-screen .cvfix summary{min-height:44px;padding:11px 0;color:#42623e;font-weight:600;cursor:pointer}
