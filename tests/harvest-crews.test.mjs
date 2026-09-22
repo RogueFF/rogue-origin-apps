@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { qrDataUri } from '../workers/src/lib/qr.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -473,10 +474,27 @@ test('the newly scanned zone wins over the previous zone during grace', async ()
 const codeSheet = (env, ctx) => handleHarvestD1(
   new Request('https://x/api/harvest?action=print_codes&lang=en'), env, ctx).then(r => r.text());
 
-/** What a phone camera would actually be pointed at, decoded out of the QR src. */
-const qrTargets = (html) =>
-  [...html.matchAll(/api\.qrserver\.com[^"]*[?&]data=([^"&]+)/g)]
-    .map(m => decodeURIComponent(m[1]));
+/**
+ * What a phone camera would actually be pointed at.
+ *
+ * The QR is generated locally and inlined as a data: URI, so the target is no
+ * longer readable out of the src — it rides in `data-qr`. Read that, AND check
+ * the image really encodes it, so this cannot pass on a correct-looking
+ * attribute over a wrong picture.
+ */
+const qrTargets = (html) => {
+  const out = [];
+  for (const m of html.matchAll(/<img[^>]*class="qr[^"]*"[^>]*>/g)) {
+    const tag = m[0];
+    const target = (tag.match(/data-qr="([^"]*)"/) || [])[1];
+    const src = (tag.match(/src="([^"]*)"/) || [])[1];
+    assert.ok(target, `QR image with no data-qr: ${tag.slice(0, 120)}`);
+    assert.equal(src, qrDataUri(target),
+      `the QR image does not encode its own data-qr target: ${target}`);
+    out.push(target);
+  }
+  return out;
+};
 
 test('the print sheet encodes the real scan targets, not a description of them', async () => {
   const { env, ctx } = freshDb();

@@ -2858,6 +2858,25 @@ function qrImageUrl(target, px) {
   return qrDataUri(target);
 }
 
+/**
+ * A QR image, with the URL it encodes carried alongside it in `data-qr`.
+ *
+ * The target used to be readable straight out of the `src`, because the src was
+ * a qrserver URL with `?data=<the target>`. Inlining the QR removed that, and
+ * with it the ability to ask a rendered page "what will a phone camera actually
+ * open?" — which is the single worst thing to get wrong here: a bad URL survives
+ * printing, laminating and staking, and only surfaces when someone scans it in a
+ * field in October.
+ *
+ * So the target rides along explicitly. Tests assert both that `data-qr` is the
+ * intended URL AND that `src` equals `qrDataUri(data-qr)`, which together are
+ * stronger than the old string match: they check the intent and that the image
+ * really encodes it.
+ */
+function qrImg(target, cls = 'qr', alt = '') {
+  return `<img class="${cls}" src="${qrDataUri(target)}" data-qr="${escapeHtml(target)}" alt="${escapeHtml(alt)}">`;
+}
+
 // ─── JSON ACTIONS ───────────────────────────────────────
 
 async function getStatus(db, env) {
@@ -3758,7 +3777,7 @@ function codeSheetBody(ui, packet = 'crew') {
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">CUADRILLA ${crew}</div>
     <div class="sub">Crew ${crew}</div>
-    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/c/${crew}`, 420)}" alt="">
+    ${qrImg(`${PUBLIC_BASE}/c/${crew}`)}
     <div class="how">Escanéalo <strong>una vez</strong> con el teléfono del jefe de cuadrilla.
       Después dirá &ldquo;Cuadrilla ${crew}&rdquo; en cada pantalla.</div>
     <div class="how en">Scan <strong>once</strong> on the crew lead's phone. Every screen then says Crew ${crew}.</div>
@@ -3770,7 +3789,7 @@ function codeSheetBody(ui, packet = 'crew') {
   <div class="kicker">Rogue Family Farms · 2026</div>
   <div class="big">RECEPCIÓN ${n}</div>
   <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
-  <img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/b/${n}`, 900)}" alt="">
+  ${qrImg(`${PUBLIC_BASE}/b/${n}`, 'qr big-qr')}
   <div class="how">Abre la recepción. Registra cada carga sin salir de la pantalla.</div>
   <div class="how en">Open intake once. Log each trailer without leaving the screen.</div>
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
@@ -3784,7 +3803,7 @@ function codeSheetBody(ui, packet = 'crew') {
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">FIN DEL DÍA</div>
     <div class="sub">End of day</div>
-    <img class="qr" src="${qrImageUrl(`${PUBLIC_BASE}/fin`, 420)}" alt="">
+    ${qrImg(`${PUBLIC_BASE}/fin`)}
     <div class="how">Escanéalo <strong>al terminar el día</strong>, con el mismo teléfono
       que abrió la zona. Cierra la zona de tu cuadrilla.</div>
     <div class="how en">Scan at the <strong>end of the day</strong>, on the phone that opened the
@@ -3794,7 +3813,7 @@ function codeSheetBody(ui, packet = 'crew') {
 
   const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
   const zones = [...VALID_ZONES].filter(isHarvestTracked).sort((a,b) => a.localeCompare(b,'en',{numeric:true}));
-  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div><img class="qr big-qr" src="${qrImageUrl(`${PUBLIC_BASE}/z/${z}`, 900)}" alt="QR ${z}"><div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
 
   return `
 <style>
@@ -5267,7 +5286,7 @@ function labelInner(s) {
   const cutBox = ord ? `<div class="cutbox"><span class="ord">${ord}</span><span class="cw">CUT</span></div>` : '';
   return `
     <div class="qrwrap">
-      <img class="qr" src="${qrUrlFor(s.qr_id || s.sack_id)}" alt="">
+      ${qrImg(`${PUBLIC_BASE}/s/${s.qr_id || s.sack_id}`)}
       ${exampleBar}
     </div>
     <div class="txt">
@@ -5570,11 +5589,12 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   .qr { width: 1in; height: 1in; flex: none; }
   .toolbar { padding: 14px; font: 14px system-ui; }
   /* Way back to the takedown screen if the browser will not close this tab.
-     Screen-only: it must never cost a label. */
+     Screen-only — it must never cost a label. Hidden in the ONE @media print
+     block below, not a second one: a stray print block ahead of it shadows the
+     real one for anything reading the first match. */
   #doneBtn { display: block; margin: 16px auto; padding: 18px 24px; font-size: 20px;
              font-weight: 700; background: #2f7a4f; color: #fff; border: 0;
              border-radius: 12px; min-width: 80%; }
-  @media print { #doneBtn { display: none !important; } }
   .toolbar a { color: #304e3c; display:inline-block; padding:10px 14px; border:1px solid #c5d0ba; border-radius:8px; text-decoration:none; margin:4px; }
   @media screen { .toolbar{background:#edf1e4!important;color:#304e3c!important;padding:16px!important;line-height:1.8} .banner{border-radius:12px!important} }
   /* Explanatory text for whoever opened the sheet — SCREEN ONLY. Left in the
@@ -5591,6 +5611,7 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
   }
   @media print {
     .toolbar, .banner { display: none; }
+    #doneBtn { display: none; }
     body { background: #fff; }
     .label, .page { margin: 0; page-break-after: always; box-shadow: none; }
     .label:last-child, .page:last-child { page-break-after: auto; }
