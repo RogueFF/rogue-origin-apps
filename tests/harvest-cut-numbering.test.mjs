@@ -44,7 +44,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
 ];
 
 function freshDb() {
@@ -159,7 +159,10 @@ test('the tag prints the cut large beside the number, and not again in the small
   await alloc(env, ctx, { session_id: seedLot(sqlite, { cut: 2 }), cultivar: 'Rainbow GMO Quik', qty: 1, bay: 8 });
   const { html } = await get(env, ctx, `action=sack_label&id=${YY}-RAINGQ-C2-1`);
   assert.match(html, /<div class="bagno"[^>]*>#1<\/div>\s*<div class="cutbox"><span class="ord">2ND<\/span><span class="cw">CUT<\/span><\/div>/);
-  assert.match(html, new RegExp(`%2Fs%2F${YY}-RAINGQ-C2-1"`), 'the QR opens the second-cut bag');
+  // The QR is generated locally and inlined, so the target no longer appears
+  // percent-encoded in the src — it rides in data-qr.
+  assert.match(html, new RegExp(`data-qr="[^"]*/s/${YY}-RAINGQ-C2-1"`),
+    'the QR opens the second-cut bag');
   const meta = html.match(/<div class="meta">([^<]*)<\/div>/)[1];
   assert.doesNotMatch(meta, /Cut/, 'the cut is in the box, not repeated small');
   assert.match(meta, /Z8 · Bay 8/);

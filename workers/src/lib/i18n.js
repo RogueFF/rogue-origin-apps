@@ -41,6 +41,10 @@ const S = {
     // — cultivar picker —
     nCultivars: '{n} cultivares plantados aquí',
     whichCutting: '¿Cuál estás cortando?',
+    wrongCultivar: '¿Cultivar equivocado? Toca el correcto:',
+    cultivarFixed: 'Cambiado a {cv}',
+    fixLotClosed: 'Ese lote ya está cerrado — el cultivar no se puede cambiar.',
+    fixHasTags: 'Ese lote ya tiene {n} etiqueta(s) impresa(s). Anula las etiquetas primero; llevan el nombre del cultivar.',
 
     // — headcount —
     loggedCutters: 'Anotado: {n} cortadores',
@@ -283,6 +287,10 @@ const S = {
 
     nCultivars: '{n} cultivars planted here',
     whichCutting: 'Which one are you cutting?',
+    wrongCultivar: 'Wrong cultivar? Tap the right one:',
+    cultivarFixed: 'Changed to {cv}',
+    fixLotClosed: "That lot is already closed — the cultivar can't be changed.",
+    fixHasTags: 'That lot already has {n} tag(s) printed. Void those first — they carry the cultivar name.',
 
     loggedCutters: 'Logged: {n} cutters',
     loggedCutter: 'Logged: 1 cutter',
