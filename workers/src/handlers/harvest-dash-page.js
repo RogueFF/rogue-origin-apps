@@ -131,6 +131,9 @@ export function dashPage() {
      state is carried by a colour lane down the left edge rather than by a word
      you have to stop and read. */
   .racks { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  /* What the bay takes, in sticks — measured 2026-09-23, not derived from
+     structure. Quiet: it is a constant, and the live numbers above it move. */
+  .rack .cap { margin-top:6px; padding-top:5px; border-top:1px solid rgba(0,0,0,.08); font-size:11px; opacity:.6 }
   .rack { position:relative; background:var(--raised); border:1px solid var(--line2);
           border-radius:10px; padding:11px 12px 11px 15px; overflow:hidden; min-height:96px; }
   .rack::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
@@ -720,6 +723,7 @@ ${OFFICE_UI_STYLE}
         return '<li><b>' + name + '</b><span>' + l.bins + ' bins</span></li>';
       }).join('');
 
+      var cap = r.capacity ? '<div class="cap">holds ' + num(r.capacity) + '</div>' : '';
       var body = r.state === 'empty'
         ? (kept
             ? '<div class="age">' + kept + '<small>' + sacksWord(kept) + '</small></div>' +
@@ -731,7 +735,7 @@ ${OFFICE_UI_STYLE}
             storedList(r.stored_lots) + '</div>' : '');
 
       var cell = '<div class="rack ' + cls + '"><div class="n"><span class="bn">Bay ' + r.bay + '</span>' +
-        (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + '</div>';
+        (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + cap + '</div>';
       (r.barn === 'top' ? top : bottom).push(cell);
     }
 
