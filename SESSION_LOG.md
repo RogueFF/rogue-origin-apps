@@ -6,6 +6,31 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-22 — print a sack tag from any phone, and show what inventory still owes
+
+- `workers/src/lib/print-client.js` — mobile browsers do not honour the hidden
+  0x0 print iframe: iOS printed the takedown page, Android printed nothing while
+  still spending the serial. Named tab that self-closes; the rule is mobile, not
+  iOS.
+- `workers/src/lib/qr.js` + `workers/src/vendor/qrcode-generator.js` — QR codes
+  generated here and inlined as a data URI. `api.qrserver.com` cost 0.62-0.84s
+  per tag against 0.16-0.24s for the whole page, and is now gone from the repo.
+- `workers/src/lib/print-queue.js`, `migrations/0038`, `tools/print-agent/` — a
+  barn-PC agent that drains a queue and drives the printer. Built, deployed and
+  switched OFF; inert until `print_mode = 'agent'`.
+- `workers/src/lib/inventory-debt.js` — one definition of what the inventory
+  owes Shopify, shared by `?action=inventory_sweep` and both screens.
+- `.github/workflows/test.yml` — CI never installed Playwright's browsers, so
+  identical code had both passed and failed.
+- 16 test files — `freshDb`'s SQL comment stripper never matched on a CRLF
+  checkout, so comments survived and their semicolons split into garbage SQL.
+  Windows-only; invisible to Linux CI.
+- PRs #64 (merged) and #65 (open).
+- Wiki context: wiki/seasons/2026/journal/2026-09-22.md
+
+---
+
+
 ## 2026-09-07 — record the drying bay, close the day, and fix three silent failures
 
 - `workers/migrations/0030-harvest-load-bay.sql`, `workers/src/handlers/harvest-d1.js` — **the drying bay is captured at the barn door.** It used to be written exactly once, at takedown, onto the sack, so the barn could say what came OUT of a bay and had no way to answer what was drying IN one. On the LOAD row, not the session: a bay takes several lots and a lot spreads over several bays, so a column on the `enter` row models one bay per lot and is wrong the first time a bay takes two zones — while still passing tests. Nullable, because the ledger counts bins by joining on the session FK and a rejected load drops them off the lot entirely; but a nullable column plus a pre-selected default is its own trap, so a default carried from a previous Pacific day is **named** on the form the way a borrowed zone already is.
