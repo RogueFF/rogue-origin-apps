@@ -20,6 +20,8 @@
  *    and reports how many it left out.
  */
 
+import { bayCapacity } from './bay-facts.js';
+
 /** SQLite's `datetime('now')` is UTC without a zone marker. */
 export function parseTs(ts) {
   return ts ? new Date(String(ts).replace(' ', 'T') + 'Z') : null;
@@ -351,6 +353,9 @@ export function buildMetrics({ lots, sessions, loads, sacks, dryWindow, bottomBa
     const cell = {
       bay,
       barn: bay > bottomBarnLastBay ? 'top' : 'bottom',
+      // Null for bays 1-3: they hang on a system the apps do not measure, and
+      // a null has to read as unknown rather than as an empty bay.
+      capacity: bayCapacity(bay),
       state: 'empty',
       bins: 0,
       loads: 0,

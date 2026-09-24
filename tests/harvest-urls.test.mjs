@@ -48,7 +48,7 @@ function freshDb() {
   const sqlite = new DatabaseSync(':memory:');
   for (const f of MIGRATIONS) {
     const c = readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
-      .split('\n').map(l => l.replace(/--.*$/, '')).join('\n');
+      .split(/\r?\n/).map(l => l.replace(/--.*$/, '')).join('\n');
     for (const st of c.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); }
   }
   sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
