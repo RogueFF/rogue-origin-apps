@@ -1,10 +1,12 @@
 /**
  * Every network call the hub makes, in one place.
  * Reads are public; chat/tts carry the shared password as a Bearer token.
+ * The dashboard read carries it too when the device has unlocked: the worker
+ * only includes labor-cost figures for callers with the password.
  */
 import { apiGet, apiPost, API_ROOT } from '../shared/api.js';
 
-export const getDashboard = (start, end) => apiGet('production', 'dashboard', { start, end });
+export const getDashboard = (start, end) => apiGet('production', 'dashboard', { start, end }, { auth: true });
 export const getScoreboard = () => apiGet('production', 'scoreboard');
 export const getMorningReport = () => apiGet('production', 'morningReport');
 

@@ -53,10 +53,18 @@ def fetch_production_data():
     url = f'{API_BASE}?action=dashboard&start={start}&end={end}'
     print(f'Fetching data: {start} to {end}')
 
-    req = urllib.request.Request(url, headers={
+    headers = {
         'User-Agent': 'RogueOrigin-ChartBot/1.0',
         'Accept': 'application/json',
-    })
+    }
+    # The worker only returns labor-cost fields to callers with the shared
+    # password (repo secret API_PASSWORD). Without it the cost charts are blank.
+    api_password = os.environ.get('API_PASSWORD', '')
+    if api_password:
+        headers['Authorization'] = f'Bearer {api_password}'
+    else:
+        print('WARNING: API_PASSWORD not set; cost figures will be missing', file=sys.stderr)
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=30) as resp:
         raw = json.loads(resp.read().decode())
 
@@ -153,7 +161,12 @@ def calc_cost_variance(days):
         if len(window) == 0:
             results.append(None)
         else:
-            baseline = sum(d['costPerLb'] for d in window) / len(window)
+            # costPerLb is absent when the API answered without the password
+            costs = [d.get('costPerLb') for d in window if d.get('costPerLb')]
+            if not costs or not day.get('costPerLb'):
+                results.append(None)
+                continue
+            baseline = sum(costs) / len(costs)
             variance = ((day['costPerLb'] - baseline) / baseline) * 100
             results.append(round(variance, 1))
     return results

@@ -27,17 +27,30 @@ async function parseOrThrow(res, endpoint, action) {
   return res.json();
 }
 
-export async function apiGet(endpoint, action, params = {}) {
-  const res = await fetch(buildUrl(endpoint, action, params));
+export const PASSWORD_KEY = 'ro_api_password';
+
+/** The shared password this device unlocked with, or '' if it never did. */
+export function storedPassword() {
+  try { return localStorage.getItem(PASSWORD_KEY) || ''; } catch { return ''; }
+}
+
+/**
+ * `auth: true` sends the stored password as a Bearer token WHEN THERE IS ONE.
+ * Reads that carry it come back with the locked fields (labor costs) filled in;
+ * without it the worker answers the same shape minus those fields, so a device
+ * that never unlocked still gets a working page.
+ */
+export async function apiGet(endpoint, action, params = {}, { auth = false } = {}) {
+  const headers = {};
+  const pw = auth ? storedPassword() : '';
+  if (pw) headers.Authorization = `Bearer ${pw}`;
+  const res = await fetch(buildUrl(endpoint, action, params), { headers });
   return unwrap(await parseOrThrow(res, endpoint, action));
 }
 
 export async function apiPost(endpoint, action, body, { auth = false } = {}) {
   const headers = { 'Content-Type': 'text/plain' };
-  if (auth) {
-    const pw = localStorage.getItem('ro_api_password') || '';
-    headers.Authorization = `Bearer ${pw}`;
-  }
+  if (auth) headers.Authorization = `Bearer ${storedPassword()}`;
   const res = await fetch(buildUrl(endpoint, action), {
     method: 'POST',
     headers,
@@ -48,7 +61,7 @@ export async function apiPost(endpoint, action, body, { auth = false } = {}) {
 
 export function makeApi(endpoint, opts = {}) {
   return {
-    get: (action, params) => apiGet(endpoint, action, params),
+    get: (action, params) => apiGet(endpoint, action, params, opts),
     post: (action, body) => apiPost(endpoint, action, body, opts),
   };
 }
