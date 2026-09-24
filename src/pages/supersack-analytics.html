@@ -480,6 +480,7 @@
       chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
       currentInventory: 'Current Inventory by Strain', totalInventory: 'Total Supersacks', totalDaysLeft: 'Total Days Left', sectionCost: 'Production Rate & Cost Metrics',
       laborMetrics: 'Labor & Cost Metrics', loading: 'Loading...',
+      costsLocked: 'Labor costs are locked. Unlock with the shared password on the Hub, then reload.',
       strain: 'Strain', sacks: 'Sacks', daysSupply: 'Days Supply',
       projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
       noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
@@ -504,6 +505,7 @@
       chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
       currentInventory: 'Inventario Actual por Variedad', totalInventory: 'Supersacos Totales', totalDaysLeft: 'Dias Totales Restantes', sectionCost: 'Tasa de Produccion y Costos',
       laborMetrics: 'Metricas de Labor y Costo', loading: 'Cargando...',
+      costsLocked: 'Los costos de labor estan bloqueados. Desbloquee con la contrasena compartida en el Hub y recargue.',
       strain: 'Variedad', sacks: 'Sacos', daysSupply: 'Dias Restantes',
       projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
       noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
@@ -634,7 +636,11 @@
 
   // -- Data Loading --
   async function fetchJSON(url) {
-    const r = await fetch(url);
+    // The dashboard read only includes labor costs for callers with the
+    // shared password; send it when this device has unlocked on the Hub.
+    const headers = {};
+    try { const pw = localStorage.getItem('ro_api_password'); if (pw) headers.Authorization = `Bearer ${pw}`; } catch { /* storage blocked */ }
+    const r = await fetch(url, { headers });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const raw = await r.json();
     return raw.data || raw;
@@ -690,6 +696,7 @@
       const dashboard = await fetchJSON(`${PROD_API}?action=dashboard&start=${start}&end=${end}`);
       const daily = dashboard.daily || [];
 
+      if (dashboard.costsLocked) { state.costData = { locked: true }; renderCostCard(); return; }
       if (!daily.length) { state.costData = null; renderCostCard(); return; }
 
       const totalTops = daily.reduce((s, d) => s + (d.totalTops || 0), 0);
@@ -1142,6 +1149,10 @@
     const card = document.getElementById('cost-card');
     const data = state.costData;
 
+    if (data && data.locked) {
+      card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">🔒 ${t('costsLocked')}</div>`;
+      return;
+    }
     if (!data || (!data.totalTops && !data.totalSmalls)) {
       card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">${t('noData')}</div>`;
       return;
@@ -1174,6 +1185,7 @@
 
 })();
 </script>
+
 
 
 

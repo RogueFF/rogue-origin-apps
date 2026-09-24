@@ -23,6 +23,7 @@ jobs:
       - name: Generate charts and email
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          API_PASSWORD: ${{ secrets.API_PASSWORD }}
         run: |
           python scripts/generate_production_charts.py \
             --email \

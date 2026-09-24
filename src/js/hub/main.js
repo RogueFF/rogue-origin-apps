@@ -10,7 +10,7 @@ import {
   renderNow, renderShift, renderPipe, renderWatch, renderTrend, renderCultivars, renderCost, renderDaily, dailyCsv, workedDays, periodTotals,
 } from './sections.js';
 import { initChat } from './chat.js';
-import { hasKey } from './auth.js';
+import { hasKey, unlock } from './auth.js';
 
 const LIVE_MS = 30_000;
 const SIDE_MS = 5 * 60_000;
@@ -197,6 +197,13 @@ async function loadProduction() {
   markStale(false);
   setStatus(range.live ? 'live' : 'idle', `${range.live ? 'Live' : range.label} · ${clockTime(state.updatedAt.toISOString())}`);
 }
+
+// Unlocking (or forgetting) the password changes what the worker sends back,
+// so refetch instead of re-rendering the redacted payload.
+document.addEventListener('ro:authchange', () => { if (state.range) loadProduction(); });
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-action="unlock-costs"]')) unlock();
+});
 
 function renderProduction() {
   renderNow(state);
