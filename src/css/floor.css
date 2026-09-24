@@ -1,0 +1,530 @@
+/**
+ * Floor Manager - the page layer.
+ *
+ * This file styles what only this screen has: the day's ledger columns, the
+ * hour editor, and the two instruments beside it. Everything else already
+ * exists one layer down and is used as-is:
+ *
+ *   src/ui/tokens.css      surfaces, ink, lines, chart colours, status colours
+ *   src/ui/components.css  .page-head .sec .card .tile .value .meter .status
+ *                          .num .eyebrow .muted .tb-btn .icon-btn .chip
+ *   src/shell/shell.css    the rail, the topbar, <main class="main">
+ *
+ * So there are no tokens named here that the shared layer already names, no
+ * second button, and no second card. The page-local tokens below are all
+ * prefixed --fl- and every one of them is derived from a shared token, so a
+ * change to the Hub's palette carries here without an edit.
+ *
+ * The proportions come from the board Koa picked on the design canvas
+ * ("Ledger, chosen"), and the two rules that make it read as a ledger rather
+ * than a form are worth naming:
+ *
+ *   · The day is a column chart. Every hour is drawn against one scale - the
+ *     largest number anywhere on the day - so a tall hour looks tall, with
+ *     the target as a gold line across the column. Two marks on one scale,
+ *     the rule the scoreboard already uses.
+ *   · The screen is full. The page is a column that fills the viewport and
+ *     the hour row takes whatever the ledger leaves, so the work does not
+ *     trail off into empty ground (Koa, 2026-09-15: "a lot of wasted space").
+ *
+ * Everything is in rem: shell.css scales the root with the viewport, so this
+ * whole screen grows on a big monitor. Hairlines and the 2px target line stay
+ * in px - they are the same mark at any size.
+ *
+ * Sections: tokens · page · ledger · the hour · instruments · drawer · queue
+ *           board · narrow.
+ */
+
+/* ---------- tokens ---------- */
+:root {
+  /* A field cut into the card, one step down from --surface in both themes. */
+  --fl-well: var(--surface-2);
+  --fl-track: var(--chart-grid);
+  --fl-hover: var(--chart-hover);
+  --fl-fill: var(--chart-tops);
+  --fl-target: var(--chart-target);
+  --fl-short: var(--chart-smalls);
+  --fl-ring: 0 0 0 0.1875rem var(--good-bg);
+
+  --fl-r: 0.625rem;      /* matches .card */
+  --fl-r-ctl: 0.5rem;    /* matches .tb-btn */
+  --fl-r-sm: 0.375rem;
+
+  /* One control height for the whole editor: the steppers, the pound fields,
+     the cultivar select and the Line 2 button all sit on it. */
+  --fl-h-ctl: 3rem;
+  /* The ledger column's bar. Everything else in a column is type. */
+  --fl-h-bar: clamp(3rem, 6.8vh, 5.5rem);
+  --fl-w-bar: 2.125rem;
+}
+
+/* ---------- page ---------- */
+/* The screen is one column that fills the viewport: topbar, title, ledger,
+   then the hour taking what is left. */
+.main { display: flex; flex-direction: column; min-height: 100vh; }
+.hour-sec { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* The page's own topbar controls, laid out as the shell's flex children. */
+.anchor { position: relative; display: inline-flex; align-items: center; }
+.tb-date { gap: 0.5rem; }
+.tb-date .num { color: var(--ink); }
+.tb-btn .num { color: var(--ink); }
+.tb-btn.sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+.tb-btn svg.i { width: 0.875rem; height: 0.875rem; }
+/* The drawer button's open-order count, and the label it drops on a phone. */
+.drawer .m { color: var(--ink-3); }
+/* Visually hidden but still laid out: showPicker() anchors the calendar to
+   this box, so display:none is not an option. */
+.vh { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.popover {
+  position: absolute; top: calc(100% + 0.375rem); left: 0; z-index: 50;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--fl-r); border: 1px solid var(--line-strong);
+  background: var(--surface); box-shadow: var(--shadow-md);
+  white-space: nowrap;
+}
+.popover input {
+  font: inherit; height: 2.125rem; padding: 0 0.5rem; border-radius: var(--fl-r-sm);
+  border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
+}
+
+svg.i { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.sprite { position: absolute; width: 0; height: 0; }
+
+/* A segmented control: the bag size, the drawer's tabs, its pool switches. */
+.seg { display: inline-flex; padding: 0.1875rem; gap: 2px; border-radius: var(--fl-r-ctl); background: var(--surface-2); border: 1px solid var(--line); }
+.seg button { padding: 0.25rem 0.625rem; border-radius: var(--fl-r-sm); font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+/* The pace tile sits opposite the page title, so it reads on the baseline of
+   the heading rather than as a card of its own. */
+.page-head { padding: clamp(0.4rem, 1.1vh, 0.75rem) 0 0.25rem; }
+.sec { margin-top: clamp(0.5rem, 1.2vh, 1rem); }
+.page-head .pace { flex: 1 1 30rem; flex-direction: row; align-items: center; gap: 0.75rem; }
+.page-head .pace .label { flex: 0 0 auto; }
+.page-head .pace .value { flex: 0 0 auto; }
+.page-head .pace .meter { flex: 1 1 6rem; margin: 0; }
+.page-head .pace .sub { flex: 0 0 auto; white-space: nowrap; }
+.page-head .pace .value .of { font-family: var(--font-mono); font-size: 0.9375rem; font-weight: 500; color: var(--ink-3); margin-left: 0.25rem; }
+.page-head .pace .meter { overflow: visible; margin-top: 0.125rem; }
+/* The gold mark is where the day should be right now; pace.js sets only its
+   left, so the centring lives here. */
+.page-head .pace .meter .tgt { position: absolute; top: -0.1875rem; bottom: -0.1875rem; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--fl-target); }
+.page-head .pace .sub .num { color: var(--ink); font-weight: 600; }
+
+/* The hour names itself at the top of the card being typed into, the way the
+   board does, rather than costing a section heading and a rule of its own. */
+.ed-head {
+  display: flex; align-items: baseline; gap: 0.75rem;
+  padding: clamp(0.5rem, 1.2vh, 0.75rem) 1rem 0;
+}
+.ed-head h2 { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 1.5rem; line-height: 1.1; }
+.ed-head .now { margin-bottom: 0.125rem; }
+.ed-head .hour-nav { margin-left: auto; align-self: center; display: flex; gap: 0.25rem; }
+
+/* ---------- the ledger ---------- */
+/* One column per hour, read left to right: when, what ran, how the pounds
+   landed against target, and what came off as smalls. The selected column is
+   a tab into the editor below it. */
+.hours-card { padding: clamp(0.5rem, 1.1vh, 0.875rem) 0.75rem clamp(0.4rem, 0.9vh, 0.625rem); overflow-x: auto; }
+.hours { display: flex; align-items: stretch; gap: 0.375rem; min-width: 55rem; }
+.tick {
+  position: relative;
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+  padding: clamp(0.35rem, 0.9vh, 0.625rem) 0.25rem clamp(0.4rem, 1vh, 0.75rem);
+  border-radius: var(--fl-r-ctl);
+  text-align: center;
+}
+.tick:hover { background: var(--fl-hover); }
+/* An hour with nothing on it yet recedes rather than reading as a zero. */
+.tick.none, .tick.open { opacity: 0.55; }
+/* The open hour is outlined in gold - the same gold that marks target
+   everywhere else on the page. */
+.tick[aria-current="true"] { opacity: 1; background: var(--warn-bg); outline: 1px solid var(--fl-target); outline-offset: -1px; }
+
+.t-hour { font-family: var(--font-mono); font-size: 1rem; font-weight: 500; color: var(--ink-2); }
+.tick[aria-current="true"] .t-hour { color: var(--fl-target); }
+/* Two lines, and the box keeps its height when an hour has no cultivar, so
+   every bar in the row starts from the same line. */
+.t-cv {
+  display: flex; flex-direction: column; gap: 0.125rem;
+  height: clamp(2.2rem, 3.8vh, 2.9rem); width: 100%; min-width: 0;
+  font-size: 0.875rem; line-height: 1.25; color: var(--ink-2);
+}
+.t-cv-name, .t-cv-grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-cv-grow { color: var(--ink-3); }
+
+.t-bar { position: relative; width: var(--fl-w-bar); height: var(--fl-h-bar); border-radius: var(--fl-r-sm); background: var(--fl-track); }
+.t-fill { position: absolute; left: 0; right: 0; bottom: 0; border-radius: var(--fl-r-sm); background: var(--fl-short); }
+/* The target line runs past the bar on both sides, so it reads as a level the
+   column is measured against rather than part of the column. */
+.t-tgt { position: absolute; left: -0.375rem; right: -0.375rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
+.tick.met .t-fill { background: var(--fl-fill); }
+.tick.near .t-fill { background: var(--fl-target); }
+
+.t-tops { display: flex; align-items: baseline; gap: 0.25rem; line-height: 1; }
+.t-tops .num { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+.tick[aria-current="true"] .t-tops .num { color: var(--fl-target); }
+.t-of { font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink-3); min-height: 1.1rem; }
+.t-smalls { font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink-3); min-height: 1.1rem; white-space: nowrap; }
+/* An hour typed but not yet on the server. */
+.t-unsaved { position: absolute; top: 0.375rem; right: 0.375rem; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--fl-target); }
+/* Lunch: the fixed break between the morning and afternoon halves. */
+.lunch { flex: 0 0 0.75rem; align-self: stretch; position: relative; }
+.lunch::before { content: ""; position: absolute; left: 50%; top: 20%; bottom: 20%; border-left: 1px dashed var(--line-strong); }
+
+/* The key, and how to drive it. */
+.hours-legend {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1.125rem;
+  margin-top: clamp(0.25rem, 0.6vh, 0.4rem); padding: 0 0.375rem;
+  font-size: 0.875rem; color: var(--ink-3);
+}
+.hours-legend span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.hours-legend i { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: 2px; background: var(--fl-fill); }
+.hours-legend i.tgt { width: 0.75rem; height: 2px; border-radius: 1px; background: var(--fl-target); }
+
+/* ---------- the hour ---------- */
+.hour-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0.875rem; align-items: stretch; }
+
+.day-sec { margin-top: clamp(0.35rem, 0.8vh, 0.6rem); }
+.editor { padding: 0; display: flex; flex-direction: column; }
+.ed-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(0.4rem, 1vh, 0.75rem); padding: clamp(0.4rem, 1vh, 0.75rem) 1.125rem; }
+.field { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+.field > label { font-size: 0.875rem; color: var(--ink-2); }
+
+/* crew - the people on the line this hour, and what they are running */
+.crew { display: flex; align-items: flex-end; gap: 0.625rem; flex-wrap: wrap; }
+.crew2 { padding-top: 0.125rem; }
+.stepper {
+  display: inline-flex; align-items: stretch;
+  height: var(--fl-h-ctl); border-radius: var(--fl-r-ctl);
+  border: 1px solid var(--line-strong); background: var(--fl-well);
+  overflow: hidden;
+}
+.stepper button { width: 1.875rem; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-3); }
+.stepper button:hover { background: var(--fl-hover); color: var(--ink); transform: none; box-shadow: none; }
+.stepper input {
+  width: 2.5rem; text-align: center; border: 0; background: transparent; outline: 0;
+  font-family: var(--font-mono); font-size: 1.625rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--ink);
+  border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  -moz-appearance: textfield; appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+/* The ring goes on the box, not the bare input inside it; the input's own
+   outline would draw inside the borders. */
+.stepper:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+.stepper input:focus-visible { outline: 0; }
+.field.grow { flex: 1 0 100%; order: 1; }
+
+/* Cultivar. The native select keeps the picking; its own text is made
+   transparent and a face laid over it typesets the choice as a name with its
+   method and year subordinate, instead of the stored
+   "2025 - Godfather OG / Sungrown". */
+.cv { position: relative; }
+select.select {
+  appearance: none; -webkit-appearance: none;
+  display: block; width: 100%; height: var(--fl-h-ctl); min-width: 0;
+  padding: 0 2.375rem 0 0.75rem;
+  border-radius: var(--fl-r-ctl); border: 1px solid var(--line-strong);
+  background-color: var(--fl-well); color: var(--ink);
+  font: inherit; font-size: 0.9375rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23858f89' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+}
+.cv > select.select { color: transparent; }
+select.select:hover { border-color: var(--ink-3); }
+select.select:focus-visible { outline: 0; border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+/* The dropdown list is painted by the UA from these, since color-scheme is
+   left alone on purpose. */
+select.select option, select.select optgroup { background: var(--surface); color: var(--ink); font-weight: 400; }
+.cv-face {
+  position: absolute; inset: 0 2.375rem 0 0.75rem;
+  display: flex; align-items: center; gap: 0.625rem;
+  white-space: nowrap; overflow: hidden;
+  pointer-events: none;
+}
+.cv-face i {
+  min-width: 0; flex: 0 1 auto;
+  font-family: var(--font-ui); font-style: normal; font-weight: 600;
+  font-size: 1.25rem; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.cv-face small { flex: 0 0 auto; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.cv-face.empty i { font-family: var(--font-ui); font-style: normal; font-size: 0.875rem; color: var(--ink-3); }
+.line2 {
+  flex: 0 0 auto; align-self: flex-end;
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  height: var(--fl-h-ctl); padding: 0 0.625rem; border-radius: var(--fl-r-ctl);
+  border: 1px dashed var(--line-strong); color: var(--ink-3);
+  font-size: 0.875rem; white-space: nowrap;
+}
+.line2:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* pounds - the two numbers the hour is for. They sit on the same control
+   height as the crew steppers: the board Koa chose sizes them for a desktop
+   and a keyboard, not for reading across the room. */
+.lbs { flex: 1 0 auto; display: flex; gap: 0.875rem; }
+.lbs-grid { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem; align-items: stretch; }
+.lbs .field > label { display: flex; align-items: baseline; gap: 0.625rem; flex-wrap: wrap; font-size: 0.875rem; color: var(--ink-2); }
+.lbs .field > label > span:first-child { font-weight: 600; color: var(--ink); }
+/* Target sits as one sentence beside the Tops label - a fact, not a third box. */
+.lbs .field > label .tgt { font-weight: 400; font-size: 0.8125rem; color: var(--ink-3); }
+.lbs .field > label .tgt .num { color: var(--fl-target); font-weight: 600; }
+/* The field being typed into says so twice: the well takes the accent edge
+   and its label takes the accent ink. */
+.lbs .field:has(.big-in:focus-within) > label > span:first-child { color: var(--fl-fill); }
+.big-in {
+  flex: 1 1 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: var(--fl-h-ctl);
+  border-radius: var(--fl-r-ctl);
+  border: 1px solid var(--line-strong); background: var(--fl-well);
+}
+.big-in input {
+  flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 0.25rem 0 1rem;
+  background: transparent; border: 0; outline: 0; color: var(--ink);
+  font-family: var(--font-mono); font-size: clamp(1.75rem, 4.4vh, 3.75rem); font-weight: 600;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.big-in input::-webkit-outer-spin-button, .big-in input::-webkit-inner-spin-button { -webkit-appearance: none; }
+/* An empty field is an em dash in caption ink - the same mark the ledger
+   uses for an hour with nothing on it. */
+.big-in input::placeholder { color: var(--ink-3); font-weight: 400; opacity: 1; }
+.big-in .unit { flex: 0 0 auto; padding-right: 1rem; font-size: 0.875rem; color: var(--ink-3); }
+.big-in:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+.big-in input:focus-visible { outline: 0; }
+
+.note-box {
+  flex: 1 1 11rem; min-width: 0;
+  display: flex; align-items: center;
+  height: 2.25rem; padding: 0 0.75rem; border-radius: var(--fl-r-ctl);
+  border: 1px solid var(--line-strong); background: var(--fl-well);
+}
+.note-box input { flex: 1; min-width: 0; font: inherit; font-size: 0.875rem; color: var(--ink); background: transparent; border: 0; outline: 0; }
+.note-box input::placeholder { color: var(--ink-3); opacity: 1; }
+.note-box:focus-within { border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+.note-box input:focus-visible { outline: 0; }
+
+/* The foot: the save, and the one place save state lives. The sentence is
+   coloured by what it says - saved is green, anything not yet on the server
+   is gold, failed is red - and Enter does what the button does. */
+.ed-foot {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-top: auto;
+  padding: clamp(0.4rem, 1vh, 0.75rem) 1.125rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem; color: var(--ink-2);
+}
+.ed-foot .save { height: 2.875rem; padding: 0 1.5rem; font-size: 0.9375rem; justify-content: center; }
+#saveState { font-weight: 600; }
+#saveState[data-state="saved"] { color: var(--good); }
+#saveState[data-state="dirty"], #saveState[data-state="pending"], #saveState[data-state="saving"] { color: var(--warn); }
+#saveState[data-state="error"] { color: var(--bad); }
+#saveState[data-state="empty"] { color: var(--ink-3); font-weight: 400; }
+.ed-foot .sep { color: var(--ink-3); }
+.ed-foot .warn { color: var(--warn); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-foot .note-box { flex: 1 1 auto; }
+.ed-foot .kbhint { color: var(--ink-3); white-space: nowrap; }
+kbd.k {
+  font-family: var(--font-mono); font-size: 0.6875rem; line-height: 1;
+  padding: 0.1875rem 0.3125rem; border-radius: 0.25rem;
+  border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  color: var(--ink-2);
+}
+
+/* ---------- the instruments beside the hour ---------- */
+.hour-side .tile .value { display: flex; align-items: baseline; gap: 0.375rem; }
+.hour-side .tile .value .of { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; color: var(--ink-3); }
+.hour-side .tile .sub b, .hour-side .tile .label b { color: var(--ink); font-weight: 600; }
+.hour-side .tile .sub svg.i { width: 0.8125rem; height: 0.8125rem; vertical-align: -0.15em; margin-right: 0.25rem; }
+/* Cultivar names are the display serif, as they are on the Hub. */
+.queue .label b, #queueNext b { font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 0.9375rem; }
+.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 0.625rem; }
+
+/* The bag and its clock, as two rings.
+ *
+ * The outer green ring is what is on the scale right now; the thinner gold ring
+ * inside it is how much of the bag's time has gone. Both fill clockwise from
+ * the top, so they are read against each other, because the manager's question
+ * is not "how long is left" but "will this bag be full when the time is up" -
+ * green further round than gold means it lands early (Koa, 2026-09-16).
+ * The same grammar as the ledger columns and the pace meter: fill is what
+ * happened, gold is what should have. The ring takes the whole bottom right and
+ * sizes itself to whichever of width or height runs out first.
+ */
+.hour-side { display: flex; flex-direction: column; min-height: 0; }
+.timer { flex: 1; min-height: 0; gap: 0.625rem; }
+.timer > .fill { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.bag { flex: 1; min-height: 8rem; container-type: size; display: grid; place-items: center; }
+.dial {
+  --ring: clamp(0.875rem, 3.2cqmin, 1.625rem);
+  --ring-gap: clamp(0.25rem, 1.2cqmin, 0.625rem);
+  --ring-inner: clamp(0.5rem, 2.2cqmin, 1.125rem);
+  position: relative;
+  width: min(100cqw, 100cqh); height: min(100cqw, 100cqh);
+}
+.dial::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(var(--fl-fill) calc(var(--weight, 0) * 1%), var(--fl-track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring)), #000 calc(100% - var(--ring) + 1px));
+}
+.dial.stale::before { background: var(--fl-track); }
+/* The time ring, inside the weight ring. timer.js writes --time on the dial as
+   a percentage and hides this ring whenever the clock is not running. */
+.dial-pace {
+  position: absolute; inset: calc(var(--ring) + var(--ring-gap)); border-radius: 50%;
+  background: conic-gradient(var(--fl-target) calc(var(--time, 0) * 1%), var(--fl-track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-inner)), #000 calc(100% - var(--ring-inner) + 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-inner)), #000 calc(100% - var(--ring-inner) + 1px));
+}
+.dial-face {
+  position: absolute; inset: calc(var(--ring) + var(--ring-gap) + var(--ring-inner) + 5%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.375rem;
+  text-align: center;
+}
+.bag-weight { font-size: clamp(1rem, 12cqmin, 4.75rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1; color: var(--ink); white-space: nowrap; }
+.bag-weight.off { font-size: clamp(0.875rem, 8cqmin, 2.5rem); font-weight: 500; color: var(--ink-3); }
+.bag-clock { font-size: clamp(0.6875rem, 3.2cqmin, 1rem); color: var(--ink-3); white-space: nowrap; }
+.bag-clock .num { font-size: clamp(0.875rem, 6.5cqmin, 2.5rem); font-weight: 600; letter-spacing: -0.02em; color: var(--good); margin-right: 0.25rem; }
+.timer[data-kind="overtime"] .bag-clock .num { color: var(--warn); }
+.timer[data-kind="break"] .bag-clock .num,
+.timer[data-kind="ended"] .bag-clock .num,
+.timer[data-kind="waiting"] .bag-clock .num { color: var(--ink-3); }
+/* The key: which ring is which. */
+.dial-key { display: flex; justify-content: center; gap: 1.25rem; font-size: 0.8125rem; color: var(--ink-3); }
+.dial-key > span { display: inline-flex; align-items: center; gap: 0.375rem; }
+.dial-key i { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; }
+.dial-key i.weight { background: var(--fl-fill); }
+.dial-key i.time { background: var(--fl-target); }
+.timer .log { align-self: stretch; justify-content: center; height: 2.75rem; font-size: 0.9375rem; }
+.timer > .fill > .sub { text-align: center; }
+
+/* What the line is running: the card's last line, not a card of its own. */
+.timer .queue { padding-top: 0.625rem; border-top: 1px solid var(--line); }
+.timer .queue .queue-fill { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.timer .queue .value { font-size: 1.25rem; }
+.timer .queue .meter { flex: 1 1 5rem; }
+
+/* ---------- drawer panel (off-canvas) ---------- */
+/* Kept visibility:hidden while closed so Tab cannot land inside the
+   off-screen panel. */
+.scrim { position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.45); opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 70;
+  width: min(28.75rem, 100vw);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--line-strong);
+  transform: translateX(105%);
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
+}
+.panel.open { transform: none; visibility: visible; transition: transform 0.25s ease, visibility 0s; }
+.panel-head { display: flex; align-items: center; gap: 0.625rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--line); }
+.panel-title { flex: 1; font-family: var(--font-ui); font-style: normal; font-weight: 600; font-size: 1.375rem; line-height: 1.2; }
+.panel > .seg { display: flex; margin: 0.875rem 1.25rem 0; }
+.panel > .seg button { flex: 1; text-align: center; }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.875rem 1.25rem 1.25rem; }
+.panel-body section { display: flex; flex-direction: column; gap: 0.625rem; }
+.panel-body .seg { align-self: flex-start; }
+.panel-body .row { display: flex; align-items: center; gap: 0.625rem; }
+.panel-body .row > select, .panel-body .row > input { flex: 1; min-width: 0; }
+.panel-body .row.recent-head { justify-content: space-between; margin-top: 0.375rem; }
+.panel-body select.select { height: 2.375rem; font-size: 0.8125rem; }
+.panel-body input[type="number"], .panel-body input[type="text"] {
+  height: 2.375rem; padding: 0 0.625rem; border-radius: var(--fl-r-ctl);
+  border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
+  font: inherit; font-size: 0.8125rem; min-width: 0;
+}
+.panel-body input::placeholder { color: var(--ink-3); opacity: 1; }
+.panel-body input:focus-visible { outline: 0; border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+.pool-now { display: flex; align-items: baseline; gap: 0.25rem; flex-wrap: wrap; }
+.pool-now .eyebrow { flex: 1 0 100%; }
+.pool-now .num { font-size: 1.375rem; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.pool-now .num + .muted { margin-right: 0.625rem; font-size: 0.75rem; }
+.preview { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 0.625rem; padding: 0.625rem 0.75rem; border-radius: var(--fl-r-ctl); border: 1px solid var(--line); font-size: 0.75rem; color: var(--ink-2); }
+.preview .num { color: var(--ink); font-weight: 600; text-align: right; }
+.panel-body .tb-btn.primary { align-self: flex-start; }
+.recent { display: flex; flex-direction: column; font-size: 0.75rem; color: var(--ink-2); }
+.recent .change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.125rem 0.5rem; padding: 0.375rem 0; border-top: 1px solid var(--line); }
+.recent .change .num { color: var(--ink); font-weight: 600; }
+.recent .change .muted { flex: 1 0 100%; }
+.qt-empty, .qt-more { padding: 0.625rem 0; color: var(--ink-3); font-size: 0.75rem; }
+
+/* ---------- queue board (queue.js renders into #queueBoard) ---------- */
+.qt-order { padding: 0.625rem 0; border-top: 1px solid var(--line); }
+.qt-order:first-child { border-top: 0; padding-top: 0; }
+.qt-head { display: flex; align-items: baseline; gap: 0.625rem; margin-bottom: 0.25rem; }
+.qt-rank { font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.08em; color: var(--ink-3); }
+.qt-who { flex: 1; min-width: 0; font-weight: 600; font-size: 0.8125rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qt-pct { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-2); }
+/* Three columns so the optional "now" mark sits beside the cultivar and the
+   form label stays pinned right whether or not the mark is present. */
+.qt-pass {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: baseline;
+  column-gap: 0.625rem; row-gap: 0.1875rem;
+  padding: 0.375rem 0 0.375rem 0.875rem;
+  font-size: 0.75rem; color: var(--ink-2);
+}
+.qt-cv { grid-column: 1; grid-row: 1; font-family: var(--font-ui); font-weight: 600; font-style: normal; font-size: 0.9375rem; color: var(--ink); }
+.qt-form { grid-column: 3; grid-row: 1; color: var(--ink-3); text-align: right; }
+.qt-now { grid-column: 2; grid-row: 1; justify-self: start; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--good); }
+.qt-pass.live .qt-cv { color: var(--good); }
+.qt-pass.done .qt-cv { color: var(--ink-3); }
+.qt-nums { grid-column: 1 / 3; grid-row: 2; display: flex; flex-wrap: wrap; gap: 0.625rem; }
+.qt-edit-row { display: inline-flex; align-items: baseline; gap: 0.3125rem; }
+.qt-edit-form { color: var(--ink-3); }
+.qt-done-edit {
+  width: 4.25rem; height: 1.875rem; padding: 0 0.375rem;
+  text-align: right; border-radius: var(--fl-r-sm);
+  border: 1px solid var(--line-strong); background: var(--fl-well); color: var(--ink);
+  font: inherit; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600;
+}
+.qt-done-edit:focus-visible { outline: 0; border-color: var(--fl-fill); box-shadow: var(--fl-ring); }
+.qt-done-edit:disabled { opacity: 0.5; }
+/* A credited line is one the floor did not trim in full; the dotted rule
+   marks the number as edited rather than measured. */
+.qt-done-edit.credited { text-decoration: underline dotted currentColor; text-underline-offset: 0.1875rem; }
+.qt-of, .qt-lbs { font-family: var(--font-mono); color: var(--ink-2); }
+.qt-state { grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap; }
+.qt-bar { grid-column: 1 / -1; position: relative; height: 0.1875rem; border-radius: 2px; background: var(--fl-track); overflow: hidden; }
+.qt-fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--fl-fill); }
+.qt-pass.done .qt-fill { background: var(--ink-3); }
+.qt-eta { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.04em; color: var(--ink-3); }
+.qt-order-eta { padding: 0.25rem 0 0 0.875rem; font-size: 0.75rem; color: var(--ink-3); }
+
+/* The window is the frame: the whole shift is on screen at once. Below these
+   sizes the page goes back to ordinary flow, because a short window with a
+   fixed frame hides things instead of fitting them. */
+@media (min-width: 1181px) and (min-height: 950px) {
+  body { height: 100vh; overflow: hidden; }
+  .main { height: 100vh; min-height: 0; overflow: hidden; }
+  .ed-body { overflow-y: auto; }
+}
+
+/* ---------- narrow ---------- */
+@media (max-width: 1180px) {
+  .main { min-height: 0; }
+  .hour-grid { grid-template-columns: minmax(0, 1fr); }
+  .hour-side { display: grid; grid-template-columns: 1fr 1fr; }
+  .timer { flex: none; }
+}
+@media (max-width: 860px) {
+  .hour-side { grid-template-columns: 1fr; }
+  .page-head .pace { flex: 1 1 100%; }
+  .drawer .t { display: none; }
+  .lbs { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel, .scrim { transition: none; }
+}

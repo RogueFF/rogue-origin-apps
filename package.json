@@ -43,12 +43,15 @@
     "lint:scoreboard": "eslint src/js/scoreboard-v2/",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev",
-    "stamp": "node tools/stamp-modules.mjs --staged",
-    "stamp:check": "node tools/stamp-modules.mjs --staged --check"
+    "build": "vite build",
+    "check:urls": "node tools/check-urls.mjs",
+    "build:check": "npm run build && npm run check:urls"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "eslint": "^9.39.2",
+    "vite": "^8.3.0",
+    "vite-plugin-pwa": "^1.3.0",
     "wrangler": "^4.81.1"
   }
 }

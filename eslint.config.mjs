@@ -137,7 +137,7 @@ export default [
       'tests/**',
       'test-results/**',
       'test-*.js',
-      'sw.js',
+      'dist/**',           // build output
       'src/js/legacy/**',
       'src/js/vendor/**',
       '*.min.js',
@@ -200,6 +200,21 @@ export default [
 
       // Console output is intentional in operational tooling
       'no-console': 'off',
+    },
+  },
+  {
+    // The service worker source: a worker runtime, not a page, and bundled by
+    // vite-plugin-pwa rather than loaded as it is written.
+    files: ['src/sw.js'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        ...workerGlobals,
+        self: 'readonly',
+        clients: 'readonly',
+        skipWaiting: 'readonly',
+        registration: 'readonly',
+      },
     },
   },
   {

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-theme-default="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <link rel="manifest" href="/rogue-origin-apps/manifest.json">
+  <meta name="theme-color" content="#668971">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RO Ops">
+  <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
+  <title>Floor Manager | Rogue Origin</title>
+
+  <!-- Theme, applied before the first paint. The <html> tag defaults to dark for
+       the no-JS case, but theme.js only reaches the page as an import of main.js
+       (a module, so deferred) - which meant a light-mode user watched a full dark
+       page for as long as the module graph took to load. This mirrors the stored
+       value onto <html> up front; theme.js still owns writing and migration. -->
+  <script>
+    (function () {
+    try {
+      var t = localStorage.getItem('ro-theme');
+      if (t !== 'dark' && t !== 'light') {
+        t = null;
+        var legacy = ['theme', 'sopDarkMode', 'darkMode', 'kanbanDarkMode', 'barcodeDarkMode'];
+        for (var i = 0; i < legacy.length; i++) {
+          var v = localStorage.getItem(legacy[i]);
+          if (v == null) continue;
+          t = (v === 'dark' || v === 'true') ? 'dark' : 'light';
+          break;
+        }
+      }
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://rogue-origin-api.roguefamilyfarms.workers.dev">
+  <link rel="stylesheet" href="../ui/fonts.css">
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../ui/tokens.css">
+  <link rel="stylesheet" href="../ui/components.css">
+  <link rel="stylesheet" href="../shell/shell.css">
+  <link rel="stylesheet" href="../css/floor.css">
+</head>
+<body>
+<!-- Floor Manager - the hour, entered from the keyboard.
+     This file is the DOM contract for src/js/floor/*: every id here is targeted
+     by a module. The rail, the topbar frame and the theme and language buttons
+     belong to the shared shell (src/shell/); what this page owns is the date and
+     shift controls, the drawer button, the day's ledger and the hour being typed. -->
+<a href="#editor" class="skip-link">Skip to the hour</a>
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-arrow-r" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8h12l1 13H5z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
+</svg>
+
+<main class="main">
+
+  <!-- The page's own topbar controls. shell.js moves these into the shared
+       topbar; .topbar-slot is display:contents, so each child lands as its own
+       flex item beside the shell's. -->
+  <div class="topbar-slot" id="topbarStart">
+    <div class="anchor">
+      <button class="tb-btn tb-date" id="dateBtn" type="button" title="Change date" data-i18n-title="changeDate"><span id="dateWeekday">Wednesday</span><span class="num" id="dateText">Sep 2, 2026</span></button>
+      <!-- The date button is the control; the picker is only here so showPicker()
+           has a laid-out input to open from. -->
+      <input type="date" id="datePicker" class="vh" tabindex="-1" aria-hidden="true">
+    </div>
+    <div class="anchor">
+      <button class="tb-btn" id="shiftBtn" type="button">
+        <svg class="i"><use href="#i-clock"/></svg>
+        <span id="shiftLabel">started</span>
+        <span class="num" id="shiftTime">7:30 AM</span>
+        <svg class="i"><use href="#i-chev-d"/></svg>
+      </button>
+      <div class="popover" id="shiftPop" hidden>
+        <span class="eyebrow" data-i18n="setStartTime">Set Start Time</span>
+        <input type="time" id="shiftTimeInput" aria-label="Shift start time">
+        <button class="tb-btn" id="shiftTimeSet" type="button" data-i18n="set">Set</button>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-slot" id="topbarEnd">
+    <button class="tb-btn drawer" id="drawerBtn" type="button" aria-expanded="false" aria-controls="drawer">
+      <svg class="i"><use href="#i-layers"/></svg>
+      <span class="t" data-i18n="drawerTitle">Inventory &middot; Order queue</span>
+      <span class="m" id="drawerMeta">3 open</span>
+    </button>
+  </div>
+
+  <!-- The title row: the screen, and the one number the whole shift is judged
+       on. pace.js writes every figure in the tile. -->
+  <div class="page-head">
+    <h1 data-i18n="floorManager">Floor Manager</h1>
+    <div class="tile pace" id="paceTile">
+      <span class="label" data-i18n="pace">Pace</span>
+      <div class="value">
+        <span id="paceActual">105.1</span>
+        <span class="of" id="paceGoal">/ 120.3</span>
+        <small id="paceUnit" data-i18n="lbTops">lb tops</small>
+      </div>
+      <div class="meter" id="paceMeter">
+        <span id="paceFill" style="width: 87.4%"></span>
+        <span class="tgt" id="paceTick" style="left: 100%"></span>
+      </div>
+      <p class="sub" id="paceLine"><span class="num">2 lb</span> behind pace</p>
+    </div>
+  </div>
+
+  <!-- The day, as a ledger: one column per hour, read left to right. Each
+       column is a tab into the editor below it. strip.js renders the real
+       columns; these two are placeholders so the composition can be judged
+       before any script runs. -->
+  <section class="sec day-sec" aria-label="Today">
+    <div class="card hours-card">
+      <nav class="hours" id="ribbon" aria-label="Hours">
+        <button class="tick met" type="button" data-index="0">
+          <span class="t-hour">7a</span>
+          <span class="t-cv">Godfather OG</span>
+          <span class="t-bar"><span class="t-fill" style="width: 100%"></span><span class="t-tgt" style="left: 87%"></span></span>
+          <span class="t-tops"><span class="num">17.1</span><span class="t-of">/ 14.9</span></span>
+          <span class="t-smalls">sm <span class="num">3.2</span></span>
+        </button>
+        <button class="tick short" type="button" data-index="1" aria-current="true">
+          <span class="t-hour">8a</span>
+          <span class="t-cv">Godfather OG</span>
+          <span class="t-bar"><span class="t-fill" style="width: 85%"></span><span class="t-tgt" style="left: 100%"></span></span>
+          <span class="t-tops"><span class="num">11.6</span><span class="t-of">/ 13.7</span></span>
+          <span class="t-smalls">sm <span class="num">2.1</span></span>
+        </button>
+      </nav>
+      <div class="hours-legend">
+        <span><i></i><span data-i18n="legendTops">Tops logged</span></span>
+        <span><i class="tgt"></i><span data-i18n="legendTarget">Target for the hour</span></span>
+        <span data-i18n="legendSmalls">Smalls are listed under each hour</span>
+        <span data-i18n="legendPick">Click an hour, or use the arrow keys</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- The hour being typed. The heading is the hour itself; everything under
+       it belongs to that one row of the day. -->
+  <section class="sec hour-sec" aria-labelledby="hourTitle">
+    <div class="hour-grid">
+      <div class="card editor" id="editor">
+        <div class="ed-head">
+          <h2 id="hourTitle">3&ndash;4 PM</h2>
+          <span class="status good now" id="nowBadge" hidden data-i18n="now">now</span>
+          <div class="hour-nav">
+            <button class="icon-btn" id="prevHour" type="button" title="Previous hour" aria-label="Previous hour" data-i18n-title="prevHour"><svg class="i"><use href="#i-chev-l"/></svg></button>
+            <button class="icon-btn" id="nextHour" type="button" title="Next hour" aria-label="Next hour" data-i18n-title="nextHour"><svg class="i"><use href="#i-chev-r"/></svg></button>
+          </div>
+        </div>
+        <div class="ed-body">
+
+      <div class="crew" id="crew1">
+        <div class="field">
+          <label for="buckers1" data-i18n="buckers">Buckers</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="buckers1" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="buckers1" min="0" max="50" inputmode="numeric" value="3">
+            <button type="button" tabindex="-1" data-step="1" data-field="buckers1" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="trimmers1" data-i18n="trimmers">Trimmers</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="trimmers1" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="trimmers1" min="0" max="50" inputmode="numeric" value="16">
+            <button type="button" tabindex="-1" data-step="1" data-field="trimmers1" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="tzero1" data-i18n="tzero">T-Zero</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="tzero1" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="tzero1" min="0" max="50" inputmode="numeric" value="1">
+            <button type="button" tabindex="-1" data-step="1" data-field="tzero1" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="qcperson" data-i18n="qcperson">QC</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="qcperson" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="qcperson" min="0" max="50" inputmode="numeric" value="1">
+            <button type="button" tabindex="-1" data-step="1" data-field="qcperson" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field grow">
+          <label for="cultivar1" data-i18n="cultivar">Cultivar</label>
+          <!-- The select does the picking; the face over it typesets the choice
+               (editor.js keeps the two in step). -->
+          <div class="cv">
+            <select id="cultivar1" class="select"><option value="" data-i18n="selectCultivar">Select cultivar…</option></select>
+            <span class="cv-face" id="cultivarFace1" aria-hidden="true"><i>Godfather OG</i><small>Sungrown · 2025</small></span>
+          </div>
+        </div>
+        <button class="line2" id="line2Toggle" type="button" aria-pressed="false"><svg class="i"><use href="#i-plus"/></svg><span data-i18n="addLine2">Line 2</span></button>
+      </div>
+
+      <div class="crew crew2" id="crew2" hidden>
+        <div class="field">
+          <label for="buckers2" data-i18n="buckers">Buckers</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="buckers2" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="buckers2" min="0" max="50" inputmode="numeric" value="0">
+            <button type="button" tabindex="-1" data-step="1" data-field="buckers2" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="trimmers2" data-i18n="trimmers">Trimmers</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="trimmers2" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="trimmers2" min="0" max="50" inputmode="numeric" value="0">
+            <button type="button" tabindex="-1" data-step="1" data-field="trimmers2" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="tzero2" data-i18n="tzero">T-Zero</label>
+          <div class="stepper">
+            <button type="button" tabindex="-1" data-step="-1" data-field="tzero2" aria-label="fewer" data-i18n-aria="fewer"><svg class="i"><use href="#i-minus"/></svg></button>
+            <input type="number" id="tzero2" min="0" max="50" inputmode="numeric" value="1">
+            <button type="button" tabindex="-1" data-step="1" data-field="tzero2" aria-label="more" data-i18n-aria="more"><svg class="i"><use href="#i-plus"/></svg></button>
+          </div>
+        </div>
+        <div class="field grow">
+          <label for="cultivar2" data-i18n="cultivar">Cultivar</label>
+          <div class="cv">
+            <select id="cultivar2" class="select"><option value="" data-i18n="selectCultivar">Select cultivar…</option></select>
+            <span class="cv-face empty" id="cultivarFace2" aria-hidden="true"><i>Select cultivar…</i></span>
+          </div>
+        </div>
+        <button class="line2" id="line2Remove" type="button"><svg class="i"><use href="#i-minus"/></svg><span data-i18n="removeLine2">Remove line 2</span></button>
+      </div>
+
+      <div class="lbs" id="lbs">
+        <div class="lbs-grid" id="lbs1">
+          <div class="field">
+            <label for="tops1"><span data-i18n="tops">Tops</span><span class="tgt" id="topsTarget">target <span class="num">19.0 lb</span> · 16 trimmers × 0.9</span></label>
+            <div class="big-in">
+              <input type="number" id="tops1" step="0.1" min="0" max="200" inputmode="decimal" placeholder="—" aria-label="Tops pounds" value="17.1">
+              <span class="unit">lb</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="smalls1"><span data-i18n="smalls">Smalls</span></label>
+            <div class="big-in">
+              <input type="number" id="smalls1" step="0.1" min="0" max="200" inputmode="decimal" placeholder="—" aria-label="Smalls pounds">
+              <span class="unit">lb</span>
+            </div>
+          </div>
+        </div>
+        <div class="lbs-grid lbs2" id="lbs2" hidden>
+          <div class="field">
+            <label for="tops2"><span data-i18n="tops">Tops</span> · <span data-i18n="line2">Line 2</span></label>
+            <div class="big-in">
+              <input type="number" id="tops2" step="0.1" min="0" max="200" inputmode="decimal" placeholder="—" aria-label="Tops pounds, line 2">
+              <span class="unit">lb</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="smalls2"><span data-i18n="smalls">Smalls</span> · <span data-i18n="line2">Line 2</span></label>
+            <div class="big-in">
+              <input type="number" id="smalls2" step="0.1" min="0" max="200" inputmode="decimal" placeholder="—" aria-label="Smalls pounds, line 2">
+              <span class="unit">lb</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+        </div>
+
+        <!-- the one place save state lives -->
+        <div class="ed-foot">
+          <button class="tb-btn primary save" id="saveHour" type="button" data-i18n="saveHour">Save hour</button>
+          <span id="saveState" data-state="saved">Saved <span class="num">3:58 PM</span></span>
+          <span class="sep" id="saveSep" hidden>&middot;</span>
+          <span class="warn" id="saveWarn" hidden></span>
+          <button class="tb-btn sm" id="retrySave" type="button" hidden data-i18n="retry">Retry</button>
+          <div class="note-box">
+            <input type="text" id="note" placeholder="Notes" data-i18n-placeholder="notes" aria-label="Notes">
+          </div>
+          <span class="kbhint"><kbd class="k">&crarr;</kbd> <span data-i18n="enterSaves">saves</span></span>
+        </div>
+      </div>
+
+      <!-- Bottom right: the bag, as one instrument. -->
+      <div class="hour-side">
+        <!-- The bag size is the control here, not a caption: setBagMode drives
+             every station's Log button. -->
+        <div class="card tile timer" id="timerTile" data-kind="remaining">
+          <div class="tile-head">
+            <span class="label" data-i18n="bagTimer">Bag timer</span>
+            <div class="seg" id="bagModeSeg" role="group" aria-label="Bag size">
+              <button type="button" data-mode="5kg" aria-pressed="true">5 kg</button>
+              <button type="button" data-mode="10lb" aria-pressed="false">10 lb</button>
+            </div>
+          </div>
+          <div class="fill">
+            <!-- The bag and its clock are one race, drawn on one ring: the green
+                 ring is the weight on the scale, the gold ring inside it is the
+                 time gone. Green further round than gold means it lands early. -->
+            <div class="bag">
+              <div class="dial" id="scaleBar">
+                <span class="dial-pace" id="bagPace"></span>
+                <div class="dial-face">
+                  <span class="bag-weight num" id="scaleValue">4,812 g</span>
+                  <span class="bag-clock"><span class="num" id="timerValue">31:48</span> <small id="timerUnit">left</small></span>
+                </div>
+              </div>
+            </div>
+            <div class="dial-key">
+              <span><i class="weight"></i><span data-i18n="ringWeight">Weight on the scale</span></span>
+              <span><i class="time"></i><span data-i18n="ringTime">Time gone</span></span>
+            </div>
+            <button class="tb-btn primary log" id="logBag" type="button"><svg class="i"><use href="#i-bag"/></svg><span id="logBagText" data-i18n="logBag">Log bag</span></button>
+            <p class="sub" id="timerStats"><span class="num">12</span> bags today</p>
+          </div>
+
+          <!-- What the line is running, as the card's last line. -->
+          <div class="queue" id="queueTile" hidden>
+            <p class="label" id="queueLead">Trimming <b>Godfather OG</b> <span class="muted">&middot; tops &middot; #35453</span></p>
+            <div class="queue-fill" id="queueFill">
+              <div class="value">
+                <span id="queueDone">15.5</span>
+                <span class="of" id="queueOf">/ 30</span>
+                <small>lb</small>
+              </div>
+              <div class="meter" id="queueMeter"><span style="width: 52%"></span></div>
+              <p class="sub" id="queueNext"><svg class="i"><use href="#i-arrow-r"/></svg>next <b>Passion Fruit OG</b></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- off-canvas: inventory + order queue -->
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="drawer" aria-hidden="true" aria-label="Inventory and order queue">
+  <div class="panel-head">
+    <h2 class="panel-title" data-i18n="drawerTitle">Inventory · Order queue</h2>
+    <button class="icon-btn" id="drawerClose" type="button" title="Close" aria-label="Close" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="seg" id="drawerTabs" role="tablist">
+    <button type="button" data-tab="inventory" data-i18n="inventory" aria-pressed="true">Inventory</button>
+    <button type="button" data-tab="queue" data-i18n="orderQueue" aria-pressed="false">Order Queue</button>
+  </div>
+  <div class="panel-body">
+
+    <section id="drawerInventory" aria-label="Inventory">
+      <div class="seg" id="poolTypeSeg" role="group">
+        <button type="button" data-pool="smalls" data-i18n="smalls" aria-pressed="true">Smalls</button>
+        <button type="button" data-pool="tops" data-i18n="tops" aria-pressed="false">Tops</button>
+      </div>
+      <div class="row">
+        <select id="poolProduct" class="select" aria-label="Product"><option value="">…</option></select>
+        <button class="icon-btn" id="poolRefresh" type="button" title="Refresh" aria-label="Refresh" data-i18n-title="refresh"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="pool-now">
+        <span class="eyebrow" data-i18n="currentPool">Current Pool</span>
+        <span class="num" id="poolGrams">17,327</span><span class="muted" data-i18n="grams">g</span>
+        <span class="num" id="poolLbs">38.20</span><span class="muted" data-i18n="lbs">lb</span>
+        <span class="warn" id="poolStale" hidden></span>
+      </div>
+      <div class="seg" id="poolOpSeg" role="group">
+        <button type="button" data-op="add" data-i18n="add" aria-pressed="true">Add</button>
+        <button type="button" data-op="subtract" data-i18n="subtract" aria-pressed="false">Subtract</button>
+        <button type="button" data-op="set" data-i18n="set" aria-pressed="false">Set</button>
+      </div>
+      <div class="row">
+        <input type="number" id="poolAmount" step="0.1" min="0" placeholder="0" inputmode="decimal" aria-label="Amount">
+        <div class="seg" id="poolUnitSeg" role="group">
+          <button type="button" data-unit="grams" aria-pressed="true">g</button>
+          <button type="button" data-unit="lbs" aria-pressed="false">lb</button>
+        </div>
+      </div>
+      <input type="text" id="poolNote" placeholder="Optional note" data-i18n-placeholder="optionalNote" aria-label="Note">
+      <div class="preview" id="poolPreview" hidden>
+        <span data-i18n="current">Current</span><span class="num" id="previewCurrent"></span>
+        <span id="previewOpLabel"></span><span class="num" id="previewChange"></span>
+        <span data-i18n="newValue">New value</span><span class="num" id="previewNew"></span>
+      </div>
+      <button class="tb-btn primary" id="poolUpdate" type="button" data-i18n="updatePool">Update Pool</button>
+      <div class="preview" id="poolResult" hidden>
+        <span data-i18n="previous">Previous</span><span class="num" id="resultPrev"></span>
+        <span id="resultChangeLabel"></span><span class="num" id="resultChange"></span>
+        <span data-i18n="newValue">New value</span><span class="num" id="resultNew"></span>
+      </div>
+      <div class="row quick">
+        <button class="tb-btn" id="quickAdd10lb" type="button">+10 lb</button>
+        <button class="tb-btn" id="quickAdd5kg" type="button">+5 kg</button>
+      </div>
+      <div class="row recent-head">
+        <span class="eyebrow" data-i18n="recentChanges">Recent Changes</span>
+        <button class="icon-btn" id="recentRefresh" type="button" title="Refresh" aria-label="Refresh" data-i18n-title="refresh"><svg class="i"><use href="#i-refresh"/></svg></button>
+      </div>
+      <div class="recent" id="recentList"></div>
+    </section>
+
+    <!-- queue.js renders the board; one placeholder order so the styling can be judged -->
+    <section id="drawerQueue" hidden aria-label="Order queue">
+      <div id="queueBoard">
+        <div class="qt-order">
+          <div class="qt-head"><span class="qt-rank">1</span><span class="qt-who">#35453 · Godfather OG run</span><span class="qt-pct">52%</span></div>
+          <div class="qt-pass live" role="listitem">
+            <span class="qt-cv">Godfather OG</span>
+            <span class="qt-form">tops</span>
+            <span class="qt-now">now</span>
+            <span class="qt-nums"><span class="qt-edit-row"><input type="text" inputmode="decimal" class="qt-done-edit" value="15.5" aria-label="Godfather OG tops pounds done"><span class="qt-of">/ 30 lb</span></span></span>
+            <span class="qt-state">14.5 lb left</span>
+            <div class="qt-bar"><div class="qt-fill" style="width:52%"></div></div>
+            <span class="qt-eta">done Thu 10:40 AM</span>
+          </div>
+          <div class="qt-pass done" role="listitem">
+            <span class="qt-cv">Passion Fruit OG</span>
+            <span class="qt-form">smalls</span>
+            <span class="qt-nums"><span class="qt-lbs">20 / 20 lb</span></span>
+            <span class="qt-state">done</span>
+            <div class="qt-bar"><div class="qt-fill" style="width:100%"></div></div>
+          </div>
+          <div class="qt-order-eta">order done Thu 10:40 AM</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</aside>
+<script type="module" src="../js/floor/main.js"></script>
+</body>
+</html>

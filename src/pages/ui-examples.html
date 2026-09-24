@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-theme-default="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
+  <title>Rogue Origin — UI examples</title>
+  <!-- Theme before first paint, as on the Hub. -->
+  <script>
+    (function () {
+    try {
+      var t = localStorage.getItem('ro-theme');
+      if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { /* localStorage blocked: keep the markup default */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="../ui/fonts.css">
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <link rel="stylesheet" href="../ui/tokens.css">
+  <link rel="stylesheet" href="../ui/components.css">
+  <link rel="stylesheet" href="../shell/shell.css">
+  <style>
+    /* Layout for this reference page only. */
+    .ex-title { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 34px; line-height: 1.1; padding: 22px 0 6px; }
+    .ex-lede { color: var(--ink-2); max-width: 64ch; }
+    .ex-sec { margin-top: 28px; }
+    .ex-sec h2 { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 24px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--line-strong); }
+    .ex-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .ex-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .ex-note { font-size: 12px; color: var(--ink-3); }
+    @media (max-width: 860px) { .ex-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="main">
+    <div class="topbar-slot" id="topbarStart">
+      <div class="chips" role="group" aria-label="Example chips">
+        <button class="chip" aria-pressed="true">Today</button>
+        <button class="chip" aria-pressed="false">7 days</button>
+        <button class="chip" aria-pressed="false">30 days</button>
+      </div>
+    </div>
+
+    <h1 class="ex-title">UI examples</h1>
+    <p class="ex-lede">The shared shell and components, in one place. Switch the theme and the language from the topbar to check both. This page is a reference for building screens, not an app, so it is not in the rail.</p>
+
+    <section class="ex-sec">
+      <h2>Buttons</h2>
+      <div class="ex-row">
+        <button class="tb-btn">Quiet</button>
+        <button class="tb-btn primary">Primary</button>
+        <button class="icon-btn" aria-label="Collapse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+      </div>
+    </section>
+
+    <section class="ex-sec">
+      <h2>Status</h2>
+      <div class="ex-row">
+        <button class="tb-btn" data-status="live">Live</button>
+        <button class="tb-btn" data-status="idle">Idle</button>
+        <button class="tb-btn" data-status="off">Offline</button>
+        <span class="ex-note">Sets the topbar pill and the rail foot.</span>
+      </div>
+    </section>
+
+    <section class="ex-sec">
+      <h2>Cards and text</h2>
+      <div class="ex-grid">
+        <div class="card"><div class="eyebrow">Eyebrow</div><p>Card with body text in Outfit.</p></div>
+        <div class="card"><div class="eyebrow">Numbers</div><p class="num">118.9 lbs · 1.03</p></div>
+        <div class="card"><div class="eyebrow">Muted</div><p class="muted">Secondary information.</p></div>
+      </div>
+    </section>
+
+    <section class="ex-sec">
+      <h2>Unlock</h2>
+      <div class="ex-row">
+        <button class="tb-btn primary" id="unlockBtn">Open unlock dialog</button>
+        <button class="tb-btn" id="forgetBtn">Forget password</button>
+        <span class="ex-note" id="keyState"></span>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="../js/ui-examples/main.js"></script>
+</body>
+</html>
