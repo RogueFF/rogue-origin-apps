@@ -6,6 +6,7 @@
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../../lib/response.js';
 import { formatError } from '../../lib/errors.js';
 import { requireAuth } from '../../lib/auth.js';
+import { lockCosts } from '../../lib/cost-lock.js';
 import { getDataVersion } from '../../lib/production-utils.js';
 
 import { scoreboard, dashboard, morningReport } from './scoreboard.js';
@@ -55,7 +56,8 @@ export async function handleProductionD1(request, env, ctx) {
       case 'scoreboard':
         return await scoreboard(params, env);
       case 'dashboard':
-        return await dashboard(params, env);
+        // Labor-cost figures need the shared password; see lib/cost-lock.js.
+        return await lockCosts(await dashboard(params, env), request, body, env);
       case 'setShiftStart':
         return await setShiftStart({ ...params, ...body }, env);
       case 'getShiftStart':
@@ -91,7 +93,7 @@ export async function handleProductionD1(request, env, ctx) {
       case 'getCultivars':
         return await getCultivars(env);
       case 'analyzeStrain':
-        return await analyzeStrain(params, env);
+        return await lockCosts(await analyzeStrain(params, env), request, body, env);
       case 'testConfig':
         return await handleTestConfig(env);
       case 'getConfig':

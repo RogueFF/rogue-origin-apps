@@ -7,7 +7,11 @@ import { validatePassword } from './api.js';
 const KEY = 'ro_api_password';
 
 export const hasKey = () => Boolean(localStorage.getItem(KEY));
-export const forget = () => localStorage.removeItem(KEY);
+
+/** Fired on document whenever the device unlocks or forgets the password. */
+const announce = () => document.dispatchEvent(new CustomEvent('ro:authchange', { detail: { unlocked: hasKey() } }));
+
+export const forget = () => { localStorage.removeItem(KEY); announce(); };
 
 let pending = null;
 
@@ -39,6 +43,7 @@ export function unlock() {
       if (ok) {
         localStorage.setItem(KEY, pw);
         dlg.close('ok');
+        announce();
       } else {
         err.textContent = 'That password did not match.';
         input.value = '';

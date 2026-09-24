@@ -161,8 +161,12 @@ export function renderNow(state) {
     </div>
     ${tile({ label: 'Rate, lbs per trimmer-hour', value: num(t.rate, 2), sub: deltaChip(t.rate, prev?.rate, { vs }) })}
     ${tile({ label: single ? 'Crew' : 'Average crew per day', value: num(t.avgCrew, single ? 0 : 1), sub: `${num(t.trimmerHours, 0)} trimmer-hrs · ${num(t.operatorHours, 0)} operator-hrs` })}
-    ${tile({ label: 'Labor per lb of tops', value: money(t.topsCostPerLb, 2), sub: deltaChip(t.topsCostPerLb, prev?.topsCostPerLb, { vs, upIsGood: false }) })}
-    ${tile({ label: single ? 'Labor cost' : 'Days worked', value: single ? money(t.laborCost) : int(t.days), sub: single ? `${money(t.costPerLb, 2)} per lb blended` : `${money(t.laborCost)} labor` })}`;
+    ${data.costsLocked
+    ? tile({ label: 'Labor per lb of tops', value: lockedMark(), sub: 'Unlock to see costs' })
+    : tile({ label: 'Labor per lb of tops', value: money(t.topsCostPerLb, 2), sub: deltaChip(t.topsCostPerLb, prev?.topsCostPerLb, { vs, upIsGood: false }) })}
+    ${data.costsLocked
+    ? tile({ label: single ? 'Labor cost' : 'Days worked', value: single ? lockedMark() : int(t.days), sub: single ? 'Unlock to see costs' : `${num(t.trimmerHours, 0)} trimmer-hrs` })
+    : tile({ label: single ? 'Labor cost' : 'Days worked', value: single ? money(t.laborCost) : int(t.days), sub: single ? `${money(t.costPerLb, 2)} per lb blended` : `${money(t.laborCost)} labor` })}`;
 }
 
 /**
@@ -379,17 +383,30 @@ export function renderCultivars(state) {
     <tbody>${snap.map((s) => {
       const p = cultivarParts(s.strain);
       const share = s.totalLbs > 0 ? (s.tops / s.totalLbs) * 100 : null;
-      return `<tr><td><div class="cultivar-name">${esc(p.name)}<small>${esc([p.grow, p.year].filter(Boolean).join(' · '))}</small></div></td><td class="n dim">${int(s.daysWorked)}</td><td class="n"><span class="bar-inline" style="width:${Math.round((s.tops / max) * 48)}px"></span>${num(s.tops)}</td><td class="n dim">${pct(share, 0)}</td><td class="n">${num(s.avgRate, 2)}</td><td class="n">${money(s.topsCostPerLb, 2)}</td></tr>`;
+      return `<tr><td><div class="cultivar-name">${esc(p.name)}<small>${esc([p.grow, p.year].filter(Boolean).join(' · '))}</small></div></td><td class="n dim">${int(s.daysWorked)}</td><td class="n"><span class="bar-inline" style="width:${Math.round((s.tops / max) * 48)}px"></span>${num(s.tops)}</td><td class="n dim">${pct(share, 0)}</td><td class="n">${num(s.avgRate, 2)}</td><td class="n">${state.data?.costsLocked ? lockedMark() : money(s.topsCostPerLb, 2)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
 // ---------------------------------------------------------------- Cost
+
+/** Small lock mark for a cost cell whose figure the worker withheld. */
+const lockedMark = () => '<span class="locked" title="Unlock to see labor costs">🔒</span>';
+
+/** Card body shown in place of the cost tiles until the device unlocks. */
+export function costLockPanel() {
+  return `<div class="cost-lock">
+    <div class="cost-lock-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <div class="cost-lock-text"><strong>Labor costs are locked.</strong><span>Enter the shared password to see dollar figures. Pounds, rates and hours stay open.</span></div>
+    <button class="tb-btn primary" type="button" data-action="unlock-costs">Unlock</button>
+  </div>`;
+}
 
 export function renderCost(state) {
   const host = $('costBody');
   const meta = $('costMeta');
   const { data, range } = state;
   if (!data) return;
+  if (data.costsLocked) { meta.textContent = 'Locked'; host.innerHTML = costLockPanel(); return; }
   const t = range.live && data.today?.laborCost != null
     ? { ...periodTotals(workedDays(data.daily).filter((d) => d.date === range.end)), laborCost: data.today.laborCost, operatorHours: data.today.operatorHours, costPerLb: data.today.costPerLb, topsCostPerLb: data.today.topsCostPerLb, smallsCostPerLb: data.today.smallsCostPerLb }
     : periodTotals(data.daily);
@@ -423,7 +440,7 @@ export function renderDaily(state) {
     <tbody>${days.map((d) => {
       const cult = dayCultivars(d, (c) => `${cultivarParts(c.cultivar).name} ${num(c.tops, 0)}`);
       const note = noteLines(d.notes).join(' · ');
-      return `<tr><td class="num">${esc(dayLabel(d.date))}</td><td>${esc(cult)}</td><td class="n">${num(d.totalTops)}</td><td class="n dim">${num(d.totalSmalls, 0)}</td><td class="n">${num(d.totalLbs)}</td><td class="n">${num(d.avgRate, 2)}</td><td class="n dim">${int(d.totalCrew)}</td><td class="n">${money(d.topsCostPerLb, 2)}</td><td class="n dim">${money(d.laborCost)}</td><td class="dim" title="${esc(note)}">${esc(note.length > 70 ? `${note.slice(0, 70)}…` : note)}</td></tr>`;
+      return `<tr><td class="num">${esc(dayLabel(d.date))}</td><td>${esc(cult)}</td><td class="n">${num(d.totalTops)}</td><td class="n dim">${num(d.totalSmalls, 0)}</td><td class="n">${num(d.totalLbs)}</td><td class="n">${num(d.avgRate, 2)}</td><td class="n dim">${int(d.totalCrew)}</td><td class="n">${source?.costsLocked ? lockedMark() : money(d.topsCostPerLb, 2)}</td><td class="n dim">${source?.costsLocked ? lockedMark() : money(d.laborCost)}</td><td class="dim" title="${esc(note)}">${esc(note.length > 70 ? `${note.slice(0, 70)}…` : note)}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
