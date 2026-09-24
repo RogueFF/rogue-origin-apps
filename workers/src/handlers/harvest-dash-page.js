@@ -77,6 +77,16 @@ export function dashPage() {
   .err { color:var(--bad); font-size:.9rem; margin-top:10px; min-height:1.2em; }
 
   /* ── strip ────────────────────────────────────────────── */
+  /* Amber overall — most of these are retryable. The unknown line goes red:
+     it is the one nobody may replay blindly. */
+  .debt { border: 2px solid #e0a53a; background: #2b2417; border-radius: 12px;
+          padding: 16px 18px; margin: 0 0 16px; color: #f6e9cf; }
+  .debt strong { display: block; font-size: 1.05rem; margin-bottom: 8px; }
+  .debt-row { margin: 4px 0; }
+  .debt-row.bad { color: #ffb3b3; font-weight: 700; }
+  .debt-ids { margin-top: 10px; line-height: 1.9; }
+  .debt-ids code { background: #18291d; border: 1px solid #3a5946; border-radius: 6px;
+                   padding: 2px 7px; font-size: .9rem; }
   .strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:10px; margin:22px 0 26px; }
   .tile { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:13px 14px; }
   .tile .k { font-size:.7rem; text-transform:uppercase; letter-spacing:.11em; color:var(--muted); font-weight:700; }
@@ -121,6 +131,9 @@ export function dashPage() {
      state is carried by a colour lane down the left edge rather than by a word
      you have to stop and read. */
   .racks { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  /* What the bay takes, in sticks — measured 2026-09-23, not derived from
+     structure. Quiet: it is a constant, and the live numbers above it move. */
+  .rack .cap { margin-top:6px; padding-top:5px; border-top:1px solid rgba(0,0,0,.08); font-size:11px; opacity:.6 }
   .rack { position:relative; background:var(--raised); border:1px solid var(--line2);
           border-radius:10px; padding:11px 12px 11px 15px; overflow:hidden; min-height:96px; }
   .rack::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px;
@@ -223,6 +236,7 @@ ${OFFICE_UI_STYLE}
       <span class="stamp" id="stamp"></span>
     </header>
 
+    <div id="invdebt" class="hide"></div>
     <div class="strip" id="strip"></div>
     <div id="testmode"></div>
     <div id="cards"></div>
@@ -398,6 +412,32 @@ ${OFFICE_UI_STYLE}
   }
 
   // ── render ──────────────────────────────────────────────────────────
+  /**
+   * Inventory writes that never settled — the same rows the reconcile screen
+   * and action=inventory_sweep see. (No backticks in here: this whole page is
+   * one template literal, and a stray backtick closes it.)
+   *
+   * Here as well as on reconcile so a debt is noticed during the day rather
+   * than only at day end. On 2026-09-22 two sacks sat owed for hours with
+   * nothing on any screen saying so.
+   */
+  function renderDebt(s) {
+    var box = $('invdebt');
+    if (!box) return;
+    if (!s || !s.show) { box.classList.add('hide'); return; }
+    var rows = '';
+    // Unknown first and in red: the call may have landed, so replaying it
+    // doubles the count — which reads exactly like an honest number.
+    if (s.unknown) rows += '<div class="debt-row bad">' + s.unknown +
+      ' unknown — check Shopify by hand before retrying</div>';
+    if (s.failed) rows += '<div class="debt-row">' + s.failed + ' can be retried</div>';
+    var ids = s.items.map(function (i) { return '<code>' + i.sack_id + '</code>'; }).join(' ');
+    if (s.total > s.items.length) ids += ' …and ' + (s.total - s.items.length) + ' more';
+    box.innerHTML = '<div class="debt"><strong>Inventory writes that never settled — ' +
+      s.total + '</strong>' + rows + '<div class="debt-ids">' + ids + '</div></div>';
+    box.classList.remove('hide');
+  }
+
   function render(d, isDemo) {
     $('gate').classList.add('hide');
     $('app').classList.remove('hide');
@@ -406,6 +446,8 @@ ${OFFICE_UI_STYLE}
     $('stamp').textContent = 'generated ' + String(d.generated_at || '').replace('T', ' ').slice(0, 16) + ' UTC';
     $('seasonline').textContent = d.season + ' season · ' + d.counts.lots + ' lots · ' +
       d.counts.sessions + ' zone sessions · ' + d.feed_total + ' timestamped events';
+
+    renderDebt(d.inventory_debts);
 
     var c = d.counts;
     var tiles = [
@@ -681,6 +723,7 @@ ${OFFICE_UI_STYLE}
         return '<li><b>' + name + '</b><span>' + l.bins + ' bins</span></li>';
       }).join('');
 
+      var cap = r.capacity ? '<div class="cap">holds ' + num(r.capacity) + '</div>' : '';
       var body = r.state === 'empty'
         ? (kept
             ? '<div class="age">' + kept + '<small>' + sacksWord(kept) + '</small></div>' +
@@ -692,7 +735,7 @@ ${OFFICE_UI_STYLE}
             storedList(r.stored_lots) + '</div>' : '');
 
       var cell = '<div class="rack ' + cls + '"><div class="n"><span class="bn">Bay ' + r.bay + '</span>' +
-        (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + '</div>';
+        (r.state === 'empty' ? '' : '<span>' + r.bins + ' bins</span>') + '</div>' + body + cap + '</div>';
       (r.barn === 'top' ? top : bottom).push(cell);
     }
 
