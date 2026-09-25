@@ -22,8 +22,13 @@ const SHEETS = {
   data: 'Data',
 };
 
-// Labor cost configuration
-const BASE_WAGE_RATE = 23.00;
+// Labor cost configuration.
+// The real base wage lives in D1 config `labor.base_wage_rate` (auth-gated via
+// the getConfig HTTP action). Do NOT hard-code the real rate here — this file is
+// in a PUBLIC repo. The 0 fallback below only applies if the D1 row is missing,
+// in which case costs read as 0 rather than disclosing a real wage. Use
+// getLoadedLaborRate(env) for cost math so the value comes from D1 at runtime.
+const BASE_WAGE_RATE = 0;
 const EMPLOYER_TAX_RATE = 0.14;
 const TOTAL_LABOR_COST_PER_HOUR = BASE_WAGE_RATE * (1 + EMPLOYER_TAX_RATE);
 
@@ -203,6 +208,17 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
   return 0.85;
 }
 
+/**
+ * Fully-loaded labor cost per hour ($/hr incl. employer taxes), sourced from D1
+ * config at runtime so the real wage is never hard-coded in this public repo.
+ * Falls back to the neutral module constants only if the config rows are missing.
+ */
+async function getLoadedLaborRate(env) {
+  const wage = (await getConfig(env, 'labor.base_wage_rate')) ?? BASE_WAGE_RATE;
+  const tax = (await getConfig(env, 'labor.employer_tax_rate')) ?? EMPLOYER_TAX_RATE;
+  return wage * (1 + tax);
+}
+
 export {
   AI_MODEL,
   SHEETS,
@@ -212,6 +228,7 @@ export {
   formatDatePT,
   parseConfigValue,
   getConfig,
+  getLoadedLaborRate,
   getAllConfig,
   setConfig,
   getDataVersion,
