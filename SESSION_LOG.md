@@ -6,6 +6,36 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-09-24 — make the harvest record say what actually happened
+
+- `workers/src/handlers/harvest-d1.js` — the cultivar is picked, never guessed.
+  `?action=enter` reached `handleEnter` with whatever the query string carried
+  and filled in the first name on the zone's list; two R1 lots recorded a
+  cultivar nobody cut. A multi-cultivar zone with no pick now gets the picker
+  back and records nothing, an unplanted cultivar is refused, and "¿Cultivar
+  equivocado?" on the receipt corrects the lot in place rather than opening a
+  second one on top of it (713438f3).
+- `workers/src/handlers/harvest-d1.js` — inventory bookkeeping that survives its
+  own failure. `shopify_added_at` clears ONLY on success, both sync paths claim
+  the attempt before calling out, and `?action=inventory_sweep` reports what the
+  count owes and replays the definite failures. Rows stuck in flight need
+  `&force=1`: replaying a call that did land subtracts twice (c69d1172).
+- `workers/src/handlers/harvest-crew-hourly.js` — the crew report, on the hour.
+  Starting numbers in the morning, then an update every hour with the five role
+  counts and the sticks hung, each timestamped. Writes `harvest_hourly` — the
+  table built for the WhatsApp bot — rather than a second store. Replaces the
+  roster form at `?action=crew` (f451e171).
+- `workers/src/lib/bay-facts.js` — bay capacity counted, not derived: 4,191
+  sticks across nine bays, each carrying its own number. Bays 1-3 are absent
+  rather than zero, since they hang on an unmeasured system (58ac876a).
+- `scripts/build-hourly-worksheet.mjs` — the paper hourly worksheet. Drives an
+  installed Chrome instead of importing playwright, after this repo's
+  `node_modules` was emptied and every doc builder broke at once (32d4ea58).
+- Tests: 4 new files, 37 new cases; suite 724/724.
+- Wiki context: wiki/seasons/2026/journal/2026-09-24.md
+
+---
+
 ## 2026-09-22 — print a sack tag from any phone, and show what inventory still owes
 
 - `workers/src/lib/print-client.js` — mobile browsers do not honour the hidden
