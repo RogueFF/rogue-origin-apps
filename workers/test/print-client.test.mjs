@@ -84,18 +84,18 @@ test('the injected snippet is a self-contained expression with no build step', (
  * The home-screen app fit rule (Koa, 2026-09-25). Same discipline: the tests
  * evaluate the shipped source, not a copy of it.
  * ---------------------------------------------------------------------- */
-import { APP_PRINT_FIT_SRC, APP_PRINT_DEFAULT_BOX, makeAppPrintFit } from '../src/lib/print-client.js';
+import { APP_PRINT_FIT_SRC, APP_PRINT_DEFAULT_BOX, makeAppPrintFit, SAFARI_PRINT_SRC, makeSafariPrint } from '../src/lib/print-client.js';
 
 const fit = makeAppPrintFit();
 
 test('the app fit source is a plain ES5 function expression', () => {
-  assert.match(APP_PRINT_FIT_SRC.trim(), /^function \(fit, setting, standalone\) \{[\s\S]*\}$/);
+  assert.match(APP_PRINT_FIT_SRC.trim(), /^function \(fit, setting, compact\) \{[\s\S]*\}$/);
   assert.doesNotMatch(APP_PRINT_FIT_SRC, /=>|\bconst\b|\blet\b/, 'must run on any handset without a build step');
 });
 
 test('Safari, Android and the barn PC keep the full 4x2 tag', () => {
   assert.equal(fit('', '', false), null);
-  assert.equal(fit('', '', undefined), null, 'navigator.standalone is undefined outside iOS');
+  assert.equal(fit('', '', undefined), null, 'no verdict means the full tag');
   assert.equal(fit('', '3.2x1', false), null, 'the setting sets the box, it never switches the layout on');
 });
 
@@ -133,4 +133,48 @@ test('a box that could not hold a tag, or exceeds the label, falls back', () => 
   assert.deepEqual(fit('', '0.5x0.5', true), dflt, 'too small to read');
   assert.deepEqual(fit('', 'wide', true), dflt, 'not a size at all');
   assert.equal(fit('9x9', '', false), null, 'a bad URL box does not force the compact layout on');
+});
+
+/* -------------------------------------------------------------------------
+ * Which phones get the compact tag (Koa, 2026-09-25, second report: "it works
+ * in Chrome but not Safari"). The first cut keyed on the home-screen app; the
+ * real split is Safari's print path versus Chrome's, and the home-screen app
+ * is just Safari's path with no address bar.
+ * ---------------------------------------------------------------------- */
+const safariPrint = makeSafariPrint();
+const UA = {
+  iphoneSafari: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
+  iphoneHomeScreen: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+  iphoneChrome: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.7339.86 Mobile/15E148 Safari/604.1',
+  ipadSafari: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15',
+  ipadChrome: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.7339.86 Version/18.6 Safari/605.1.15',
+  androidChrome: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36',
+  winChrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+  macSafari: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15',
+};
+
+test('the Safari-print predicate is a plain ES5 function expression', () => {
+  assert.match(SAFARI_PRINT_SRC.trim(), /^function \(ua, platform, maxTouchPoints\) \{[\s\S]*\}$/);
+  assert.doesNotMatch(SAFARI_PRINT_SRC, /=>|const|let/, 'must run on any handset without a build step');
+});
+
+test('Safari on an iPhone, and the home-screen app, print through Safari', () => {
+  assert.equal(safariPrint(UA.iphoneSafari, 'iPhone', 5), true);
+  assert.equal(safariPrint(UA.iphoneHomeScreen, 'iPhone', 5), true, 'the home-screen app is Safari with no address bar');
+});
+
+test('Chrome on iOS prints the full tag — the one phone path proven to work', () => {
+  assert.equal(safariPrint(UA.iphoneChrome, 'iPhone', 5), false);
+  assert.equal(safariPrint(UA.ipadChrome, 'MacIntel', 5), false);
+});
+
+test('iPadOS hides behind a Mac user-agent; touch points give it away', () => {
+  assert.equal(safariPrint(UA.ipadSafari, 'MacIntel', 5), true);
+  assert.equal(safariPrint(UA.macSafari, 'MacIntel', 0), false, 'a real Mac keeps the full tag');
+});
+
+test('Android and the barn PC keep the full tag', () => {
+  assert.equal(safariPrint(UA.androidChrome, 'Linux armv81', 5), false);
+  assert.equal(safariPrint(UA.winChrome, 'Win32', 10), false, 'a touchscreen laptop is not an iPad');
+  assert.equal(safariPrint('', '', 0), false, 'nothing known means the proven path');
 });
