@@ -15,11 +15,9 @@ import {
   calculateDailyProjection,
 } from '../../lib/production-helpers.js';
 import {
-  TOTAL_LABOR_COST_PER_HOUR,
-  BASE_WAGE_RATE,
-  EMPLOYER_TAX_RATE,
   formatDatePT,
   getConfig,
+  getLoadedLaborRate,
   getEffectiveTargetRate,
 } from '../../lib/production-utils.js';
 
@@ -28,9 +26,6 @@ import {
 async function getScoreboardData(env, date = null) {
   const today = date || formatDatePT(new Date(), 'yyyy-MM-dd');
 
-  const baseWageRate = (await getConfig(env, 'labor.base_wage_rate')) ?? BASE_WAGE_RATE;
-  const employerTaxRate = (await getConfig(env, 'labor.employer_tax_rate')) ?? EMPLOYER_TAX_RATE;
-  const totalLaborCostPerHour = baseWageRate * (1 + employerTaxRate);
   const timeSlotMultipliers = (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS;
 
   const result = {
@@ -240,6 +235,7 @@ async function getExtendedDailyData(days, env) {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
+  const loadedRate = await getLoadedLaborRate(env);
 
   // Fetch smalls inspector count config
   const smallsInspectorCount = (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1;
@@ -333,8 +329,8 @@ async function getExtendedDailyData(days, env) {
     // Add inspector hours DIRECTLY to smalls labor (100% attribution)
     smallsLaborHours += smallsInspectorHours;
 
-    const topsLaborCost = topsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-    const smallsLaborCost = smallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+    const topsLaborCost = topsLaborHours * loadedRate;
+    const smallsLaborCost = smallsLaborHours * loadedRate;
     const totalLaborCost = topsLaborCost + smallsLaborCost;
 
     const topsCostPerLb = totalTops > 0 ? topsLaborCost / totalTops : 0;
@@ -386,6 +382,7 @@ async function scoreboard(params, env) {
 async function dashboard(params, env) {
   const start = params.start || '';
   const end = params.end || '';
+  const loadedRate = await getLoadedLaborRate(env);
 
   if (start && !validateDate(start)) {
     return errorResponse('Invalid start date', 'VALIDATION_ERROR', 400);
@@ -514,8 +511,8 @@ async function dashboard(params, env) {
   // Add inspector hours DIRECTLY to smalls labor (100% attribution)
   todaySmallsLaborHours += todaySmallsInspectorHours;
 
-  const todayTopsLaborCost = todayTopsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-  const todaySmallsLaborCost = todaySmallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+  const todayTopsLaborCost = todayTopsLaborHours * loadedRate;
+  const todaySmallsLaborCost = todaySmallsLaborHours * loadedRate;
   const todayTotalLaborCost = todayTopsLaborCost + todaySmallsLaborCost;
 
   const todayTopsCostPerLb = todayTops > 0 ? todayTopsLaborCost / todayTops : 0;

@@ -95,12 +95,16 @@ export async function handleProductionD1(request, env, ctx) {
       case 'analyzeStrain':
         return await lockCosts(await analyzeStrain(params, env), request, body, env);
       case 'testConfig':
+        requireAuth(request, body, env, 'production-testConfig');
         return await handleTestConfig(env);
       case 'getConfig':
+        requireAuth(request, body, env, 'production-getConfig');
         return await handleGetConfig(params, env);
       case 'setConfig':
+        requireAuth(request, body, env, 'production-setConfig');
         return await handleSetConfig(body, env, request);
       case 'migrate':
+        requireAuth(request, body, env, 'production-migrate');
         return await migrateFromSheets(env);
       case 'checkSheet':
         return await checkSheet(params, env);
