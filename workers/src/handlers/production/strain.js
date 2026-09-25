@@ -4,10 +4,11 @@
 
 import { query } from '../../lib/db.js';
 import { successResponse, errorResponse } from '../../lib/response.js';
-import { TOTAL_LABOR_COST_PER_HOUR, formatDatePT } from '../../lib/production-utils.js';
+import { getLoadedLaborRate, formatDatePT } from '../../lib/production-utils.js';
 
 async function getStrainSummary(env, days = 7, limit = 5) {
   try {
+    const loadedRate = await getLoadedLaborRate(env);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffStr = formatDatePT(cutoffDate, 'yyyy-MM-dd');
@@ -45,8 +46,8 @@ async function getStrainSummary(env, days = 7, limit = 5) {
       const topsLaborHours = trimmerHours + (sharedHours * topsRatio);
       const smallsLaborHours = sharedHours * smallsRatio;
 
-      const topsLaborCost = topsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-      const smallsLaborCost = smallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+      const topsLaborCost = topsLaborHours * loadedRate;
+      const smallsLaborCost = smallsLaborHours * loadedRate;
 
       const topsCostPerLb = r.total_tops > 0 ? topsLaborCost / r.total_tops : 0;
       const smallsCostPerLb = r.total_smalls > 0 ? smallsLaborCost / r.total_smalls : 0;
@@ -80,6 +81,7 @@ async function analyzeStrain(params, env) {
   }
 
   try {
+    const loadedRate = await getLoadedLaborRate(env);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
     const cutoffStr = formatDatePT(cutoffDate, 'yyyy-MM-dd');
@@ -188,8 +190,8 @@ async function analyzeStrain(params, env) {
     const topsLaborHours = totalTrimmerHours + (sharedHours * topsRatio);
     const smallsLaborHours = sharedHours * smallsRatio;
 
-    const topsLaborCost = topsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-    const smallsLaborCost = smallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+    const topsLaborCost = topsLaborHours * loadedRate;
+    const smallsLaborCost = smallsLaborHours * loadedRate;
     const totalLaborCost = topsLaborCost + smallsLaborCost;
 
     const topsCostPerLb = totalTops > 0 ? topsLaborCost / totalTops : 0;
@@ -211,8 +213,8 @@ async function analyzeStrain(params, env) {
         const vSharedHours = v.buckerHours + v.tzeroHours + vWaterspiderHours;
         const vTopsLaborHours = v.trimmerHours + (vSharedHours * vTopsRatio);
         const vSmallsLaborHours = vSharedHours * vSmallsRatio;
-        const vTopsLaborCost = vTopsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
-        const vSmallsLaborCost = vSmallsLaborHours * TOTAL_LABOR_COST_PER_HOUR;
+        const vTopsLaborCost = vTopsLaborHours * loadedRate;
+        const vSmallsLaborCost = vSmallsLaborHours * loadedRate;
         const vTotalLaborCost = vTopsLaborCost + vSmallsLaborCost;
         const vCrewHours = v.trimmerHours + v.buckerHours + v.tzeroHours;
         const vAvgRate = vCrewHours > 0 ? vTotalLbs / vCrewHours : 0;
