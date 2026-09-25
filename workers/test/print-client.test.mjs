@@ -84,7 +84,7 @@ test('the injected snippet is a self-contained expression with no build step', (
  * The home-screen app fit rule (Koa, 2026-09-25). Same discipline: the tests
  * evaluate the shipped source, not a copy of it.
  * ---------------------------------------------------------------------- */
-import { APP_PRINT_FIT_SRC, APP_PRINT_DEFAULT_BOX, makeAppPrintFit, SAFARI_PRINT_SRC, makeSafariPrint } from '../src/lib/print-client.js';
+import { APP_PRINT_FIT_SRC, APP_PRINT_DEFAULT_BOX, makeAppPrintFit, SAFARI_PRINT_SRC, makeSafariPrint, COMPACT_TEXT_SRC, makeCompactText } from '../src/lib/print-client.js';
 
 const fit = makeAppPrintFit();
 
@@ -177,4 +177,40 @@ test('Android and the barn PC keep the full tag', () => {
   assert.equal(safariPrint(UA.androidChrome, 'Linux armv81', 5), false);
   assert.equal(safariPrint(UA.winChrome, 'Win32', 10), false, 'a touchscreen laptop is not an iPad');
   assert.equal(safariPrint('', '', 0), false, 'nothing known means the proven path');
+});
+
+/* -------------------------------------------------------------------------
+ * How the text column is sized inside the compact box (Koa, 2026-09-25,
+ * third report: "it looks better, but the printout is too small"). One
+ * factor for everything left the bag number at 17pt; the number is what is
+ * read across the barn, so it keeps its size and the lines around it give.
+ * ---------------------------------------------------------------------- */
+const compactText = makeCompactText();
+
+test('the compact text rule is a plain ES5 function expression', () => {
+  assert.match(COMPACT_TEXT_SRC.trim(), /^function \(h\) \{[\s\S]*\}$/);
+  assert.doesNotMatch(COMPACT_TEXT_SRC, /=>|\bconst\b|\blet\b/, 'must run on any handset without a build step');
+});
+
+test('in the default 0.9in box the bag number stays near full size and the rest gives', () => {
+  const t = compactText(APP_PRINT_DEFAULT_BOX.h);
+  assert.equal(t.num, 0.95);
+  assert.equal(t.name, 0.65);
+  assert.equal(t.cut, 0.65);
+  assert.equal(t.meta, 0.7);
+});
+
+test('a taller box grows every line back toward the full tag, never past it', () => {
+  const t = compactText(1.2);
+  assert.equal(t.num, 1, 'the number never exceeds its full size');
+  assert.ok(t.name > 0.65 && t.name <= 1);
+  assert.ok(t.cut > 0.65 && t.cut <= 1);
+  assert.ok(t.meta > 0.7 && t.meta <= 1);
+  assert.deepEqual(compactText(2), { name: 1, num: 1, cut: 1, meta: 1 }, 'a full-height box is the full tag');
+});
+
+test('a shorter box shrinks in proportion, and nothing goes below a readable floor', () => {
+  const t = compactText(0.6);
+  assert.ok(t.num < 0.95 && t.name < 0.65);
+  for (const k of ['name', 'num', 'cut', 'meta']) assert.ok(t[k] >= 0.3, k + ' has a floor');
 });

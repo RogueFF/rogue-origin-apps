@@ -66,7 +66,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC } from '../lib/print-client.js';
+import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import {
   IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
@@ -5690,11 +5690,13 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
      QR gives up its two lines rather than pushing the bar off the box. */
   html.app-print .qrwrap:has(.exbar) .qr { width: calc(var(--ph) - 0.34in); height: calc(var(--ph) - 0.34in); }
   html.app-print .exbar { border-width: 1pt; padding: 0.01in 0.03in; }
-  html.app-print .code { margin-top: 0; }
-  html.app-print .bagrow { gap: calc(0.08in * var(--tf)); margin-top: calc(0.02in * var(--tf)); }
-  html.app-print .cutbox { border-width: calc(2pt * var(--tf)); padding: calc(0.03in * var(--tf)) calc(0.06in * var(--tf)); }
-  html.app-print .cutbox .cw { margin-top: calc(0.02in * var(--tf)); }
-  html.app-print .meta { margin-top: calc(0.04in * var(--tf)); }
+  /* The code line folds into the date line in the compact tag (the script
+     moves the text); its 0.2in is what buys the bag number its full size. */
+  html.app-print .code { display: none; }
+  html.app-print .bagrow { gap: calc(0.06in * var(--tf)); margin-top: 0; }
+  html.app-print .cutbox { border-width: calc(2pt * var(--tc)); padding: calc(0.03in * var(--tc)) calc(0.06in * var(--tc)); }
+  html.app-print .cutbox .cw { margin-top: calc(0.02in * var(--tc)); }
+  html.app-print .meta { margin-top: calc(0.02in * var(--tf)); }
 </style></head>
 <body>
 <div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
@@ -5708,23 +5710,60 @@ ${opts.popup || opts.back ? `<button type="button" id="doneBtn" hidden>${ui.lang
   // iOS, Android and the barn PC get null here and print the full 4x2 tag.
   var safariPrint = ${SAFARI_PRINT_SRC};
   var appPrintFit = ${APP_PRINT_FIT_SRC};
+  var compactText = ${COMPACT_TEXT_SRC};
   (function () {
     var q = /[?&]fit=([^&]*)/.exec(window.location.search);
     var compact = safariPrint(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
     var box = appPrintFit(q ? decodeURIComponent(q[1]) : '', ${JSON.stringify(String(opts.appBox || ''))}, compact);
     if (!box) return;
     var root = document.documentElement;
+    var t = compactText(box.h);
     root.style.setProperty('--pw', box.w + 'in');
     root.style.setProperty('--ph', box.h + 'in');
     root.style.setProperty('--tf', String(box.f));
-    // The name and number carry their size inline (it steps with length), so
-    // the stylesheet cannot scale them: read what each is, scale, write back.
-    var els = document.querySelectorAll('.cultivar, .code, .bagno, .cutbox .ord, .cutbox .cw, .meta, .exbar span');
-    for (var i = 0; i < els.length; i++) {
-      var pt = parseFloat(getComputedStyle(els[i]).fontSize) * 0.75 * box.f;
-      els[i].style.fontSize = (Math.round(pt * 4) / 4) + 'pt';
+    root.style.setProperty('--tc', String(t.cut));
+    // Each line has its own factor (COMPACT_TEXT_SRC): the bag number is read
+    // across the barn and keeps its size; the rest gives. The name and number
+    // carry their size inline (it steps with length), so the stylesheet cannot
+    // scale them: read what each is, scale, write back.
+    function scale(sel, f) {
+      var els = document.querySelectorAll(sel);
+      for (var i = 0; i < els.length; i++) {
+        var pt = parseFloat(getComputedStyle(els[i]).fontSize) * 0.75 * f;
+        els[i].style.fontSize = (Math.round(pt * 4) / 4) + 'pt';
+      }
+    }
+    scale('.cultivar', t.name);
+    scale('.bagno', t.num);
+    scale('.cutbox .ord, .cutbox .cw', t.cut);
+    scale('.meta, .exbar span', t.meta);
+    // The code line gives up its row: it leads the date line instead, so the
+    // abbreviation is still on the tag where the full-size layout has it.
+    var labels = document.querySelectorAll('.label');
+    for (var j = 0; j < labels.length; j++) {
+      var code = labels[j].querySelector('.code'), meta = labels[j].querySelector('.meta');
+      if (code && meta && code.textContent) meta.textContent = code.textContent + ' \u00b7 ' + meta.textContent;
     }
     root.className += ' app-print';
+    // Then fit the stack to the box's HEIGHT. The number's inline size is
+    // already fit to the column width (a short "#142" starts near 44pt), so a
+    // factor alone cannot promise the stack fits; and height is the one
+    // overflow that costs a label — it prints on the next one. The number
+    // gives first, down to the cut box beside it, then the name. Width fitting
+    // stays with fitTagText below.
+    var innerPx = (box.h - 0.08) * 96;
+    for (var k = 0; k < labels.length; k++) {
+      var txt = labels[k].querySelector('.txt'), bag = labels[k].querySelector('.bagno');
+      var cb = labels[k].querySelector('.cutbox'), nm = labels[k].querySelector('.cultivar');
+      for (var guard = 0; guard < 200 && txt.getBoundingClientRect().height > innerPx + 0.5; guard++) {
+        var bagPt = parseFloat(getComputedStyle(bag).fontSize) * 0.75;
+        var cbH = cb ? cb.getBoundingClientRect().height : 0;
+        if (bag.getBoundingClientRect().height > cbH + 1 && bagPt > 10) { bag.style.fontSize = (bagPt - 0.5) + 'pt'; continue; }
+        var nmPt = parseFloat(getComputedStyle(nm).fontSize) * 0.75;
+        if (nmPt > 8) { nm.style.fontSize = (nmPt - 0.5) + 'pt'; continue; }
+        break;
+      }
+    }
   })();
 </script>
 ${TAG_FIT_SCRIPT}
