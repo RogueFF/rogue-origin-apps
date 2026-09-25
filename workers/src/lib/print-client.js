@@ -186,3 +186,43 @@ export function makeAppPrintFit() {
   // eslint-disable-next-line no-new-func
   return new Function('return (' + APP_PRINT_FIT_SRC + ');')();
 }
+
+/**
+ * How each line of the text column is scaled inside the compact box.
+ *
+ * Koa, 2026-09-25, after the compact tag printed whole: "it looks better, but
+ * the printout is too small." One factor for every line (the 1.25 x height
+ * ratio above) put the bag number at 17pt. That number is the thing read
+ * across the barn; the cultivar name, the cut box and the date line are read
+ * at arm's length. So the number keeps its size and the lines around it give.
+ *
+ * Budget, at the default 0.9in box (0.82in inside the padding): name 0.65,
+ * number 0.95, cut box 0.65, date line 0.7. The cultivar code loses its own
+ * line and rides at the front of the date line (the page script moves it),
+ * which is the 0.2in that pays for the number. These are ceilings: the page
+ * then shrinks the number, and after it the name, until the stack actually
+ * fits the box's height, because the number's inline size is already fit to
+ * the column width and a short "#142" starts near 44pt.
+ *
+ * Everything scales with the box height so a taller box, set by ?fit= or the
+ * app_print_box setting, grows each line back toward the full tag. Capped at
+ * 1: a compact tag is never larger than the real one. Floored at 0.3: below
+ * that nothing is readable and the box is a typo.
+ *
+ * ES5, injected verbatim, like the rules above.
+ */
+export const COMPACT_TEXT_SRC = `function (h) {
+  var k = (Number(h) - 0.08) / 0.82;
+  function f(base) { return Math.min(1, Math.max(0.3, Math.round(base * k * 1000) / 1000)); }
+  return { name: f(0.65), num: f(0.95), cut: f(0.65), meta: f(0.7) };
+}`;
+
+/**
+ * Build the rule from that exact source, so tests exercise what ships.
+ *
+ * @returns {(h: number) => ({name:number,num:number,cut:number,meta:number})}
+ */
+export function makeCompactText() {
+  // eslint-disable-next-line no-new-func
+  return new Function('return (' + COMPACT_TEXT_SRC + ');')();
+}
