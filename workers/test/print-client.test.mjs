@@ -79,3 +79,58 @@ test('the injected snippet is a self-contained expression with no build step', (
   assert.match(IFRAME_PRINT_UNRELIABLE_SRC, /^function\s*\(/);
   assert.ok(!IFRAME_PRINT_UNRELIABLE_SRC.includes('=>'), 'ES5 only — this ships to whatever the crew carries');
 });
+
+/* -------------------------------------------------------------------------
+ * The home-screen app fit rule (Koa, 2026-09-25). Same discipline: the tests
+ * evaluate the shipped source, not a copy of it.
+ * ---------------------------------------------------------------------- */
+import { APP_PRINT_FIT_SRC, APP_PRINT_DEFAULT_BOX, makeAppPrintFit } from '../src/lib/print-client.js';
+
+const fit = makeAppPrintFit();
+
+test('the app fit source is a plain ES5 function expression', () => {
+  assert.match(APP_PRINT_FIT_SRC.trim(), /^function \(fit, setting, standalone\) \{[\s\S]*\}$/);
+  assert.doesNotMatch(APP_PRINT_FIT_SRC, /=>|\bconst\b|\blet\b/, 'must run on any handset without a build step');
+});
+
+test('Safari, Android and the barn PC keep the full 4x2 tag', () => {
+  assert.equal(fit('', '', false), null);
+  assert.equal(fit('', '', undefined), null, 'navigator.standalone is undefined outside iOS');
+  assert.equal(fit('', '3.2x1', false), null, 'the setting sets the box, it never switches the layout on');
+});
+
+test('the iOS home-screen app gets the compact tag with the default box', () => {
+  const r = fit('', '', true);
+  assert.deepEqual(r, { w: APP_PRINT_DEFAULT_BOX.w, h: APP_PRINT_DEFAULT_BOX.h, f: 0.563 });
+});
+
+test('the text factor keeps the stack inside the box height and never enlarges', () => {
+  assert.equal(fit('3.2x1', '', true).f, 0.625);
+  assert.equal(fit('4x2', '', true).f, 1, 'a full-size box means full-size text, not 125%');
+  assert.equal(fit('1x2', '', true).f, 0.313, 'a narrow box is limited by its width');
+});
+
+test('?fit=full forces the full tag even inside the app', () => {
+  assert.equal(fit('full', '', true), null);
+  assert.equal(fit('FULL', '3x1', true), null);
+});
+
+test('?fit=app and ?fit=WxH force the compact tag, so it can be checked from Safari', () => {
+  assert.deepEqual(fit('app', '', false), fit('', '', true));
+  assert.deepEqual(fit('3.2x1.1', '', false), { w: 3.2, h: 1.1, f: 0.688 });
+  assert.deepEqual(fit(' 3.2 X 1.1 ', '', false), { w: 3.2, h: 1.1, f: 0.688 }, 'spacing and case are forgiven');
+});
+
+test('the URL box wins over the setting, and the setting over the default', () => {
+  assert.equal(fit('3.5x1.2', '3.2x1', true).w, 3.5);
+  assert.equal(fit('', '3.2x1', true).w, 3.2);
+  assert.equal(fit('app', '3.2x1', true).h, 1);
+});
+
+test('a box that could not hold a tag, or exceeds the label, falls back', () => {
+  const dflt = fit('', '', true);
+  assert.deepEqual(fit('', '9x9', true), dflt, 'bigger than the label');
+  assert.deepEqual(fit('', '0.5x0.5', true), dflt, 'too small to read');
+  assert.deepEqual(fit('', 'wide', true), dflt, 'not a size at all');
+  assert.equal(fit('9x9', '', false), null, 'a bad URL box does not force the compact layout on');
+});
