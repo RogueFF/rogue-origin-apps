@@ -67,3 +67,85 @@ export function makeIframePrintUnreliable() {
   // eslint-disable-next-line no-new-func
   return new Function('return (' + IFRAME_PRINT_UNRELIABLE_SRC + ');')();
 }
+
+/* ---------------------------------------------------------------------------
+ * Printing from the iOS home-screen app
+ *
+ * Koa, 2026-09-25: a tag printed from the takedown screen added to an iPhone's
+ * Home Screen came out shrunk to ~80% and split across two labels — the date
+ * line and the bottom of the QR on the second one. The same page printed from
+ * Safari on another iPhone was perfect.
+ *
+ * Safari prints a page WebKit has already laid out on the 4x2 page the label
+ * CSS asks for (`@page { size: 4in 2in; margin: 0 }`). The home-screen app
+ * container does not: it hands the web view to UIKit's print formatter, which
+ * lays the page out inside the printer's reported printable area — about half
+ * an inch in from every edge of the label — and shrinks anything wider to fit.
+ * The 4in tag became ~3in wide and ~1.6in tall in a box ~1in tall, so the
+ * bottom third went onto the next label. Nothing on the page can widen that
+ * box; the only move is to lay the tag out to fit it.
+ *
+ * So when the label page finds itself in the home-screen app (Safari sets
+ * `navigator.standalone` there and nowhere else; Android's Chrome honours
+ * `@page` and must keep the full tag), it re-lays the SAME markup into a
+ * smaller box: QR to the height of the box, the text column scaled to match.
+ * The box is a guess at the printable area, measured off Koa's photo, so it is
+ * tunable without a deploy: `?fit=3.2x1` on the URL for a test print, or the
+ * `app_print_box` row in harvest_settings for every phone.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Printable box the home-screen app is assumed to have on a 4x2 label, in
+ * inches. Measured off the 2026-09-25 photo: the tag was scaled to ~0.8 (so
+ * ~3.2in of usable width) and cut ~1in below where it started. Height is the
+ * one that matters — width overflow only shrinks, height overflow SPLITS — so
+ * it is set a little under the measurement.
+ */
+export const APP_PRINT_DEFAULT_BOX = { w: 3, h: 0.9 };
+
+/**
+ * Source of the browser-side decision, injected into the label page.
+ *
+ * Returns null for the normal 4x2 tag, or `{ w, h, f }`: the box in inches and
+ * the factor to apply to the text column's font sizes. `f` keeps the text stack
+ * (name, code, number+cut, date) inside the box's height: the full-size stack
+ * is ~1.3in tall in a 2in label, hence 1.25 × the height ratio, never above 1.
+ *
+ *   fit      — the URL's ?fit=: 'full' forces the normal tag, 'app' forces the
+ *              compact one, 'WxH' forces it with that box. Anything else defers
+ *              to `standalone`.
+ *   setting  — the app_print_box setting ('WxH' or empty). Only ever sets the
+ *              box; it cannot switch the compact layout on, so a phone in
+ *              Safari is never affected by it.
+ *   standalone — navigator.standalone, true only inside an iOS home-screen app.
+ *
+ * ES5 on purpose, like the predicate above: no build step, any handset.
+ */
+export const APP_PRINT_FIT_SRC = `function (fit, setting, standalone) {
+  function parseBox(s) {
+    var m = /^\\s*(\\d+(?:\\.\\d+)?)\\s*x\\s*(\\d+(?:\\.\\d+)?)\\s*$/i.exec(String(s || ''));
+    if (!m) return null;
+    var w = parseFloat(m[1]), h = parseFloat(m[2]);
+    // A box wider or taller than the label is a typo, and one under an inch
+    // wide or a third of an inch tall could not hold a readable tag.
+    if (!(w >= 1 && w <= 4 && h >= 0.3 && h <= 2)) return null;
+    return { w: w, h: h };
+  }
+  fit = String(fit || '').toLowerCase();
+  if (fit === 'full') return null;
+  var urlBox = parseBox(fit);
+  if (fit !== 'app' && !urlBox && standalone !== true) return null;
+  var box = urlBox || parseBox(setting) || { w: ${APP_PRINT_DEFAULT_BOX.w}, h: ${APP_PRINT_DEFAULT_BOX.h} };
+  var f = Math.min(1, 1.25 * Math.min(box.h / 2, box.w / 4));
+  return { w: box.w, h: box.h, f: Math.round(f * 1000) / 1000 };
+}`;
+
+/**
+ * Build the fit function from that exact source, so tests exercise what ships.
+ *
+ * @returns {(fit?: string, setting?: string, standalone?: boolean) => ({w:number,h:number,f:number}|null)}
+ */
+export function makeAppPrintFit() {
+  // eslint-disable-next-line no-new-func
+  return new Function('return (' + APP_PRINT_FIT_SRC + ');')();
+}

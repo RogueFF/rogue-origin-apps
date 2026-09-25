@@ -66,7 +66,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
+import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import {
   IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
@@ -2110,9 +2110,19 @@ async function handleSackLabel(ui, db, env, params) {
   // where a hidden iframe cannot print (WebKit scopes window.print() to the top
   // document). It closes itself once printing is done so the crew lands back on
   // the takedown screen instead of piling up tabs, one per sack, all day.
+  // ?back=1 — reached by navigation from the takedown screen running as an
+  // iOS home-screen app, where there is no tab to open or close. The page
+  // offers a way back instead of closing itself.
+  //
+  // app_print_box — the printable box the home-screen app is assumed to have,
+  // 'WxH' in inches, for every phone at once (see print-client.js). Read here
+  // so a wrong guess is one D1 row rather than a deploy. Absent means default.
+  const boxRow = await queryOne(db, `SELECT value FROM harvest_settings WHERE key = 'app_print_box'`);
   return renderLabelSheet(ui, sacks, null, {
     autoPrint: params.preview !== '1',
     popup: String(params.popup || '') === '1',
+    back: String(params.back || '') === '1',
+    appBox: boxRow ? String(boxRow.value || '') : '',
   });
 }
 
@@ -5117,6 +5127,14 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   function print(ids, via) {
     if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
     var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    if (window.navigator.standalone === true) {
+      // Running as an iOS home-screen app (Koa, 2026-09-25). There are no tabs
+      // in there: window.open either fails or lands in a view with no way
+      // back. Go to the label page in place; it lays the tag out for the app's
+      // print path and offers history.back() to return here for the next bag.
+      window.location.href = url + '&back=1';
+      return;
+    }
     if (topLevelPrint) {
       // A separate tab, so window.print() runs at top level where WebKit will
       // honour it. Opened from the button's own click handler, so it counts as
@@ -5655,12 +5673,56 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
     .label:last-child, .page:last-child { page-break-after: auto; }
     .page .label { page-break-after: auto; }
   }
+  /* THE iOS HOME-SCREEN APP (Koa, 2026-09-25). Its print path ignores @page
+     and lays the tag out inside the printer's printable area, ~0.5in in from
+     every edge, shrinking to fit the width and SPLITTING on the height: the
+     date and the bottom of the QR came out on the next label. Nothing here can
+     widen that area, so the same markup is laid out to fit inside it instead.
+     --pw/--ph are the box, --tf the text factor; the script below sets them
+     (see APP_PRINT_FIT_SRC in print-client.js for the rule and the tuning).
+     The QR takes the box's full height; the text column scales to match. */
+  html.app-print .label { width: var(--pw); height: var(--ph); padding: 0.04in 0.06in; gap: 0.06in; }
+  html.app-print .qr { width: calc(var(--ph) - 0.08in); height: calc(var(--ph) - 0.08in); }
+  html.app-print .qrwrap { gap: 0.02in; }
+  /* Specimen tags only: the EJEMPLO/EXAMPLE bar shares the QR's column, so the
+     QR gives up its two lines rather than pushing the bar off the box. */
+  html.app-print .qrwrap:has(.exbar) .qr { width: calc(var(--ph) - 0.34in); height: calc(var(--ph) - 0.34in); }
+  html.app-print .exbar { border-width: 1pt; padding: 0.01in 0.03in; }
+  html.app-print .code { margin-top: 0; }
+  html.app-print .bagrow { gap: calc(0.08in * var(--tf)); margin-top: calc(0.02in * var(--tf)); }
+  html.app-print .cutbox { border-width: calc(2pt * var(--tf)); padding: calc(0.03in * var(--tf)) calc(0.06in * var(--tf)); }
+  html.app-print .cutbox .cw { margin-top: calc(0.02in * var(--tf)); }
+  html.app-print .meta { margin-top: calc(0.04in * var(--tf)); }
 </style></head>
 <body>
 <div class="toolbar"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a>${sacks.length} · ${backLink} · <a href="javascript:window.print()">${ui.t('printTag')}</a></div>
 ${opts.banner || ''}
 ${labels}
-${opts.popup ? `<button type="button" id="doneBtn" hidden>${ui.lang === 'es' ? '← Volver e imprimir la siguiente' : '← Back for the next tag'}</button>` : ''}
+${opts.popup || opts.back ? `<button type="button" id="doneBtn" hidden>${ui.lang === 'es' ? '← Volver e imprimir la siguiente' : '← Back for the next tag'}</button>` : ''}
+<script>
+  // Home-screen app on iOS: lay the tag out to fit the box its print path
+  // leaves us (see the html.app-print rules above). Runs BEFORE the fit script
+  // so the width check below sees the scaled sizes. Safari, Android and the
+  // barn PC get null here and print the full 4x2 tag as before.
+  var appPrintFit = ${APP_PRINT_FIT_SRC};
+  (function () {
+    var q = /[?&]fit=([^&]*)/.exec(window.location.search);
+    var box = appPrintFit(q ? decodeURIComponent(q[1]) : '', ${JSON.stringify(String(opts.appBox || ''))}, window.navigator.standalone);
+    if (!box) return;
+    var root = document.documentElement;
+    root.style.setProperty('--pw', box.w + 'in');
+    root.style.setProperty('--ph', box.h + 'in');
+    root.style.setProperty('--tf', String(box.f));
+    // The name and number carry their size inline (it steps with length), so
+    // the stylesheet cannot scale them: read what each is, scale, write back.
+    var els = document.querySelectorAll('.cultivar, .code, .bagno, .cutbox .ord, .cutbox .cw, .meta, .exbar span');
+    for (var i = 0; i < els.length; i++) {
+      var pt = parseFloat(getComputedStyle(els[i]).fontSize) * 0.75 * box.f;
+      els[i].style.fontSize = (Math.round(pt * 4) / 4) + 'pt';
+    }
+    root.className += ' app-print';
+  })();
+</script>
 ${TAG_FIT_SCRIPT}
 ${autoPrint ? `<script>
   // Wait for QR images before printing — printing early yields blank squares.
@@ -5674,15 +5736,23 @@ ${autoPrint ? `<script>
       img.addEventListener('error', function () { if (--left === 0) window.print(); });
     });
   })();
-</script>` : ''}${opts.popup ? `<script>
+</script>` : ''}${opts.popup || opts.back ? `<script>
   // Opened as a print tab by the takedown screen. Get the crew back to that
   // screen without making them close a tab per sack (Koa, 2026-09-21: "when i
   // want to print the next tag, i have to close back and go to the previous
   // page"). A script-opened window may close itself, which is why this only
   // ever runs with popup=1.
+  //
+  // back=1 is the home-screen app, which navigated here instead: there is no
+  // tab to close, so "done" is history.back() to the takedown screen, and the
+  // button is the same way back if afterprint never fires.
   (function () {
     var closed = false;
+    var goBack = ${opts.back ? 'true' : 'false'};
     function done() {
+      // Never latched in the app: if the first back() went nowhere (the label
+      // page was opened cold, nothing behind it), the button must still try.
+      if (goBack) { window.history.back(); return; }
       if (closed) return;
       closed = true;
       window.close();
