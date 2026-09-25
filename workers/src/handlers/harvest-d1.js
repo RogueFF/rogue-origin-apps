@@ -66,7 +66,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC } from '../lib/print-client.js';
+import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import {
   IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
@@ -5673,13 +5673,15 @@ function renderLabelSheet(ui, sacks, printCtx, opts = {}) {
     .label:last-child, .page:last-child { page-break-after: auto; }
     .page .label { page-break-after: auto; }
   }
-  /* THE iOS HOME-SCREEN APP (Koa, 2026-09-25). Its print path ignores @page
-     and lays the tag out inside the printer's printable area, ~0.5in in from
-     every edge, shrinking to fit the width and SPLITTING on the height: the
-     date and the bottom of the QR came out on the next label. Nothing here can
-     widen that area, so the same markup is laid out to fit inside it instead.
-     --pw/--ph are the box, --tf the text factor; the script below sets them
-     (see APP_PRINT_FIT_SRC in print-client.js for the rule and the tuning).
+  /* SAFARI ON iOS (Koa, 2026-09-25: "it works in Chrome but not Safari"; the
+     home-screen app is Safari's print path too). Safari ignores @page and lays
+     the tag out inside the printer's printable area, ~0.5in in from every
+     edge, shrinking to fit the width and SPLITTING on the height: the date and
+     the bottom of the QR came out on the next label. Chrome on iOS lands the
+     4x2 page 1:1. Nothing here can widen Safari's box, so the same markup is
+     laid out to fit inside it instead. --pw/--ph are the box, --tf the text
+     factor; the script below sets them (see SAFARI_PRINT_SRC and
+     APP_PRINT_FIT_SRC in print-client.js for the rule and the tuning).
      The QR takes the box's full height; the text column scales to match. */
   html.app-print .label { width: var(--pw); height: var(--ph); padding: 0.04in 0.06in; gap: 0.06in; }
   html.app-print .qr { width: calc(var(--ph) - 0.08in); height: calc(var(--ph) - 0.08in); }
@@ -5700,14 +5702,16 @@ ${opts.banner || ''}
 ${labels}
 ${opts.popup || opts.back ? `<button type="button" id="doneBtn" hidden>${ui.lang === 'es' ? '← Volver e imprimir la siguiente' : '← Back for the next tag'}</button>` : ''}
 <script>
-  // Home-screen app on iOS: lay the tag out to fit the box its print path
-  // leaves us (see the html.app-print rules above). Runs BEFORE the fit script
-  // so the width check below sees the scaled sizes. Safari, Android and the
-  // barn PC get null here and print the full 4x2 tag as before.
+  // Safari on iOS (and the home-screen app): lay the tag out to fit the box
+  // its print path leaves us (see the html.app-print rules above). Runs BEFORE
+  // the fit script so the width check below sees the scaled sizes. Chrome on
+  // iOS, Android and the barn PC get null here and print the full 4x2 tag.
+  var safariPrint = ${SAFARI_PRINT_SRC};
   var appPrintFit = ${APP_PRINT_FIT_SRC};
   (function () {
     var q = /[?&]fit=([^&]*)/.exec(window.location.search);
-    var box = appPrintFit(q ? decodeURIComponent(q[1]) : '', ${JSON.stringify(String(opts.appBox || ''))}, window.navigator.standalone);
+    var compact = safariPrint(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+    var box = appPrintFit(q ? decodeURIComponent(q[1]) : '', ${JSON.stringify(String(opts.appBox || ''))}, compact);
     if (!box) return;
     var root = document.documentElement;
     root.style.setProperty('--pw', box.w + 'in');
