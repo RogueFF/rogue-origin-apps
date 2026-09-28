@@ -50,6 +50,10 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .notice{background:#f8edcf;color:#77511a;border-color:#d7b574}
 .harvest-screen .flash{background:#e8efdd;color:#365b36;border-color:#abc093}
 .harvest-screen .finishrow{background:#fff;border-color:#d9dfd1;align-items:center;flex-wrap:wrap}
+.harvest-screen form.finishrow.done{background:#f3f5ef;color:#263f32}
+.harvest-screen .tagrow{background:#fff;color:#263f32;border-color:#d9dfd1}
+.harvest-screen .tagrow.voided{background:#f3f5ef;opacity:.75}
+.harvest-screen .tagrow .tagwhen{color:#60715d}
 .harvest-screen .footer{padding-top:22px;border-top:1px solid #d9dfd1;font-size:14px;line-height:2}
 .harvest-screen .footer a{color:#42623e;display:inline-block;min-height:44px;padding:4px 0}
 .harvest-screen .cvgrid a{background:white;color:#304e3c;border:1px solid #d4ddcb;text-align:left}
