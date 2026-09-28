@@ -505,6 +505,14 @@ let testFlagCache = { at: 0, value: null };
 const TEST_FLAG_TTL_MS = 5000;
 
 async function withSettings(env) {
+  // A PREVIEW build — uploaded with `wrangler versions upload --var
+  // HARVEST_FORCE_TEST:true`, reached on its own preview URL while the live
+  // worker keeps serving the floor — is pinned to test mode whatever the
+  // farm's switch says, and posts nothing to Telegram. The shared switch lives
+  // in the same database the live worker reads, so trying a new build on real
+  // phones must neither obey it (and write real rows) nor move it (see
+  // handleTestMode), nor post into the floor's chat. Koa, 2026-09-28.
+  if (isPreviewBuild(env)) return { ...env, HARVEST_TEST_MODE: 'true', TELEGRAM_TEST_CHAT_ID: '' };
   if (!env?.DB) return env;
   const now = Date.now();
   if (now - testFlagCache.at > TEST_FLAG_TTL_MS) {
@@ -515,6 +523,10 @@ async function withSettings(env) {
   }
   if (testFlagCache.value === null) return env;
   return { ...env, HARVEST_TEST_MODE: testFlagCache.value === 'true' ? 'true' : 'false' };
+}
+
+function isPreviewBuild(env) {
+  return env?.HARVEST_FORCE_TEST === 'true';
 }
 
 /** Flip it, and let the next request on every isolate see the change. */
@@ -2213,6 +2225,11 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 async function handleTestMode(request, db, env, body) {
   requireAuth(request, body, env, 'harvest-test-mode');
   if (request.method === 'POST' && body.on !== undefined) {
+    if (isPreviewBuild(env)) {
+      // The switch is shared with the live worker: flipping it from a preview
+      // would change what the floor is recording.
+      throw createError('VALIDATION_ERROR', 'This is a preview build: it is always in test mode, and cannot change the farm switch.');
+    }
     const on = body.on === true || body.on === 'true' || body.on === 1 || body.on === '1';
     await setTestMode(db, on, 'dashboard');
     return successResponse({ success: true, test_mode: on, source: 'setting' });
