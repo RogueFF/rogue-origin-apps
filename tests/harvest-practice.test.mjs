@@ -46,7 +46,7 @@ test('practice never accesses bindings or sets production cookies', async () => 
   assert.equal(/localStorage|sessionStorage|indexedDB|fetch\(|XMLHttpRequest|sendBeacon/.test(html), false);
 });
 
-test('full practice workflow is temporary, crew-specific and makes no API calls', async () => {
+test('full practice workflow is temporary, one open lot at a time, and makes no API calls', async () => {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({viewport:{width:390,height:844}});
@@ -59,17 +59,16 @@ test('full practice workflow is temporary, crew-specific and makes no API calls'
     });
     await page.goto('https://practice.test/api/harvest?action=practice');
     await page.locator('#scan').click();
-    await page.locator('#crew').selectOption('B');
+    // One crew (2026-09-28): scanning the next zone moves the one open lot.
+    assert.equal(await page.locator('#crew').count(), 0, 'there is no crew to choose');
     await page.locator('#zone').selectOption('Z8');
     await page.locator('#scan').click();
     await page.locator('[data-step="1"]').click();
     assert.match(await page.locator('.practice-receipt').textContent(), /Z8/);
-    await page.locator('#crew').selectOption('A');
-    assert.match(await page.locator('.practice-receipt').textContent(), /Z4/);
     await page.locator('#load').click();
     await page.locator('#bins').fill('10');
     await page.locator('#load').click();
-    assert.equal(await page.locator('#bins').inputValue(),'22');
+    assert.equal(await page.locator('#bins').inputValue(),'24', 'a full trailer is 24 bins');
     await page.locator('[data-step="2"]').click();
     await page.locator('#end').click();
     await page.locator('[data-step="3"]').click();
@@ -82,14 +81,14 @@ test('full practice workflow is temporary, crew-specific and makes no API calls'
     await page.locator('#move-save').click();
     await page.locator('#open').click();
     await page.locator('[data-step="5"]').click();
-    assert.match(await page.locator('#practice-app').textContent(), /2 trailers · 32 bins/);
+    assert.match(await page.locator('#practice-app').textContent(), /2 trailers · 34 bins/);
     assert.match(await page.locator('#practice-app').textContent(), /2 valid tags · 1 opened sacks/);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.locator('#reset').click();
     await page.locator('[data-step="5"]').click();
     assert.match(await page.locator('#practice-app').textContent(), /0 trailers · 0 bins/);
     await page.reload();
-    assert.equal(await page.locator('[aria-current=step]').textContent(),'1 · Crew & field');
+    assert.equal(await page.locator('[aria-current=step]').textContent(),'1 · Field');
     assert.deepEqual(errors,[]);
     assert.equal(requests.filter(([method,url])=>method!=='GET'||!url.includes('action=practice')).length,0);
   } finally { await browser.close(); }
