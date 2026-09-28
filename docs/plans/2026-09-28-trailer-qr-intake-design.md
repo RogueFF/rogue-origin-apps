@@ -52,6 +52,16 @@ drivers logging their own loads instead of the waterspider.
   trailer to the lot it was cut in.
 - **Both sides at once:** same lot, different bays. Nothing special.
 
+### Added after review
+- The repeat guard is part of the INSERT (`INSERT ... SELECT ... WHERE NOT EXISTS`),
+  so two posts in flight together cannot both pass it.
+- Logging answers with a 303 to a GET receipt (`?action=trailer_done&id=`), so a
+  reload or back button never re-posts a load.
+- An OPEN lot is always eligible, however long ago it opened (a weekend with no
+  End of day scan must not lock trailers out). Closed lots keep the 3-day window.
+- A trailer's first load gets no bay ticked, rather than another trailer's.
+- `/t/<n>` accepts exactly `1`-`6` (or `T3`): `/t/1abc` and `/t/03` are refused.
+
 ### Kept
 - `/b/1`, `/b/2` barn door pages stay as a fallback (torn decal, dead phone),
   without the crew label, using the same one-lot attribution.

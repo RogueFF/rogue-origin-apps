@@ -86,7 +86,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .choice:has(input:checked){border-color:#304e3c;background:#edf1e4}
 .harvest-screen .partial{margin-top:14px}
 .harvest-screen #intakeActive{margin-bottom:14px;font-size:17px;font-weight:600}
-.harvest-screen #followCrew{font-size:14px;min-height:44px}
+.harvest-screen #followOpen{font-size:14px;min-height:44px}
 .harvest-screen .reconcile-table{overflow:auto}.harvest-screen table{border-collapse:collapse;width:100%;font-size:15px;white-space:nowrap}
 .harvest-screen td,.harvest-screen th{text-align:left;padding:15px 12px;border-bottom:1px solid #d7dfcd}
 .harvest-screen th{font-size:12px;color:#60715d}

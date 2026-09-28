@@ -203,7 +203,10 @@ const trailerName = (n) => `T${n}`;
 const TRAILER_REPEAT_MS = 5 * 60 * 1000;   // Koa, 2026-09-28
 
 function parseTrailer(raw) {
-  const n = parseInt(String(raw ?? '').replace(/^t/i, ''), 10);
+  // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
+  // a mangled QR would still log — to a trailer nobody chose.
+  const m = String(raw ?? '').trim().match(/^t?([1-9]\d?)$/i);
+  const n = m ? Number(m[1]) : NaN;
   return TRAILERS.includes(n) ? n : null;
 }
 
@@ -212,7 +215,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -264,6 +267,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
         case 'trailer_log':
           return await handleTrailerLog(ui, db, env, ctx, body);
+        case 'trailer_done':
+          return await handleTrailerDone(ui, db, env, params);
         case 'harvest_dash':
           // The shell only. It ships zero harvest data and fetches everything
           // after the operator types the password, the same way the lot board
@@ -623,25 +628,20 @@ async function getLastStorage(db, isTest) {
  * routinely different bays — one crew is hanging bay 9 while the other is
  * pulling bay 3.
  *
- * Scoped to THIS TRAILER first. A trailer runs a loop to one side of the barn,
- * so its own last bay is the best guess, and the two sides filling different
- * bays at once no longer hand each other the wrong default all day. Falls back
- * to the last bay anyone filled: a trailer's first load, or the door page.
+ * With a trailer, ONLY that trailer's own loads. A trailer runs a loop to one
+ * side of the barn, so its own last bay is the best guess — and another
+ * trailer's bay is quite likely the other side, so a trailer's first load gets
+ * no default at all rather than a borrowed one. A wrong bay cannot be put right
+ * afterwards; a blank one is a tap. Without a trailer (the door page): the last
+ * bay anyone filled.
  */
 async function getLastFilledBay(db, isTest, trailer = null) {
-  if (trailer) {
-    const mine = await queryOne(db, `
-      SELECT bay, occurred_at FROM harvest_scan_log
-      WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ? AND trailer = ?
-      ORDER BY occurred_at DESC, id DESC LIMIT 1
-    `, [isTest, trailer]);
-    if (mine) return mine;
-  }
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
     WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
+      ${trailer ? 'AND trailer = ?' : ''}
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest]);
+  `, trailer ? [isTest, trailer] : [isTest]);
 }
 
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
@@ -1123,10 +1123,12 @@ async function pickedLot(ui, db, isTest, raw, zone = null) {
   if (!value) return null;
   const id = parseInt(value, 10);
   if (!Number.isInteger(id) || id <= 0) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
+  // An OPEN lot is always eligible: it is being cut now, however long ago it
+  // opened — a weekend with no End of day scan must not lock every trailer out.
   const lot = await queryOne(db, `
     SELECT * FROM harvest_scan_log
     WHERE id = ? AND event_type = 'enter' AND is_test = ? ${zone ? 'AND zone = ?' : ''}
-      AND julianday('now') - julianday(occurred_at) <= ?
+      AND (closed_at IS NULL OR julianday('now') - julianday(occurred_at) <= ?)
   `, zone ? [id, isTest, zone, LOT_AT_DOOR_DAYS] : [id, isTest, LOT_AT_DOOR_DAYS]);
   if (!lot) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
   return lot;
@@ -1187,26 +1189,51 @@ async function attributeForZone(db, isTest, zone) {
 }
 
 /**
+ * Which load of its Pacific day, for its zone, a load is: "Carga #3 hoy".
+ * Counted up to the load itself, so a receipt re-opened later still says 3.
+ *
+ * Pacific, not UTC: "#3 today" used to reset at 5pm Pacific, mid-afternoon,
+ * while trailers were still arriving.
+ */
+async function loadNumberFor(db, isTest, zone, occurredAt, id) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificDay(occurredAt));
+  const r = await queryOne(db, `
+    SELECT COUNT(*) as n FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND zone = ? AND id <= ?
+      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
+  `, [zone, id, dayStart, dayEnd, isTest]);
+  return (r?.n) || 1;
+}
+
+/**
  * Write one barn load and announce it. Both entry points end here, so the
  * ledger, the rack board and the Telegram feed cannot disagree about what a
- * load is. Returns the load's number today for its zone.
+ * load is. Returns { id, loadNumber }.
+ *
+ * `guard` makes the trailer repeat check part of the INSERT itself: two posts
+ * in flight together (a second phone on the same decal, a retry) cannot both
+ * pass a check that ran before either wrote. Returns null when the guard
+ * refused — nothing was written.
  */
-async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = null, isTest, cutNote }) {
-  await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, session ? session.id : null, bay, trailer, isTest]);
+async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = null, isTest, cutNote, guard = false }) {
+  const values = [zone, getSeason(), bins, session ? session.id : null, bay, trailer, isTest];
+  const columns = 'event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test';
+  const res = guard && trailer
+    ? await execute(db, `
+        INSERT INTO harvest_scan_log (${columns})
+        SELECT 'barn_load', ?, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM harvest_scan_log
+          WHERE event_type = 'barn_load' AND trailer = ? AND is_test = ?
+            AND occurred_at > datetime('now', ?))
+      `, [...values, trailer, isTest, `-${Math.round(TRAILER_REPEAT_MS / 1000)} seconds`])
+    : await execute(db, `
+        INSERT INTO harvest_scan_log (${columns})
+        VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
+      `, values);
+  if (!res.changes) return null;
 
-  // "Carga #3 hoy" used to reset at 5pm Pacific, mid-afternoon, while trailers
-  // were still arriving — the crew would have seen this one long before anyone
-  // read a dashboard.
-  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
-  const todayCount = await queryOne(db, `
-    SELECT COUNT(*) as n FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND zone = ?
-      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
-  `, [zone, dayStart, dayEnd, isTest]);
-  const loadNumber = (todayCount?.n) || 1;
+  const loadNumber = await loadNumberFor(db, isTest, zone, new Date(), res.lastRowId);
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
@@ -1214,7 +1241,7 @@ async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = nu
       + `${bay ? ` · bay ${bay}` : ''}. Load #${loadNumber} today for this zone.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return loadNumber;
+  return { id: res.lastRowId, loadNumber };
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -1252,7 +1279,7 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
     ? `cut ${session.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
       + `${viaSwitch ? `, ${viaSwitch.from || '?'} (cultivar just changed)` : ''}`
     : 'no active session for this zone';
-  const loadNumber = await recordLoad(db, env, ctx, { zone, bins, session, bay, isTest, cutNote });
+  const { loadNumber } = await recordLoad(db, env, ctx, { zone, bins, session, bay, isTest, cutNote });
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
     chosen: picked ? `${picked.zone} · ${picked.cultivar || '?'} · ${translate(ui.lang, 'cut', { n: picked.cut_number ?? '?' })}` : null,
@@ -1346,21 +1373,43 @@ async function handleTrailerLog(ui, db, env, ctx, body) {
     bins = n;
   }
 
-  if (!truthy(body.again) && await getRecentTrailerLoad(db, isTest, trailer)) {
-    // Nothing written. The screen comes back with the warning and the
-    // driver's own choices, and one more tap logs it if it really is another.
-    return trailerFormPage(ui, db, env, trailer, { lot: lot.id, bay, partial });
-  }
-
   const proposal = await proposeLot(db, isTest);
   const asProposed = !!(proposal.lot && proposal.lot.id === lot.id);
   const cutNote = `cut ${lot.cut_number}${asProposed ? (proposal.viaGrace ? ', just-closed lot' : '') : ', chosen by driver'}`;
-  const loadNumber = await recordLoad(db, env, ctx, {
-    zone: lot.zone, bins, session: lot, bay, trailer, isTest, cutNote,
+  const saved = await recordLoad(db, env, ctx, {
+    zone: lot.zone, bins, session: lot, bay, trailer, isTest, cutNote, guard: !truthy(body.again),
   });
+  if (!saved) {
+    // Nothing written: this trailer was logged inside the last five minutes.
+    // The screen comes back with the warning and the driver's own choices, and
+    // one more tap logs it if it really is another load.
+    return trailerFormPage(ui, db, env, trailer, { lot: lot.id, bay, partial });
+  }
 
-  return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`,
-    trailerLoggedBody(ui, { trailer, lot, bins, bay, loadNumber }));
+  // Post/Redirect/Get. The receipt is its own GET, so a reload or a back
+  // button re-shows it instead of re-posting the load — which, after the five
+  // minutes, the guard would let through as a second trailer.
+  return new Response(null, { status: 303, headers: {
+    Location: `${API}?action=trailer_done&id=${saved.id}&lang=${ui.lang}`,
+  } });
+}
+
+/** GET receipt for a trailer load, the target of handleTrailerLog's redirect. */
+async function handleTrailerDone(ui, db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const id = parseInt(params.id, 10);
+  const row = Number.isInteger(id) && id > 0 ? await queryOne(db, `
+    SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut
+    FROM harvest_scan_log l
+    JOIN harvest_scan_log s ON s.id = l.attributed_zone_session_id
+    WHERE l.id = ? AND l.event_type = 'barn_load' AND l.trailer IS NOT NULL AND l.is_test = ?
+  `, [id, isTest]) : null;
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const loadNumber = await loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id);
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerLoggedBody(ui, {
+    trailer: row.trailer, bins: row.bins, bay: row.bay, loadNumber,
+    lot: { zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut },
+  }));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -3032,7 +3081,7 @@ async function getRecentEnterSessions(db, isTest, days = LOT_AT_DOOR_DAYS) {
   return await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND is_test = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
+      AND (closed_at IS NULL OR julianday('now') - julianday(occurred_at) <= ?)
     ORDER BY occurred_at DESC, id DESC LIMIT 40
   `, [isTest, days]);
 }
