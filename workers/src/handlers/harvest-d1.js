@@ -4084,7 +4084,10 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .status strong { font-size: 1.25rem; }
   .last { color: #cfe3d6; margin-top: 6px; }
   .lastActions { margin-top: 10px; display: flex; gap: 10px; }
-  .taglist summary { font-size: 1.05rem; }
+  /* A real button, not a grey line: a collapsed section is exactly where
+     Reopen went unfound (Koa, 2026-09-28). Closed so PRINT TAG stays on top. */
+  .batch.taglist > summary { font-size: 1.05rem; font-weight: 600; padding: 14px 16px; border-radius: 10px;
+                       background: #edf1e4; color: #304e3c; border: 1px solid #c2cdb8; }
   .tagrows { display: grid; gap: 8px; margin-top: 8px; }
   .tagrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
             padding: 10px 12px; background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; color: #f4f1e8; }
