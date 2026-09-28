@@ -30,13 +30,21 @@ const worker = (await import(modUrl('workers/src/index.js'))).default;
 const scanTrailer = (env, ctx, n, lang = 'en') => quiet(() => handleTrailerScan(
   new Request(`https://x/t/${n}${lang ? `?lang=${lang}` : ''}`), env, ctx));
 
-const logTrailer = (env, ctx, fields) => quiet(() => handleHarvestD1(
+/** The raw POST, redirect and all. */
+const postTrailer = (env, ctx, fields) => quiet(() => handleHarvestD1(
   new Request('https://x/api/harvest?action=trailer_log&lang=en', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(Object.fromEntries(
       Object.entries(fields).map(([k, v]) => [k, String(v)]))),
   }), env, ctx));
+
+/** What the driver's phone ends up showing: the POST, with its 303 followed. */
+const logTrailer = async (env, ctx, fields) => {
+  const res = await postTrailer(env, ctx, fields);
+  if (res.status !== 303) return res;
+  return quiet(() => handleHarvestD1(new Request(`https://x${res.headers.get('location')}`), env, ctx));
+};
 
 const scanZone = (env, ctx, zone) => quiet(() => handleZoneScan(
   new Request(`https://x/z/${zone}?lang=en`), env, ctx));
@@ -86,7 +94,7 @@ test('it is Spanish by default, in the crew\'s own words', async () => {
 
 test('an unknown trailer is refused, not guessed at', async () => {
   const { env, ctx } = freshDb();
-  for (const n of ['7', '0', 'abc']) {
+  for (const n of ['7', '0', 'abc', '1abc', '2/x', '03']) {
     const res = await scanTrailer(env, ctx, n);
     assert.ok(res.status >= 400, `/t/${n}`);
   }
@@ -242,8 +250,19 @@ test('the bay default is this trailer\'s own last bay', async () => {
 
   assert.equal(checkedBay(await (await scanTrailer(env, ctx, 3)).text()), '9');
   assert.equal(checkedBay(await (await scanTrailer(env, ctx, 4)).text()), '3');
-  // A trailer with no history borrows the last bay anyone filled.
-  assert.equal(checkedBay(await (await scanTrailer(env, ctx, 5)).text()), '3');
+});
+
+test('a trailer\'s first load has no bay ticked, rather than another trailer\'s', async () => {
+  // Another trailer's bay is quite likely the other side of the barn, and a
+  // wrong bay cannot be put right afterwards. A blank one is a tap.
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  await logTrailer(env, ctx, { trailer: 2, lot: z4, bay: 9 });
+
+  const html = await (await scanTrailer(env, ctx, 5)).text();
+  assert.equal(checkedBay(html), null);
+  assert.match(html, /Tap the bay it is hung in/);
+  assert.doesNotMatch(html, /This trailer went to/);
 });
 
 test('a bay from an earlier day is named, not ticked', async () => {
@@ -257,7 +276,63 @@ test('a bay from an earlier day is named, not ticked', async () => {
   assert.match(html, /9 was a different day/);
 });
 
+test('a lot left open over a weekend still takes the trailer', async () => {
+  // Nobody scanned End of day on Friday. The lot is still the open one on
+  // Tuesday; refusing it would lock every trailer out until someone rescans.
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 4) });
+  const html = await (await scanTrailer(env, ctx, 1)).text();
+  assert.equal(checkedLot(html), String(z4));
+
+  const res = await logTrailer(env, ctx, { trailer: 1, lot: z4, bay: 5 });
+  assert.equal(res.status, 200);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, z4);
+});
+
+// --- the receipt -----------------------------------------------------------------
+
+test('logging answers with a redirect to a receipt, so a reload cannot log it twice', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter' });
+  const res = await postTrailer(env, ctx, { trailer: 3, lot: z4, bay: 9 });
+  assert.equal(res.status, 303);
+  const location = res.headers.get('location');
+  assert.match(location, /^\/api\/harvest\?action=trailer_done&id=\d+&lang=en$/, 'absolute path, like every other action');
+
+  for (let i = 0; i < 3; i++) {
+    const receipt = await quiet(() => handleHarvestD1(new Request(`https://x${location}`), env, ctx));
+    assert.equal(receipt.status, 200);
+    const html = await receipt.text();
+    assert.match(html, /T3: 24 bins logged/);
+    assert.match(html, /Load #1 today for Z4/, 'the number is the load\'s own, not a recount');
+  }
+  assert.equal(loads(sqlite).length, 1, 're-opening the receipt writes nothing');
+});
+
+test('a receipt for something that is not a trailer load is refused', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  for (const id of [z4, 99999, 'abc']) {
+    const res = await quiet(() => handleHarvestD1(
+      new Request(`https://x/api/harvest?action=trailer_done&id=${id}&lang=en`), env, ctx));
+    assert.ok(res.status >= 400, `id ${id}`);
+  }
+});
+
 // --- the repeat guard ------------------------------------------------------------
+
+test('two posts at the same moment write one load, not two', async () => {
+  // A second phone on the same decal, or a retry. A check that ran before
+  // either wrote would let both through; the guard is part of the INSERT.
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  const [a, b] = await Promise.all([
+    postTrailer(env, ctx, { trailer: 3, lot: z4, bay: 9 }),
+    postTrailer(env, ctx, { trailer: 3, lot: z4, bay: 9 }),
+  ]);
+  assert.equal(loads(sqlite).length, 1);
+  assert.deepEqual([a.status, b.status].sort(), [200, 303], 'one logged, one shown the warning');
+});
 
 test('a second scan of the same trailer inside five minutes asks before logging', async () => {
   const { sqlite, env, ctx } = freshDb();
