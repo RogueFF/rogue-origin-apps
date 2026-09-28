@@ -85,6 +85,13 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .choice input{width:24px;height:24px;margin:0;flex:none}
 .harvest-screen .choice:has(input:checked){border-color:#304e3c;background:#edf1e4}
 .harvest-screen .partial{margin-top:14px}
+.harvest-screen .baybig{font-size:44px;font-weight:800;line-height:1.1;color:#304e3c;margin-top:6px}
+.harvest-screen .fixload{margin:18px 0 6px}
+.harvest-screen .fixload>summary{display:block;min-height:52px;padding:14px 16px;border:2px solid #c5d1b9;border-radius:12px;background:#fff;color:#304e3c;font-weight:700;cursor:pointer;list-style:none}
+.harvest-screen .fixload>summary::-webkit-details-marker{display:none}
+.harvest-screen .fixload[open]>summary{margin-bottom:12px}
+.harvest-screen #trailerFix button[type=submit]{width:100%;min-height:64px;margin-top:14px}
+.harvest-screen form.undo button,.harvest-screen form.newload button{width:100%;min-height:56px;margin-top:12px}
 .harvest-screen #intakeActive{margin-bottom:14px;font-size:17px;font-weight:600}
 .harvest-screen #followOpen{font-size:14px;min-height:44px}
 .harvest-screen .reconcile-table{overflow:auto}.harvest-screen table{border-collapse:collapse;width:100%;font-size:15px;white-space:nowrap}

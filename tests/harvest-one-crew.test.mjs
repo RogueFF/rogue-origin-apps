@@ -230,7 +230,9 @@ test('a lot from another zone, or too old, is refused — the bins are not moved
   assert.ok(wrongZone.status >= 400);
   assert.match(await wrongZone.text(), /not in this zone|too old/i);
 
-  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-9 days') WHERE id = ?").run(z4);
+  // Too old = last ACTIVE more than 3 days ago (closed 9 days back), not merely
+  // opened long ago — a two-day zone that closed a minute ago is recent.
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-10 days'), closed_at = datetime('now','-9 days') WHERE id = ?").run(z4);
   assert.ok((await logLoadAt(env, ctx, 'Z4', 20, 1, { lot: String(z4) })).status >= 400);
   assert.ok((await logLoadAt(env, ctx, 'Z4', 20, 1, { lot: 'abc' })).status >= 400);
   assert.equal(loads(sqlite).length, before, 'a refused load writes no row at all');
@@ -255,12 +257,24 @@ test('the status feed carries the recent lots the picker offers', async () => {
   const { sqlite, env, ctx } = freshDb();
   await scanZone(env, ctx, 'Z4');
   const lot = lotIdFor(sqlite, 'Z4');
-  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-9 days') WHERE id = ?").run(lot);
   await scanZone(env, ctx, 'Z7');
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-10 days'), closed_at = datetime('now','-9 days') WHERE id = ?").run(lot);
 
   const d = await handleHarvestD1(new Request('https://x/api/harvest?action=status'), env, ctx).then(r => r.json());
   const body = d.data || d;
   assert.deepEqual(body.recent_lots.map(l => l.zone), ['Z7'], 'a lot older than the window is not offered');
+});
+
+test('a long zone that closed a minute ago is still a recent lot', async () => {
+  // A zone is a day and a half to two days of cutting; over a weekend, four.
+  // Measuring age from when it OPENED dropped it from the picker (and refused
+  // the trailer the grace window had just proposed) the moment it closed.
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 4), closed: minsAgo(1) });
+  const d = await handleHarvestD1(new Request('https://x/api/harvest?action=status'), env, ctx).then(r => r.json());
+  assert.ok((d.data || d).recent_lots.some(l => l.id === z4));
+  await logLoadAt(env, ctx, 'Z4', 20, 1, { lot: String(z4) });
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, z4);
 });
 
 test('open intake follows the open zone, preserves an override, and logs repeatedly in place', async () => {
