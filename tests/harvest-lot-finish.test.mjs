@@ -8,8 +8,11 @@
  *
  * What this suite holds:
  *
- * 1. A FINISHED LOT IS NOT A CANDIDATE. It leaves the radio list and sits in a
- *    collapsed Finished list, one press from Reopen.
+ * 1. A FINISHED LOT IS NOT A CANDIDATE. It leaves the radio list and sits in an
+ *    open Finished list, one press from Reopen — which lands back on the lot.
+ * 7. A STARTED LOT IS ONE PRESS FROM ITS SCREEN. Resume carries the cultivar
+ *    and bay its last tag went out with (Koa, 2026-09-28).
+ * 8. EVERY TAG ON THE LOT CAN BE REPRINTED OR VOIDED, not only the last.
  * 2. THE WHOLE LOT, NOTHING ELSE. A lot spans sessions (a second crew, a
  *    same-shift re-entry), so every one is stamped — and the next cut of the
  *    same zone is a different lot and is left alone.
@@ -104,7 +107,15 @@ const finish = (env, ctx, sessionId, { reopen = false, lang = 'en' } = {}) => ha
   new Request(`https://x/api/harvest?action=lot_finish&lang=${lang}`, {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ session_id: String(sessionId), ...(reopen ? { reopen: '1' } : {}) }).toString(),
-  }), env, ctx).then(async r => ({ status: r.status, html: await r.text() }));
+  }), env, ctx).then(async r => ({ status: r.status, location: r.headers.get('location'), html: await r.text() }));
+
+const resume = (env, ctx, sessionId, extra = '') => handleHarvestD1(
+  new Request(`https://x/api/harvest?action=lot_resume&session_id=${sessionId}&lang=en${extra}`), env, ctx)
+  .then(r => r.text());
+
+/** Lots offered Resume on the picker. */
+const resumeLinks = (html) =>
+  [...html.matchAll(/action=lot_resume&session_id=(\d+)/g)].map(m => Number(m[1]));
 
 const picker = (env, ctx, lang = 'en') => handleHarvestD1(
   new Request(`https://x/api/harvest?action=sack_print&lang=${lang}`), env, ctx).then(r => r.text());
@@ -156,7 +167,7 @@ test('a finished lot leaves the takedown list and waits under Finished, one pres
   assert.deepEqual(radios(r.html), [other], 'a finished lot is not a takedown candidate');
   assert.deepEqual(finishRows(r.html), []);
   assert.deepEqual(reopenRows(r.html), [lot]);
-  assert.match(r.html, /<details class="batch finished">/, 'the finished list is collapsed');
+  assert.match(r.html, /<details class="batch finished" open>/, 'the finished list is open, so Reopen can be found');
 
   html = await picker(env, ctx);
   assert.deepEqual(radios(html), [other], 'and it stays off on a fresh load');
@@ -168,7 +179,8 @@ test('a lot never started is not offered Finished — there is nothing to close 
   const html = await picker(env, ctx);
   assert.deepEqual(radios(html), [lot]);
   assert.deepEqual(finishRows(html), []);
-  assert.doesNotMatch(html, /Done taking a lot down\?/);
+  assert.doesNotMatch(html, /Lots in progress/);
+  assert.doesNotMatch(html, /action=lot_resume/, 'nothing to resume either');
 });
 
 test('when every lot is finished the picker says so, rather than that none were ever cut', async () => {
@@ -182,18 +194,74 @@ test('when every lot is finished the picker says so, rather than that none were 
   assert.deepEqual(reopenRows(r.html), [lot], 'and the way back is still on the page');
 });
 
-test('reopen puts the lot back on the takedown list', async () => {
+test('reopen lands on the lot, ready to print, and puts it back on the takedown list', async () => {
   const { sqlite, env, ctx } = freshDb();
   const lot = seedSession(sqlite);
   await tagged(env, ctx, lot);
   await finish(env, ctx, lot);
   const r = await finish(env, ctx, lot, { reopen: true });
-  assert.equal(r.status, 200);
-  assert.match(r.html, /reopened — it is back on the takedown list/);
-  assert.deepEqual(radios(r.html), [lot]);
-  assert.deepEqual(finishRows(r.html), [lot]);
-  assert.deepEqual(reopenRows(r.html), []);
+  assert.equal(r.status, 303, 'a redirect, so a reload does not POST again');
+  assert.equal(r.location, `/api/harvest?action=lot_resume&session_id=${lot}&reopened=1&lang=en`);
   assert.equal(stamps(sqlite)[lot], null);
+
+  const screen = await resume(env, ctx, lot, '&reopened=1');
+  assert.match(screen, /class="flash">✅ Z8 · Sour Lifter Cut 1 reopened — you can print more tags\./);
+  assert.match(screen, /<button id="printBtn" class="bigbtn">/, 'PRINT TAG is live again');
+  assert.match(screen, /var locked = false;/);
+
+  const html = await picker(env, ctx);
+  assert.deepEqual(radios(html), [lot]);
+  assert.deepEqual(finishRows(html), [lot]);
+  assert.deepEqual(reopenRows(html), []);
+});
+
+test('a started lot offers Resume, which returns to its screen with the same cultivar and bay', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const fresh = seedSession(sqlite, { zone: 'Z4' });
+  await tagged(env, ctx, lot, 3);
+
+  const html = await picker(env, ctx);
+  assert.deepEqual(resumeLinks(html), [lot], 'only the started lot');
+  assert.ok(html.indexOf('Lots in progress') < html.indexOf('id="lotForm"'), 'in-progress lots sit above the start form');
+  assert.match(html, /<h2>Start a lot<\/h2>/);
+
+  const screen = await resume(env, ctx, lot);
+  assert.match(screen, /<div class="lot-cultivar">Sour Lifter<\/div>/);
+  assert.match(screen, /Bay 9 · /, 'the bay carries over from its last tag');
+  assert.match(screen, /Stored in: Supermarket|Supermarket/, 'same-day storage carries over too');
+  assert.match(screen, /bay: 9, storage: "Supermarket"/, 'and rides the next PRINT TAG');
+  assert.match(screen, /<strong>3<\/strong> tags printed for this lot/);
+
+  // Storage from an earlier day is not guessed onto today's sacks.
+  sqlite.exec(`UPDATE harvest_sacks SET printed_at = datetime('now', '-3 days')`);
+  assert.match(await resume(env, ctx, lot), /bay: 9, storage: null/);
+
+  const none = await handleHarvestD1(new Request(`https://x/api/harvest?action=lot_resume&session_id=${fresh}&lang=en`), env, ctx);
+  assert.match(await none.text(), /<div class="lot-cultivar">Sour Lifter<\/div>/, 'an unstarted lot falls back to its own cultivar');
+});
+
+test('every tag on the lot is listed and can be voided, not only the last', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  const r = await tagged(env, ctx, lot, 4);
+  assert.deepEqual(r.body.tags.map(t => t.id), [4, 3, 2, 1].map(n => `${yy}-SLIFT-${n}`), 'newest first, from the print response');
+  assert.ok(r.body.tags.every(t => !t.voided && !t.opened && /Z$/.test(t.at)));
+
+  const screen = await sessionScreen(env, ctx, lot);
+  assert.match(screen, /<details id="tagList" class="batch taglist">/);
+  assert.match(screen, new RegExp(`var tags = \\[\\{"id":"${yy}-SLIFT-4"`));
+
+  const v = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_void', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sack_id: `${yy}-SLIFT-2` }),
+  }), env, ctx).then(res => res.json());
+  assert.equal(v.success, true);
+  assert.equal(v.printed, 3);
+  assert.equal(v.last_sack_id, `${yy}-SLIFT-4`, 'voiding an older tag leaves the last one alone');
+  assert.deepEqual(v.tags.filter(t => t.voided).map(t => t.id), [`${yy}-SLIFT-2`], 'the void shows in the list');
+  assert.equal(v.tags.length, 4, 'a voided tag stays listed');
 });
 
 // ─── which rows ──────────────────────────────────────────────────────────────
@@ -372,7 +440,7 @@ test('every new string renders in both languages', async () => {
     if (lang === 'es') assert.match(flash.html + await sessionScreen(env, ctx, open, lang), /¿Marcar Z/);
     for (const key of ['finishLot', 'finishLotHelp', 'confirmFinish', 'finishSection', 'finishSectionHelp',
                        'markFinished', 'finishedLots', 'finishedOn', 'reopenLot', 'lotFinished',
-                       'lotFinishedNotice']) {
+                       'lotFinishedNotice', 'resumeLot', 'startSection']) {
       assert.doesNotMatch(shown, new RegExp(`\\b${key}\\b`), `${lang}: ${key} rendered as a raw key`);
     }
     await finish(env, ctx, done, { reopen: true, lang });

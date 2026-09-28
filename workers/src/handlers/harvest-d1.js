@@ -216,7 +216,7 @@ function stationCookie(station) {
 
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix',
-  'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
+  'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
 ]);
@@ -288,6 +288,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackSession(ui, db, env, body);
         case 'sack_session':
           return await handleSackSession(ui, db, env, params);
+        case 'lot_resume':
+          return await handleLotResume(ui, db, env, params);
         case 'lot_finish':
           return await handleLotFinish(ui, db, env, ctx, body);
         case 'sack_label':
@@ -1731,7 +1733,7 @@ function lotPlausibility(ui, lot) {
  * worker fills sack after sack — the PRINT TAG button allocates and prints
  * without navigating, so nobody loses their place mid-rack with gloves on.
  */
-async function handleSackSession(ui, db, env, input) {
+async function handleSackSession(ui, db, env, input, flash = null) {
   const sessionId = parseInt(input.session_id, 10);
   const cultivar = String(input.cultivar || '').trim().substring(0, 60);
 
@@ -1753,8 +1755,47 @@ async function handleSackSession(ui, db, env, input) {
   const variantCheck = isTest ? null : await checkSupersackVariant(env, db, {
     season: lot.season || getSeason(), cultivar, zone: lot.zone, cut: lot.cut_number });
 
+  const tags = await getLotTags(db, sessionId, isTest);
+
   return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, bay, storage, finishedAt, variantCheck }));
+    sackSessionBody(ui, { lot, cultivar, stats, tags, bay, storage, finishedAt, variantCheck, flash }));
+}
+
+/**
+ * Where to pick a started lot back up (Koa, 2026-09-28: "once a lot is
+ * started, I'd like to be able to re-open it").
+ *
+ * The cultivar and bay its newest tag went out with, so Resume does not ask for
+ * them again — the rack has not moved. Voided tags count here: a void retires a
+ * number, not the rack it came off. Storage carries over only from the same
+ * Pacific day, the same rule as the picker's default, because a guessed
+ * location is worse than an empty one.
+ */
+async function getLotResume(db, lot) {
+  const f = lotSessionsWhere(lot);
+  const last = await queryOne(db, `
+    SELECT cultivar, bay, storage, printed_at FROM harvest_sacks
+    WHERE is_test = ? AND zone_session_id IN (SELECT id FROM harvest_scan_log WHERE ${f.where})
+    ORDER BY printed_at DESC, serial DESC LIMIT 1
+  `, [lot.is_test, ...f.params]);
+  const today = !!last?.printed_at && pacificDay(parseSqliteUtc(last.printed_at)) === pacificToday();
+  return {
+    cultivar: last?.cultivar || lot.cultivar || '',
+    bay: last?.bay ?? null,
+    storage: today ? (last.storage || null) : null,
+  };
+}
+
+/** GET ?action=lot_resume&session_id= — straight back onto a lot's takedown screen. */
+async function handleLotResume(ui, db, env, params) {
+  const sessionId = parseInt(params.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+  }
+  const lot = await requireLot(db, sessionId);
+  const resume = await getLotResume(db, lot);
+  const flash = String(params.reopened || '') === '1' ? ui.t('lotReopened', { lot: lotLabel(ui, lot, resume.cultivar) }) : null;
+  return handleSackSession(ui, db, env, { session_id: sessionId, ...resume }, flash);
 }
 
 /**
@@ -1856,8 +1897,14 @@ async function handleLotFinish(ui, db, env, ctx, body) {
     }).catch(e => console.error('[harvest][telegram]', e)));
   }
 
-  return handleSackPrintForm(ui, db, env,
-    ui.t(reopen ? 'lotReopened' : 'lotFinished', { lot: label, n: sacks }));
+  // Reopening is done to print more, so it lands on the lot's takedown screen.
+  // A redirect rather than rendering it here: a reload of a POST would reopen
+  // again, and the address bar should say where the crew actually is.
+  if (reopen) {
+    return new Response(null, { status: 303, headers: {
+      Location: `${API}?action=lot_resume&session_id=${sessionId}&reopened=1&lang=${ui.lang}` } });
+  }
+  return handleSackPrintForm(ui, db, env, ui.t('lotFinished', { lot: label, n: sacks }));
 }
 
 // Voided tags are excluded from the count — they were never a sack.
@@ -1875,6 +1922,27 @@ async function getLotTagStats(db, sessionId, isTest) {
                   ORDER BY printed_at DESC, serial DESC LIMIT 1`, [sessionId, isTest]),
   ]);
   return { printed: row?.printed || 0, lastSackId: last?.sack_id || null };
+}
+
+/**
+ * Every tag on this lot, newest first, for the takedown screen's list — so any
+ * of them can be reprinted or voided, not only the last (Koa, 2026-09-28).
+ * Same scope and order as getLotTagStats, so the list's top row is the tag the
+ * screen calls "Last". Voided tags stay in, marked, with no actions: seeing the
+ * void land is the confirmation. `at` is ISO UTC; the page shows it in Pacific.
+ */
+async function getLotTags(db, sessionId, isTest) {
+  const rows = await query(db, `
+    SELECT sack_id, printed_at, voided_at, opened_at FROM harvest_sacks
+    WHERE zone_session_id = ? AND is_test = ?
+    ORDER BY printed_at DESC, serial DESC
+  `, [sessionId, isTest]);
+  return rows.map(r => ({
+    id: r.sack_id,
+    at: r.printed_at ? parseSqliteUtc(r.printed_at).toISOString() : null,
+    voided: !!r.voided_at,
+    opened: !!r.opened_at,
+  }));
 }
 
 /**
@@ -2011,7 +2079,7 @@ async function handleSackAlloc(db, env, ctx, body) {
   const printVia = await resolvePrintVia(db);
 
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
-    note_on: note ? ids[0] : null, print_via: printVia });
+    tags: await getLotTags(db, sessionId, isTest), note_on: note ? ids[0] : null, print_via: printVia });
 }
 
 /* ---------------------------------------------------------------------------
@@ -2304,7 +2372,8 @@ async function handleSackVoid(db, env, ctx, body) {
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
 
-  return successResponse({ success: true, voided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId });
+  return successResponse({ success: true, voided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId,
+    tags: await getLotTags(db, sack.zone_session_id, isTest) });
 }
 
 // Reprint path — looks the sack up and reuses its EXISTING serial. Never
@@ -4296,6 +4365,19 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .status strong { font-size: 1.25rem; }
   .last { color: #cfe3d6; margin-top: 6px; }
   .lastActions { margin-top: 10px; display: flex; gap: 10px; }
+  /* A real button, not a grey line: a collapsed section is exactly where
+     Reopen went unfound (Koa, 2026-09-28). Closed so PRINT TAG stays on top. */
+  .batch.taglist > summary { font-size: 1.05rem; font-weight: 600; padding: 14px 16px; border-radius: 10px;
+                       background: #edf1e4; color: #304e3c; border: 1px solid #c2cdb8; }
+  .tagrows { display: grid; gap: 8px; margin-top: 8px; }
+  .tagrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
+            padding: 10px 12px; background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; color: #f4f1e8; }
+  .tagrow .taginfo { display: flex; flex-direction: column; }
+  .tagrow .tagid { font-size: 1.1rem; }
+  .tagrow .tagwhen { color: #9fc2ac; font-size: 0.85rem; }
+  .tagrow .tagacts { display: flex; gap: 8px; align-items: center; }
+  .tagrow.voided { opacity: 0.55; }
+  .tagrow.voided .tagid { text-decoration: line-through; }
   /* The note for the NEXT tag sits above PRINT TAG, closed until someone needs
      it. A note waiting to go out turns the heading gold and the button says so. */
   .nextnote { margin: 0 0 12px; color: #cfe3d6; }
@@ -4361,7 +4443,12 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   form.finishrow { display: flex; gap: 12px; align-items: center; padding: 14px; margin: 0;
                    background: #1b3123; border: 1px solid #2c4a36; border-radius: 10px; }
   form.finishrow .lotbody { flex: 1; }
-  form.finishrow button.btn { flex: none; margin: 0; padding: 14px 18px; font-size: 1rem; cursor: pointer; }
+  /* Name on its own line, buttons under it side by side — room on a phone for
+     Resume and Finished without either shrinking to an unreadable tap target. */
+  form.finishrow { flex-wrap: wrap; }
+  form.finishrow .lotbody { flex: 1 1 100%; }
+  form.finishrow a.btn { flex: 1; }
+  form.finishrow button.btn, form.finishrow a.btn { flex: none; margin: 0; padding: 14px 18px; font-size: 1rem; cursor: pointer; }
   form.finishrow.done { background: #17271c; }
   button.btn.alt { background: #3a5f4c; }
   .finishlot { margin-top: 26px; }
@@ -5256,12 +5343,13 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
           ? ui.t('finishedOn', { date: escapeHtml(finishedDate(ui, l.takedown_done_at)), n: l.sacks_printed })
           : escapeHtml(ui.t('noteStarted', { n: l.sacks_printed }))}</span>
       </span>
-      <button class="btn${reopen ? ' alt' : ''}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
+      ${reopen ? '' : `<a class="btn" href="${API}?action=lot_resume&session_id=${l.id}&lang=${ui.lang}">${ui.t('resumeLot')}</a>`}
+      <button class="btn${reopen ? '' : ' alt'}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
     </form>`;
 
-  // Collapsed: reopening is the rare case, and this page is for lots coming down.
+  // Open, not collapsed (Koa, 2026-09-28): tucked away, nobody found Reopen.
   const finishedHtml = finished.length ? `
-<details class="batch finished">
+<details class="batch finished" open>
   <summary>${ui.t('finishedLots', { n: finished.length })}</summary>
   <div class="lotlist">${finished.map(l => closeForm(l, true)).join('')}</div>
 </details>` : '';
@@ -5274,7 +5362,7 @@ ${flashHtml}
 ${finishedHtml}`;
   }
 
-  // Only a lot with tags can be closed out from here. A lot never started has
+  // Only a lot with tags can be resumed or closed out from here. A lot never started has
   // nothing to finish, and listing every lot twice would bury the ones that do.
   const started = lots.filter(l => l.sacks_printed > 0);
   const finishHtml = started.length ? `
@@ -5322,6 +5410,8 @@ ${finishedHtml}`;
   return `
 <h1>${ui.t('printTags')}</h1>
 ${flashHtml}
+${finishHtml}
+${finishHtml ? `<h2>${ui.t('startSection')}</h2>` : ''}
 <p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
 <form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
@@ -5336,7 +5426,6 @@ ${flashHtml}
   <select id="storage" name="storage">${storageOptions(ui, lastStorage?.today ? lastStorage.storage : null)}</select>
   <button class="btn" type="submit">${ui.t('startTakedown')}</button>
 </form>
-${finishHtml}
 ${finishedHtml}
 
 <script>
@@ -5385,7 +5474,7 @@ ${finishedHtml}
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null, finishedAt = null, variantCheck = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, storage = null, finishedAt = null, variantCheck = null, flash = null }) {
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -5412,7 +5501,8 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
   // about this lot.
   const variantWarn = variantCheck?.ok === false ? `
 <div class="notice">⚠️ ${ui.t('variantMissing', { e: escapeHtml(variantCheck.error) })}</div>` : '';
-  return `${notice}${variantWarn}
+  const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
+  return `${flashHtml}${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
@@ -5443,6 +5533,15 @@ function sackSessionBody(ui, { lot, cultivar, stats, bay = null, storage = null,
        says whether one actually did. Stays hidden while the browser prints. -->
   <div id="agentMsg" class="hcstat" hidden></div>
 </div>
+
+<!-- Every tag on the lot, so an older one can be reprinted or voided — not
+     only the last (Koa, 2026-09-28). Closed by default: PRINT TAG is the job,
+     this is the correction. Filled by the script below from the same list the
+     print and void responses return, so it never goes stale. -->
+<details id="tagList" class="batch taglist"${tags.length ? '' : ' hidden'}>
+  <summary id="tagListSum"></summary>
+  <div id="tagRows" class="tagrows"></div>
+</details>
 
 <details class="batch">
   <summary>${ui.t('printSeveral')}</summary>
@@ -5477,6 +5576,8 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
     printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
+    reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
+    tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
     printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
     printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
     printAgentFailed: ui.lang === 'es'
@@ -5499,6 +5600,52 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   var noteText = document.getElementById('noteText');
   var noteMsg = document.getElementById('noteMsg');
   var lastId = ${stats.lastSackId ? JSON.stringify(stats.lastSackId) : 'null'};
+  var tags = ${JSON.stringify(tags).replace(/</g, '\\u003c')};
+  var tagList = document.getElementById('tagList');
+  var tagListSum = document.getElementById('tagListSum');
+  var tagRows = document.getElementById('tagRows');
+  var TAG_TIME = { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+  var TAG_LOCALE = '${ui.lang === 'es' ? 'es-US' : 'en-US'}';
+
+  // Built from DOM nodes, not an HTML string: the ids come from the server,
+  // and this page is one template literal, so the fewer layers of escaping
+  // the better.
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function renderTags() {
+    var live = tags.filter(function (t) { return !t.voided; }).length;
+    tagList.hidden = !tags.length;
+    tagListSum.textContent = T.tagList.replace('{n}', live);
+    tagRows.textContent = '';
+    tags.forEach(function (t) {
+      var row = el('div', 'tagrow' + (t.voided ? ' voided' : ''));
+      var info = el('span', 'taginfo');
+      info.appendChild(el('strong', 'tagid', '# ' + t.id));
+      if (t.at) info.appendChild(el('span', 'tagwhen', new Date(t.at).toLocaleString(TAG_LOCALE, TAG_TIME)));
+      row.appendChild(info);
+      var acts = el('span', 'tagacts');
+      if (t.voided) {
+        acts.appendChild(el('span', 'hint', T.tagVoided));
+      } else {
+        var rp = el('a', 'mini', T.reprint); rp.href = '#';
+        rp.setAttribute('data-act', 'reprint'); rp.setAttribute('data-id', t.id);
+        acts.appendChild(rp);
+        if (t.opened) {
+          acts.appendChild(el('span', 'hint', T.tagOpened));
+        } else {
+          var vd = el('a', 'mini danger', T.void); vd.href = '#';
+          vd.setAttribute('data-act', 'void'); vd.setAttribute('data-id', t.id);
+          acts.appendChild(vd);
+        }
+      }
+      row.appendChild(acts);
+      tagRows.appendChild(row);
+    });
+  }
   var busy = false;
   var locked = ${finishedAt ? 'true' : 'false'};   // lot finished: no printing until it is reopened
   var printed = ${stats.printed};
@@ -5518,6 +5665,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   });
 
   function refresh(data) {
+    if (data.tags) { tags = data.tags; renderTags(); }
     var n = data.printed;
     printed = n;
     countEl.innerHTML = (n === 1 ? T.tagForLot : T.tagsForLot.replace('{n}', n));
@@ -5653,35 +5801,33 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     if (n >= 2) alloc(n);
   });
 
-  reprint.addEventListener('click', function (e) {
-    e.preventDefault();
-    if (!lastId) return;
+  function reprintTag(id) {
+    if (!id) return;
     // A jam is the most time-critical recovery there is, so it must work on
     // every handset. ALWAYS ask the server which way to print — this page may
     // have been loaded without allocating anything, so there is no local answer
     // that can be trusted, and guessing 'browser' is the path WebKit breaks.
     fetch('${API}?action=print_reprint', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: lastId }),
+      body: JSON.stringify({ sack_id: id }),
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Reprint failed');
-        if (d.print_via === 'agent') watchPrint([lastId]);
-        else print([lastId], 'browser');
+        if (d.print_via === 'agent') watchPrint([id]);
+        else print([id], 'browser');
       })
       .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
-  });
+  }
 
-  voidLink.addEventListener('click', function (e) {
-    e.preventDefault();
-    if (!lastId || busy) return;
-    if (!confirm(T.confirmVoid.replace('{id}', lastId))) return;
+  function voidTag(id) {
+    if (!id || busy) return;
+    if (!confirm(T.confirmVoid.replace('{id}', id))) return;
     setBusy(true, T.voiding);
     fetch('${API}?action=sack_void', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: lastId })
+      body: JSON.stringify({ sack_id: id })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -5689,7 +5835,18 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
         refresh(d); setBusy(false);
       })
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
+  }
+
+  reprint.addEventListener('click', function (e) { e.preventDefault(); reprintTag(lastId); });
+  voidLink.addEventListener('click', function (e) { e.preventDefault(); voidTag(lastId); });
+  tagRows.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-act]');
+    if (!a) return;
+    e.preventDefault();
+    var id = a.getAttribute('data-id');
+    if (a.getAttribute('data-act') === 'void') voidTag(id); else reprintTag(id);
   });
+  renderTags();
 
   // The count in the question is the live one, not the one the page loaded with.
   var finishForm = document.getElementById('finishForm');
