@@ -165,12 +165,19 @@ test('a bag weighed light at takedown takes a share in proportion to its weight'
   }
   assert.deepEqual([light.tops_lbs, light.smalls_lbs, light.biomass_lbs, light.trim_lbs], [10, 5, 1, 0.5],
     'half a sack, half a share');
+  // Every bag's five parts add up to ITS OWN weight. The floor's waste assumed
+  // three full sacks (105 lb); spreading it would put 42 lb in a 35 lb bag.
+  const parts = x => Math.round((x.tops_lbs + x.smalls_lbs + x.biomass_lbs + x.trim_lbs + x.waste_lbs) * 100) / 100;
+  assert.equal(parts(a), 35);
+  assert.equal(parts(b), 35);
+  assert.equal(parts(light), 17.5);
   const tops = sackRows(sqlite).reduce((t, r) => t + r.tops_lbs, 0);
   assert.equal(tops, 50, 'the day still adds up');
 
   const row = res.allocated.find(x => x.cultivar === 'Sour Lifter');
   assert.equal(row.sack_lbs, 87.5);
-  assert.deepEqual(row.weighed_bags, [{ sack_id: 'T-3', lbs: 17.5 }]);
+  assert.deepEqual(row.weighed_bags.map(w => [w.sack_id, w.lbs]), [['T-3', 17.5]]);
+  assert.equal(row.floor_raw_over_bags_lbs, 17.5, 'the floor counted a full sack the bag never held');
   assert.equal(row.per_sack.tops, 20, 'per_sack is what a full bag got');
 });
 

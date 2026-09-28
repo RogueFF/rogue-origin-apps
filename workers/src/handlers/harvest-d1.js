@@ -2298,7 +2298,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  *
  * The serials are high on purpose, so that day is late if it comes at all.
  *
- * The five parts sum to the 37 lb that went into the sack, because that is how
+ * The five parts sum to the 35 lb that went into the sack (a 2026-crop bag), because that is how
  * the real figures behave: waste is the remainder, not a reading. Lifter is
  * given a lower tops share than Sour Lifter, which is the direction the real
  * supersack data actually goes — a demo with the ranking backwards teaches the
@@ -2307,7 +2307,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
 const DEMO_SACKS = {
   '26-SLIFT-142': {
     serial: 142, code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut: 1, bay: 7, storage: 'Supermarket', lotSacks: 14,
-    parts: { tops: 21.4, smalls: 11.9, biomass: 2.1, trim: 1.2, waste: 0.4 },
+    parts: { tops: 20.2, smalls: 11.3, biomass: 2.0, trim: 1.1, waste: 0.4 },
     notes: [
       { note: 'Bottom of the rack was still damp — held back a day.', at: '16:05:00' },
       { note: 'Tape said Z4 cut 1, matches the lot picker.', at: '14:22:00' },
@@ -2315,7 +2315,7 @@ const DEMO_SACKS = {
   },
   '26-LIFT-87': {
     serial: 87, code: 'LIFT', cultivar: 'Lifter', zone: 'Z19', cut: 1, bay: 11, storage: '3', lotSacks: 9,
-    parts: { tops: 18.2, smalls: 14.6, biomass: 2.6, trim: 1.3, waste: 0.3 },
+    parts: { tops: 17.2, smalls: 13.8, biomass: 2.5, trim: 1.2, waste: 0.3 },
     notes: [
       { note: 'Top bay, dried fast — came down two days early.', at: '15:40:00' },
       { note: 'Z19 cut 1, whole plant.', at: '15:38:00' },
@@ -2393,7 +2393,7 @@ function demoSackView(opened, voided, id = DEMO_SACK_ID) {
       stored_at: d.storage ? bagged + ' 14:30:00' : null,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
-      // The five parts sum to the 37 lb that went into the sack, because that
+      // The five parts sum to the 35 lb that went into the sack, because that
       // is how the real figures behave — waste is the remainder, not a reading.
       // A demo that did not add up would teach the wrong thing.
       tops_lbs: opened ? d.parts.tops : null,
@@ -2724,29 +2724,57 @@ async function handleAllocate(db, env, params) {
       });
     }
 
-    // Each bag's share of the day is its weight over the group's weight. With
-    // every bag full that is exactly the old equal split.
-    const shareFor = lbs => ({
-      tops: r2(f.tops * lbs / r.lbs), smalls: r2(f.smalls * lbs / r.lbs), biomass: r2(f.biomass * lbs / r.lbs),
-      trim: r2(f.trim * lbs / r.lbs), waste: r2(f.waste * lbs / r.lbs),
-    });
-    await transaction(db, r.bags.map(b => {
-      const sh = shareFor(b.lbs);
-      return {
-        sql: `UPDATE harvest_sacks
-              SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
-                  weights_source = 'allocated', weights_allocated_at = datetime('now')
-              WHERE sack_id = ? AND (weights_source IS NULL OR weights_source = 'allocated')`,
-        params: [sh.tops, sh.smalls, sh.biomass, sh.trim, sh.waste, b.sack_id],
+    // Each bag's share of the four weighed parts is its weight over the
+    // group's weight. With every bag full that is exactly the old equal split.
+    //
+    // WASTE IS NOT SPLIT — it is re-derived per bag, as what is left of THAT
+    // bag's weight. The floor's own waste is left over from sacks x a full
+    // sack, because the tracker cannot know a bag was light; splitting it by
+    // weight would carry the light bag's missing pounds onto every bag in the
+    // group and push each one past its own weight. With every bag full the
+    // two give the same figure.
+    const shareFor = lbs => {
+      const sh = {
+        tops: r2(f.tops * lbs / r.lbs), smalls: r2(f.smalls * lbs / r.lbs),
+        biomass: r2(f.biomass * lbs / r.lbs), trim: r2(f.trim * lbs / r.lbs),
       };
-    }));
+      sh.waste = r2(Math.max(0, lbs - sh.tops - sh.smalls - sh.biomass - sh.trim));
+      return sh;
+    };
+    const SET = `SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
+                     weights_source = 'allocated', weights_allocated_at = datetime('now')`;
     const full = fullSackLbs(r.season);
+    const fullShare = shareFor(full);
+    // One write for every full bag in the group, one per weighed bag — so a
+    // replayed window costs about what it did before bags had weights.
+    await transaction(db, [
+      {
+        sql: `UPDATE harvest_sacks ${SET}
+              WHERE opened_at >= ? AND opened_at < ? AND season = ? AND cultivar = ?
+                AND is_test = ? AND voided_at IS NULL AND fill_lbs IS NULL
+                AND (weights_source IS NULL OR weights_source = 'allocated')`,
+        params: [fullShare.tops, fullShare.smalls, fullShare.biomass, fullShare.trim, fullShare.waste,
+                 dayStart, dayEnd, r.season, r.cultivar, isTest],
+      },
+      ...r.bags.filter(b => b.weighed).map(b => {
+        const sh = shareFor(b.lbs);
+        return {
+          sql: `UPDATE harvest_sacks ${SET}
+                WHERE sack_id = ? AND (weights_source IS NULL OR weights_source = 'allocated')`,
+          params: [sh.tops, sh.smalls, sh.biomass, sh.trim, sh.waste, b.sack_id],
+        };
+      }),
+    ]);
     done.push({
       season: r.season, cultivar: r.cultivar, sacks: r.n, sack_lbs: round1(r.lbs),
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
-      // What a full bag got. A weighed bag got the same scaled by its weight.
-      per_sack: shareFor(full),
-      weighed_bags: r.bags.filter(b => b.weighed).map(b => ({ sack_id: b.sack_id, lbs: b.lbs })),
+      // What a full bag got. A weighed bag got the same four parts scaled by
+      // its weight, and its own remainder as waste.
+      per_sack: fullShare,
+      weighed_bags: r.bags.filter(b => b.weighed).map(b => ({ sack_id: b.sack_id, lbs: b.lbs, share: shareFor(b.lbs) })),
+      // The floor assumes every bag it opened was full. The gap is the pounds
+      // its raw figure (and its waste) carries that were never in the bags.
+      floor_raw_over_bags_lbs: round1(r.n * full - r.lbs),
     });
   }
 
@@ -2771,7 +2799,7 @@ async function handleAllocate(db, env, params) {
     // the per-bag figures for that cultivar are scaled wrong, so it belongs in
     // the result rather than in a log line nobody reads.
     sack_count_mismatches: countMismatches,
-    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure.",
+    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure: each bag's is what is left of its own weight after the four weighed parts.",
   });
 }
 
