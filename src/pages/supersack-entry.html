@@ -799,7 +799,16 @@
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
   const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
   const LBS_TO_GRAMS = 453.592;
-  const SACK_WEIGHT = 37;
+  // A full sack by crop year: 37 lb through 2025, 35 lb from the 2026 crop
+  // (Koa, 2026-09-28). The year comes from the strain title, not today's date —
+  // 2025 sacks trimmed in 2026 are still 37 lb. Mirrors workers/src/lib/sack-weight.js.
+  function sackWeight(title) {
+    const m = /^\s*(\d{4})\s*-/.exec(String(title || ''));
+    return m && Number(m[1]) >= 2026 ? 35 : 37;
+  }
+  function rawLbs() {
+    return Object.entries(strainData).reduce((sum, [name, s]) => sum + (s.sacks || 0) * sackWeight(name), 0);
+  }
 
   // State
   let strainData = {}; // { strainTitle: { sacks, tops, smalls, productId, inventoryItemId, locationId, poolValue } }
@@ -927,7 +936,7 @@
   // Recalculate totals + per-strain averages
   function recalc() {
     const sackCount = totalSacks();
-    const raw = sackCount * SACK_WEIGHT;
+    const raw = rawLbs();
 
     // The day's two piles, entered once
     const { biomass, trim } = dayTotals();
@@ -975,7 +984,7 @@
       avgBody.innerHTML = strainsWithSacks.map(([name, s]) => {
         const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
         const n = s.sacks;
-        const strainWaste = Math.max(0, (n * SACK_WEIGHT) - s.tops - s.smalls);
+        const strainWaste = Math.max(0, (n * sackWeight(name)) - s.tops - s.smalls);
         // Proportional biomass/trim based on sack ratio
         const ratio = n / sackCount;
         const strainBio = biomass * ratio;
@@ -1014,7 +1023,7 @@
         const avgSmalls = s.smalls / n;
         const avgBio = (biomass * ratio) / n;
         const avgTrim = (trim * ratio) / n;
-        const avgWaste = Math.max(0, SACK_WEIGHT - avgTops - avgSmalls - avgBio - avgTrim);
+        const avgWaste = Math.max(0, sackWeight(name) - avgTops - avgSmalls - avgBio - avgTrim);
 
         const remTops = remaining * avgTops;
         const remSmalls = remaining * avgSmalls;
@@ -1569,7 +1578,7 @@
         body: JSON.stringify({
           date, supersack_count: sackCount, biomass_lbs: biomass,
           trim_lbs: trim, tops_lbs: topsLbs, smalls_lbs: smallsLbs,
-          waste_lbs: Math.max(0, (sackCount * SACK_WEIGHT) - topsLbs - smallsLbs - biomass - trim),
+          waste_lbs: Math.max(0, rawLbs() - topsLbs - smallsLbs - biomass - trim),
           // Per-strain sacks/tops/smalls only — biomass and trim travel as day
           // totals and the API splits them by sack share.
           strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
@@ -1734,6 +1743,7 @@
   loadAll().then(() => checkExistingEntry()); // load strains first, then pre-fill saved counts
 })();
 </script>
+
 
 
 

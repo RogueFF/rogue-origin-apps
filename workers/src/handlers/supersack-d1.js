@@ -14,8 +14,11 @@
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { buildRates } from '../lib/sack-rates.js';
 import { constantTimeEqual } from '../lib/auth.js';
+import { fullSackLbsForTitle } from '../lib/sack-weight.js';
 
-const SACK_WEIGHT = 37;
+// A full sack is 37 lb through the 2025 crop and 35 lb from 2026 (Koa,
+// 2026-09-28). Read per strain from its title's crop year, never from the date
+// the sack was opened: 2025 sacks trimmed in 2026 are still 37 lb sacks.
 
 /**
  * Premium #1 Trim never outweighs Biomass (#2 trim). A sack's premium
@@ -96,7 +99,7 @@ async function submit(body, env) {
     // strain blocks the whole day instead of half of it.
     const rows = normalized.map(([strain, sacks, perStrainTops, perStrainSmalls, perStrainBio, perStrainTrim]) => {
       const ratio = sacks / totalSacks;
-      const raw = sacks * SACK_WEIGHT;
+      const raw = sacks * fullSackLbsForTitle(strain);
       // Use per-strain values when supplied; otherwise ratio-split the day-totals.
       // Per-strain entry eliminates the multi-strain attribution error.
       const tops = perStrainTops != null ? perStrainTops : tops_lbs * ratio;
@@ -130,8 +133,8 @@ async function submit(body, env) {
   }
 
   // Single-strain fallback
-  const raw = supersack_count * SACK_WEIGHT;
   const strain = body.strain || 'Unknown';
+  const raw = supersack_count * fullSackLbsForTitle(strain);
   if (premiumOutweighsBiomass(biomass_lbs, trim_lbs)) return premiumOutweighsBiomassError([strain]);
   const computedWaste = waste_lbs || Math.max(0, raw - tops_lbs - smalls_lbs - biomass_lbs - trim_lbs);
 
@@ -590,7 +593,7 @@ async function backfill(body, env) {
   for (const entry of Object.values(dateStrainMap)) {
     if (entry.sacks === 0) continue;
 
-    const raw = entry.sacks * SACK_WEIGHT;
+    const raw = entry.sacks * fullSackLbsForTitle(entry.strain);
     const prod = prodByDate[entry.date] || { tops: 0, smalls: 0 };
 
     const sameDayEntries = Object.values(dateStrainMap).filter(e => e.date === entry.date);

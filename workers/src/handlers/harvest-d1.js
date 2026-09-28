@@ -57,6 +57,7 @@ import { cultivarsFor, isMultiCultivar, isHarvestTracked,
   cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
+import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
@@ -139,7 +140,9 @@ const CONSTANTS = {
     unblocks: 'cutter person-hours on a lot the crew slept on',
     how: 'the crew stops at the end of the day and picks up in the same zone next morning, so the session spans the night; the hours it was actually worked need the day window',
   },
-  supersackLbs: { value: 37, label: '1 supersack = 37 lbs', unblocks: null, how: 'confirmed 2026-08-03' },
+  // Per crop year, from lib/sack-weight.js — this entry is the dashboard's label
+  // for the current crop, not a number anything multiplies by.
+  supersackLbs: { value: fullSackLbs(2026), label: `1 supersack = ${fullSackLbs(2026)} lb (2026 crop on; ${fullSackLbs(2025)} lb through 2025). A bag weighed off-standard carries its own weight.`, unblocks: null, how: 'Koa 2026-09-28 (37 lb confirmed 2026-08-03 for the 2025 crop)' },
   binsPerTrailer: { value: 22, label: '1 trailer = 22 bins', unblocks: null, how: 'recalibrate once 2026 trailers run' },
   plantsPerBin: { value: 1, label: '1 bin = 1 plant', unblocks: null, how: 'recalibrate once real' },
 };
@@ -215,7 +218,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
 ]);
 
@@ -306,6 +309,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleSackNote(ui, db, env, ctx, body);
         case 'sack_note_edit':
           return await handleSackNoteEdit(ui, db, env, ctx, body);
+        case 'sack_fill':
+          return await handleSackFill(ui, db, env, ctx, body);
         case 'sack_store':
           return await handleSackStore(ui, db, env, ctx, body);
         case 'sack_open':
@@ -1660,7 +1665,7 @@ async function getLotTagStats(db, sessionId, isTest) {
  */
 async function getLotTags(db, sessionId, isTest) {
   const rows = await query(db, `
-    SELECT sack_id, printed_at, voided_at, opened_at FROM harvest_sacks
+    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs FROM harvest_sacks
     WHERE zone_session_id = ? AND is_test = ?
     ORDER BY printed_at DESC, serial DESC
   `, [sessionId, isTest]);
@@ -1669,6 +1674,7 @@ async function getLotTags(db, sessionId, isTest) {
     at: r.printed_at ? parseSqliteUtc(r.printed_at).toISOString() : null,
     voided: !!r.voided_at,
     opened: !!r.opened_at,
+    fill: r.fill_lbs ?? null,
   }));
 }
 
@@ -1697,6 +1703,14 @@ async function handleSackAlloc(db, env, ctx, body) {
   const note = String(body.note || '').trim().substring(0, 500);
   if (note && qty !== 1) {
     throw createError('VALIDATION_ERROR', 'A note goes on one tag — print it with PRINT TAG, not a batch.');
+  }
+  // The bag's own weight when it is not a full sack — the last of a lot, most
+  // often (Koa, 2026-09-28). Same one-bag rule as the note, for the same reason.
+  let fillLbs;
+  try { fillLbs = parseFillLbs(body.fill_lbs); }
+  catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+  if (fillLbs !== null && qty !== 1) {
+    throw createError('VALIDATION_ERROR', 'A bag weight goes on one tag — print it with PRINT TAG, not a batch.');
   }
 
   const lot = await requireLot(db, sessionId);
@@ -1748,10 +1762,10 @@ async function handleSackAlloc(db, env, ctx, body) {
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, storage, stored_at, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, storage, stored_at, is_test, fill_lbs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [sackId, season, serial, code, supersackSku(code, season),
-               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest],
+               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest, fillLbs],
     });
   }
   if (note) {
@@ -1806,7 +1820,8 @@ async function handleSackAlloc(db, env, ctx, body) {
   const printVia = await resolvePrintVia(db);
 
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
-    tags: await getLotTags(db, sessionId, isTest), note_on: note ? ids[0] : null, print_via: printVia });
+    tags: await getLotTags(db, sessionId, isTest), note_on: note ? ids[0] : null,
+    fill_on: fillLbs !== null ? ids[0] : null, fill_lbs: fillLbs, print_via: printVia });
 }
 
 /* ---------------------------------------------------------------------------
@@ -2640,12 +2655,24 @@ async function handleAllocate(db, env, params) {
   // Grouped by season AND cultivar. The floor spends part of 2026 trimming
   // 2025 material, so "Lifter" alone is not a lot — 2025 Lifter and 2026
   // Lifter are different crops that happen to share a name.
-  const rows = await query(db, `
-    SELECT season, cultivar, COUNT(*) AS n FROM harvest_sacks
+  // One row per bag, grouped here rather than in SQL, because each bag's share
+  // now depends on its own weight (Koa, 2026-09-28): a bag weighed at 18 lb
+  // takes 18/35 of a full bag's share, not a full one.
+  const bags = await query(db, `
+    SELECT sack_id, season, cultivar, fill_lbs FROM harvest_sacks
     WHERE opened_at >= ? AND opened_at < ? AND is_test = ? AND voided_at IS NULL
       AND (weights_source IS NULL OR weights_source = 'allocated')
-    GROUP BY season, cultivar
+    ORDER BY season, cultivar, sack_id
   `, [dayStart, dayEnd, isTest]);
+  const groups = new Map();
+  for (const b of bags) {
+    const k = `${b.season}|${b.cultivar}`;
+    const g = groups.get(k) || { season: b.season, cultivar: b.cultivar, n: 0, lbs: 0, bags: [] };
+    const w = sackLbs(b);
+    g.n += 1; g.lbs += w; g.bags.push({ sack_id: b.sack_id, lbs: w, weighed: b.fill_lbs != null });
+    groups.set(k, g);
+  }
+  const rows = [...groups.values()];
 
   if (!rows.length) {
     return successResponse({ success: true, date: day, allocated: [], note: 'No bags opened that day.' });
@@ -2663,7 +2690,7 @@ async function handleAllocate(db, env, params) {
     throw createError('INTERNAL_ERROR', `Could not read floor output for ${day}: ${e.message}`);
   }
 
-  const per = (total, n) => Math.round((total / n) * 100) / 100;
+  const r2 = x => Math.round(x * 100) / 100;
 
   const done = [];
   const countMismatches = [];
@@ -2697,23 +2724,29 @@ async function handleAllocate(db, env, params) {
       });
     }
 
-    const share = {
-      tops: per(f.tops, r.n), smalls: per(f.smalls, r.n), biomass: per(f.biomass, r.n),
-      trim: per(f.trim, r.n), waste: per(f.waste, r.n),
-    };
-    await execute(db, `
-      UPDATE harvest_sacks
-      SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
-          weights_source = 'allocated', weights_allocated_at = datetime('now')
-      WHERE opened_at >= ? AND opened_at < ? AND season = ? AND cultivar = ?
-        AND is_test = ? AND voided_at IS NULL
-        AND (weights_source IS NULL OR weights_source = 'allocated')
-    `, [share.tops, share.smalls, share.biomass, share.trim, share.waste,
-        dayStart, dayEnd, r.season, r.cultivar, isTest]);
+    // Each bag's share of the day is its weight over the group's weight. With
+    // every bag full that is exactly the old equal split.
+    const shareFor = lbs => ({
+      tops: r2(f.tops * lbs / r.lbs), smalls: r2(f.smalls * lbs / r.lbs), biomass: r2(f.biomass * lbs / r.lbs),
+      trim: r2(f.trim * lbs / r.lbs), waste: r2(f.waste * lbs / r.lbs),
+    });
+    await transaction(db, r.bags.map(b => {
+      const sh = shareFor(b.lbs);
+      return {
+        sql: `UPDATE harvest_sacks
+              SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
+                  weights_source = 'allocated', weights_allocated_at = datetime('now')
+              WHERE sack_id = ? AND (weights_source IS NULL OR weights_source = 'allocated')`,
+        params: [sh.tops, sh.smalls, sh.biomass, sh.trim, sh.waste, b.sack_id],
+      };
+    }));
+    const full = fullSackLbs(r.season);
     done.push({
-      season: r.season, cultivar: r.cultivar, sacks: r.n,
+      season: r.season, cultivar: r.cultivar, sacks: r.n, sack_lbs: round1(r.lbs),
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
-      per_sack: share,
+      // What a full bag got. A weighed bag got the same scaled by its weight.
+      per_sack: shareFor(full),
+      weighed_bags: r.bags.filter(b => b.weighed).map(b => ({ sack_id: b.sack_id, lbs: b.lbs })),
     });
   }
 
@@ -2738,7 +2771,7 @@ async function handleAllocate(db, env, params) {
     // the per-bag figures for that cultivar are scaled wrong, so it belongs in
     // the result rather than in a log line nobody reads.
     sack_count_mismatches: countMismatches,
-    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split equally across the TAGGED bags opened the same day. Sacks are filled to 37 lb, so equal is near-exact — the last sack of a lot runs light and still takes a full share. Waste is a derived residual, not a weighed figure.",
+    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure.",
   });
 }
 
@@ -2907,6 +2940,33 @@ async function handleSackStore(ui, db, env, ctx, body) {
   const where = storageLabel(ui, storage);
   return renderPage(ui, `${ui.t('sack')} ${sackId}`,
     sackDetailBody(ui, updated, where ? ui.t('storageSaved', { where }) : ui.t('storageCleared')));
+}
+
+/**
+ * Correct a bag's weight from its page — for a bag weighed after its tag
+ * printed, or a weight typed wrong at takedown. Blank means a full sack.
+ * Refused once the bag is opened: the day's output has been split by it.
+ */
+async function handleSackFill(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  let fillLbs;
+  try { fillLbs = parseFillLbs(body.fill_lbs); }
+  catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+
+  const view = await getSackView(db, sackId);
+  refuseRealInTest(ui, env, view?.sack);
+  if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
+  if (view.sack.voided_at) throw createError('VALIDATION_ERROR', ui.t('fillVoided'));
+  if (view.sack.opened_at) throw createError('VALIDATION_ERROR', ui.t('fillOpened'));
+
+  await execute(db, `UPDATE harvest_sacks SET fill_lbs = ? WHERE sack_id = ? AND opened_at IS NULL AND voided_at IS NULL`,
+    [fillLbs, sackId]);
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`,
+    sackDetailBody(ui, updated, fillLbs !== null
+      ? ui.t('fillSaved', { n: fillLbs })
+      : ui.t('fillCleared', { n: fullSackLbs(updated.sack.season) })));
 }
 
 /**
@@ -3436,6 +3496,11 @@ export async function computeRollup(db, env, params) {
         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS bins,
       (SELECT COUNT(*) FROM harvest_sacks s
         WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS sacks,
+      (SELECT COALESCE(SUM(COALESCE(s.fill_lbs, ?)), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS sack_lbs,
+      (SELECT COUNT(*) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
+          AND s.fill_lbs IS NOT NULL) AS sacks_weighed,
       (SELECT COUNT(*) FROM harvest_sacks s
         WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
           AND s.opened_at IS NOT NULL) AS sacks_opened,
@@ -3452,7 +3517,7 @@ export async function computeRollup(db, env, params) {
     FROM harvest_scan_log l
     WHERE l.event_type = 'enter' AND l.season = ? AND l.is_test = ?
     ORDER BY l.occurred_at ASC
-  `, [season, isTest]);
+  `, [fullSackLbs(season), season, isTest]);
 
   // Trailer times per session, for clipping an overnight session to the hours
   // it can be seen to have worked. Counts and sums come from the subqueries
@@ -3649,21 +3714,22 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
   const finished = round1(tops + smalls);
 
   // Dry biomass, and the ONLY yield figure available at takedown. Product is
-  // weighed into every sack at 37 lb, so the sack count IS a measurement — no
-  // bucking, no trim floor, no allocation needed. That matters because the
+  // weighed into every sack (35 lb from the 2026 crop, 37 lb before), so the
+  // sacks ARE a measurement — no bucking, no trim floor, no allocation needed. That matters because the
   // finished figures below are gated on every sack having been opened, and
   // sacks are only bucked when there is an order for that strain: a lot cut in
   // October can sit with no yield row until the following spring while this
   // number was knowable the day the rack came down.
   //
-  // Reads UP TO 37 LB HIGH per lot: the last sack of a lot goes out light and
-  // is counted as full. One sack in ~48 (3,965 sacks / 82 lots), always in the
-  // same direction. Accepted by Koa 2026-09-02 rather than ask the crew to
-  // record a fill weight for one sack; the real figure is written in that
-  // tag's notes if anyone needs it.
+  // The light last sack of a lot used to be counted as full (accepted
+  // 2026-09-02). Since 2026-09-28 the crew types its weight at takedown, so a
+  // weighed bag counts at its own weight and only an unweighed light bag still
+  // reads high.
   const sacks = sum('sacks');
   const sacksOpened = sum('sacks_opened');
-  const dryLbs = sacks ? round1(sacks * CONSTANTS.supersackLbs.value) : null;
+  const sacksWeighed = sum('sacks_weighed');
+  const fullLbs = fullSackLbs(l.season || getSeason());
+  const dryLbs = sacks ? round1(sum('sack_lbs')) : null;
 
   // Yields are only honest once every tagged sack has actually been weighed —
   // a partially-opened lot would read as a catastrophic yield miss.
@@ -3706,7 +3772,7 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
     sacks_opened: sacksOpened,
     dry_lbs: dryLbs,
     dry_lbs_basis: dryLbs === null ? null
-      : `${sacks} sacks x ${CONSTANTS.supersackLbs.value} lb; last sack of the lot runs light, so up to 37 lb high`,
+      : `${sacks - sacksWeighed} full sacks x ${fullLbs} lb${sacksWeighed ? ` + ${sacksWeighed} weighed at takedown` : ''}; a light last sack that was not weighed still counts as full`,
     dry_lbs_per_acre: dryLbs !== null && acres ? round1(dryLbs / acres) : null,
     dry_lbs_per_plant: dryLbs !== null && plants ? +(dryLbs / plants).toFixed(3) : null,
     tops_lbs: tops,
@@ -4104,6 +4170,9 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .nextnote.pending summary { color: #e9c462; font-weight: 700; }
   .nextnote textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.1rem; padding: 12px;
                        border: none; border-radius: 8px; resize: vertical; margin: 4px 0 6px; }
+  .fillrow { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+  .fillrow input { width: 7em; margin: 0; font-size: 1.4rem; font-weight: 700; text-align: center; }
+  .fillrow span { font-size: 1.2rem; font-weight: 700; }
   a.mini { display: inline-block; padding: 10px 16px; background: #3a5f4c; color: #fff;
            text-decoration: none; border-radius: 8px; font-size: 0.95rem; }
   a.mini.danger { background: #7a3a3a; }
@@ -5099,6 +5168,16 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   <div class="hint">${ui.t('noteNextHint')}</div>
 </details>
 
+<!-- The next bag's weight when it is not a full sack — the last bag of a lot,
+     almost always (Koa, 2026-09-28). The crew had been typing it into the note
+     ("18lb"); here it is a number the ledger and the allocator can add up. -->
+<details id="nextFill" class="nextnote"${finishedAt ? ' hidden' : ''}>
+  <summary>${ui.t('fillNext')}</summary>
+  <div class="fillrow"><input id="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1"
+    placeholder="${fullSackLbs(lot.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div>
+  <div class="hint">${ui.t('fillNextHint', { n: fullSackLbs(lot.season || getSeason()) })}</div>
+</details>
+
 <button id="printBtn" class="bigbtn"${finishedAt ? ' disabled' : ''}>${ui.t('printTag')}</button>
 
 <div class="status">
@@ -5156,6 +5235,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
     printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
+    printTagFill: ui.t('printTagFill', { n: '{n}' }), fillSavedOn: ui.t('fillSavedOn', { id: '{id}', n: '{n}' }),
     reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
     tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
     printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
@@ -5205,7 +5285,9 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       var row = el('div', 'tagrow' + (t.voided ? ' voided' : ''));
       var info = el('span', 'taginfo');
       info.appendChild(el('strong', 'tagid', '# ' + t.id));
-      if (t.at) info.appendChild(el('span', 'tagwhen', new Date(t.at).toLocaleString(TAG_LOCALE, TAG_TIME)));
+      var when = t.at ? new Date(t.at).toLocaleString(TAG_LOCALE, TAG_TIME) : '';
+      if (t.fill != null) when += (when ? ' · ' : '') + t.fill + ' lb';
+      if (when) info.appendChild(el('span', 'tagwhen', when));
       row.appendChild(info);
       var acts = el('span', 'tagacts');
       if (t.voided) {
@@ -5236,11 +5318,22 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     btn.textContent = b ? (label || T.printing) : idleLabel();
   }
 
+  var fillBox = document.getElementById('nextFill');
+  var fillInput = document.getElementById('fillLbs');
   function pendingNote() { return noteText.value.trim(); }
-  // The button names what it will do: a waiting note goes out with the tag.
-  function idleLabel() { return pendingNote() ? T.printTagNote : T.printTag; }
+  function pendingFill() { return fillInput.value.trim(); }
+  // The button names what it will do: a waiting note or weight goes out with
+  // the tag. The weight wins the label — it changes the numbers, a note does not.
+  function idleLabel() {
+    if (pendingFill()) return T.printTagFill.replace('{n}', pendingFill());
+    return pendingNote() ? T.printTagNote : T.printTag;
+  }
   noteText.addEventListener('input', function () {
     noteBox.classList.toggle('pending', !!pendingNote());
+    if (!busy) btn.textContent = idleLabel();
+  });
+  fillInput.addEventListener('input', function () {
+    fillBox.classList.toggle('pending', !!pendingFill());
     if (!busy) btn.textContent = idleLabel();
   });
 
@@ -5349,24 +5442,29 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     // Only PRINT TAG carries the note: a batch is several bags. The note waits
     // in its box for the next single tag instead.
     var note = qty === 1 ? pendingNote() : '';
+    var fill = qty === 1 ? pendingFill() : '';
     setBusy(true);
     fetch('${API}?action=sack_alloc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note })
+      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) throw new Error(d.error || 'Print failed');
         print(d.ids, d.print_via); refresh(d);
+        var saved = [];
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
-          noteMsg.innerHTML = T.noteSavedOn.replace('{id}', d.note_on);
-          noteMsg.hidden = false;
-        } else {
-          noteMsg.hidden = true;
+          saved.push(T.noteSavedOn.replace('{id}', d.note_on));
         }
+        if (d.fill_on) {
+          fillInput.value = ''; fillBox.classList.remove('pending'); fillBox.open = false;
+          saved.push(T.fillSavedOn.replace('{id}', d.fill_on).replace('{n}', d.fill_lbs));
+        }
+        noteMsg.innerHTML = saved.join('<br>');
+        noteMsg.hidden = !saved.length;
         setBusy(false);
       })
       .catch(function (e) {
@@ -6491,7 +6589,9 @@ ${canMove ? `<details class="batch">
     { cls: 'waste', label: ui.t('wWaste'), v: num(sack.waste_lbs), derived: true },
   ].filter(p => p.v !== null);
   const hasWeights = parts.length > 0;
-  const fill = CONSTANTS.supersackLbs.value;   // 37 lb; null would hide the reference, not fake it
+  // What went into THIS bag: its weighed fill, else a full sack for its crop
+  // year (35 lb from 2026, 37 before). Never null.
+  const fill = sackLbs(sack);
   const measured = sack.weights_source === 'measured';
   const srcBadge = `<span class="badge ${measured ? 'ok' : 'warn'}">${measured ? ui.t('srcMeasuredBadge') : ui.t('srcAllocatedBadge')}</span>`;
   const srcLine = measured ? ui.t('weightsMeasured') : ui.t('weightsAllocated');
@@ -6513,7 +6613,23 @@ ${canMove ? `<details class="batch">
   <p class="note" style="margin:0">${ui.t('voidedNoOpen')}</p>
 </div>`;
   } else if (!opened) {
+    // The bag's weight, and a way to correct it until it is opened — after that
+    // the day's output has been split by it, so it is fixed.
+    const full = fullSackLbs(sack.season);
+    const weighed = sack.fill_lbs !== null && sack.fill_lbs !== undefined;
     weights = `<div class="card">
+  <p class="note" style="margin:0 0 6px"><strong>${ui.t('bagWeight')}:</strong> ${weighed
+    ? ui.t('bagWeighed', { n: lb(Number(sack.fill_lbs)) }) : ui.t('bagFull', { n: full })}</p>
+  <details class="batch" style="margin:0 0 12px">
+    <summary>${ui.t('fillChange')}</summary>
+    <form method="POST" action="/api/harvest?action=sack_fill&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
+      <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+      <div class="fillrow"><input name="fill_lbs" type="number" inputmode="decimal" min="1" max="60" step="0.1"
+        value="${weighed ? lb(Number(sack.fill_lbs)) : ''}" placeholder="${full}" aria-label="${escapeHtml(ui.t('bagWeight'))}"><span>lb</span></div>
+      <p class="hint" style="margin:0 0 8px">${ui.t('fillChangeHint', { n: full })}</p>
+      <button class="btn" type="submit">${ui.t('fillSave')}</button>
+    </form>
+  </details>
   <p class="note" style="margin:0 0 12px">${ui.t('notOpened')}</p>
   <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">

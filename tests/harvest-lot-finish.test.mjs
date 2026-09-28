@@ -51,7 +51,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0040-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -423,6 +423,62 @@ test('the takedown screen offers Finished on an open lot, and on a finished one 
   assert.match(html, /<button id="printBtn" class="bigbtn" disabled>/);
   assert.match(html, /<button id="batchBtn" class="btn" disabled>/);
   assert.match(html, /var locked = true;/, 'a void re-enabling the buttons must not undo the lock');
+});
+
+test('a bag weight typed before PRINT TAG is saved on that tag, and only on one tag', async () => {
+  // Koa, 2026-09-28: the last bag of a lot goes out light; the crew had been
+  // writing "18lb" in the note. Now it is a number the ledger can add up.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  await tagged(env, ctx, lot, 2);
+  const r = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, bay: 9, fill_lbs: '17,5' });
+  assert.equal(r.body.success, true, JSON.stringify(r.body));
+  assert.equal(r.body.fill_on, `${yy}-SLIFT-3`);
+  assert.equal(r.body.fill_lbs, 17.5);
+  assert.equal(r.body.tags[0].fill, 17.5, 'the tag list shows it');
+  const fills = () => sqlite.prepare('SELECT sack_id, fill_lbs FROM harvest_sacks ORDER BY serial').all().map(x => x.fill_lbs);
+  assert.deepEqual(fills(), [null, null, 17.5], 'the full bags stay null');
+
+  const batch = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 3, fill_lbs: 20 });
+  assert.equal(batch.body.success, false, 'a batch is several bags and cannot share one weight');
+  const typo = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, fill_lbs: 180 });
+  assert.equal(typo.body.success, false, '180 lb is a typo, not a bag');
+  assert.equal(fills().length, 3, 'refused before any serial is spent');
+
+  const screen = await sessionScreen(env, ctx, lot);
+  assert.match(screen, /<details id="nextFill" class="nextnote">/);
+  assert.match(screen, /placeholder="35"/, 'the 2026 full sack is the hint');
+});
+
+test('a bag weight can be corrected from the bag page until the bag is opened', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  await tagged(env, ctx, lot, 1);
+  const id = `${yy}-SLIFT-1`;
+  const fill = (v) => handleHarvestD1(new Request('https://x/api/harvest?action=sack_fill&lang=en', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ sack_id: id, fill_lbs: String(v) }).toString(),
+  }), env, ctx).then(async res => ({ status: res.status, html: await res.text() }))
+    .catch(e => ({ status: e.statusCode || 500, html: e.message }));
+  const stored = () => sqlite.prepare('SELECT fill_lbs FROM harvest_sacks WHERE sack_id = ?').get(id).fill_lbs;
+
+  let r = await fill(22);
+  assert.equal(r.status, 200);
+  assert.match(r.html, /Weight saved: 22 lb\./);
+  assert.match(r.html, /22 lb · weighed/);
+  assert.equal(stored(), 22);
+
+  r = await fill('');
+  assert.match(r.html, /Bag marked full \(35 lb\)\./);
+  assert.match(r.html, /35 lb · full/);
+  assert.equal(stored(), null);
+
+  sqlite.exec(`UPDATE harvest_sacks SET opened_at = datetime('now') WHERE sack_id = '${id}'`);
+  r = await fill(20);
+  assert.ok(r.status >= 400, 'the day was split by it — refused once opened');
+  assert.equal(stored(), null);
 });
 
 test('every new string renders in both languages', async () => {
