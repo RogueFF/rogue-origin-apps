@@ -26,6 +26,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
+const { fullSackLbsForTitle } = await import(
+  join(REPO, 'workers/src/lib/sack-weight.js').replace(/\\/g, '/').replace(/^/, 'file:///'));
 
 let DatabaseSync = null;
 try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
@@ -45,7 +47,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0040-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -67,6 +69,7 @@ function freshDb() {
   sqlite.exec("INSERT INTO cultivars (id, name) VALUES (1, 'Sour Lifter'), (2, 'Lifter')");
 
   const DB = {
+    async batch(stmts) { return Promise.all(stmts.map(st => st.run())); },
     prepare(sql) {
       return {
         bind(...args) {
@@ -85,9 +88,9 @@ function freshDb() {
   return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
 }
 
-/** The floor's row for a day. `waste` defaults to the real residual of 37/sack. */
+/** The floor's row for a day. `waste` defaults to the real residual of a full sack for the strain's crop year. */
 function seedFloor(sqlite, { day = DAY, strain, sacks, tops, smalls, biomass = 0, trim = 0, waste = null }) {
-  const raw = sacks * 37;
+  const raw = sacks * fullSackLbsForTitle(strain);
   const w = waste === null ? Math.max(0, raw - tops - smalls - biomass - trim) : waste;
   sqlite.prepare(`INSERT INTO supersack_entries
     (date, strain, sacks_opened, tops_lbs, smalls_lbs, biomass_lbs, trim_lbs, waste_lbs, raw_lbs)
@@ -125,24 +128,69 @@ before(function () {
 test('every part of the sack is shared out, not just tops and smalls', async () => {
   const { sqlite, env, ctx } = freshDb();
   seedAlias(sqlite, `${SEASON} - Sour Lifter / Sungrown`, 1);
-  // 4 sacks = 148 lb raw. tops 84, smalls 48, biomass 8, trim 4 -> waste 4.
-  seedFloor(sqlite, { strain: `${SEASON} - Sour Lifter / Sungrown`, sacks: 4, tops: 84, smalls: 48, biomass: 8, trim: 4 });
+  // 4 sacks = 140 lb raw at the 2026 crop's 35 lb. tops 80, smalls 44,
+  // biomass 8, trim 4 -> waste 4.
+  seedFloor(sqlite, { strain: `${SEASON} - Sour Lifter / Sungrown`, sacks: 4, tops: 80, smalls: 44, biomass: 8, trim: 4 });
   seedOpenedSacks(sqlite, { n: 4, cultivar: 'Sour Lifter' });
 
   await allocate(env, ctx);
 
   for (const row of sackRows(sqlite)) {
-    assert.equal(row.tops_lbs, 21);
-    assert.equal(row.smalls_lbs, 12);
+    assert.equal(row.tops_lbs, 20);
+    assert.equal(row.smalls_lbs, 11);
     assert.equal(row.biomass_lbs, 2);
     assert.equal(row.trim_lbs, 1);
     assert.equal(row.waste_lbs, 1);
     assert.equal(row.weights_source, 'allocated');
     // True by construction, not a reconciliation: waste is defined as the
-    // remainder of 37. Asserted only to show the parts account for the sack.
+    // remainder of a full sack. Asserted only to show the parts account for it.
     const sum = row.tops_lbs + row.smalls_lbs + row.biomass_lbs + row.trim_lbs + row.waste_lbs;
-    assert.equal(Math.round(sum * 10) / 10, 37);
+    assert.equal(Math.round(sum * 10) / 10, 35);
   }
+});
+
+test('a bag weighed light at takedown takes a share in proportion to its weight', async () => {
+  // Koa, 2026-09-28: the last bag of a lot goes out light, and its weight is
+  // now typed at takedown. Equal shares would credit it with a full bag's output.
+  const { sqlite, env, ctx } = freshDb();
+  seedAlias(sqlite, `${SEASON} - Sour Lifter / Sungrown`, 1);
+  seedFloor(sqlite, { strain: `${SEASON} - Sour Lifter / Sungrown`, sacks: 3, tops: 50, smalls: 25, biomass: 5, trim: 2.5 });
+  seedOpenedSacks(sqlite, { n: 3, cultivar: 'Sour Lifter' });
+  sqlite.exec(`UPDATE harvest_sacks SET fill_lbs = 17.5 WHERE serial = 3`);   // 35 + 35 + 17.5 = 87.5 lb
+
+  const res = await allocate(env, ctx);
+  const [a, b, light] = sackRows(sqlite);
+  for (const full of [a, b]) {
+    assert.deepEqual([full.tops_lbs, full.smalls_lbs, full.biomass_lbs, full.trim_lbs], [20, 10, 2, 1]);
+  }
+  assert.deepEqual([light.tops_lbs, light.smalls_lbs, light.biomass_lbs, light.trim_lbs], [10, 5, 1, 0.5],
+    'half a sack, half a share');
+  const tops = sackRows(sqlite).reduce((t, r) => t + r.tops_lbs, 0);
+  assert.equal(tops, 50, 'the day still adds up');
+
+  const row = res.allocated.find(x => x.cultivar === 'Sour Lifter');
+  assert.equal(row.sack_lbs, 87.5);
+  assert.deepEqual(row.weighed_bags, [{ sack_id: 'T-3', lbs: 17.5 }]);
+  assert.equal(row.per_sack.tops, 20, 'per_sack is what a full bag got');
+});
+
+test('a 2025-crop bag is still a 37 lb sack when it is opened in 2026', async () => {
+  const { fullSackLbs, fullSackLbsForTitle: forTitle, sackLbs, parseFillLbs } = await import(
+    join(REPO, 'workers/src/lib/sack-weight.js').replace(/\\/g, '/').replace(/^/, 'file:///'));
+  assert.equal(fullSackLbs(2025), 37);
+  assert.equal(fullSackLbs(2026), 35);
+  assert.equal(fullSackLbs(2027), 35);
+  assert.equal(forTitle('2025 - Lifter / Sungrown'), 37, 'the crop year in the title, not the day it is opened');
+  assert.equal(forTitle('2026 - Lifter / Sungrown / 1st Cut'), 35);
+  assert.equal(forTitle('Unknown'), 37, 'legacy rows with no year keep the old weight');
+  assert.equal(sackLbs({ season: 2026, fill_lbs: null }), 35);
+  assert.equal(sackLbs({ season: 2026, fill_lbs: 18 }), 18);
+  assert.equal(sackLbs({ season: 2025 }), 37);
+  assert.equal(parseFillLbs(''), null, 'blank is a full sack');
+  assert.equal(parseFillLbs('17,5'), 17.5, 'a comma decimal from a Spanish keyboard');
+  assert.throws(() => parseFillLbs('0'));
+  assert.throws(() => parseFillLbs('180'), 'a typo, not a bag');
+  assert.throws(() => parseFillLbs('lots'));
 });
 
 test('the result reports the floor day and the per-sack share for every part', async () => {
@@ -153,7 +201,7 @@ test('the result reports the floor day and the per-sack share for every part', a
 
   const res = await allocate(env, ctx);
   const row = res.allocated.find(a => a.cultivar === 'Lifter');
-  assert.deepEqual(row.per_sack, { tops: 20, smalls: 10, biomass: 3, trim: 1, waste: 3 });
+  assert.deepEqual(row.per_sack, { tops: 20, smalls: 10, biomass: 3, trim: 1, waste: 1 });
   assert.equal(row.floor.biomass, 6);
   // The basis line travels with the numbers, so a reader of the raw API is
   // told waste is derived without having to find the source.
