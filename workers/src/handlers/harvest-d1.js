@@ -215,7 +215,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix',
   'sack_print', 'sack_session_start', 'sack_session', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -269,6 +269,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleTrailerLog(ui, db, env, ctx, body);
         case 'trailer_done':
           return await handleTrailerDone(ui, db, env, params);
+        case 'trailer_fix':
+          return await handleTrailerFix(ui, db, env, ctx, body);
         case 'harvest_dash':
           // The shell only. It ships zero harvest data and fetches everything
           // after the operator types the password, the same way the lot board
@@ -1123,12 +1125,14 @@ async function pickedLot(ui, db, isTest, raw, zone = null) {
   if (!value) return null;
   const id = parseInt(value, 10);
   if (!Number.isInteger(id) || id <= 0) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
-  // An OPEN lot is always eligible: it is being cut now, however long ago it
-  // opened — a weekend with no End of day scan must not lock every trailer out.
+  // Age is time since the lot was last ACTIVE: now if it is open, else its
+  // close. An open lot is always eligible (a weekend with no End of day scan
+  // must not lock every trailer out), and a two-day zone that closed a minute
+  // ago is recent, however long ago it opened.
   const lot = await queryOne(db, `
     SELECT * FROM harvest_scan_log
     WHERE id = ? AND event_type = 'enter' AND is_test = ? ${zone ? 'AND zone = ?' : ''}
-      AND (closed_at IS NULL OR julianday('now') - julianday(occurred_at) <= ?)
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
   `, zone ? [id, isTest, zone, LOT_AT_DOOR_DAYS] : [id, isTest, LOT_AT_DOOR_DAYS]);
   if (!lot) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
   return lot;
@@ -1291,16 +1295,77 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
 }
 
 // ─── TRAILER DECAL ──────────────────────────────────────
+// ONE SCAN (Koa, 2026-09-28: "just a one-scan on the qr without jumping
+// through any hoops"). Scanning the decal IS logging the load: open lot (or
+// the one that just closed), 24 bins, this trailer's bay from earlier today.
+// The receipt then offers the rare corrections — wrong bay, a partial, the
+// wrong lot, undo — for TRAILER_EDIT_MS. Fix-after instead of ask-before.
+//
+// It still asks, and writes nothing, in exactly two cases, because guessing
+// would put bins somewhere wrong that nobody can see afterwards:
+//   - no bay for this trailer yet today (its first run: one tap, then
+//     hands-free until the barn moves on);
+//   - no lot to put it on (nothing open and nothing just closed).
+
+/** How long after the scan the receipt still offers fixes and undo. */
+const TRAILER_EDIT_MS = 10 * 60 * 1000;
+
+/**
+ * A request that must never log a load: anything but a plain GET, a browser
+ * prefetch/prerender, or a link-preview bot (the URL is printed on a trailer
+ * and may well be texted around). These get the ask screen, which writes
+ * nothing until someone taps.
+ */
+function isNotAPerson(request) {
+  if (request.method !== 'GET') return true;
+  const h = request.headers;
+  const purpose = `${h.get('sec-purpose') || ''} ${h.get('purpose') || ''} ${h.get('x-purpose') || ''}`;
+  if (/prefetch|prerender|preview/i.test(purpose)) return true;
+  return /bot\b|crawler|spider|preview|facebookexternalhit|whatsapp|slack|discord|telegram/i
+    .test(h.get('user-agent') || '');
+}
+
+const receiptUrl = (id, ui, seen = false) =>
+  `${API}?action=trailer_done&id=${id}&lang=${ui.lang}${seen ? '&seen=1' : ''}`;
+
+/** 303 to a GET page: the tab ends up on the receipt, never on the scan URL. */
+const seeOther = (location) => new Response(null, { status: 303, headers: { Location: location } });
 
 /** GET /t/<n> — the QR on a trailer, scanned by its driver at drop-off. */
-export async function handleTrailerScan(request, env, _ctx) {
+export async function handleTrailerScan(request, env, ctx) {
   env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
     const raw = new URL(request.url).pathname.replace(/^\/t\//, '').trim();
     const trailer = parseTrailer(raw);
     if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: raw }));
-    return await trailerFormPage(ui, env.DB, env, trailer);
+    const db = env.DB;
+    if (isNotAPerson(request)) return await trailerFormPage(ui, db, env, trailer);
+
+    const isTest = isTestMode(env) ? 1 : 0;
+    // A rescan inside the repeat window is the same load: show it, write nothing.
+    const recent = await getRecentTrailerLoad(db, isTest, trailer);
+    if (recent) return seeOther(receiptUrl(recent.id, ui, true));
+
+    const [proposal, lastFill] = await Promise.all([
+      proposeLot(db, isTest), getLastFilledBay(db, isTest, trailer)]);
+    const bayToday = lastFill && lastFill.occurred_at &&
+      pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
+      ? lastFill.bay : null;
+    if (!proposal.lot || !bayToday) return await trailerFormPage(ui, db, env, trailer);
+
+    const saved = await recordLoad(db, env, ctx, {
+      zone: proposal.lot.zone, bins: CONSTANTS.binsPerTrailer.value, session: proposal.lot,
+      bay: bayToday, trailer, isTest, guard: true,
+      cutNote: `cut ${proposal.lot.cut_number}${proposal.viaGrace ? ', just-closed lot' : ''}, one scan`,
+    });
+    if (!saved) {
+      // Lost a race with another scan of the same decal: that one is the load.
+      const other = await getRecentTrailerLoad(db, isTest, trailer);
+      if (other) return seeOther(receiptUrl(other.id, ui, true));
+      return await trailerFormPage(ui, db, env, trailer);
+    }
+    return seeOther(receiptUrl(saved.id, ui));
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -1310,8 +1375,7 @@ export async function handleTrailerScan(request, env, _ctx) {
 /**
  * This trailer's last load, if it was inside the repeat window. A trailer
  * cannot be cut, filled and driven round in five minutes, so a second scan
- * that soon is a camera retry, a back button or a double tap — asked about,
- * never written silently.
+ * that soon is a camera retry, a back button or a double tap.
  */
 async function getRecentTrailerLoad(db, isTest, trailer) {
   const row = await queryOne(db, `
@@ -1324,9 +1388,9 @@ async function getRecentTrailerLoad(db, isTest, trailer) {
 }
 
 /**
- * The trailer screen. The lot is worked out HERE, shown to the driver, and
- * posted as an explicit id — so what the driver saw is exactly what is saved,
- * even if the crew scans a new zone between the scan and the tap.
+ * The ask screen, for the two cases one scan cannot settle. The lot is worked
+ * out HERE, shown to the driver, and posted as an explicit id — so what the
+ * driver saw is exactly what is saved.
  */
 async function trailerFormPage(ui, db, env, trailer, keep = null) {
   const isTest = isTestMode(env) ? 1 : 0;
@@ -1347,6 +1411,17 @@ async function trailerFormPage(ui, db, env, trailer, keep = null) {
   }));
 }
 
+/** Bins from a form field: 1..max, the whole value, or a thrown range error. */
+function parseBins(raw, max, errorKey, ui) {
+  const s = String(raw ?? '').trim();
+  const n = parseInt(s, 10);
+  if (!Number.isInteger(n) || n < 1 || n > max || String(n) !== s) {
+    throw createError('VALIDATION_ERROR', ui.t(errorKey, { max }));
+  }
+  return n;
+}
+
+/** POST from the ask screen: the tap that one scan could not do by itself. */
 async function handleTrailerLog(ui, db, env, ctx, body) {
   const trailer = parseTrailer(body.trailer);
   if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: body.trailer ?? '' }));
@@ -1359,19 +1434,11 @@ async function handleTrailerLog(ui, db, env, ctx, body) {
   const bay = parseBay(body.bay, ui);
   if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
 
-  // 24 is the standard (Koa, 2026-09-28). Short trailers are real — the last
-  // one out of every zone — so a partial is a number the driver types, and
-  // anything that is not a partial is refused rather than stored as one.
+  // 24 is the standard (Koa, 2026-09-28). A partial is 1..23; anything else in
+  // the partial box is refused rather than stored as one.
   const FULL = CONSTANTS.binsPerTrailer.value;
   const partial = String(body.partial_bins ?? '').trim();
-  let bins = FULL;
-  if (partial) {
-    const n = parseInt(partial, 10);
-    if (!Number.isInteger(n) || n < 1 || n >= FULL || String(n) !== partial) {
-      throw createError('VALIDATION_ERROR', ui.t('partialRange', { max: FULL - 1 }));
-    }
-    bins = n;
-  }
+  const bins = partial ? parseBins(partial, FULL - 1, 'partialRange', ui) : FULL;
 
   const proposal = await proposeLot(db, isTest);
   const asProposed = !!(proposal.lot && proposal.lot.id === lot.id);
@@ -1386,30 +1453,99 @@ async function handleTrailerLog(ui, db, env, ctx, body) {
     return trailerFormPage(ui, db, env, trailer, { lot: lot.id, bay, partial });
   }
 
-  // Post/Redirect/Get. The receipt is its own GET, so a reload or a back
-  // button re-shows it instead of re-posting the load — which, after the five
-  // minutes, the guard would let through as a second trailer.
-  return new Response(null, { status: 303, headers: {
-    Location: `${API}?action=trailer_done&id=${saved.id}&lang=${ui.lang}`,
-  } });
+  // Post/Redirect/Get: a reload or a back button re-shows the receipt instead
+  // of re-posting the load.
+  return seeOther(receiptUrl(saved.id, ui));
 }
 
-/** GET receipt for a trailer load, the target of handleTrailerLog's redirect. */
-async function handleTrailerDone(ui, db, env, params) {
-  const isTest = isTestMode(env) ? 1 : 0;
-  const id = parseInt(params.id, 10);
-  const row = Number.isInteger(id) && id > 0 ? await queryOne(db, `
+/** One trailer load with its lot, or null. Trailer loads only. */
+async function getTrailerLoad(db, isTest, rawId) {
+  const id = parseInt(rawId, 10);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return queryOne(db, `
     SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut
     FROM harvest_scan_log l
     JOIN harvest_scan_log s ON s.id = l.attributed_zone_session_id
     WHERE l.id = ? AND l.event_type = 'barn_load' AND l.trailer IS NOT NULL AND l.is_test = ?
-  `, [id, isTest]) : null;
+  `, [id, isTest]);
+}
+
+const editableUntil = (row) => parseSqliteUtc(row.occurred_at).getTime() + TRAILER_EDIT_MS;
+
+/** GET receipt for a trailer load — where every scan and every tap ends up. */
+async function handleTrailerDone(ui, db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, params.id);
   if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
-  const loadNumber = await loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id);
-  return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerLoggedBody(ui, {
-    trailer: row.trailer, bins: row.bins, bay: row.bay, loadNumber,
-    lot: { zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut },
+  const editable = Date.now() < editableUntil(row);
+  const [loadNumber, recentLots, proposal] = await Promise.all([
+    loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id),
+    editable ? getRecentEnterSessions(db, isTest) : [],
+    truthy(params.seen) ? proposeLot(db, isTest) : { lot: null },
+  ]);
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
+    row, loadNumber, editable, recentLots, seen: truthy(params.seen), proposal,
   }));
+}
+
+/**
+ * POST from the receipt: fix a load (bay, bins, lot) or undo it, inside
+ * TRAILER_EDIT_MS of the scan. The window is enforced in the UPDATE/DELETE
+ * itself, so a receipt left open on a phone cannot rewrite an old load.
+ */
+async function handleTrailerFix(ui, db, env, ctx, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, body.id);
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const windowSql = `occurred_at > datetime('now', '-${Math.round(TRAILER_EDIT_MS / 1000)} seconds')`;
+  const name = trailerName(row.trailer);
+
+  if (truthy(body.undo)) {
+    // A hard delete, on purpose: a load scanned by mistake minutes ago was
+    // never a load, and a void flag would have to be honoured by every ledger,
+    // rack-board and metrics query there is. The Telegram feed keeps the record.
+    const r = await execute(db, `
+      DELETE FROM harvest_scan_log
+      WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+    `, [row.id, isTest]);
+    if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `↩️ ${name} · load removed (was ${row.bins} bins → *${row.zone}*${row.bay ? ` · bay ${row.bay}` : ''}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    return renderPage(ui, `${ui.t('trailer')} ${name}`, `
+<h1>${ui.t('trailerUndone', { t: name })}</h1>
+<p class="sub">${ui.t('trailerUndoneSub')}</p>`);
+  }
+
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
+  const bins = parseBins(body.bins, CONSTANTS.binsPerTrailer.value, 'binsFixRange', ui);
+  // The load's own lot needs no re-validation — it was valid when the scan
+  // chose it, and an old-but-just-closed lot must not block a bay fix.
+  const lotRaw = String(body.lot ?? '').trim();
+  const lot = !lotRaw || Number(lotRaw) === row.attributed_zone_session_id
+    ? { id: row.attributed_zone_session_id, zone: row.zone }
+    : await pickedLot(ui, db, isTest, lotRaw);
+
+  const r = await execute(db, `
+    UPDATE harvest_scan_log SET bay = ?, bins = ?, attributed_zone_session_id = ?, zone = ?
+    WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+  `, [bay, bins, lot.id, lot.zone, row.id, isTest]);
+  if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+
+  const changed = [
+    bay !== row.bay ? `bay ${row.bay ?? '?'}→${bay}` : '',
+    bins !== row.bins ? `${row.bins}→${bins} bins` : '',
+    lot.id !== row.attributed_zone_session_id ? `lot ${row.zone}→${lot.zone}` : '',
+  ].filter(Boolean).join(', ');
+  if (changed) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ ${name} · load fixed: ${changed}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+  return seeOther(receiptUrl(row.id, ui));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -3081,7 +3217,7 @@ async function getRecentEnterSessions(db, isTest, days = LOT_AT_DOOR_DAYS) {
   return await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND is_test = ?
-      AND (closed_at IS NULL OR julianday('now') - julianday(occurred_at) <= ?)
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
     ORDER BY occurred_at DESC, id DESC LIMIT 40
   `, [isTest, days]);
 }
@@ -4914,11 +5050,15 @@ function trailerFormBody(ui, { trailer, proposal, recentLots, repeat, keep, last
         zone: escapeHtml(repeat.zone), bins: repeat.bins })}</p>`
     : '';
   const canLog = !!proposal.lot || lots.length > 0;
+  // Why a one-scan decal is asking at all: its first run of the day.
+  const firstBay = proposal.lot && !bayToday && !keep && !repeat
+    ? `<p class="note">${ui.t('trailerFirstBay')}</p>` : '';
 
   return `
 <h1 class="trailer-name">${name}</h1>
 <p class="sub">${ui.t('trailerSub')}</p>
 ${lotCard}
+${firstBay}
 ${repeatNote}
 ${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_log&lang=${ui.lang}"
       onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
@@ -4936,20 +5076,82 @@ ${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_l
 </form>` : lotPicker}`;
 }
 
-function trailerLoggedBody(ui, { trailer, lot, bins, bay, loadNumber }) {
+/**
+ * The receipt: what the scan logged, big enough to check at arm's length, and
+ * — for TRAILER_EDIT_MS — the fixes, folded away so the ordinary load is just
+ * a glance. The bay is the loudest thing on the page because it is the one
+ * default that can quietly stop being true (the barn moved on to the next bay).
+ */
+function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, seen, proposal }) {
+  const name = trailerName(row.trailer);
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
+  const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut };
+
+  const seenNote = seen
+    ? `<p class="note warn" role="alert">${ui.t('trailerSeen', { t: name, time: pacificClock(ui, row.occurred_at) })}</p>`
+    : '';
+  const newLoad = seen && proposal && proposal.lot ? `
+<form method="POST" action="${API}?action=trailer_log&lang=${ui.lang}" class="newload"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${row.trailer}">
+  <input type="hidden" name="lot" value="${proposal.lot.id}">
+  <input type="hidden" name="bay" value="${row.bay}">
+  <input type="hidden" name="again" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerNewLoad')}</button>
+</form>` : '';
+
+  let fix = `<p class="note">${ui.t('trailerFixClosed')}</p>`;
+  if (editable) {
+    const lots = [...recentLots];
+    if (!lots.some(l => l.id === current.id)) lots.unshift(current);
+    const lotRadios = lots.map(l => `<label class="choice"><input type="radio" name="lot" value="${l.id}"${
+      l.id === current.id ? ' checked' : ''}> ${lotLabel(l)}</label>`).join('');
+    const bayBtn = (n) => `<label class="baybtn"><input type="radio" name="bay" value="${n}" required${
+      Number(row.bay) === n ? ' checked' : ''}><span>${n}</span></label>`;
+    const bayRow = (labelKey, from, to) => {
+      const out = [];
+      for (let n = from; n <= to; n++) out.push(bayBtn(n));
+      return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
+    };
+    fix = `
+<details class="fixload"><summary>✏️ ${ui.t('trailerFix')} <span class="hint">· ${ui.t('trailerFixHint')}</span></summary>
+<form id="trailerFix" method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}"
+      onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="id" value="${row.id}">
+  <label>${ui.t('bayHung')}</label>
+  ${bayRow('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)}
+  ${bayRow('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX)}
+  <label for="fixbins">${ui.t('trailerBinsNow')}</label>
+  <input id="fixbins" name="bins" type="number" min="1" max="${FULL}" inputmode="numeric" required value="${row.bins}">
+  <details class="lotother"><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>
+  <button class="btn" type="submit">${ui.t('trailerFixSave')}</button>
+</form>
+<form method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}" class="undo"
+      onsubmit="return confirm(${escapeHtml(JSON.stringify(ui.t('trailerUndoConfirm')))})">
+  <input type="hidden" name="id" value="${row.id}">
+  <input type="hidden" name="undo" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerUndo')}</button>
+</form>
+</details>
+<p class="note">${ui.t('trailerFixUntil', { time: pacificClock(ui, new Date(editableUntil(row))) })}</p>`;
+  }
+
   return `
-<h1>✅ ${ui.t('trailerLogged', { t: trailerName(trailer), bins })}</h1>
+<h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
+${seenNote}
 <div class="status trailer-lot">
-  <div class="lotmeta"><strong>→ ${escapeHtml(lot.zone)} · ${escapeHtml(lot.cultivar || '?')} · ${ui.t('cut', { n: lot.cut_number ?? '?' })}</strong></div>
-  <div class="lotmeta">${ui.t('hungInBay', { n: bay })}</div>
+  <div class="lotmeta"><strong>→ ${lotLabel(current)}</strong></div>
+  <div class="baybig">${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
 </div>
-<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(lot.zone) })}</p>
-<p class="note">${ui.t('trailerDone')}</p>`;
+<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(row.zone) })}</p>
+${newLoad}
+${fix}`;
 }
 
-/** A stored UTC timestamp as a Pacific wall-clock time, "2:14 PM". */
+/** A stored UTC timestamp (or a Date) as a Pacific wall-clock time, "2:14 PM". */
 function pacificClock(ui, ts) {
-  return parseSqliteUtc(ts).toLocaleTimeString(ui.lang === 'es' ? 'es-US' : 'en-US',
+  return (ts instanceof Date ? ts : parseSqliteUtc(ts)).toLocaleTimeString(ui.lang === 'es' ? 'es-US' : 'en-US',
     { timeZone: HARVEST_TZ, hour: 'numeric', minute: '2-digit' });
 }
 
