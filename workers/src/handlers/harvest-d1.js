@@ -199,14 +199,13 @@ function pickStation(request, body = {}) {
 const TRAILERS = [1, 2, 3, 4, 5, 6];
 const trailerName = (n) => `T${n}`;
 
-/**
- * NO COOLDOWN (Koa, 2026-09-29). A 5-minute block on rescanning a decal refused
- * real trailers whenever two were logged on one decal, and the crew went back
- * to the barn tablet on the first morning. Every scan logs. A second load on
- * the same decal inside this window is FLAGGED on its receipt, with Undo in
- * plain view — never refused.
+/*
+ * NO COOLDOWN, NO DOUBLE-SCAN FLAG (Koa, 2026-09-29). A 5-minute block on
+ * rescanning a decal refused real trailers and sent the crew back to the barn
+ * tablet on the first morning; the amber "double scan?" warning that replaced
+ * it was dropped the same day — Koa checks the data for doubles instead. Every
+ * scan logs, and every receipt is the green one.
  */
-const DOUBLE_SCAN_MS = 2 * 60 * 1000;
 
 /** A receipt this new is the scan landing: show the full-screen confirmation. */
 const LOGGED_FLASH_FRESH_MS = 30 * 1000;
@@ -1389,22 +1388,6 @@ async function handleTrailerAgain(ui, db, env, ctx, body, method) {
 }
 
 /**
- * The load logged on the same decal just before this one, if it was inside
- * DOUBLE_SCAN_MS — a camera that fired twice, a back button, or one decal
- * scanned for two trailers. Only ever shown, never used to refuse.
- */
-async function getDoubleScan(db, isTest, row) {
-  const prev = await queryOne(db, `
-    SELECT * FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND trailer = ? AND is_test = ? AND id < ?
-    ORDER BY id DESC LIMIT 1
-  `, [row.trailer, isTest, row.id]);
-  if (!prev) return null;
-  const gap = parseSqliteUtc(row.occurred_at).getTime() - parseSqliteUtc(prev.occurred_at).getTime();
-  return gap >= 0 && gap < DOUBLE_SCAN_MS ? { ...prev, gapSec: Math.round(gap / 1000) } : null;
-}
-
-/**
  * The ask screen, for the two cases one scan cannot settle. The lot is worked
  * out HERE, shown to the driver, and posted as an explicit id — so what the
  * driver saw is exactly what is saved.
@@ -1488,16 +1471,15 @@ async function handleTrailerDone(ui, db, env, params) {
   const row = await getTrailerLoad(db, isTest, params.id);
   if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
   const editable = Date.now() < editableUntil(row);
-  const [loadNumber, recentLots, double] = await Promise.all([
+  const [loadNumber, recentLots] = await Promise.all([
     loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id),
     editable ? getRecentEnterSessions(db, isTest) : [],
-    getDoubleScan(db, isTest, row),
   ]);
   // The full-screen "logged" flash plays only on the scan's own redirect, not
   // when an old receipt is reopened from the tab list hours later.
   const fresh = Date.now() - parseSqliteUtc(row.occurred_at).getTime() < LOGGED_FLASH_FRESH_MS;
   return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
-    row, loadNumber, editable, recentLots, double, fresh,
+    row, loadNumber, editable, recentLots, fresh,
   }));
 }
 
@@ -5178,25 +5160,12 @@ ${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_l
  * a glance. The bay is the loudest thing on the page because it is the one
  * default that can quietly stop being true (the barn moved on to the next bay).
  */
-function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, double, fresh = false }) {
+function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh = false }) {
   const name = trailerName(row.trailer);
   const FULL = CONSTANTS.binsPerTrailer.value;
   const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
   const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut };
 
-  const undoForm = (cls) => `
-<form method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}" class="${cls}"
-      onsubmit="return confirm(${escapeHtml(JSON.stringify(ui.t('trailerUndoConfirm')))})">
-  <input type="hidden" name="id" value="${row.id}">
-  <input type="hidden" name="undo" value="1">
-  <button class="btn alt" type="submit">${ui.t('trailerUndo')}</button>
-</form>`;
-  // Logged, but the same decal was logged moments ago. Said, with the way out
-  // in plain view; whether it was a double scan or a second trailer, only the
-  // person holding the phone knows.
-  const doubleNote = double ? `
-<p class="note warn" role="alert">${ui.t('trailerDouble', {
-    t: name, time: pacificClock(ui, double.occurred_at), s: double.gapSec })}</p>${editable ? undoForm('undo') : ''}` : '';
 
   let fix = `<p class="note">${ui.t('trailerFixClosed')}</p>`;
   if (editable) {
@@ -5224,28 +5193,31 @@ function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, double,
   <details class="lotother"><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>
   <button class="btn" type="submit">${ui.t('trailerFixSave')}</button>
 </form>
-${double ? '' : undoForm('undo')}
+<form method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}" class="undo"
+      onsubmit="return confirm(${escapeHtml(JSON.stringify(ui.t('trailerUndoConfirm')))})">
+  <input type="hidden" name="id" value="${row.id}">
+  <input type="hidden" name="undo" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerUndo')}</button>
+</form>
 </details>
 <p class="note">${ui.t('trailerFixUntil', { time: pacificClock(ui, new Date(editableUntil(row))) })}</p>`;
   }
 
   // Drivers asked for an unmistakable "it worked" (Koa, 2026-09-29): a green
   // screen with a drawn check, read at a glance from the tractor seat, that
-  // fades to the receipt after two seconds or on a tap. Amber, and held a
-  // little longer, when the same decal was just logged — the receipt under it
-  // carries the Undo. No sound or buzz: a page opened from a camera scan has no
-  // user gesture, and browsers block both without one.
+  // fades to the receipt after two seconds or on a tap. No sound or buzz: a
+  // page opened from a camera scan has no user gesture, and browsers block both
+  // without one.
   const flash = fresh ? `
-<div class="logged-flash ${double ? 'warn' : 'ok'}" role="status" aria-live="assertive" onclick="this.remove()">
-  <svg class="lf-mark" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/>${
-    double ? '<path d="M26 13 L26 31 M26 38 L26 39"/>' : '<path d="M14 27 L22 35 L38 17"/>'}</svg>
-  <div class="lf-big">${ui.t(double ? 'flashDouble' : 'flashOk')}</div>
+<div class="logged-flash ok" role="status" aria-live="assertive" onclick="this.remove()">
+  <svg class="lf-mark" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M14 27 L22 35 L38 17"/></svg>
+  <div class="lf-big">${ui.t('flashOk')}</div>
   <div class="lf-sub">${name} · ${ui.t('flashBins', { n: row.bins })} · ${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
   <div class="lf-lot">→ ${escapeHtml(row.zone)} · ${escapeHtml(row.lot_cultivar || '?')}</div>
 </div>
 <script>(function () {
   var f = document.querySelector('.logged-flash'); if (!f) return;
-  var hold = ${double ? 3200 : 2000};
+  var hold = 2000;
   setTimeout(function () { f.classList.add('out'); }, hold);
   setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, hold + 500);
   // The "Log another load" button stays locked until well after the flash:
@@ -5266,7 +5238,6 @@ ${double ? '' : undoForm('undo')}
 
   return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
-${doubleNote}
 <div class="status trailer-lot">
   <div class="lotmeta"><strong>→ ${lotLabel(current)}</strong></div>
   <div class="baybig">${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
