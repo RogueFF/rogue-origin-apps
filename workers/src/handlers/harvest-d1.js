@@ -208,6 +208,9 @@ const trailerName = (n) => `T${n}`;
  */
 const DOUBLE_SCAN_MS = 2 * 60 * 1000;
 
+/** A receipt this new is the scan landing: show the full-screen confirmation. */
+const LOGGED_FLASH_FRESH_MS = 30 * 1000;
+
 function parseTrailer(raw) {
   // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
   // a mangled QR would still log — to a trailer nobody chose.
@@ -1468,8 +1471,11 @@ async function handleTrailerDone(ui, db, env, params) {
     editable ? getRecentEnterSessions(db, isTest) : [],
     getDoubleScan(db, isTest, row),
   ]);
+  // The full-screen "logged" flash plays only on the scan's own redirect, not
+  // when an old receipt is reopened from the tab list hours later.
+  const fresh = Date.now() - parseSqliteUtc(row.occurred_at).getTime() < LOGGED_FLASH_FRESH_MS;
   return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
-    row, loadNumber, editable, recentLots, double,
+    row, loadNumber, editable, recentLots, double, fresh,
   }));
 }
 
@@ -5150,7 +5156,7 @@ ${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_l
  * a glance. The bay is the loudest thing on the page because it is the one
  * default that can quietly stop being true (the barn moved on to the next bay).
  */
-function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, double }) {
+function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, double, fresh = false }) {
   const name = trailerName(row.trailer);
   const FULL = CONSTANTS.binsPerTrailer.value;
   const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
@@ -5201,7 +5207,28 @@ ${double ? '' : undoForm('undo')}
 <p class="note">${ui.t('trailerFixUntil', { time: pacificClock(ui, new Date(editableUntil(row))) })}</p>`;
   }
 
-  return `
+  // Drivers asked for an unmistakable "it worked" (Koa, 2026-09-29): a green
+  // screen with a drawn check, read at a glance from the tractor seat, that
+  // fades to the receipt after two seconds or on a tap. Amber, and held a
+  // little longer, when the same decal was just logged — the receipt under it
+  // carries the Undo. No sound or buzz: a page opened from a camera scan has no
+  // user gesture, and browsers block both without one.
+  const flash = fresh ? `
+<div class="logged-flash ${double ? 'warn' : 'ok'}" role="status" aria-live="assertive" onclick="this.remove()">
+  <svg class="lf-mark" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/>${
+    double ? '<path d="M26 13 L26 31 M26 38 L26 39"/>' : '<path d="M14 27 L22 35 L38 17"/>'}</svg>
+  <div class="lf-big">${ui.t(double ? 'flashDouble' : 'flashOk')}</div>
+  <div class="lf-sub">${name} · ${ui.t('flashBins', { n: row.bins })} · ${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
+  <div class="lf-lot">→ ${escapeHtml(row.zone)} · ${escapeHtml(row.lot_cultivar || '?')}</div>
+</div>
+<script>(function () {
+  var f = document.querySelector('.logged-flash'); if (!f) return;
+  var hold = ${double ? 3200 : 2000};
+  setTimeout(function () { f.classList.add('out'); }, hold);
+  setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, hold + 500);
+})();</script>` : '';
+
+  return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
 ${doubleNote}
 <div class="status trailer-lot">

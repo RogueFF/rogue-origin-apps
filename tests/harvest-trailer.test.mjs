@@ -376,6 +376,47 @@ test('the ask screen logs every submit too, and flags a double', async () => {
   assert.match(await (await follow(env, ctx, res)).text(), /was also logged/);
 });
 
+// --- the "logged" flash -----------------------------------------------------
+
+test('a fresh scan lands on a full-screen green "Logged!" the driver can read at a glance', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z2 = seedSession(sqlite, { zone: 'Z2', cultivar: 'Sour Lifter' });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z2 });
+  const html = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
+  assert.match(html, /class="logged-flash ok" role="status" aria-live="assertive"/);
+  assert.match(html, /<div class="lf-big">Logged!<\/div>/);
+  assert.match(html, /T3 · 24 bins · Bay 9/);
+  assert.match(html, /→ Z2 · Sour Lifter/);
+  assert.match(html, /f\.classList\.add\('out'\)/, 'it fades by itself');
+  // Spanish by default, in the crew's words.
+  const es = await (await follow(env, ctx, await scan(env, ctx, 4, { lang: null }))).text();
+  assert.match(es, /¡Anotada!/);
+  assert.match(es, /T4 · 24 cajas · Bahía 9/);
+});
+
+test('a double scan flashes amber instead, so it is noticed', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
+  await scan(env, ctx, 3);
+  const html = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
+  assert.match(html, /class="logged-flash warn"/);
+  assert.match(html, /Double scan\?/);
+});
+
+test('an old receipt reopened later does not flash', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
+  await scan(env, ctx, 3);
+  const id = lastLoad(sqlite).id;
+  age(sqlite, id, 2);
+  const html = await (await quiet(() => handleHarvestD1(
+    new Request(`https://x/api/harvest?action=trailer_done&id=${id}&lang=en`), env, ctx))).text();
+  assert.doesNotMatch(html, /class="logged-flash/, 'no flash element (the stylesheet naming it does not count)');
+  assert.match(html, /T3: 24 bins logged/, 'the receipt itself is still there');
+});
+
 // --- fixes and undo --------------------------------------------------------------
 
 test('the receipt fixes the bay, a partial and the lot, inside ten minutes', async () => {
