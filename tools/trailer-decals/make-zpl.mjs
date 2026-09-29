@@ -4,7 +4,10 @@
  *
  *   node tools/trailer-decals/make-zpl.mjs            -> all six, T1..T6, to stdout
  *   node tools/trailer-decals/make-zpl.mjs 3 5        -> just T3 and T5
- *   node tools/trailer-decals/make-zpl.mjs --grid 3   -> T3's QR placement as JSON (for a decode check)
+ *   node tools/trailer-decals/make-zpl.mjs --test 1   -> a PRUEBA/TEST decal for T1 that opens the
+ *                                                       sealed preview, for showing the crew
+ *   node tools/trailer-decals/make-zpl.mjs --grid 3 [--test]
+ *                                                     -> T3's QR placement as JSON (for a decode check)
  *
  * Send the output raw to the printer with send-raw.ps1 (see README.md).
  *
@@ -17,6 +20,9 @@
 import { qrModules } from '../../workers/src/lib/qr.js';
 
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
+// The sealed preview alias (wrangler versions upload --preview-alias trailer-test
+// --var HARVEST_FORCE_TEST:true): always test mode, never the floor's records.
+const PREVIEW_BASE = 'https://trailer-test-rogue-origin-api.roguefamilyfarms.workers.dev';
 const TRAILERS = [1, 2, 3, 4, 5, 6];
 
 const W = 812;          // 4 in at 203 dpi
@@ -25,8 +31,8 @@ const QR_TOP = 440;
 const QR_MAX = 640;     // dots available for the symbol itself
 const QUIET = 4;        // modules of white the spec requires around it
 
-function qrPlacement(n) {
-  const target = `${PUBLIC_BASE}/t/${n}`;
+function qrPlacement(n, base = PUBLIC_BASE) {
+  const target = `${base}/t/${n}`;
   const grid = qrModules(target);
   const count = grid.length;
   const dot = Math.floor(QR_MAX / count);
@@ -56,29 +62,39 @@ function qrBoxes({ grid, dot, x0, y0 }) {
 const line = (y, h, text) =>
   `^FO0,${y}^FB${W},1,0,C,0^A0N,${h},${Math.round(h * 0.9)}^FD${text}^FS`;
 
-function decalZpl(n) {
-  const p = qrPlacement(n);
+function decalZpl(n, test = false) {
+  const base = test ? PREVIEW_BASE : PUBLIC_BASE;
+  const p = qrPlacement(n, base);
   const below = p.y0 + p.size;
+  // A test decal must never pass for a real one on a trailer: the big number is
+  // replaced by PRUEBA reversed out of a black band, and the line under it says
+  // what it is for.
+  const head = test
+    ? [`^FO0,40^GB${W},250,250,B,0^FS`,
+       `^FO0,70^FB${W},1,0,C,0^A0N,200,180^FR^FDPRUEBA^FS`,
+       line(318, 46, `TEST · T${n} · no cuenta / does not count`)]
+    : [line(24, 330, `T${n}`), line(360, 62, `TRAILA / TRAILER ${n}`)];
   return [
     '^XA',
     '^CI28',                        // UTF-8, for the accents
     `^PW${W}`, `^LL${H}`, '^LH0,0', '^PON',
-    line(24, 330, `T${n}`),
-    line(360, 62, `TRAILA / TRAILER ${n}`),
+    ...head,
     qrBoxes(p),
-    line(below + 26, 40, 'Escanea al dejar cada carga'),
-    line(below + 74, 32, 'Scan at every drop-off'),
-    line(below + 118, 24, `${PUBLIC_BASE.replace('https://', '')}/t/${n}`),
+    line(below + 26, 40, test ? 'Demo: escanea para ver cómo funciona' : 'Escanea al dejar cada carga'),
+    line(below + 74, 32, test ? 'Demo: scan to see how it works' : 'Scan at every drop-off'),
+    line(below + 118, 22, `${base.replace('https://', '')}/t/${n}`),
     '^XZ',
   ].join('\n');
 }
 
 const args = process.argv.slice(2);
+const test = args.includes('--test');
+const nums = args.filter(a => !a.startsWith('--')).map(Number);
 if (args[0] === '--grid') {
-  const { target, grid, dot, x0, y0 } = qrPlacement(Number(args[1]));
+  const { target, grid, dot, x0, y0 } = qrPlacement(nums[0], test ? PREVIEW_BASE : PUBLIC_BASE);
   process.stdout.write(JSON.stringify({ target, grid, dot, x0, y0, W, H }));
 } else {
-  const picks = args.length ? args.map(Number) : TRAILERS;
+  const picks = nums.length ? nums : (test ? [1] : TRAILERS);
   for (const n of picks) if (!TRAILERS.includes(n)) throw new Error(`No trailer T${n}; there are T1-T6.`);
-  process.stdout.write(picks.map(decalZpl).join('\n') + '\n');
+  process.stdout.write(picks.map(n => decalZpl(n, test)).join('\n') + '\n');
 }
