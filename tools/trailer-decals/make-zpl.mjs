@@ -27,8 +27,10 @@ const TRAILERS = [1, 2, 3, 4, 5, 6];
 
 const W = 812;          // 4 in at 203 dpi
 const H = 1218;         // 6 in
-const QR_TOP = 440;
-const QR_MAX = 640;     // dots available for the symbol itself
+const QR_TOP = 400;
+// Dots for the symbol. 600, not the 640 of the first print: the rest went to
+// the "or tap the button" line (Koa, 2026-09-29). Still ~2.9 in on the trailer.
+const QR_MAX = 600;
 const QUIET = 4;        // modules of white the spec requires around it
 
 function qrPlacement(n, base = PUBLIC_BASE) {
@@ -58,9 +60,13 @@ function qrBoxes({ grid, dot, x0, y0 }) {
   return out.join('\n');
 }
 
-/** Centred text line: ^FB across the full width, justification C. */
-const line = (y, h, text) =>
-  `^FO0,${y}^FB${W},1,0,C,0^A0N,${h},${Math.round(h * 0.9)}^FD${text}^FS`;
+/**
+ * Centred text: ^FB across the width, justification C. Up to `lines` lines, so
+ * a string that turns out wider than the label wraps instead of overprinting
+ * itself — the one failure you only find on the printed decal.
+ */
+const line = (y, h, text, lines = 1) =>
+  `^FO24,${y}^FB${W - 48},${lines},0,C,0^A0N,${h},${Math.round(h * 0.9)}^FD${text}^FS`;
 
 function decalZpl(n, test = false) {
   const base = test ? PREVIEW_BASE : PUBLIC_BASE;
@@ -70,19 +76,20 @@ function decalZpl(n, test = false) {
   // replaced by PRUEBA reversed out of a black band, and the line under it says
   // what it is for.
   const head = test
-    ? [`^FO0,40^GB${W},250,250,B,0^FS`,
-       `^FO0,70^FB${W},1,0,C,0^A0N,200,180^FR^FDPRUEBA^FS`,
-       line(318, 46, `TEST · T${n} · no cuenta / does not count`)]
-    : [line(24, 330, `T${n}`), line(360, 62, `TRAILA / TRAILER ${n}`)];
+    ? [`^FO0,30^GB${W},230,230,B,0^FS`,
+       `^FO0,55^FB${W},1,0,C,0^A0N,190,171^FR^FDPRUEBA^FS`,
+       line(290, 42, `TEST · T${n} · no cuenta / does not count`)]
+    : [line(20, 300, `T${n}`), line(328, 56, `TRAILA / TRAILER ${n}`)];
   return [
     '^XA',
     '^CI28',                        // UTF-8, for the accents
     `^PW${W}`, `^LL${H}`, '^LH0,0', '^PON',
     ...head,
     qrBoxes(p),
-    line(below + 26, 40, test ? 'Demo: escanea para ver cómo funciona' : 'Escanea al dejar cada carga'),
-    line(below + 74, 32, test ? 'Demo: scan to see how it works' : 'Scan at every drop-off'),
-    line(below + 118, 22, `${base.replace('https://', '')}/t/${n}`),
+    line(below + 18, 40, test ? 'Demo: escanea para ver cómo funciona' : 'Escanea en cada descarga'),
+    line(below + 62, 32, 'o toca «Anotar otra carga» en el teléfono', 2),
+    line(below + 136, 28, test ? 'Demo: scan, or tap "Log another load"' : 'Scan each drop-off, or tap "Log another load"', 2),
+    line(below + 196, 20, `${base.replace('https://', '')}/t/${n}`),
     '^XZ',
   ].join('\n');
 }
