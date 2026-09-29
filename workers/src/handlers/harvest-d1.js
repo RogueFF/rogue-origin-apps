@@ -224,7 +224,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -280,6 +280,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleTrailerDone(ui, db, env, params);
         case 'trailer_fix':
           return await handleTrailerFix(ui, db, env, ctx, body);
+        case 'trailer_again':
+          return await handleTrailerAgain(ui, db, env, ctx, body, request.method);
         case 'harvest_dash':
           // The shell only. It ships zero harvest data and fetches everything
           // after the operator types the password, the same way the lot board
@@ -1343,27 +1345,47 @@ export async function handleTrailerScan(request, env, ctx) {
     const raw = new URL(request.url).pathname.replace(/^\/t\//, '').trim();
     const trailer = parseTrailer(raw);
     if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: raw }));
-    const db = env.DB;
-    if (isNotAPerson(request)) return await trailerFormPage(ui, db, env, trailer);
-
-    const isTest = isTestMode(env) ? 1 : 0;
-    const [proposal, lastFill] = await Promise.all([
-      proposeLot(db, isTest), getLastFilledBay(db, isTest)]);
-    const bayToday = lastFill && lastFill.occurred_at &&
-      pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
-      ? lastFill.bay : null;
-    if (!proposal.lot || !bayToday) return await trailerFormPage(ui, db, env, trailer);
-
-    const saved = await recordLoad(db, env, ctx, {
-      zone: proposal.lot.zone, bins: CONSTANTS.binsPerTrailer.value, session: proposal.lot,
-      bay: bayToday, trailer, isTest,
-      cutNote: `cut ${proposal.lot.cut_number}${proposal.viaGrace ? ', just-closed lot' : ''}, one scan`,
-    });
-    return seeOther(receiptUrl(saved.id, ui));
+    if (isNotAPerson(request)) return await trailerFormPage(ui, env.DB, env, trailer);
+    return await logTrailerNow(ui, env.DB, env, ctx, trailer, 'one scan');
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
   }
+}
+
+/**
+ * What one scan does, shared by the decal and the receipt's "Log another load"
+ * button (Koa, 2026-09-29: "if they don't want to scan the QR every time"), so
+ * the two can never disagree: the open or just-closed lot, 24 bins, the barn's
+ * bay today — or the ask screen when one of those has no honest answer.
+ */
+async function logTrailerNow(ui, db, env, ctx, trailer, how) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [proposal, lastFill] = await Promise.all([
+    proposeLot(db, isTest), getLastFilledBay(db, isTest)]);
+  const bayToday = lastFill && lastFill.occurred_at &&
+    pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
+    ? lastFill.bay : null;
+  if (!proposal.lot || !bayToday) return await trailerFormPage(ui, db, env, trailer);
+
+  const saved = await recordLoad(db, env, ctx, {
+    zone: proposal.lot.zone, bins: CONSTANTS.binsPerTrailer.value, session: proposal.lot,
+    bay: bayToday, trailer, isTest,
+    cutNote: `cut ${proposal.lot.cut_number}${proposal.viaGrace ? ', just-closed lot' : ''}, ${how}`,
+  });
+  return seeOther(receiptUrl(saved.id, ui));
+}
+
+/**
+ * POST from the receipt's "Log another load" button — the same as scanning the
+ * decal again. POST only: a button is a deliberate tap, and nothing that merely
+ * fetches a page (a prefetch, a restored tab) may log a trailer.
+ */
+async function handleTrailerAgain(ui, db, env, ctx, body, method) {
+  if (method !== 'POST') throw createError('VALIDATION_ERROR', ui.t('trailerAgainPost'));
+  const trailer = parseTrailer(body.trailer);
+  if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: body.trailer ?? '' }));
+  return logTrailerNow(ui, db, env, ctx, trailer, 'receipt button');
 }
 
 /**
@@ -5226,7 +5248,21 @@ ${double ? '' : undoForm('undo')}
   var hold = ${double ? 3200 : 2000};
   setTimeout(function () { f.classList.add('out'); }, hold);
   setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, hold + 500);
+  // The "Log another load" button stays locked until well after the flash:
+  // a tap meant to dismiss it must never land on the button underneath.
+  setTimeout(function () {
+    var b = document.querySelector('.again-btn[data-unlock]');
+    if (b) { b.disabled = false; b.removeAttribute('data-unlock'); }
+  }, hold + 900);
 })();</script>` : '';
+
+  const again = `
+<form method="POST" action="${API}?action=trailer_again&lang=${ui.lang}" class="again"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${row.trailer}">
+  <button class="btn again-btn" type="submit"${fresh ? ' disabled data-unlock' : ''}>+ ${ui.t('trailerAgain', { t: name })}</button>
+  <p class="hint">${ui.t('trailerAgainHint')}</p>
+</form>`;
 
   return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
@@ -5236,6 +5272,7 @@ ${doubleNote}
   <div class="baybig">${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
 </div>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(row.zone) })}</p>
+${again}
 ${fix}`;
 }
 

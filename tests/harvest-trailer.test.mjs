@@ -417,6 +417,62 @@ test('an old receipt reopened later does not flash', async () => {
   assert.match(html, /T3: 24 bins logged/, 'the receipt itself is still there');
 });
 
+// --- "Log another load" on the receipt -----------------------------------------
+
+test('the receipt carries a big "Log another load" button that logs like a scan', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z2 = seedSession(sqlite, { zone: 'Z2' });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z2 });
+  const receipt = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
+  assert.match(receipt, /action="\/api\/harvest\?action=trailer_again&lang=en"/);
+  assert.match(receipt, /name="trailer" value="3"/);
+  assert.match(receipt, /Log another load · T3/);
+
+  const res = await post(env, ctx, 'trailer_again', { trailer: 3 });
+  assert.equal(res.status, 303, 'a tap is a scan: log, then the receipt');
+  const row = lastLoad(sqlite);
+  assert.deepEqual({ t: row.trailer, bins: row.bins, bay: row.bay, lot: row.attributed_zone_session_id },
+    { t: 3, bins: 24, bay: 9, lot: z2 });
+  const next = await (await follow(env, ctx, res)).text();
+  assert.match(next, /class="logged-flash warn"/, 'straight after the last one, so the double-scan warning shows');
+});
+
+test('the button is locked while the green flash is up, so a dismissing tap cannot log twice', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z2 = seedSession(sqlite, {});
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z2 });
+  const fresh = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
+  assert.match(fresh, /class="btn again-btn" type="submit" disabled data-unlock/);
+  assert.match(fresh, /\.again-btn\[data-unlock\]/, 'and the flash script unlocks it afterwards');
+
+  const id = lastLoad(sqlite).id;
+  age(sqlite, id, 2);
+  const later = await (await quiet(() => handleHarvestD1(
+    new Request(`https://x/api/harvest?action=trailer_done&id=${id}&lang=en`), env, ctx))).text();
+  assert.match(later, /class="btn again-btn" type="submit">/, 'a receipt reopened later is ready to tap');
+});
+
+test('only a real tap logs: fetching the button URL writes nothing', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z2 = seedSession(sqlite, {});
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z2 });
+  const before = loads(sqlite).length;
+  const res = await quiet(() => handleHarvestD1(
+    new Request('https://x/api/harvest?action=trailer_again&trailer=3&lang=en'), env, ctx));
+  assert.ok(res.status >= 400);
+  assert.equal(loads(sqlite).length, before);
+  assert.ok((await post(env, ctx, 'trailer_again', { trailer: 9 })).status >= 400, 'no trailer T9');
+});
+
+test('the button asks, like a scan, when there is no bay yet today', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedSession(sqlite, {});
+  const res = await post(env, ctx, 'trailer_again', { trailer: 3 });
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /First load of the day: tap the bay once/);
+  assert.equal(loads(sqlite).length, 0);
+});
+
 // --- fixes and undo --------------------------------------------------------------
 
 test('the receipt fixes the bay, a partial and the lot, inside ten minutes', async () => {
