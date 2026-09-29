@@ -23,7 +23,7 @@
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshDb, quiet, minsAgo, seedSession, loads, lastLoad, modUrl, sqliteAvailable, SEASON }
+import { freshDb, quiet, minsAgo, seedSession, loads, lastLoad, modUrl, sqliteAvailable, SEASON, earlierTodayMins }
   from './helpers/harvest-sqlite.mjs';
 
 const { handleHarvestD1, handleZoneScan, handleTrailerScan } =
@@ -52,6 +52,9 @@ const post = (env, ctx, action, fields) => quiet(() => handleHarvestD1(
 
 const scanZone = (env, ctx, zone) => quiet(() => handleZoneScan(new Request(`https://x/z/${zone}?lang=en`), env, ctx));
 
+/** Earlier today and past the repeat window; see earlierTodayMins. */
+const TODAY = earlierTodayMins();
+
 const checkedLot = (html) => (html.match(/name="lot" value="(\d+)" required checked/) || [])[1] ?? null;
 const checkedBay = (html) => (html.match(/name="bay" value="(\d+)" required checked/) || [])[1] ?? null;
 
@@ -64,7 +67,7 @@ const age = (sqlite, id, minutes) => sqlite.prepare(
  * repeat window, so the next scan is a new load. Seeded directly: the point
  * is the state, not the path that made it.
  */
-function ranEarlier(sqlite, { trailer, bay, lot, minutes = 30 }) {
+function ranEarlier(sqlite, { trailer, bay, lot, minutes = TODAY }) {
   const r = sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test, occurred_at)
     SELECT 'barn_load', zone, season, 24, id, ?, ?, 1, datetime('now', ?) FROM harvest_scan_log WHERE id = ?
@@ -74,6 +77,7 @@ function ranEarlier(sqlite, { trailer, bay, lot, minutes = 30 }) {
 
 before(function () {
   if (!sqliteAvailable) this.skip('node:sqlite unavailable (needs Node >= 22.5)');
+  if (TODAY === null) this.skip('within 6 minutes of midnight Pacific: there is no "earlier today" to seed');
 });
 
 // --- one scan ------------------------------------------------------------------
@@ -126,7 +130,7 @@ test('just after a zone change, the scan logs to the lot it was cut from', async
   const { sqlite, env, ctx } = freshDb();
   const z8 = seedSession(sqlite, { zone: 'Z8', cultivar: 'Orange Pineapple Quik', cut: 2, opened: minsAgo(300), closed: minsAgo(3) });
   seedSession(sqlite, { zone: 'Z21', cultivar: 'Lifter', opened: minsAgo(3) });
-  ranEarlier(sqlite, { trailer: 5, bay: 2, lot: z8, minutes: 40 });
+  ranEarlier(sqlite, { trailer: 5, bay: 2, lot: z8, minutes: TODAY });
 
   await scan(env, ctx, 5);
   assert.equal(lastLoad(sqlite).attributed_zone_session_id, z8);
@@ -137,7 +141,7 @@ test('past the grace window the scan logs to the open lot', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, { zone: 'Z4', opened: minsAgo(300), closed: minsAgo(20) });
   const z5 = seedSession(sqlite, { zone: 'Z5', cultivar: 'Lifter', opened: minsAgo(20) });
-  ranEarlier(sqlite, { trailer: 1, bay: 6, lot: z4, minutes: 40 });
+  ranEarlier(sqlite, { trailer: 1, bay: 6, lot: z4, minutes: TODAY });
 
   await scan(env, ctx, 1);
   assert.equal(lastLoad(sqlite).attributed_zone_session_id, z5);
@@ -187,7 +191,7 @@ test('a trailer\'s first run of the day asks for the bay once, and writes nothin
   const tapped = await post(env, ctx, 'trailer_log', { trailer: 3, lot: z4, bay: 9 });
   assert.equal(tapped.status, 303);
   assert.equal(lastLoad(sqlite).bay, 9);
-  age(sqlite, lastLoad(sqlite).id, 30);
+  age(sqlite, lastLoad(sqlite).id, TODAY);
   assert.equal((await scan(env, ctx, 3)).status, 303);
   assert.equal(loads(sqlite).length, 2);
   assert.equal(lastLoad(sqlite).bay, 9);
@@ -308,7 +312,7 @@ test('a rescan inside five minutes shows the same load and writes nothing', asyn
 test('after five minutes the scan is an ordinary load again', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
-  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4, minutes: 6 });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4, minutes: TODAY });
   await scan(env, ctx, 3);
   assert.equal(loads(sqlite).length, 2);
 });
@@ -353,7 +357,7 @@ test('the receipt fixes the bay, a partial and the lot, inside ten minutes', asy
   const { sqlite, env, ctx } = freshDb();
   const z8 = seedSession(sqlite, { zone: 'Z8', cultivar: 'Rainbow Cake', opened: minsAgo(400), closed: minsAgo(30) });
   const z10 = seedSession(sqlite, { zone: 'Z10', cultivar: 'Spruce Dough', opened: minsAgo(30) });
-  ranEarlier(sqlite, { trailer: 2, bay: 9, lot: z10, minutes: 40 });
+  ranEarlier(sqlite, { trailer: 2, bay: 9, lot: z10, minutes: TODAY });
   await scan(env, ctx, 2);
   const id = lastLoad(sqlite).id;
 
@@ -372,7 +376,7 @@ test('the receipt fixes the bay, a partial and the lot, inside ten minutes', asy
 test('a fix that leaves the lot alone keeps it, even an old one that just closed', async () => {
   const { sqlite, env, ctx } = freshDb();
   const long = seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 4), closed: minsAgo(2) });
-  ranEarlier(sqlite, { trailer: 1, bay: 5, lot: long, minutes: 60 });
+  ranEarlier(sqlite, { trailer: 1, bay: 5, lot: long, minutes: TODAY });
   await scan(env, ctx, 1);
   const id = lastLoad(sqlite).id;
   assert.equal(lastLoad(sqlite).attributed_zone_session_id, long);

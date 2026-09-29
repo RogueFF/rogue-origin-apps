@@ -13,7 +13,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshDb, quiet, seedSession, modUrl, sqliteAvailable } from './helpers/harvest-sqlite.mjs';
+import { freshDb, quiet, seedSession, modUrl, sqliteAvailable, earlierTodayMins } from './helpers/harvest-sqlite.mjs';
 
 const { handleHarvestD1, handleZoneScan, handleTrailerScan } =
   await import(modUrl('workers/src/handlers/harvest-d1.js'));
@@ -98,7 +98,7 @@ test('a preview build posts nothing to the floor\'s Telegram chat', async () => 
   await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?lang=en'), env, c));
   const lot = rows(sqlite, "event_type='enter'")[0];
   sqlite.prepare(`INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test, occurred_at)
-    VALUES ('barn_load', 'Z4', 2026, 24, ?, 9, 3, 1, datetime('now','-30 minutes'))`).run(lot.id);
+    VALUES ('barn_load', 'Z4', 2026, 24, ?, 9, 3, 1, datetime('now', ?))`).run(lot.id, `-${earlierTodayMins() ?? 6} minutes`);
   await quiet(() => handleTrailerScan(new Request('https://preview/t/3?lang=en'), env, c));
   await quiet(() => Promise.all(waits));
   assert.equal(rows(sqlite, "event_type='barn_load'").length, 2, 'the scan did log (to test rows)');

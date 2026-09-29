@@ -69,6 +69,21 @@ export const quiet = async (fn) => {
   try { return await fn(); } finally { console.log = l; console.error = e; }
 };
 
+/**
+ * "Earlier today", in minutes ago, for anything whose meaning depends on the
+ * Pacific calendar day (a trailer's bay is only reused on the same day). A
+ * fixed 30 was yesterday whenever the suite ran just after midnight Pacific.
+ * Always past the 5-minute trailer repeat window; `null` in the first few
+ * minutes after midnight, when no such time exists — callers skip then.
+ */
+export function earlierTodayMins(ideal = 30) {
+  const [h, m] = new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Los_Angeles', hour12: false })
+    .split(':').map(Number);
+  const sinceMidnight = h * 60 + m;
+  const mins = Math.min(ideal, sinceMidnight - 1);
+  return mins >= 6 ? mins : null;
+}
+
 /** SQLite UTC text, `m` minutes ago. */
 export const minsAgo = (m) =>
   new Date(Date.now() - m * 60000).toISOString().replace('T', ' ').slice(0, 19);
