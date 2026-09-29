@@ -15,7 +15,7 @@
  *  - an ordinary scan logs with no tap, and the tab lands on the receipt (so a
  *    reopened browser cannot re-log it);
  *  - a load never saves without a lot (the thing that lost 96 bins on 9/24);
- *  - every scan logs (no cooldown); a quick repeat on one decal is flagged with Undo;
+ *  - every scan logs: no cooldown and no double-scan flag;
  *  - link-preview bots and browser prefetches never log a load;
  *  - fixes and undo work inside the window and are refused after it.
  *
@@ -305,12 +305,12 @@ test('a link preview, a prefetch or a HEAD never logs a load', async () => {
   assert.equal((await scan(env, ctx, 3, phone)).status, 303);
 });
 
-// --- no cooldown: every scan logs, a quick repeat is flagged -----------------
+// --- no cooldown, no double-scan flag -------------------------------------------
 //
 // Koa, 2026-09-29: the 5-minute block refused real trailers the first morning
-// (one decal was being scanned for more than one trailer) and the crew went
-// back to the barn tablet. Nothing is refused now; a second load on the same
-// decal within two minutes is said out loud on its receipt, with Undo in view.
+// and sent the crew back to the barn tablet; the amber "double scan?" warning
+// that replaced it was dropped the same day. Every scan logs, every receipt is
+// the green one, and doubles are Koa's to spot in the data.
 
 test('every scan logs, even seconds apart — there is no cooldown', async () => {
   const { sqlite, env, ctx } = freshDb();
@@ -320,60 +320,35 @@ test('every scan logs, even seconds apart — there is no cooldown', async () =>
   assert.equal(loads(sqlite).length, 4, 'the earlier run plus all three scans');
 });
 
-test('a second load on one decal within two minutes is flagged, with Undo in plain view', async () => {
+test('a quick second scan gets the same green receipt — no double-scan warning', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
   ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
-  const first = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
-  assert.doesNotMatch(first, /was also logged/, 'the earlier run was long ago: no flag');
-
+  await scan(env, ctx, 3);
   const second = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
-  assert.match(second, /T3: 24 bins logged/, 'it IS logged');
-  assert.match(second, /T3 was also logged at \d{1,2}:\d{2} [AP]M, \d+ seconds earlier/);
-  // The undo sits outside the folded Fix panel, so it is one tap away.
-  const beforeFix = second.slice(0, second.indexOf('class="fixload"'));
-  assert.match(beforeFix, /name="undo" value="1"/);
-
-  await post(env, ctx, 'trailer_fix', { id: lastLoad(sqlite).id, undo: 1 });
-  assert.equal(loads(sqlite).length, 2, 'the double is gone, the real load stays');
+  assert.match(second, /class="logged-flash ok"/);
+  assert.doesNotMatch(second, /class="logged-flash warn"|was also logged|Double scan/);
+  // Undo still exists, folded inside Fix with the rest of the corrections.
+  const inFix = second.slice(second.indexOf('class="fixload"'));
+  assert.match(inFix, /name="undo" value="1"/);
 });
 
-test('the flag is per decal and per two minutes', async () => {
-  const { sqlite, env, ctx } = freshDb();
-  const z4 = seedSession(sqlite, {});
-  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
-  ranEarlier(sqlite, { trailer: 4, bay: 9, lot: z4 });
-  await scan(env, ctx, 3);
-  const t4 = await (await follow(env, ctx, await scan(env, ctx, 4))).text();
-  assert.doesNotMatch(t4, /was also logged/, 'another trailer is not a double');
-
-  await scan(env, ctx, 3);
-  const id = lastLoad(sqlite).id;
-  age(sqlite, id, 3);   // now 3 minutes after the one before it
-  const late = await (await quiet(() => handleHarvestD1(
-    new Request(`https://x/api/harvest?action=trailer_done&id=${id}&lang=en`), env, ctx))).text();
-  assert.doesNotMatch(late, /was also logged/);
-});
-
-test('two scans at the same moment both log, and the receipts say so', async () => {
+test('two scans at the same moment both log', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
   ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
   const [a, b] = await Promise.all([scan(env, ctx, 3), scan(env, ctx, 3)]);
   assert.deepEqual([a.status, b.status], [303, 303]);
   assert.equal(loads(sqlite).length, 3);
-  const pages = await Promise.all([a, b].map(r => follow(env, ctx, r).then(x => x.text())));
-  assert.ok(pages.some(h => /was also logged/.test(h)), 'the later one is flagged');
 });
 
-test('the ask screen logs every submit too, and flags a double', async () => {
+test('the ask screen logs every submit too', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
   await post(env, ctx, 'trailer_log', { trailer: 3, lot: z4, bay: 9, partial_bins: 12 });
   const res = await post(env, ctx, 'trailer_log', { trailer: 3, lot: z4, bay: 9, partial_bins: 12 });
   assert.equal(res.status, 303);
   assert.equal(loads(sqlite).length, 2);
-  assert.match(await (await follow(env, ctx, res)).text(), /was also logged/);
 });
 
 // --- the "logged" flash -----------------------------------------------------
@@ -392,16 +367,6 @@ test('a fresh scan lands on a full-screen green "Logged!" the driver can read at
   const es = await (await follow(env, ctx, await scan(env, ctx, 4, { lang: null }))).text();
   assert.match(es, /¡Anotada!/);
   assert.match(es, /T4 · 24 cajas · Bahía 9/);
-});
-
-test('a double scan flashes amber instead, so it is noticed', async () => {
-  const { sqlite, env, ctx } = freshDb();
-  const z4 = seedSession(sqlite, {});
-  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
-  await scan(env, ctx, 3);
-  const html = await (await follow(env, ctx, await scan(env, ctx, 3))).text();
-  assert.match(html, /class="logged-flash warn"/);
-  assert.match(html, /Double scan\?/);
 });
 
 test('an old receipt reopened later does not flash', async () => {
@@ -434,7 +399,7 @@ test('the receipt carries a big "Log another load" button that logs like a scan'
   assert.deepEqual({ t: row.trailer, bins: row.bins, bay: row.bay, lot: row.attributed_zone_session_id },
     { t: 3, bins: 24, bay: 9, lot: z2 });
   const next = await (await follow(env, ctx, res)).text();
-  assert.match(next, /class="logged-flash warn"/, 'straight after the last one, so the double-scan warning shows');
+  assert.match(next, /class="logged-flash ok"/, 'the same green confirmation as a scan');
 });
 
 test('the button is locked while the green flash is up, so a dismissing tap cannot log twice', async () => {
