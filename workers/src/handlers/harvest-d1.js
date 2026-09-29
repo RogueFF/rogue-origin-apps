@@ -650,20 +650,19 @@ async function getLastStorage(db, isTest) {
  * routinely different bays — one crew is hanging bay 9 while the other is
  * pulling bay 3.
  *
- * With a trailer, ONLY that trailer's own loads. A trailer runs a loop to one
- * side of the barn, so its own last bay is the best guess — and another
- * trailer's bay is quite likely the other side, so a trailer's first load gets
- * no default at all rather than a borrowed one. A wrong bay cannot be put right
- * afterwards; a blank one is a tap. Without a trailer (the door page): the last
- * bay anyone filled.
+ * BARN-WIDE, for trailers and the door alike (Koa, 2026-09-29: "once a bay is
+ * changed, all trailers update to the newest bay"). The first day live the
+ * barn moved from bay 10 to 9 mid-morning and each trailer kept logging its
+ * OWN last bay, 10, until someone fixed that trailer's receipt — nobody does,
+ * the floor moves too fast. Now the newest load's bay is everyone's default:
+ * one load logged (or one receipt fixed) into bay 9 moves every trailer.
  */
-async function getLastFilledBay(db, isTest, trailer = null) {
+async function getLastFilledBay(db, isTest) {
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
     WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
-      ${trailer ? 'AND trailer = ?' : ''}
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, trailer ? [isTest, trailer] : [isTest]);
+  `, [isTest]);
 }
 
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
@@ -1346,7 +1345,7 @@ export async function handleTrailerScan(request, env, ctx) {
 
     const isTest = isTestMode(env) ? 1 : 0;
     const [proposal, lastFill] = await Promise.all([
-      proposeLot(db, isTest), getLastFilledBay(db, isTest, trailer)]);
+      proposeLot(db, isTest), getLastFilledBay(db, isTest)]);
     const bayToday = lastFill && lastFill.occurred_at &&
       pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
       ? lastFill.bay : null;
@@ -1389,7 +1388,7 @@ async function trailerFormPage(ui, db, env, trailer, keep = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [proposal, lastFill, recentLots] = await Promise.all([
     proposeLot(db, isTest),
-    getLastFilledBay(db, isTest, trailer),
+    getLastFilledBay(db, isTest),
     getRecentEnterSessions(db, isTest),
   ]);
   // Pre-selected only on the same Pacific day, for the reason the door gives:
@@ -5116,7 +5115,7 @@ function trailerFormBody(ui, { trailer, proposal, recentLots, keep, lastBay, bay
     return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
   };
   const bayHint = lastBay
-    ? (bayToday ? ui.t('trailerBayLast', { n: lastBay }) : ui.t('bayStale', { n: lastBay }))
+    ? (bayToday ? ui.t('bayHungLast', { n: lastBay }) : ui.t('bayStale', { n: lastBay }))
     : ui.t('trailerBayPick');
 
   const partialVal = keep && keep.partial ? escapeHtml(keep.partial) : '';

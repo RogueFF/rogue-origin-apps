@@ -182,9 +182,9 @@ test('a trailer\'s first run of the day asks for the bay once, and writes nothin
   assert.equal(res.status, 200, 'an ask screen, not a redirect');
   assert.equal(loads(sqlite).length, 0);
   const html = await res.text();
-  assert.match(html, /First load of the day for this trailer: tap the bay once/);
+  assert.match(html, /First load of the day: tap the bay once/);
   assert.equal(checkedLot(html), String(z4), 'the lot is still worked out for them');
-  assert.equal(checkedBay(html), null, 'never another trailer\'s bay');
+  assert.equal(checkedBay(html), null, 'nothing logged today, so no bay to guess');
   assert.match(html, /action="\/api\/harvest\?action=trailer_log&lang=en"/);
 
   // The one tap. Then the next scan is hands-free.
@@ -211,16 +211,34 @@ test('a bay from yesterday is asked about again, not reused', async () => {
   assert.match(html, /9 was a different day/);
 });
 
-test('each trailer keeps its own bay', async () => {
-  // Trailers entering from both sides fill different bays at once.
+test('a new bay from any trailer moves every trailer', async () => {
+  // Koa, 2026-09-29: the barn went from bay 10 to 9 mid-morning and each
+  // trailer kept logging its OWN last bay. The newest load's bay wins.
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
-  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4 });
-  ranEarlier(sqlite, { trailer: 4, bay: 3, lot: z4 });
+  ranEarlier(sqlite, { trailer: 4, bay: 10, lot: z4, minutes: TODAY });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: z4, minutes: TODAY - 1 });   // newer
+  await scan(env, ctx, 4);
+  assert.equal(lastLoad(sqlite).bay, 9, 'T4 follows the bay T3 moved to');
+});
+
+test('fixing the bay on a receipt moves every trailer', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, {});
+  ranEarlier(sqlite, { trailer: 3, bay: 10, lot: z4 });
+  await scan(env, ctx, 3);                                      // logged into 10
+  await post(env, ctx, 'trailer_fix', { id: lastLoad(sqlite).id, bay: 9, bins: 24 });
+  await scan(env, ctx, 5);
+  assert.equal(lastLoad(sqlite).bay, 9);
+});
+
+test('a load logged on the barn tablet moves the trailers too', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedSession(sqlite, { zone: 'Z4' });
+  ranEarlier(sqlite, { trailer: 3, bay: 10, lot: z4 });
+  await post(env, ctx, 'barn_log', { zone: 'Z4', bins: 24, bay: 9 });
   await scan(env, ctx, 3);
   assert.equal(lastLoad(sqlite).bay, 9);
-  await scan(env, ctx, 4);
-  assert.equal(lastLoad(sqlite).bay, 3);
 });
 
 test('with nothing open the driver must pick, and a load never saves without a lot', async () => {
@@ -253,7 +271,7 @@ test('it is Spanish by default, in the crew\'s own words', async () => {
   const { sqlite, env, ctx } = freshDb();
   const z4 = seedSession(sqlite, {});
   const ask = await scanPage(env, ctx, 1, { lang: null });
-  assert.match(ask, /Primera carga del día de esta traila/);
+  assert.match(ask, /Primera carga del día: toca la bahía/);
   ranEarlier(sqlite, { trailer: 2, bay: 7, lot: z4 });
   const receipt = await scanPage(env, ctx, 2, { lang: null });
   assert.match(receipt, /T2: 24 cajas anotadas/);
