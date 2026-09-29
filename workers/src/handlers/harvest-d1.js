@@ -140,7 +140,7 @@ const CONSTANTS = {
     how: 'the crew stops at the end of the day and picks up in the same zone next morning, so the session spans the night; the hours it was actually worked need the day window',
   },
   supersackLbs: { value: 37, label: '1 supersack = 37 lbs', unblocks: null, how: 'confirmed 2026-08-03' },
-  binsPerTrailer: { value: 22, label: '1 trailer = 22 bins', unblocks: null, how: 'recalibrate once 2026 trailers run' },
+  binsPerTrailer: { value: 24, label: '1 trailer = 24 bins', unblocks: null, how: 'standard for all of 2026 harvest (Koa, 2026-09-28)' },
   plantsPerBin: { value: 1, label: '1 bin = 1 plant', unblocks: null, how: 'recalibrate once real' },
 };
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
@@ -159,45 +159,28 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const API = '/api/harvest';
 
 /**
- * The cutting crews, and how a phone says which one it is.
+ * ONE CREW (Koa, 2026-09-28). There are still two cutting groups, but they are
+ * always in the same zone on the same cultivar, so there is exactly one open
+ * lot at a time and nothing to tell apart.
  *
- * 2026 runs two crews that can be in the same zone at once. The discriminator
- * has to travel with the crew, and the zone signs cannot carry it — they are
- * printed and laminated for the season — so it rides on the crew lead's phone:
- * scan a Crew A / Crew B card once (PUBLIC_BASE/c/A) and the cookie is set for
- * the season.
+ * The Crew A / Crew B tag this replaced is what lost loads: door 1 only matched
+ * Crew A sessions, a second, untagged phone kept scanning zone signs, and every
+ * trailer cut under an untagged session saved with no lot. The two tag chains
+ * also left two lots open at once, because each phone only closed its own.
  *
- * A phone with no tag is legitimate (a spare handset, a cleared cookie) and
- * degrades to single-crew behaviour rather than to a wrong crew. It is shown in
- * the header of every crew screen, so an untagged phone is visibly untagged
- * instead of quietly wrong.
+ * Old sessions keep whatever crew they were written with — history is not
+ * rewritten — but nothing reads the tag any more, and the /c/ card now clears
+ * it off a phone instead of setting it.
  */
-const CREWS = ['A', 'B'];
-
-function pickCrew(request) {
-  const url = new URL(request.url);
-  const q = (url.searchParams.get('crew') || '').toUpperCase();
-  if (CREWS.includes(q)) return q;
-  const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_crew=([A-Z])/);
-  return m && CREWS.includes(m[1]) ? m[1] : null;
-}
-
-function crewCookie(crew) {
-  return `rf_crew=${crew}; Path=/; Max-Age=31536000; SameSite=Lax`;
-}
+const CREW_COOKIE_CLEAR = 'rf_crew=; Path=/; Max-Age=0; SameSite=Lax';
 
 /**
- * Barn intake stations. Two of them in 2026 — PUBLIC_BASE/b/1 and /b/2, one QR
- * each — and each is worked by the same cutting crew all shift. The station is
- * therefore what tells the barn whose trailer just pulled in: the crew tag
- * lives on a phone out in the field and never reaches here.
- *
- * The pairing is an arrangement, not something the system can verify, so it
- * only ever DEFAULTS the zone and scopes the grace. The dropdown still offers
- * every tracked zone, because the person at the door can see which trailer
- * arrived and we cannot. If the crews swap stations this is the one line.
+ * Barn intake doors, PUBLIC_BASE/b/1 and /b/2. A fallback since trailers carry
+ * their own QR (a torn decal, a dead phone): the door number is shown on the
+ * screen so two identical tablets are not two chances to log at the wrong one,
+ * and nothing else hangs off it.
  */
-const STATION_CREW = { 1: 'A', 2: 'B' };
+const STATIONS = [1, 2];
 
 function pickStation(request, body = {}) {
   const url = new URL(request.url);
@@ -205,7 +188,26 @@ function pickStation(request, body = {}) {
   const raw = fromPath ?? body.station ?? url.searchParams.get('station')
     ?? ((request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_barn=(\d+)/) || [])[1];
   const n = parseInt(raw, 10);
-  return Object.prototype.hasOwnProperty.call(STATION_CREW, n) ? n : null;
+  return STATIONS.includes(n) ? n : null;
+}
+
+/**
+ * Trailers, PUBLIC_BASE/t/1 .. /t/6. Each carries its own QR decal, and the
+ * DRIVER scans it on drop-off — the trailer, not a door or a crew, is the fact
+ * that arrives at the barn. Stored as the bare number; shown as "T3".
+ */
+const TRAILERS = [1, 2, 3, 4, 5, 6];
+const trailerName = (n) => `T${n}`;
+
+/** A second scan of the same trailer inside this window asks before logging. */
+const TRAILER_REPEAT_MS = 5 * 60 * 1000;   // Koa, 2026-09-28
+
+function parseTrailer(raw) {
+  // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
+  // a mangled QR would still log — to a trailer nobody chose.
+  const m = String(raw ?? '').trim().match(/^t?([1-9]\d?)$/i);
+  const n = m ? Number(m[1]) : NaN;
+  return TRAILERS.includes(n) ? n : null;
 }
 
 function stationCookie(station) {
@@ -213,7 +215,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -263,6 +265,12 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
           return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
+        case 'trailer_log':
+          return await handleTrailerLog(ui, db, env, ctx, body);
+        case 'trailer_done':
+          return await handleTrailerDone(ui, db, env, params);
+        case 'trailer_fix':
+          return await handleTrailerFix(ui, db, env, ctx, body);
         case 'harvest_dash':
           // The shell only. It ships zero harvest data and fetches everything
           // after the operator types the password, the same way the lot board
@@ -499,6 +507,14 @@ let testFlagCache = { at: 0, value: null };
 const TEST_FLAG_TTL_MS = 5000;
 
 async function withSettings(env) {
+  // A PREVIEW build — uploaded with `wrangler versions upload --var
+  // HARVEST_FORCE_TEST:true`, reached on its own preview URL while the live
+  // worker keeps serving the floor — is pinned to test mode whatever the
+  // farm's switch says, and posts nothing to Telegram. The shared switch lives
+  // in the same database the live worker reads, so trying a new build on real
+  // phones must neither obey it (and write real rows) nor move it (see
+  // handleTestMode), nor post into the floor's chat. Koa, 2026-09-28.
+  if (isPreviewBuild(env)) return { ...env, HARVEST_TEST_MODE: 'true', TELEGRAM_TEST_CHAT_ID: '' };
   if (!env?.DB) return env;
   const now = Date.now();
   if (now - testFlagCache.at > TEST_FLAG_TTL_MS) {
@@ -509,6 +525,10 @@ async function withSettings(env) {
   }
   if (testFlagCache.value === null) return env;
   return { ...env, HARVEST_TEST_MODE: testFlagCache.value === 'true' ? 'true' : 'false' };
+}
+
+function isPreviewBuild(env) {
+  return env?.HARVEST_FORCE_TEST === 'true';
 }
 
 /** Flip it, and let the next request on every isolate see the change. */
@@ -624,23 +644,20 @@ async function getLastStorage(db, isTest) {
  * routinely different bays — one crew is hanging bay 9 while the other is
  * pulling bay 3.
  *
- * Scoped to this door's crew first because two crews filling two barns would
- * otherwise hand each other the wrong default all day.
+ * With a trailer, ONLY that trailer's own loads. A trailer runs a loop to one
+ * side of the barn, so its own last bay is the best guess — and another
+ * trailer's bay is quite likely the other side, so a trailer's first load gets
+ * no default at all rather than a borrowed one. A wrong bay cannot be put right
+ * afterwards; a blank one is a tap. Without a trailer (the door page): the last
+ * bay anyone filled.
  */
-async function getLastFilledBay(db, isTest, crew = null) {
-  const pick = (c) => queryOne(db, `
-    SELECT bay, occurred_at FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
-      AND crew IS ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest, c]);
-  const mine = crew ? await pick(crew) : null;
-  if (mine) return mine;
+async function getLastFilledBay(db, isTest, trailer = null) {
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
     WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
+      ${trailer ? 'AND trailer = ?' : ''}
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest]);
+  `, trailer ? [isTest, trailer] : [isTest]);
 }
 
 // SQLite's datetime('now') returns "YYYY-MM-DD HH:MM:SS" (UTC, no offset).
@@ -759,8 +776,7 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
-  const crew = ui.crew;
-  const active = await getActiveSession(db, isTest, crew);
+  const active = await getActiveSession(db, isTest);
   const now = new Date();
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
@@ -792,16 +808,16 @@ async function handleEnter(ui, db, env, ctx, params) {
     return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active));
   }
 
-  if (active) {
-    await execute(db, `UPDATE harvest_scan_log SET closed_at = datetime('now') WHERE id = ?`, [active.id]);
-  }
+  // EVERY open lot, not just the newest: one crew means one open lot, and the
+  // first scan after the two-crew build collapses both old chains at once.
+  await closeOpenSessions(db, isTest);
 
   const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
 
   const result = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, is_test)
-    VALUES ('enter', ?, ?, ?, ?, ?, ?)
-  `, [zone, cultivar, season, cutNumber, crew, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?)
+  `, [zone, cultivar, season, cutNumber, isTest]);
   const sessionId = result.lastRowId;
 
   const prevNote = active
@@ -809,8 +825,7 @@ async function handleEnter(ui, db, env, ctx, params) {
     : 'No prior zone was open.';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}`
-      + `${crew ? ` (Crew ${crew})` : ''}\n${prevNote}`,
+    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
@@ -820,33 +835,10 @@ async function handleEnter(ui, db, env, ctx, params) {
 }
 
 /**
- * This crew's open session. `IS` rather than `=` so an untagged phone (crew
- * NULL) matches only other untagged sessions — the whole point of the scoping
- * is that one crew's scan can never close another's, and a missing tag must
- * degrade to single-crew behaviour instead of hijacking crew A's zone.
+ * The open lot. One crew, so one at a time; the newest wins if old data ever
+ * holds two, and the next zone scan closes both.
  */
-async function getActiveSession(db, isTest, crew = null) {
-  return queryOne(db, `
-    SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND closed_at IS NULL AND crew IS ? AND is_test = ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [crew, isTest]);
-}
-
-/** Any crew's open session in a zone — what the barn needs, where the trailer
- *  is the only fact and nobody knows which crew cut it. */
-async function getOpenSessionForZone(db, isTest, zone, crew = undefined) {
-  const scoped = crew !== undefined;
-  return queryOne(db, `
-    SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL
-      ${scoped ? 'AND crew IS ?' : ''} AND is_test = ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, scoped ? [zone, crew, isTest] : [zone, isTest]);
-}
-
-/** The newest open session belonging to ANY crew — what the barn falls back to. */
-async function getAnyOpenSession(db, isTest) {
+async function getActiveSession(db, isTest) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
@@ -854,15 +846,31 @@ async function getAnyOpenSession(db, isTest) {
   `, [isTest]);
 }
 
-// The most recently closed session — for a given zone, or anywhere, and
-// optionally for one crew. Deliberately cultivar-agnostic: at the barn nobody
-// knows which cultivar of a trial zone a load came off, and the closed session
-// already carries it.
-async function getLastClosedAnyCultivar(db, isTest, zone = null, crew = undefined) {
+/** Close every open lot. Returns how many it closed. */
+async function closeOpenSessions(db, isTest) {
+  const r = await execute(db, `
+    UPDATE harvest_scan_log SET closed_at = datetime('now')
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+  `, [isTest]);
+  return r.changes || 0;
+}
+
+/** The open lot in one zone — what the fallback door needs once it knows the zone. */
+async function getOpenSessionForZone(db, isTest, zone) {
+  return queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [zone, isTest]);
+}
+
+// The most recently closed session — for a given zone, or anywhere.
+// Deliberately cultivar-agnostic: at the barn nobody knows which cultivar of a
+// trial zone a load came off, and the closed session already carries it.
+async function getLastClosedAnyCultivar(db, isTest, zone = null) {
   const parts = ["event_type = 'enter'", 'closed_at IS NOT NULL'];
   const args = [];
   if (zone) { parts.push('zone = ?'); args.push(zone); }
-  if (crew !== undefined) { parts.push('crew IS ?'); args.push(crew); }
   parts.push('is_test = ?'); args.push(isTest);
   return queryOne(db, `
     SELECT * FROM harvest_scan_log WHERE ${parts.join(' AND ')}
@@ -1008,23 +1016,17 @@ async function handleCultivarFix(ui, db, env, ctx, params) {
   }));
 }
 
-// ─── CREW CARD ──────────────────────────────────────────
-// Scanned once per phone, off a laminated card on the crew lead's clipboard.
-// Nothing is written to the database here — the tag lives on the handset and
-// stamps every session that phone opens from then on.
+// ─── CREW CARD (retired) ────────────────────────────────
+// The Crew A / Crew B cards are retired (one crew, Koa 2026-09-28), but they
+// are laminated and still on clipboards. Scanning one CLEARS the old tag off
+// the phone and says so, rather than erroring at someone holding a card.
 
-async function handleCrewTag(ui, request) {
-  const raw = (new URL(request.url).pathname.split('/')[2] || '').toUpperCase();
-  if (!CREWS.includes(raw)) {
-    throw createError('VALIDATION_ERROR', ui.t('crewTagBad'));
-  }
-  // renderPage already sets the language cookie; append rather than replace so
-  // a crew lead who switched to English does not lose it by scanning the card.
-  const res = renderPage(ui, ui.t('crewTagSet', { crew: raw }), `
-<h1>${ui.t('crewTagSet', { crew: raw })}</h1>
-<p class="sub">${ui.t('crewTagSetSub')}</p>
-<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`);
-  res.headers.append('Set-Cookie', crewCookie(raw));
+async function handleCrewTag(ui) {
+  const res = renderPage(ui, ui.t('crewRetired'), `
+<h1>${ui.t('crewRetired')}</h1>
+<p class="sub">${ui.t('crewRetiredSub')}</p>
+<div class="footer"><a href="${API}?action=hub&lang=${ui.lang}">${ui.t('allTools')}</a></div>`);
+  res.headers.append('Set-Cookie', CREW_COOKIE_CLEAR);
   return res;
 }
 
@@ -1043,64 +1045,37 @@ async function handleCrewTag(ui, request) {
 // this is the only new habit in the whole chain.
 
 /**
- * Close this crew's open session.
- *
- * Scoped by the cookie, so ONE laminated card serves both crews: crew A's lead
- * scans it and crew A's session closes. An untagged phone closes an untagged
- * session, the same NULL-safe scoping as everywhere else.
+ * Close the open lot. One crew, so whoever scans the card closes it — and
+ * anything old data still holds open closes with it.
  */
 async function handleDayEnd(ui, db, env, ctx) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = ui.crew ?? null;
 
-  const open = await getActiveSession(db, isTest, crew);
+  const open = await getActiveSession(db, isTest);
   if (!open) {
     // Not an error. Scanning twice, or scanning after the crew already moved
     // on, is a person being careful — it must not look like a fault.
-    const other = await getAnyOpenSession(db, isTest);
-    return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null, other, crew));
+    return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null));
   }
 
-  await execute(db, `
-    UPDATE harvest_scan_log SET closed_at = datetime('now')
-    WHERE id = ? AND closed_at IS NULL
-  `, [open.id]);
+  await closeOpenSessions(db, isTest);
 
   const hours = (Date.now() - parseSqliteUtc(open.occurred_at).getTime()) / 3600000;
-
-  // Anyone else still open — the other lead, or a phone with no crew tag. Said
-  // out loud because the person holding this card is the one who can go and
-  // tell them, and a session left open all night is what this exists to stop.
-  const other = await getAnyOpenSession(db, isTest);
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `🌙 Fin del día: *${open.zone}*${open.cultivar ? ` · ${open.cultivar}` : ''}`
-      + `${crew ? ` (Cuadrilla ${crew})` : ''} cerrada tras ${hours.toFixed(1)} h.`
-      + `${other ? ` ⚠️ ${other.zone} sigue abierta.` : ''}`,
+      + ` cerrada tras ${hours.toFixed(1)} h.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, { ...open, hours }, other, crew));
+  return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, { ...open, hours }));
 }
 
-function dayEndBody(ui, closed, other, crew) {
-  const crewNote = crew
-    ? `<p class="sub">${ui.t('crewTag', { crew })}</p>`
-    : `<p class="sub">${ui.t('dayEndNoCrew')}</p>`;
-
-  const otherNote = other && (!closed || other.id !== closed.id)
-    ? `<p class="note">${ui.t('dayEndOtherOpen', {
-        zone: escapeHtml(other.zone),
-        crew: other.crew ? ui.t('crewTag', { crew: other.crew }) : ui.t('dayEndUntagged'),
-      })}</p>`
-    : '';
-
+function dayEndBody(ui, closed) {
   if (!closed) {
     return `
 <h1>${ui.t('dayEndNothing')}</h1>
-${crewNote}
 <p class="note">${ui.t('dayEndNothingSub')}</p>
-${otherNote}
 <div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a></div>`;
   }
 
@@ -1108,24 +1083,25 @@ ${otherNote}
 <h1>✅ ${ui.t('dayEndClosed', {
     lot: `${escapeHtml(closed.zone)}${closed.cultivar ? ` · ${escapeHtml(closed.cultivar)}` : ''}`,
   })}</h1>
-${crewNote}
 <div class="status">
   <div class="lotmeta"><strong>${ui.t('cut', { n: closed.cut_number })}</strong></div>
   <div class="lotmeta">${ui.t('dayEndAfter', { h: closed.hours.toFixed(1) })}</div>
 </div>
 <p class="note">${ui.t('dayEndTomorrow')}</p>
-${otherNote}
 <div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── BARN INTAKE ────────────────────────────────────────
+// Two ways in, one set of rules, one write.
+//
+// The TRAILER decal (/t/<n>) is the normal path (Koa, 2026-09-28): the driver
+// scans it on drop-off, sees the lot the load is about to go to, taps a bay.
+// The DOOR page (/b/<n>) is the fallback for a torn decal or a dead phone,
+// where someone picks the zone by hand. Both end in recordLoad().
 
 async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = station ? STATION_CREW[station] : null;
-
-  // A labelled barn follows only its own crew. No other crew is a default.
-  const active = crew ? await getActiveSession(db, isTest, crew) : null;
+  const active = await getActiveSession(db, isTest);
 
   // The bay default is worth more care than it looks. A wrong bay is
   // unrecoverable — nothing afterwards distinguishes it from a right one —
@@ -1133,7 +1109,7 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   // is still the same Pacific day, and NAMED once the day has turned, which is
   // exactly when the crew has moved on to the next bay and the default has
   // quietly stopped being true. Keep the stale bay warning visible.
-  const lastFill = await getLastFilledBay(db, isTest, crew);
+  const lastFill = await getLastFilledBay(db, isTest);
   const bayStale = !!(lastFill && lastFill.occurred_at &&
     pacificDay(parseSqliteUtc(lastFill.occurred_at)) !== pacificDay(new Date()));
 
@@ -1150,22 +1126,140 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
 }
 
 /**
- * The lot the door named, or null when it named none. Throws rather than
+ * The lot a form named, or null when it named none. Throws rather than
  * falling back: a load that quietly ignored the choice made at the door would
  * be worse than one that never offered the choice.
+ *
+ * With a zone, the lot must be in it: an id for another zone is a mis-tap or a
+ * stale page, not an override, and it would move a trailer of bins onto a lot
+ * it never touched. Old lots are refused for the same reason.
  */
-async function pickedLot(ui, db, isTest, raw, zone) {
+async function pickedLot(ui, db, isTest, raw, zone = null) {
   const value = raw === undefined || raw === null ? '' : String(raw).trim();
   if (!value) return null;
   const id = parseInt(value, 10);
   if (!Number.isInteger(id) || id <= 0) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
+  // Age is time since the lot was last ACTIVE: now if it is open, else its
+  // close. An open lot is always eligible (a weekend with no End of day scan
+  // must not lock every trailer out), and a two-day zone that closed a minute
+  // ago is recent, however long ago it opened.
   const lot = await queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE id = ? AND event_type = 'enter' AND is_test = ? AND zone = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
-  `, [id, isTest, zone, LOT_AT_DOOR_DAYS]);
+    WHERE id = ? AND event_type = 'enter' AND is_test = ? ${zone ? 'AND zone = ?' : ''}
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
+  `, zone ? [id, isTest, zone, LOT_AT_DOOR_DAYS] : [id, isTest, LOT_AT_DOOR_DAYS]);
   if (!lot) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
   return lot;
+}
+
+/**
+ * Which lot does a trailer arriving NOW belong to, when nobody has named a
+ * zone? The trailer screen's question.
+ *
+ * One crew means one open lot, so the answer is that lot — except inside the
+ * barn grace window after a close (a zone change, a cultivar switch in a trial
+ * zone, the end of the day). Then the trailer on the apron was loaded BEFORE
+ * the change and belongs to the lot that just closed. lib/barn-attribution.js
+ * has why that error is one-sided: a genuine load for the new lot cannot be
+ * cut, filled and driven in six minutes.
+ *
+ * A null lot means nothing is open and nothing just closed — the driver has to
+ * say which lot, because the alternative is bins that belong to no lot.
+ */
+async function proposeLot(db, isTest) {
+  const recent = await getLastClosedAnyCultivar(db, isTest);
+  if (inBarnGrace(recent)) return { lot: recent, viaGrace: true };
+  return { lot: await getActiveSession(db, isTest), viaGrace: false };
+}
+
+/**
+ * The door's question: the zone is known (someone picked it), which lot?
+ *
+ * A cultivar switch INSIDE one zone is invisible to a plain open-session
+ * lookup: the zone is still open, so the load attaches to whatever is being
+ * cut NOW. In a trial zone that is the whole error. Z10 is 15 cultivars in one
+ * acre at ~130 plants each — roughly six trailers a lot — so a single
+ * misplaced trailer is a 15-20% error on a lot whose only purpose is being
+ * compared against its neighbours. Z8 and R1 are the same shape. So if a
+ * DIFFERENT cultivar closed in this zone inside the grace window, the trailer
+ * was loaded before the switch. Self-limiting: in a single-cultivar zone the
+ * previous session carries the same cultivar, so this never fires.
+ *
+ * Nothing open for this zone — the crew has moved on. If it closed within the
+ * grace window the load was cut there and is only now arriving.
+ */
+async function attributeForZone(db, isTest, zone) {
+  let session = await getOpenSessionForZone(db, isTest, zone);
+  let viaSwitch = null;
+  let viaGrace = false;
+  if (session) {
+    const prev = await getLastClosedAnyCultivar(db, isTest, zone);
+    const now = session.cultivar || null;
+    if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
+      viaSwitch = { from: prev.cultivar || null, to: now };
+      session = prev;
+    }
+  } else {
+    const recent = await getLastClosedAnyCultivar(db, isTest, zone);
+    if (inBarnGrace(recent)) { session = recent; viaGrace = true; }
+  }
+  return { session, viaGrace, viaSwitch };
+}
+
+/**
+ * Which load of its Pacific day, for its zone, a load is: "Carga #3 hoy".
+ * Counted up to the load itself, so a receipt re-opened later still says 3.
+ *
+ * Pacific, not UTC: "#3 today" used to reset at 5pm Pacific, mid-afternoon,
+ * while trailers were still arriving.
+ */
+async function loadNumberFor(db, isTest, zone, occurredAt, id) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificDay(occurredAt));
+  const r = await queryOne(db, `
+    SELECT COUNT(*) as n FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND zone = ? AND id <= ?
+      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
+  `, [zone, id, dayStart, dayEnd, isTest]);
+  return (r?.n) || 1;
+}
+
+/**
+ * Write one barn load and announce it. Both entry points end here, so the
+ * ledger, the rack board and the Telegram feed cannot disagree about what a
+ * load is. Returns { id, loadNumber }.
+ *
+ * `guard` makes the trailer repeat check part of the INSERT itself: two posts
+ * in flight together (a second phone on the same decal, a retry) cannot both
+ * pass a check that ran before either wrote. Returns null when the guard
+ * refused — nothing was written.
+ */
+async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = null, isTest, cutNote, guard = false }) {
+  const values = [zone, getSeason(), bins, session ? session.id : null, bay, trailer, isTest];
+  const columns = 'event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test';
+  const res = guard && trailer
+    ? await execute(db, `
+        INSERT INTO harvest_scan_log (${columns})
+        SELECT 'barn_load', ?, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM harvest_scan_log
+          WHERE event_type = 'barn_load' AND trailer = ? AND is_test = ?
+            AND occurred_at > datetime('now', ?))
+      `, [...values, trailer, isTest, `-${Math.round(TRAILER_REPEAT_MS / 1000)} seconds`])
+    : await execute(db, `
+        INSERT INTO harvest_scan_log (${columns})
+        VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
+      `, values);
+  if (!res.changes) return null;
+
+  const loadNumber = await loadNumberFor(db, isTest, zone, new Date(), res.lastRowId);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `🚚 ${trailer ? `${trailerName(trailer)} · ` : ''}Load: ${bins} bins → *${zone}* (${cutNote})`
+      + `${bay ? ` · bay ${bay}` : ''}. Load #${loadNumber} today for this zone.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return { id: res.lastRowId, loadNumber };
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -1189,104 +1283,283 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const bay = parseBay(body.bay, ui);
 
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = station ? STATION_CREW[station] : null;
 
   // A lot named at the door beats every rule below it. Nothing automatic knows
   // more than the person holding the trailer, who was told which zone started
   // (Koa, 2026-09-17) — and this is the case where the automatic answer is
   // "nothing", which loses the bins off every lot.
-  //
-  // Checked against the zone on the same form: an id for another zone is a
-  // mis-tap or a stale page, not an override, and it would move a trailer of
-  // bins onto a lot it never touched. Old lots are refused for the same reason.
   const picked = await pickedLot(ui, db, isTest, body.lot, zone);
+  const { session, viaGrace, viaSwitch } = picked
+    ? { session: picked, viaGrace: false, viaSwitch: null }
+    : await attributeForZone(db, isTest, zone);
 
-  // Labelled doors attribute only to their own crew, including a just-closed
-  // session for a manually selected previous zone. Unlabelled legacy submits
-  // retain their old attribution behavior.
-  let zoneSession = picked
-    || (crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null);
-  if (!zoneSession && !crew) zoneSession = await getOpenSessionForZone(db, isTest, zone);
-
-  // A cultivar switch INSIDE one zone is invisible to the two steps above: the
-  // zone is still open, so the load attaches to whatever is being cut NOW, and
-  // `hasActiveSession` is true so the confirm screen stays silent about it.
-  //
-  // In a trial zone that is the whole error. Z10 is 15 cultivars in one acre at
-  // ~130 plants each — roughly six trailers a lot — so a single misplaced
-  // trailer is a 15-20% error on a lot whose only purpose is being compared
-  // against its neighbours. Z8 and R1 are the same shape.
-  //
-  // So before accepting an open session, ask whether the SAME crew closed a
-  // DIFFERENT cultivar in this zone inside the grace window. If they did, the
-  // trailer on the apron was loaded before the switch. Scoped to that crew
-  // because both crews can work one zone on different cultivars, and the other
-  // crew's just-closed lot says nothing about this door's load.
-  //
-  // Self-limiting: in a single-cultivar zone the previous session carries the
-  // same cultivar, so this never fires.
-  let viaSwitch = null;
-  if (zoneSession && !picked) {
-    const prev = await getLastClosedAnyCultivar(db, isTest, zone, zoneSession.crew ?? null);
-    const now = zoneSession.cultivar || null;
-    if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
-      viaSwitch = { from: prev.cultivar || null, to: now };
-      zoneSession = prev;
-    }
-  }
-
-  // Nothing open for this zone — the crew has moved on. If it closed within the
-  // grace window the load was cut there and is only now arriving, so it belongs
-  // to that closed lot.
-  let viaGrace = false;
-  if (!zoneSession && !picked && crew) {
-    const mine = await getLastClosedAnyCultivar(db, isTest, zone, crew);
-    if (inBarnGrace(mine)) { zoneSession = mine; viaGrace = true; }
-  }
-  if (!zoneSession && !crew) {
-    const recent = await getLastClosedAnyCultivar(db, isTest, zone);
-    if (inBarnGrace(recent)) { zoneSession = recent; viaGrace = true; }
-  }
-
-  // The load landed on the OTHER crew's session. Legitimate when both crews are
-  // in one zone, and a mistake worth catching when they are not — either way
-  // the person at the door is the only one who can tell, so tell them.
-  const crossedCrew = !!(crew && zoneSession && zoneSession.crew && zoneSession.crew !== crew);
-
-  await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, crew, bay, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, bay, isTest]);
-
-  // "Carga #3 hoy" used to reset at 5pm Pacific, mid-afternoon, while trailers
-  // were still arriving — the crew would have seen this one long before anyone
-  // read a dashboard.
-  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
-  const todayCount = await queryOne(db, `
-    SELECT COUNT(*) as n FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND zone = ?
-      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
-  `, [zone, dayStart, dayEnd, isTest]);
-  const loadNumber = (todayCount?.n) || 1;
-
-  const cutNote = zoneSession
-    ? `cut ${zoneSession.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
+  const cutNote = session
+    ? `cut ${session.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
       + `${viaSwitch ? `, ${viaSwitch.from || '?'} (cultivar just changed)` : ''}`
-      + `${crossedCrew ? `, Crew ${zoneSession.crew}` : ''}`
     : 'no active session for this zone';
-  ctx.waitUntil(sendTelegramMessage(env, {
-    chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🚚 Load: ${bins} bins → *${zone}* (${cutNote}). Load #${loadNumber} today for this zone.`,
-  }).catch(e => console.error('[harvest][telegram]', e)));
+  const { loadNumber } = await recordLoad(db, env, ctx, { zone, bins, session, bay, isTest, cutNote });
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
     chosen: picked ? `${picked.zone} · ${picked.cultivar || '?'} · ${translate(ui.lang, 'cut', { n: picked.cut_number ?? '?' })}` : null,
     zone, bins, loadNumber, station, bay,
-    hasActiveSession: !!zoneSession,
-    grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
+    hasActiveSession: !!session,
+    grace: viaGrace ? { zone, cut: session.cut_number } : null,
     switched: viaSwitch,
-    crossedCrew: crossedCrew ? zoneSession.crew : null,
   }));
+}
+
+// ─── TRAILER DECAL ──────────────────────────────────────
+// ONE SCAN (Koa, 2026-09-28: "just a one-scan on the qr without jumping
+// through any hoops"). Scanning the decal IS logging the load: open lot (or
+// the one that just closed), 24 bins, this trailer's bay from earlier today.
+// The receipt then offers the rare corrections — wrong bay, a partial, the
+// wrong lot, undo — for TRAILER_EDIT_MS. Fix-after instead of ask-before.
+//
+// It still asks, and writes nothing, in exactly two cases, because guessing
+// would put bins somewhere wrong that nobody can see afterwards:
+//   - no bay for this trailer yet today (its first run: one tap, then
+//     hands-free until the barn moves on);
+//   - no lot to put it on (nothing open and nothing just closed).
+
+/** How long after the scan the receipt still offers fixes and undo. */
+const TRAILER_EDIT_MS = 10 * 60 * 1000;
+
+/**
+ * A request that must never log a load: anything but a plain GET, a browser
+ * prefetch/prerender, or a link-preview bot (the URL is printed on a trailer
+ * and may well be texted around). These get the ask screen, which writes
+ * nothing until someone taps.
+ */
+function isNotAPerson(request) {
+  if (request.method !== 'GET') return true;
+  const h = request.headers;
+  const purpose = `${h.get('sec-purpose') || ''} ${h.get('purpose') || ''} ${h.get('x-purpose') || ''}`;
+  if (/prefetch|prerender|preview/i.test(purpose)) return true;
+  return /bot\b|crawler|spider|preview|facebookexternalhit|whatsapp|slack|discord|telegram/i
+    .test(h.get('user-agent') || '');
+}
+
+const receiptUrl = (id, ui, seen = false) =>
+  `${API}?action=trailer_done&id=${id}&lang=${ui.lang}${seen ? '&seen=1' : ''}`;
+
+/** 303 to a GET page: the tab ends up on the receipt, never on the scan URL. */
+const seeOther = (location) => new Response(null, { status: 303, headers: { Location: location } });
+
+/** GET /t/<n> — the QR on a trailer, scanned by its driver at drop-off. */
+export async function handleTrailerScan(request, env, ctx) {
+  env = await withSettings(env);
+  const ui = makeUi(request, env);
+  try {
+    const raw = new URL(request.url).pathname.replace(/^\/t\//, '').trim();
+    const trailer = parseTrailer(raw);
+    if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: raw }));
+    const db = env.DB;
+    if (isNotAPerson(request)) return await trailerFormPage(ui, db, env, trailer);
+
+    const isTest = isTestMode(env) ? 1 : 0;
+    // A rescan inside the repeat window is the same load: show it, write nothing.
+    const recent = await getRecentTrailerLoad(db, isTest, trailer);
+    if (recent) return seeOther(receiptUrl(recent.id, ui, true));
+
+    const [proposal, lastFill] = await Promise.all([
+      proposeLot(db, isTest), getLastFilledBay(db, isTest, trailer)]);
+    const bayToday = lastFill && lastFill.occurred_at &&
+      pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
+      ? lastFill.bay : null;
+    if (!proposal.lot || !bayToday) return await trailerFormPage(ui, db, env, trailer);
+
+    const saved = await recordLoad(db, env, ctx, {
+      zone: proposal.lot.zone, bins: CONSTANTS.binsPerTrailer.value, session: proposal.lot,
+      bay: bayToday, trailer, isTest, guard: true,
+      cutNote: `cut ${proposal.lot.cut_number}${proposal.viaGrace ? ', just-closed lot' : ''}, one scan`,
+    });
+    if (!saved) {
+      // Lost a race with another scan of the same decal: that one is the load.
+      const other = await getRecentTrailerLoad(db, isTest, trailer);
+      if (other) return seeOther(receiptUrl(other.id, ui, true));
+      return await trailerFormPage(ui, db, env, trailer);
+    }
+    return seeOther(receiptUrl(saved.id, ui));
+  } catch (e) {
+    const { message, status } = formatError(e);
+    return errorPage(ui, message, status);
+  }
+}
+
+/**
+ * This trailer's last load, if it was inside the repeat window. A trailer
+ * cannot be cut, filled and driven round in five minutes, so a second scan
+ * that soon is a camera retry, a back button or a double tap.
+ */
+async function getRecentTrailerLoad(db, isTest, trailer) {
+  const row = await queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND trailer = ? AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [trailer, isTest]);
+  if (!row) return null;
+  return Date.now() - parseSqliteUtc(row.occurred_at).getTime() < TRAILER_REPEAT_MS ? row : null;
+}
+
+/**
+ * The ask screen, for the two cases one scan cannot settle. The lot is worked
+ * out HERE, shown to the driver, and posted as an explicit id — so what the
+ * driver saw is exactly what is saved.
+ */
+async function trailerFormPage(ui, db, env, trailer, keep = null) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [proposal, lastFill, recentLots, repeat] = await Promise.all([
+    proposeLot(db, isTest),
+    getLastFilledBay(db, isTest, trailer),
+    getRecentEnterSessions(db, isTest),
+    getRecentTrailerLoad(db, isTest, trailer),
+  ]);
+  // Pre-selected only on the same Pacific day, for the reason the door gives:
+  // overnight the barn moves on to the next bay and the default stops being
+  // true. The number is still named, just not ticked.
+  const today = !!(lastFill && lastFill.occurred_at &&
+    pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date()));
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`, trailerFormBody(ui, {
+    trailer, proposal, recentLots, repeat, keep,
+    lastBay: lastFill ? lastFill.bay : null, bayToday: today,
+  }));
+}
+
+/** Bins from a form field: 1..max, the whole value, or a thrown range error. */
+function parseBins(raw, max, errorKey, ui) {
+  const s = String(raw ?? '').trim();
+  const n = parseInt(s, 10);
+  if (!Number.isInteger(n) || n < 1 || n > max || String(n) !== s) {
+    throw createError('VALIDATION_ERROR', ui.t(errorKey, { max }));
+  }
+  return n;
+}
+
+/** POST from the ask screen: the tap that one scan could not do by itself. */
+async function handleTrailerLog(ui, db, env, ctx, body) {
+  const trailer = parseTrailer(body.trailer);
+  if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: body.trailer ?? '' }));
+  const isTest = isTestMode(env) ? 1 : 0;
+
+  // Both required. The screen marks them required too; this is the guard for
+  // anything that reaches the endpoint without the screen.
+  const lot = await pickedLot(ui, db, isTest, body.lot);
+  if (!lot) throw createError('VALIDATION_ERROR', ui.t('trailerPickLot'));
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
+
+  // 24 is the standard (Koa, 2026-09-28). A partial is 1..23; anything else in
+  // the partial box is refused rather than stored as one.
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const partial = String(body.partial_bins ?? '').trim();
+  const bins = partial ? parseBins(partial, FULL - 1, 'partialRange', ui) : FULL;
+
+  const proposal = await proposeLot(db, isTest);
+  const asProposed = !!(proposal.lot && proposal.lot.id === lot.id);
+  const cutNote = `cut ${lot.cut_number}${asProposed ? (proposal.viaGrace ? ', just-closed lot' : '') : ', chosen by driver'}`;
+  const saved = await recordLoad(db, env, ctx, {
+    zone: lot.zone, bins, session: lot, bay, trailer, isTest, cutNote, guard: !truthy(body.again),
+  });
+  if (!saved) {
+    // Nothing written: this trailer was logged inside the last five minutes.
+    // The screen comes back with the warning and the driver's own choices, and
+    // one more tap logs it if it really is another load.
+    return trailerFormPage(ui, db, env, trailer, { lot: lot.id, bay, partial });
+  }
+
+  // Post/Redirect/Get: a reload or a back button re-shows the receipt instead
+  // of re-posting the load.
+  return seeOther(receiptUrl(saved.id, ui));
+}
+
+/** One trailer load with its lot, or null. Trailer loads only. */
+async function getTrailerLoad(db, isTest, rawId) {
+  const id = parseInt(rawId, 10);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return queryOne(db, `
+    SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut
+    FROM harvest_scan_log l
+    JOIN harvest_scan_log s ON s.id = l.attributed_zone_session_id
+    WHERE l.id = ? AND l.event_type = 'barn_load' AND l.trailer IS NOT NULL AND l.is_test = ?
+  `, [id, isTest]);
+}
+
+const editableUntil = (row) => parseSqliteUtc(row.occurred_at).getTime() + TRAILER_EDIT_MS;
+
+/** GET receipt for a trailer load — where every scan and every tap ends up. */
+async function handleTrailerDone(ui, db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, params.id);
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const editable = Date.now() < editableUntil(row);
+  const [loadNumber, recentLots, proposal] = await Promise.all([
+    loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id),
+    editable ? getRecentEnterSessions(db, isTest) : [],
+    truthy(params.seen) ? proposeLot(db, isTest) : { lot: null },
+  ]);
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
+    row, loadNumber, editable, recentLots, seen: truthy(params.seen), proposal,
+  }));
+}
+
+/**
+ * POST from the receipt: fix a load (bay, bins, lot) or undo it, inside
+ * TRAILER_EDIT_MS of the scan. The window is enforced in the UPDATE/DELETE
+ * itself, so a receipt left open on a phone cannot rewrite an old load.
+ */
+async function handleTrailerFix(ui, db, env, ctx, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, body.id);
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const windowSql = `occurred_at > datetime('now', '-${Math.round(TRAILER_EDIT_MS / 1000)} seconds')`;
+  const name = trailerName(row.trailer);
+
+  if (truthy(body.undo)) {
+    // A hard delete, on purpose: a load scanned by mistake minutes ago was
+    // never a load, and a void flag would have to be honoured by every ledger,
+    // rack-board and metrics query there is. The Telegram feed keeps the record.
+    const r = await execute(db, `
+      DELETE FROM harvest_scan_log
+      WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+    `, [row.id, isTest]);
+    if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `↩️ ${name} · load removed (was ${row.bins} bins → *${row.zone}*${row.bay ? ` · bay ${row.bay}` : ''}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    return renderPage(ui, `${ui.t('trailer')} ${name}`, `
+<h1>${ui.t('trailerUndone', { t: name })}</h1>
+<p class="sub">${ui.t('trailerUndoneSub')}</p>`);
+  }
+
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
+  const bins = parseBins(body.bins, CONSTANTS.binsPerTrailer.value, 'binsFixRange', ui);
+  // The load's own lot needs no re-validation — it was valid when the scan
+  // chose it, and an old-but-just-closed lot must not block a bay fix.
+  const lotRaw = String(body.lot ?? '').trim();
+  const lot = !lotRaw || Number(lotRaw) === row.attributed_zone_session_id
+    ? { id: row.attributed_zone_session_id, zone: row.zone }
+    : await pickedLot(ui, db, isTest, lotRaw);
+
+  const r = await execute(db, `
+    UPDATE harvest_scan_log SET bay = ?, bins = ?, attributed_zone_session_id = ?, zone = ?
+    WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+  `, [bay, bins, lot.id, lot.zone, row.id, isTest]);
+  if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+
+  const changed = [
+    bay !== row.bay ? `bay ${row.bay ?? '?'}→${bay}` : '',
+    bins !== row.bins ? `${row.bins}→${bins} bins` : '',
+    lot.id !== row.attributed_zone_session_id ? `lot ${row.zone}→${lot.zone}` : '',
+  ].filter(Boolean).join(', ');
+  if (changed) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ ${name} · load fixed: ${changed}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+  return seeOther(receiptUrl(row.id, ui));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -2020,6 +2293,11 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 async function handleTestMode(request, db, env, body) {
   requireAuth(request, body, env, 'harvest-test-mode');
   if (request.method === 'POST' && body.on !== undefined) {
+    if (isPreviewBuild(env)) {
+      // The switch is shared with the live worker: flipping it from a preview
+      // would change what the floor is recording.
+      throw createError('VALIDATION_ERROR', 'This is a preview build: it is always in test mode, and cannot change the farm switch.');
+    }
     const on = body.on === true || body.on === 'true' || body.on === 1 || body.on === '1';
     await setTestMode(db, on, 'dashboard');
     return successResponse({ success: true, test_mode: on, source: 'setting' });
@@ -2977,9 +3255,9 @@ function qrImg(target, cls = 'qr', alt = '') {
 
 async function getStatus(db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
-  // Every open session, not one: with two crews there are legitimately two
-  // zones being cut, and asking getActiveSession() here would have reported
-  // only the untagged ones.
+  // Every open session, not one. One crew means one open lot, but data from
+  // the two-crew build can hold two until the next zone scan closes both, and
+  // a status feed that hid one would hide exactly that.
   const open = await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
@@ -3025,7 +3303,7 @@ async function getRecentEnterSessions(db, isTest, days = LOT_AT_DOOR_DAYS) {
   return await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND is_test = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
     ORDER BY occurred_at DESC, id DESC LIMIT 40
   `, [isTest, days]);
 }
@@ -3861,11 +4139,12 @@ async function getMetrics(request, db, env, params, body) {
 }
 
 /**
- * The one-off print job: two crew cards and one code per barn door.
+ * The one-off print jobs: the end-of-day card and one code per barn door
+ * (default), one sign per zone, and one decal per trailer.
  *
- * Generated from CREWS and STATION_CREW rather than typed out, so it cannot
- * drift from what the handler actually accepts — add a Crew C or a third
- * intake and this sheet grows a page on its own.
+ * Generated from STATIONS, TRAILERS and the zone list rather than typed out,
+ * so it cannot drift from what the handler actually accepts — add a seventh
+ * trailer and this sheet grows a page on its own.
  *
  * Bilingual, Spanish first, because these are read by the field and barn crew
  * the same way the screens are. (The supersack TAG is the deliberate exception
@@ -3876,48 +4155,47 @@ async function getMetrics(request, db, env, params, body) {
  * someone who wants to pick the tray and the paper first.
  */
 function codeSheetBody(ui, packet = 'crew') {
-  const card = (crew) => `
-  <div class="card">
-    <div class="kicker">Rogue Family Farms · 2026</div>
-    <div class="big">CUADRILLA ${crew}</div>
-    <div class="sub">Crew ${crew}</div>
-    ${qrImg(`${PUBLIC_BASE}/c/${crew}`)}
-    <div class="how">Escanéalo <strong>una vez</strong> con el teléfono del jefe de cuadrilla.
-      Después dirá &ldquo;Cuadrilla ${crew}&rdquo; en cada pantalla.</div>
-    <div class="how en">Scan <strong>once</strong> on the crew lead's phone. Every screen then says Crew ${crew}.</div>
-    <div class="url">${PUBLIC_BASE.replace('https://', '')}/c/${crew}</div>
-  </div>`;
-
   const door = (n) => `
 <section class="sheet door">
   <div class="kicker">Rogue Family Farms · 2026</div>
   <div class="big">RECEPCIÓN ${n}</div>
-  <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
+  <div class="sub">Barn intake ${n}</div>
   ${qrImg(`${PUBLIC_BASE}/b/${n}`, 'qr big-qr')}
-  <div class="how">Abre la recepción. Registra cada carga sin salir de la pantalla.</div>
-  <div class="how en">Open intake once. Log each trailer without leaving the screen.</div>
+  <div class="how">Si una traila no tiene su código, anota la carga aquí.</div>
+  <div class="how en">If a trailer's own code is missing, log the load here.</div>
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
 </section>`;
 
-  // ONE card for both crews. The crew tag lives on the lead's phone, so the
-  // same code closes whichever crew scans it — printing one per crew would be
-  // two things to laminate and one more way to grab the wrong one.
   const dayEndCard = `
   <div class="card">
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">FIN DEL DÍA</div>
     <div class="sub">End of day</div>
     ${qrImg(`${PUBLIC_BASE}/fin`)}
-    <div class="how">Escanéalo <strong>al terminar el día</strong>, con el mismo teléfono
-      que abrió la zona. Cierra la zona de tu cuadrilla.</div>
-    <div class="how en">Scan at the <strong>end of the day</strong>, on the phone that opened the
-      zone. Closes that crew's zone.</div>
+    <div class="how">Escanéalo <strong>al terminar el día</strong>. Cierra la zona abierta.</div>
+    <div class="how en">Scan at the <strong>end of the day</strong>. Closes the open zone.</div>
     <div class="url">${PUBLIC_BASE.replace('https://', '')}/fin</div>
   </div>`;
 
-  const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
+  // One decal per trailer. The printed number IS the trailer's name — they had
+  // none before these (Koa, 2026-09-28) — so it is sized to read across a yard.
+  const trailerSheet = (n) => `
+<section class="sheet door trailer">
+  <div class="kicker">Rogue Family Farms · ${getSeason()}</div>
+  <div class="big trailer-num">${trailerName(n)}</div>
+  <div class="sub">Traila / Trailer ${n}</div>
+  ${qrImg(`${PUBLIC_BASE}/t/${n}`, 'qr trailer-qr', `QR ${trailerName(n)}`)}
+  <div class="how">El chofer lo escanea <strong>cada vez que deja una carga</strong>.</div>
+  <div class="how en">The driver scans this <strong>at every drop-off</strong>.</div>
+  <div class="url">${PUBLIC_BASE.replace('https://', '')}/t/${n}</div>
+</section>`;
+
+  const doors = STATIONS.map(door).join('');
+  const trailerSheets = TRAILERS.map(trailerSheet).join('');
   const zones = [...VALID_ZONES].filter(isHarvestTracked).sort((a,b) => a.localeCompare(b,'en',{numeric:true}));
-  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar.</div><div class="how en">Scan when cutting starts. Confirm the cultivar.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const pages = packet === 'zones' ? zones.length
+    : packet === 'trailers' ? TRAILERS.length : STATIONS.length + 1;
 
   return `
 <style>
@@ -3959,6 +4237,9 @@ function codeSheetBody(ui, packet = 'crew') {
   .door { padding-top: 0.5in; }
   .door .big-qr { width: 5.2in; height: 5.2in; }
   .door .big { font-size: 54pt; }
+  /* Trailer decals: the number is the name, read from the driver's seat. */
+  .trailer .trailer-num { font-size: 150pt; line-height: .9; }
+  .trailer .trailer-qr { width: 4.6in; height: 4.6in; }
 
   .noprint { max-width: 6.5in; margin: 0 auto 18pt; padding: 12pt 14pt; border: 1pt solid #ccd;
              border-radius: 8pt; background: #f6f7f9; font-size: 11pt; color: #334; text-align: left; }
@@ -3984,20 +4265,20 @@ function codeSheetBody(ui, packet = 'crew') {
 </style>
 <div class="codesheet">
   <div class="noprint">
-    <strong>${ui.t('printCodes')}</strong> — ${packet === 'zones' ? zones.length : Object.keys(STATION_CREW).length + 2} pages.
-    <div><a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${API}?action=print_codes&packet=crew&lang=${ui.lang}">Crew / Cuadrilla</a><a href="${API}?action=print_codes&packet=zones&lang=${ui.lang}">Zones / Zonas</a><button type="button" onclick="window.print()">Print / Imprimir</button><a href="${API}?action=practice&lang=${ui.lang}">${ui.lang === 'es' ? 'Practicar sin guardar' : 'Practice without saving'}</a></div>
+    <strong>${ui.t('printCodes')}</strong> — ${pages} pages.
+    <div><a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${API}?action=print_codes&packet=crew&lang=${ui.lang}">Barn / Recepción</a><a href="${API}?action=print_codes&packet=trailers&lang=${ui.lang}">Trailers / Trailas</a><a href="${API}?action=print_codes&packet=zones&lang=${ui.lang}">Zones / Zonas</a><button type="button" onclick="window.print()">Print / Imprimir</button><a href="${API}?action=practice&lang=${ui.lang}">${ui.lang === 'es' ? 'Practicar sin guardar' : 'Practice without saving'}</a></div>
     Print at 100% (no &ldquo;fit to page&rdquo;), then laminate.
-    ${packet === 'zones' ? '<p>One zone per page / Una zona por página.</p>' : `<ul>
-      <li><strong>Page 1</strong> — the two crew cards. Cut along the dashed line;
-          one for each crew lead's clipboard. Scanned <em>once</em> per phone.</li>
-      <li><strong>Page 2</strong> — End of day / Fin del día.</li>
-      <li><strong>Pages 3–${Object.keys(STATION_CREW).length + 2}</strong> — one per barn intake door.
-          Open once, then log each trailer on the same screen.</li>
+    ${packet === 'zones' ? '<p>One zone per page / Una zona por página.</p>'
+      : packet === 'trailers' ? '<p>One trailer per page / Una traila por página. Weatherproof decal or a laminated sheet on the trailer.</p>'
+      : `<ul>
+      <li><strong>Page 1</strong> — End of day / Fin del día.</li>
+      <li><strong>Pages 2–${STATIONS.length + 1}</strong> — one per barn intake door. The fallback
+          when a trailer's own code is missing.</li>
     </ul>`}
   </div>
 
-  ${packet === 'zones' ? zoneSheets : `<section class="sheet cards">${CREWS.map(card).join('')}</section>
-  <section class="sheet cards">${dayEndCard}</section>
+  ${packet === 'zones' ? zoneSheets : packet === 'trailers' ? trailerSheets
+    : `<section class="sheet cards">${dayEndCard}</section>
   ${doors}`}
 </div>`;
 }
@@ -4375,7 +4656,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 </head>
 <body${ui.isTest ? ' class="testmode"' : ''}>
 ${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
-<div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}" data-lang-swap>${ui.t('langOther')}</a></div>
+<div class="lang"><a href="${ui.toggle}" data-lang-swap>${ui.t('langOther')}</a></div>
 ${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtml}
 </body>
 </html>`;
@@ -4397,15 +4678,11 @@ ${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtm
  */
 function makeUi(request, env = null) {
   const lang = pickLang(request);
-  const crew = pickCrew(request);
   const url = new URL(request.url);
   const other = lang === 'es' ? 'en' : 'es';
   url.searchParams.set('lang', other);
   return {
     lang,
-    // null, never undefined: it is bound straight into the session INSERT, and
-    // undefined is not a value SQLite will take.
-    crew: crew ?? null,
     toggle: url.pathname + url.search,
     // Carried on the ui rather than threaded through renderPage's 28 callers.
     // Every crew screen has to be able to say it, because the ONE thing a
@@ -4613,7 +4890,7 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
   // No autofocus now: the common case needs no keyboard at all. Tapping the
   // field selects it, so a partial is typed over rather than edited around.
   const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
-  // Follow the matching crew; older arriving trailers use a manual override.
+  // Follow the open lot; an older arriving trailer uses a manual override.
   const preselect = active ? active.zone : null;
 
   // Only zones harvest actually counts — offering GH here would let a load be
@@ -4629,11 +4906,7 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
     : `<p class="note">${ui.t('noZoneOpen')}</p>`;
   // Which door this is, stated on the screen: two intakes that look identical
   // are two chances to log a load at the wrong one.
-  const stationNote = station
-    ? `<p class="sub">${STATION_CREW[station]
-        ? ui.t('atStation', { n: station, crew: STATION_CREW[station] })
-        : ui.t('atStationNoCrew', { n: station })}</p>`
-    : '';
+  const stationNote = station ? `<p class="sub">${ui.t('atStation', { n: station })}</p>` : '';
   // Carried explicitly rather than trusted to the cookie: the cookie makes a
   // bookmark remember its door, this makes THIS submission unambiguous.
   const stationField = station ? `<input type="hidden" name="station" value="${station}">` : '';
@@ -4662,7 +4935,7 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
 <h1>${ui.t('barnIntake')}</h1>
 ${stationNote}
 <div id="intakeActive" role="status">${activeNote}</div>
-${station ? `<button id="followCrew" type="button" class="btn alt" style="margin-bottom:16px">${ui.lang === 'es' ? 'Seguir zona de Cuadrilla ' : 'Follow Crew '}${STATION_CREW[station]}${ui.lang === 'es' ? '' : ' zone'}</button>` : `<p class="note">${ui.lang === 'es' ? 'Elige tu recepción para seguir la zona de tu cuadrilla.' : 'Choose your intake to follow your crew’s scanned zone.'}</p><div class="intake-choices">${[['A', 1], ['B', 2]].map(([crew, door]) => `<a class="intake-choice crew-${crew.toLowerCase()}" href="/b/${door}?lang=${ui.lang}"><span class="intake-letter" aria-hidden="true">${crew}</span><span><strong>${ui.lang === 'es' ? 'Cuadrilla' : 'Crew'} ${crew}</strong><small>${ui.lang === 'es' ? 'Recepción' : 'Barn intake'} ${door}</small></span><span class="intake-arrow" aria-hidden="true">→</span></a>`).join('')}</div>`}
+<button id="followOpen" type="button" class="btn alt" style="margin-bottom:16px">${ui.t('followOpen')}</button>
 <form id="intakeForm" method="POST" action="${API}?action=barn_log&lang=${ui.lang}">
   ${stationField}
   <label for="zone">${ui.t('zone')}</label>
@@ -4683,16 +4956,16 @@ ${station ? `<button id="followCrew" type="button" class="btn alt" style="margin
   <button class="btn" type="submit">${ui.t('logLoad')}</button>
 </form>
 <div id="intakeReceipt" role="status" aria-live="polite"></div>
-${barnLiveScript(ui, station)}`;
+${barnLiveScript(ui)}`;
 }
 
 // Progressive enhancement: the normal POST remains usable without JavaScript.
 // Never retry a failed POST automatically: a lost response may already be saved.
-function barnLiveScript(ui, station) {
+function barnLiveScript(ui) {
   const es = ui.lang === 'es';
   const text = {
-    live: es ? 'Zona actual de Cuadrilla ' : 'Current zone for Crew ',
-    none: es ? 'Sin zona abierta para esta cuadrilla. Elige una zona.' : 'No open zone for this crew. Choose a zone.',
+    live: es ? 'Zona abierta: ' : 'Open zone: ',
+    none: es ? 'Sin zona abierta. Elige una zona.' : 'No zone open. Choose a zone.',
     manual: es ? 'Zona manual — se conserva para cargas anteriores. Pulsa Seguir para volver.' : 'Manual zone — held for arriving loads. Press Follow to resume automatic selection.',
     offline: es ? 'No se pudo actualizar la zona. Confírmala antes de registrar.' : 'Zone update unavailable. Confirm the zone before logging.',
     saving: es ? 'Registrando…' : 'Recording…',
@@ -4705,17 +4978,17 @@ function barnLiveScript(ui, station) {
   };
   return `<script>
 (function () {
-  var T = ${JSON.stringify(text)}, crew = ${JSON.stringify(STATION_CREW[station] || null)};
+  var T = ${JSON.stringify(text)};
   var form = document.getElementById('intakeForm'), zone = document.getElementById('zone');
   var status = document.getElementById('intakeActive'), receipt = document.getElementById('intakeReceipt');
-  var follow = document.getElementById('followCrew'), busy = false, manual = false, polling = false;
+  var follow = document.getElementById('followOpen'), busy = false, manual = false, polling = false;
   var latest = null, modeVersion = 0;
   var lotPick = document.getElementById('lotPick'), lotSel = document.getElementById('lot');
   var openZones = [], recentLots = null;
   function applyActive() {
     if (manual || busy) return;
     zone.value = latest ? latest.zone : '';
-    status.textContent = latest ? T.live + crew + ': ' + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
+    status.textContent = latest ? T.live + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
   }
   // The picker is for the case the rules cannot answer: this zone has nothing
   // open, so without a lot named here the bins land on no lot at all. With a
@@ -4742,14 +5015,14 @@ function barnLiveScript(ui, station) {
     lotPick.hidden = !needed;
   }
   async function refresh() {
-    if (!crew || polling || busy || document.hidden) return;
+    if (polling || busy || document.hidden) return;
     polling = true;
     try {
       var r = await fetch('${API}?action=status', { cache: 'no-store' });
       if (!r.ok) throw new Error('status');
       var d = await r.json();
       if (!Array.isArray(d.active_zones)) throw new Error('status');
-      latest = d.active_zones.find(function (s) { return s.crew === crew; }) || null;
+      latest = d.active_zones[0] || null;
       openZones = d.active_zones.map(function (s) { return s.zone; });
       if (Array.isArray(d.recent_lots)) recentLots = d.recent_lots;
       applyActive();
@@ -4807,20 +5080,16 @@ function barnLiveScript(ui, station) {
 }
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
-                                  crossedCrew = null, station = null, bay = null,
+                                  station = null, bay = null,
                                   switched = null, chosen = null }) {
-  // Four outcomes, and the person at the door should be able to tell them
+  // Three outcomes, and the person at the door should be able to tell them
   // apart: attributed to the open lot (silent), to a lot that just closed (say
-  // so — it is a correction), to the OTHER crew's lot (say so — only they can
-  // judge it), or to nothing (warn, that one loses bins).
+  // so — it is a correction), or to nothing (warn, that one loses bins).
   const attribution = chosen
     ? `<p class="note">${ui.t('lotChosen', { lot: escapeHtml(chosen) })}</p>`
     : grace
       ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
       : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
-  const crossNote = crossedCrew
-    ? `<p class="note">${ui.t('crossedCrew', { crew: crossedCrew })}</p>`
-    : '';
   // Said out loud, like every other correction the cascade makes. The person at
   // the door is the only one who can tell a trailer loaded before the switch
   // from one loaded after it, so they are told which lot it went to.
@@ -4835,8 +5104,159 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grac
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}${bay ? ` · ${ui.t('hungInBay', { n: bay })}` : ''}</p>
 ${attribution}
 ${switchNote}
-${crossNote}
 <div class="footer"><a href="${API}?action=barn_intake${station ? `&station=${station}` : ''}">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
+}
+
+/**
+ * The driver's screen. Built for a phone held in one hand at a barn door:
+ * the trailer's name, the lot it is going to, a bay, one button.
+ *
+ * Every choice is a radio, not a select: one tap each, all visible, and the
+ * page works with no script at all. The lot the server proposed is ticked;
+ * "Different lot?" opens the recent ones for the rare wrong case.
+ */
+function trailerFormBody(ui, { trailer, proposal, recentLots, repeat, keep, lastBay, bayToday }) {
+  const name = trailerName(trailer);
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
+
+  const lots = [...recentLots];
+  if (proposal.lot && !lots.some(l => l.id === proposal.lot.id)) lots.unshift(proposal.lot);
+  const chosen = keep ? keep.lot : (proposal.lot ? proposal.lot.id : null);
+  const lotRadios = lots.map(l => `<label class="choice"><input type="radio" name="lot" value="${l.id}" required${
+    String(l.id) === String(chosen) ? ' checked' : ''}> ${lotLabel(l)}${
+    l.closed_at ? '' : ` · ${ui.t('lotAtDoorOpen')}`}</label>`).join('');
+
+  const lotCard = proposal.lot
+    ? `<div class="status trailer-lot"><div class="lotmeta"><strong>→ ${lotLabel(proposal.lot)}</strong></div>${
+        proposal.viaGrace ? `<p class="note">${ui.t('trailerGrace')}</p>` : ''}</div>`
+    : `<p class="note">${ui.t('trailerNoLot')}</p>`;
+  const lotPicker = proposal.lot
+    ? `<details class="lotother"${keep && keep.lot !== proposal.lot.id ? ' open' : ''}><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>`
+    : `<fieldset class="lotother"><legend>${ui.t('trailerWhichLot')}</legend>${lotRadios || `<p class="note">${ui.t('trailerNoRecent')}</p>`}</fieldset>`;
+
+  const bayPick = keep ? keep.bay : (bayToday ? lastBay : null);
+  const bayBtn = (n) => `<label class="baybtn"><input type="radio" name="bay" value="${n}" required${
+    Number(bayPick) === n ? ' checked' : ''}><span>${n}</span></label>`;
+  const bayRow = (labelKey, from, to) => {
+    const out = [];
+    for (let n = from; n <= to; n++) out.push(bayBtn(n));
+    return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
+  };
+  const bayHint = lastBay
+    ? (bayToday ? ui.t('trailerBayLast', { n: lastBay }) : ui.t('bayStale', { n: lastBay }))
+    : ui.t('trailerBayPick');
+
+  const partialVal = keep && keep.partial ? escapeHtml(keep.partial) : '';
+  const repeatNote = repeat
+    ? `<p class="note warn" role="alert">${ui.t('trailerRepeat', {
+        t: name, time: pacificClock(ui, repeat.occurred_at),
+        zone: escapeHtml(repeat.zone), bins: repeat.bins })}</p>`
+    : '';
+  const canLog = !!proposal.lot || lots.length > 0;
+  // Why a one-scan decal is asking at all: its first run of the day.
+  const firstBay = proposal.lot && !bayToday && !keep && !repeat
+    ? `<p class="note">${ui.t('trailerFirstBay')}</p>` : '';
+
+  return `
+<h1 class="trailer-name">${name}</h1>
+<p class="sub">${ui.t('trailerSub')}</p>
+${lotCard}
+${firstBay}
+${repeatNote}
+${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_log&lang=${ui.lang}"
+      onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${trailer}">
+  ${repeat ? '<input type="hidden" name="again" value="1">' : ''}
+  ${lotPicker}
+  <label>${ui.t('bayHung')} <span class="hint">${bayHint}</span></label>
+  ${bayRow('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)}
+  ${bayRow('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX)}
+  <details class="partial"${partialVal ? ' open' : ''}><summary>${ui.t('trailerPartial', { n: FULL })}</summary>
+    <label for="partial_bins">${ui.t('trailerPartialHow')}</label>
+    <input id="partial_bins" name="partial_bins" type="number" min="1" max="${FULL - 1}" inputmode="numeric" value="${partialVal}">
+  </details>
+  <button class="btn" type="submit">${repeat ? ui.t('trailerLogAgain') : ui.t('trailerLogBtn', { n: FULL })}</button>
+</form>` : lotPicker}`;
+}
+
+/**
+ * The receipt: what the scan logged, big enough to check at arm's length, and
+ * — for TRAILER_EDIT_MS — the fixes, folded away so the ordinary load is just
+ * a glance. The bay is the loudest thing on the page because it is the one
+ * default that can quietly stop being true (the barn moved on to the next bay).
+ */
+function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, seen, proposal }) {
+  const name = trailerName(row.trailer);
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
+  const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut };
+
+  const seenNote = seen
+    ? `<p class="note warn" role="alert">${ui.t('trailerSeen', { t: name, time: pacificClock(ui, row.occurred_at) })}</p>`
+    : '';
+  const newLoad = seen && proposal && proposal.lot ? `
+<form method="POST" action="${API}?action=trailer_log&lang=${ui.lang}" class="newload"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${row.trailer}">
+  <input type="hidden" name="lot" value="${proposal.lot.id}">
+  <input type="hidden" name="bay" value="${row.bay}">
+  <input type="hidden" name="again" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerNewLoad')}</button>
+</form>` : '';
+
+  let fix = `<p class="note">${ui.t('trailerFixClosed')}</p>`;
+  if (editable) {
+    const lots = [...recentLots];
+    if (!lots.some(l => l.id === current.id)) lots.unshift(current);
+    const lotRadios = lots.map(l => `<label class="choice"><input type="radio" name="lot" value="${l.id}"${
+      l.id === current.id ? ' checked' : ''}> ${lotLabel(l)}</label>`).join('');
+    const bayBtn = (n) => `<label class="baybtn"><input type="radio" name="bay" value="${n}" required${
+      Number(row.bay) === n ? ' checked' : ''}><span>${n}</span></label>`;
+    const bayRow = (labelKey, from, to) => {
+      const out = [];
+      for (let n = from; n <= to; n++) out.push(bayBtn(n));
+      return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
+    };
+    fix = `
+<details class="fixload"><summary>✏️ ${ui.t('trailerFix')} <span class="hint">· ${ui.t('trailerFixHint')}</span></summary>
+<form id="trailerFix" method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}"
+      onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="id" value="${row.id}">
+  <label>${ui.t('bayHung')}</label>
+  ${bayRow('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)}
+  ${bayRow('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX)}
+  <label for="fixbins">${ui.t('trailerBinsNow')}</label>
+  <input id="fixbins" name="bins" type="number" min="1" max="${FULL}" inputmode="numeric" required value="${row.bins}">
+  <details class="lotother"><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>
+  <button class="btn" type="submit">${ui.t('trailerFixSave')}</button>
+</form>
+<form method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}" class="undo"
+      onsubmit="return confirm(${escapeHtml(JSON.stringify(ui.t('trailerUndoConfirm')))})">
+  <input type="hidden" name="id" value="${row.id}">
+  <input type="hidden" name="undo" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerUndo')}</button>
+</form>
+</details>
+<p class="note">${ui.t('trailerFixUntil', { time: pacificClock(ui, new Date(editableUntil(row))) })}</p>`;
+  }
+
+  return `
+<h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
+${seenNote}
+<div class="status trailer-lot">
+  <div class="lotmeta"><strong>→ ${lotLabel(current)}</strong></div>
+  <div class="baybig">${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
+</div>
+<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(row.zone) })}</p>
+${newLoad}
+${fix}`;
+}
+
+/** A stored UTC timestamp (or a Date) as a Pacific wall-clock time, "2:14 PM". */
+function pacificClock(ui, ts) {
+  return (ts instanceof Date ? ts : parseSqliteUtc(ts)).toLocaleTimeString(ui.lang === 'es' ? 'es-US' : 'en-US',
+    { timeZone: HARVEST_TZ, hour: 'numeric', minute: '2-digit' });
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
@@ -6117,10 +6537,12 @@ function formatTagDate(lang, iso) {
  * 2026-09-16: "a dashboard/ect that has all these accessible through it").
  *
  * Links only — no season data — so it needs no password; the pages that carry
- * numbers keep their own. Three tools are deliberately NOT links: a zone sign
- * (/z/) opens a cutting session, /fin closes the day, and a crew card (/c/)
- * tags the phone. Opening those from a menu would write real records, so they
- * are shown as "scan only" with where the printed code lives.
+ * numbers keep their own. Two tools are deliberately NOT links: a zone sign
+ * (/z/) opens a cutting session and /fin closes the day. Opening those from a
+ * menu would write real records, so they are shown as "scan only" with where
+ * the printed code lives. A trailer decal (/t/) writes nothing until its
+ * button is pressed, but it is still shown as a scan: it belongs to the
+ * driver standing at the trailer, not to a menu.
  */
 function hubBody(ui) {
   const es = ui.lang === 'es';
@@ -6265,12 +6687,12 @@ ${[L('Field', 'Campo'), L('Barn', 'Bodega'), L('Takedown', 'Bajada'), L('Bags', 
 </nav>
 ${lane(1, LANE[0], L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'), [
     scan(L('Zone sign', 'Letrero de zona'), L('Starts cutting a zone: cultivar and crew size.', 'Empieza a cortar una zona: cultivar y número de cortadores.'), '/z/Z8'),
-    scan(L('Crew card', 'Tarjeta de cuadrilla'), L('Scan once per phone to set Crew A or B.', 'Escanéala una vez por teléfono: Cuadrilla A o B.'), '/c/A · /c/B'),
     scan(L('End of day', 'Fin del día'), L('Closes the zone that is open.', 'Cierra la zona que esté abierta.'), '/fin'),
-    card(`${API}?action=print_codes&${q}`, L('Print signs &amp; cards', 'Imprimir letreros y tarjetas'), L('Every zone sign, crew card and barn code as QR codes.', 'Todos los letreros, tarjetas y códigos de bodega en QR.')),
+    card(`${API}?action=print_codes&${q}`, L('Print signs &amp; decals', 'Imprimir letreros y códigos'), L('Every zone sign, trailer decal and barn code as QR codes.', 'Todos los letreros, códigos de traila y de bodega en QR.')),
   ])}
 ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
-    card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
+    scan(L('Trailer decal', 'Código de traila'), L('The driver scans it at every drop-off: lot, bay, one tap.', 'El chofer lo escanea en cada descarga: lote, bahía, un toque.'), '/t/1 … /t/6'),
+    card(`/b?${q}`, L('Barn intake (fallback)', 'Recibo de cargas (respaldo)'), L('When a trailer code is missing: log it here with zone, bins and bay.', 'Si falta el código de la traila: anótala aquí con zona, cajas y bahía.')),
     card(`${API}?action=crew&${q}`, L('Hourly crew report', 'Reporte por hora'), L('On the hour: who is working and how many sticks went up.', 'Cada hora: quién está trabajando y cuántos palos se colgaron.')),
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
@@ -6630,7 +7052,7 @@ ${canMove ? `<details class="batch">
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
   return `<div class="sd">
-<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></span></div>
+<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language"><a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></span></div>
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
 ${notes.length ? `<div class="flash" style="margin-top:18px"><strong>${ui.t('secNotes')}</strong><br>${notes.map(n => escapeHtml(n.note)).join('<br>')}</div>` : ''}
