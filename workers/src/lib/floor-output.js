@@ -19,7 +19,8 @@
  * rather than only ever looking at yesterday, so a late row still lands.
  *
  * WASTE IS DERIVED, NOT WEIGHED — `raw - tops - smalls - biomass - trim`, with
- * `raw = sacks x 37`. It absorbs every error in the other four. Carried through
+ * `raw = sacks x a full sack` (37 lb through 2025, 35 lb from the 2026 crop — see
+ * lib/sack-weight.js). It absorbs every error in the other four. Carried through
  * so the material balance survives, and kept labelled so it is never read as a
  * measurement.
  *
