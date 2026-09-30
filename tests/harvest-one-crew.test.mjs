@@ -193,6 +193,14 @@ test('the cut cannot change by a fetched link, on a closed lot, or once tags are
   assert.equal(sessions(sqlite)[0].cut_number, 1, 'nothing moved');
 });
 
+test('the cutter buttons run 6 to 20 — the crew is 16-18, one team is 8, 1-5 never happens', async () => {
+  const { env, ctx } = freshDb();
+  const html = await (await scanZone(env, ctx, 'Z5')).text();
+  const counts = [...html.matchAll(/action=headcount&session_id=\d+&count=(\d+)"/g)].map(m => Number(m[1]));
+  assert.deepEqual(counts, Array.from({ length: 15 }, (_, i) => i + 6));
+  assert.doesNotMatch(html, /13\+/);
+});
+
 // --- the retired crew card ---------------------------------------------------
 
 test('the old crew card clears the tag off the phone and says why', async () => {
