@@ -268,13 +268,35 @@ async function summary(params, env) {
  * 5 minutes so public traffic doesn't hammer the GAS/Shopify quota — inventory
  * only changes a couple times a day.
  */
+/**
+ * A fresh-cache hit, but only while its own `as_of` is under five minutes old.
+ *
+ * The Cache API cannot be trusted to expire on its own here: on 2026-09-30 a
+ * "5-minute" entry was still being served after two hours, which hid a deploy
+ * that changed the number (113 lb kept showing after the fix that makes it
+ * ~174). The age is read from the payload the entry carries, so a stale entry
+ * is a miss — dropped and recomputed — whatever the cache thinks.
+ */
+export const FRESH_MS = 5 * 60 * 1000;
+export async function freshHit(cache, key, now = Date.now()) {
+  const hit = await cache.match(key);
+  if (!hit) return null;
+  try {
+    const { as_of } = await hit.clone().json();
+    const age = now - Date.parse(as_of);
+    if (age >= 0 && age <= FRESH_MS) return hit;
+  } catch { /* unreadable body: treat as a miss */ }
+  try { await cache.delete(key); } catch { /* best effort */ }
+  return null;
+}
+
 async function topsRemaining(request, env, ctx) {
   const cache = caches.default;
   // Canonical keys — one entry each regardless of how the client formats the URL.
   const freshKey = new Request('https://cache.local/supersack/tops_remaining');       // 5-min hot cache
   const lastGoodKey = new Request('https://cache.local/supersack/tops_remaining-lg');  // 24-h outage fallback
 
-  const hit = await cache.match(freshKey);
+  const hit = await freshHit(cache, freshKey);
   if (hit) return hit;
 
   if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) {
@@ -428,7 +450,7 @@ async function topsBreakdown(request, env, ctx) {
 
   // Cache hit: stored copy is `public` (so the Cache API kept it) — re-stamp
   // `private` before handing it back so intermediaries don't cache it.
-  const hit = await cache.match(freshKey);
+  const hit = await freshHit(cache, freshKey);
   if (hit) {
     const h = new Headers(hit.headers);
     h.set('Cache-Control', 'private, max-age=300');
