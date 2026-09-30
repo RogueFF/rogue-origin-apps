@@ -80,7 +80,9 @@ import {
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
 const NEW_CUT_PROMPT_DAYS = 7;           // a zone untouched this long: the scan ASKS whether it is a new cut (never decides)
-const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, plus a 13+ link
+// Cutter counts offered on the zone screen. 6-20: the 2026 crew is 16-18 most
+// days and 8 when one team is in (Koa, 2026-09-30); 1-5 never happens.
+const HEADCOUNT_OPTIONS = Array.from({ length: 15 }, (_, i) => i + 6);
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
 const LOT_PICKER_DAYS = 45;
@@ -4845,9 +4847,9 @@ function headcountGrid(ui, zone, sessionId, current = null) {
   const cell = (n, extra = '') => {
     const on = Number(current) === n;
     return `<a class="btn${extra}${on ? ' sel' : ''}" data-n="${n}" href="${q}&count=${n}"`
-      + ` aria-pressed="${on}">${n === 13 ? '13+' : n}</a>`;
+      + ` aria-pressed="${on}">${n}</a>`;
   };
-  return HEADCOUNT_OPTIONS.map(n => cell(n)).join('') + cell(13, ' alt');
+  return HEADCOUNT_OPTIONS.map(n => cell(n)).join('');
 }
 
 /**
