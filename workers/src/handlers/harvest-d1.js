@@ -4536,6 +4536,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .notice { background: #3d3214; border: 1px solid #8a6d1f; border-left: 6px solid #e9c462; border-radius: 8px;
             padding: 14px 16px; margin: 0 0 18px; font-size: 1.05rem; color: #f4f1e8; }
   .notice button.btn { margin-top: 12px; width: 100%; cursor: pointer; }
+  .notice a.btn { margin-top: 12px; }
+  .notice .hint { display: block; margin-top: 8px; }
   /* ── Sack scan page ──────────────────────────────────────────────────
      A crew member holding a sack, phone at arm's length, gloves on, barn
      light. Built like field signage: three dark planes (page → card →
@@ -5416,6 +5418,40 @@ function storageOptions(ui, selected) {
     + bayOptions(ui, selected);
 }
 
+/**
+ * "Open in Chrome", for an iPhone that is NOT in Chrome (Koa, 2026-09-30).
+ *
+ * Safari on iOS — and the home-screen app, which prints through the same path —
+ * forces its own margins onto a printed page, so the tag can only come out at
+ * about 3.2 x 1.05 in of the 4 x 2 label. Chrome on iOS prints it full size.
+ * Nothing on the page can widen Safari's box, so the fallback is to hand the
+ * same screen to Chrome: `googlechromes://` is Chrome's own URL scheme for an
+ * https page.
+ *
+ * A BUTTON, not a redirect: iOS only follows an app link from a tap, and a
+ * redirect that silently did nothing would be worse than no offer at all. If
+ * Chrome is not installed the tap does nothing and the crew keeps printing
+ * here at the smaller size — which is why this is an offer and never a gate.
+ *
+ * Hidden by default and revealed by script, so every other device never sees
+ * it. `path` must be a GET that rebuilds this exact screen.
+ */
+function chromeHandoff(ui, path) {
+  const target = `${PUBLIC_BASE.replace(/^https:\/\//, '')}${path}`;
+  return `<div id="chromeHandoff" class="notice handoff" hidden>${ui.t('chromeWhy')}
+  <a class="btn" href="googlechromes://${escapeHtml(target)}">${ui.t('openInChrome')}</a>
+  <span class="hint">${ui.t('chromeHint')}</span>
+</div>
+<script>
+(function () {
+  var ua = navigator.userAgent || '';
+  // iPadOS reports itself as a Mac; touch points tell them apart.
+  var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios && !/CriOS/.test(ua)) document.getElementById('chromeHandoff').hidden = false;
+})();
+</script>`;
+}
+
 function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null) {
   // A finished lot is not a takedown candidate, so it never reaches the radio
   // list — nor the pre-selection, which reads the top of that list.
@@ -5448,6 +5484,7 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
   if (!lots.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
+${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
 ${flashHtml}
 <p class="note">${ui.t(finished.length ? 'noOpenLots' : 'noLots', { n: LOT_PICKER_DAYS })}</p>
 ${finishedHtml}`;
@@ -5500,6 +5537,7 @@ ${finishedHtml}`;
 
   return `
 <h1>${ui.t('printTags')}</h1>
+${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
 ${flashHtml}
 ${finishHtml}
 ${finishHtml ? `<h2>${ui.t('startSection')}</h2>` : ''}
@@ -5593,7 +5631,9 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   const variantWarn = variantCheck?.ok === false ? `
 <div class="notice">⚠️ ${ui.t('variantMissing', { e: escapeHtml(variantCheck.error) })}</div>` : '';
   const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
-  return `${flashHtml}${notice}${variantWarn}
+  const handoff = chromeHandoff(ui, `${API}?action=sack_session&${q}`
+    + (bay === null ? '' : `&bay=${bay}`) + (storage ? `&storage=${encodeURIComponent(storage)}` : ''));
+  return `${handoff}${flashHtml}${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>

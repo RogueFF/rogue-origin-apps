@@ -481,6 +481,31 @@ test('a bag weight can be corrected from the bag page until the bag is opened', 
   assert.equal(stored(), null);
 });
 
+test('both print screens offer the same screen in Chrome, hidden until an iPhone outside Chrome asks', async () => {
+  // Koa, 2026-09-30: Safari and the iOS home-screen app can only print the tag
+  // at ~3.2 x 1.05 in; Chrome on iOS prints it full size.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const host = 'googlechromes://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest';
+
+  const pick = await picker(env, ctx);
+  assert.match(pick, /<div id="chromeHandoff" class="notice handoff" hidden>/, 'every other device never sees it');
+  assert.ok(pick.includes(`href="${host}?action=sack_print&amp;lang=en"`));
+  assert.match(pick, /!\/CriOS\/\.test\(ua\)/, 'not offered inside Chrome itself');
+
+  const posted = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_session_start&lang=en', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ session_id: String(lot), cultivar: 'Sour Lifter', bay: '9', storage: 'Supermarket' }).toString(),
+  }), env, ctx).then(res => res.text());
+  // A GET that rebuilds THIS screen — the POST that drew it cannot be replayed
+  // in another browser — with the lot, cultivar, bay and storage it was started with.
+  const href = posted.match(/href="googlechromes:\/\/([^"]+)"/)[1].replace(/&amp;/g, '&');
+  assert.equal(href, `rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?action=sack_session&session_id=${lot}&cultivar=Sour%20Lifter&lang=en&bay=9&storage=Supermarket`);
+  const reopened = await handleHarvestD1(new Request('https://' + href.replace('rogue-origin-api.roguefamilyfarms.workers.dev', 'x')), env, ctx).then(res => res.text());
+  assert.match(reopened, /<div class="lot-cultivar">Sour Lifter<\/div>/);
+  assert.match(reopened, /bay: 9, storage: "Supermarket"/, 'the next PRINT TAG carries the same bay and storage');
+});
+
 test('every new string renders in both languages', async () => {
   const { sqlite, env, ctx } = freshDb();
   const done = seedSession(sqlite, { zone: 'Z4' });
@@ -496,7 +521,7 @@ test('every new string renders in both languages', async () => {
     if (lang === 'es') assert.match(flash.html + await sessionScreen(env, ctx, open, lang), /¿Marcar Z/);
     for (const key of ['finishLot', 'finishLotHelp', 'confirmFinish', 'finishSection', 'finishSectionHelp',
                        'markFinished', 'finishedLots', 'finishedOn', 'reopenLot', 'lotFinished',
-                       'lotFinishedNotice', 'resumeLot', 'startSection']) {
+                       'lotFinishedNotice', 'resumeLot', 'startSection', 'chromeWhy', 'openInChrome', 'chromeHint']) {
       assert.doesNotMatch(shown, new RegExp(`\\b${key}\\b`), `${lang}: ${key} rendered as a raw key`);
     }
     await finish(env, ctx, done, { reopen: true, lang });
