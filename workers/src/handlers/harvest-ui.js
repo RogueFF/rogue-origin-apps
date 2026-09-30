@@ -69,18 +69,37 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .cvfix summary{min-height:44px;padding:11px 0;color:#42623e;font-weight:600;cursor:pointer}
 .harvest-screen #intakeForm{max-width:680px}.harvest-screen #intakeForm button{width:100%;min-height:76px;background:#edc76b;color:#263f32;border-color:#d9b259}
 .harvest-screen #intakeReceipt:not(:empty){padding:20px;background:#e9efdf;border:1px solid #c4d2b5;border-radius:12px;margin:18px 0}
-.intake-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0 26px}
-.harvest-screen .intake-choice{display:flex;align-items:center;gap:16px;min-height:110px;padding:20px;text-decoration:none;border:2px solid transparent;border-radius:14px}
-.harvest-screen .intake-choice.crew-a{background:#304e3c;color:#fff;border-color:#304e3c}
-.harvest-screen .intake-choice.crew-b{background:#f2cf78;color:#3d321b;border-color:#c59939}
-.intake-letter{display:grid;place-items:center;width:56px;height:56px;flex:none;border-radius:10px;font-size:36px;font-weight:800;border:1px solid currentColor}
-.intake-choice strong{display:block;font-size:23px;line-height:1.2}
-.intake-choice small{display:block;font-size:14px;margin-top:6px}
-.intake-arrow{margin-left:auto;font-size:26px}
-.harvest-screen .intake-choice:hover{box-shadow:0 0 0 3px #9ba98c}
-@media(max-width:600px){.intake-choices{grid-template-columns:1fr;gap:16px}.harvest-screen .intake-choice{min-height:104px}}
+/* Trailer decal screen (/t/<n>): one hand, one phone, gloves. Every choice is a big radio tile. */
+.harvest-screen h1.trailer-name{font-size:64px;line-height:1;margin:4px 0 6px;letter-spacing:-.02em}
+.harvest-screen .trailer-lot{margin:14px 0}.harvest-screen .trailer-lot .lotmeta strong{font-size:24px;line-height:1.25;color:#263f32}
+.harvest-screen .note.warn{padding:14px 16px;background:#fff4d6;border:2px solid #d9a93a;border-radius:12px;color:#4a3a12;font-weight:600}
+.harvest-screen #trailerForm{max-width:680px}
+.harvest-screen #trailerForm button[type=submit]{width:100%;min-height:84px;font-size:22px;background:#edc76b;color:#263f32;border-color:#d9b259;margin-top:18px}
+.harvest-screen .baybarn{font-size:14px;font-weight:700;color:#55664c;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.06em}
+.harvest-screen .baygrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.harvest-screen .baybtn{position:relative;display:block}
+.harvest-screen .baybtn input{position:absolute;opacity:0;inset:0;margin:0}
+.harvest-screen .baybtn span{display:grid;place-items:center;min-height:64px;border:2px solid #c5d1b9;border-radius:12px;background:#fff;font-size:26px;font-weight:800;color:#304e3c}
+.harvest-screen .baybtn input:checked+span{background:#304e3c;border-color:#304e3c;color:#fff}
+.harvest-screen .baybtn input:focus-visible+span{box-shadow:0 0 0 3px #9ba98c}
+.harvest-screen .lotother{margin:10px 0 4px;border:0;padding:0}
+.harvest-screen .lotother summary,.harvest-screen .partial summary{min-height:44px;padding:11px 0;color:#42623e;font-weight:600;cursor:pointer}
+.harvest-screen .lotother legend{font-weight:700;margin-bottom:8px}
+.harvest-screen .choice{display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;margin:8px 0;border:2px solid #d9dfd1;border-radius:12px;background:#fff;font-size:17px}
+.harvest-screen .choice input{width:24px;height:24px;margin:0;flex:none}
+.harvest-screen .choice:has(input:checked){border-color:#304e3c;background:#edf1e4}
+.harvest-screen .partial{margin-top:14px}
+.harvest-screen .again{margin:16px 0 8px}.harvest-screen .again-btn{width:100%;min-height:84px;font-size:24px;font-weight:800;background:#2f7a4f;color:#fff;border-color:#2f7a4f}.harvest-screen .again-btn:disabled{opacity:.45}.harvest-screen .again .hint{text-align:center;margin:6px 0 0}
+.logged-flash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;color:#fff;background:#2f7a4f;cursor:pointer;animation:lfIn .18s ease-out}.logged-flash.out{opacity:0;transition:opacity .45s ease}.logged-flash .lf-mark{width:min(48vw,230px);height:min(48vw,230px)}.logged-flash .lf-mark circle{fill:none;stroke:rgba(255,255,255,.35);stroke-width:3}.logged-flash .lf-mark path{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:50;stroke-dashoffset:50;animation:lfDraw .45s .15s ease-out forwards}.logged-flash .lf-big{font-size:clamp(40px,13vw,64px);font-weight:900;line-height:1}.logged-flash .lf-sub{font-size:clamp(22px,7vw,32px);font-weight:800}.logged-flash .lf-lot{font-size:clamp(16px,5vw,22px);opacity:.92}@keyframes lfIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}@keyframes lfDraw{to{stroke-dashoffset:0}}@media (prefers-reduced-motion:reduce){.logged-flash,.logged-flash .lf-mark path{animation:none}.logged-flash .lf-mark path{stroke-dashoffset:0}}
+.harvest-screen .baybig{font-size:44px;font-weight:800;line-height:1.1;color:#304e3c;margin-top:6px}
+.harvest-screen .fixload{margin:18px 0 6px}
+.harvest-screen .fixload>summary{display:block;min-height:52px;padding:14px 16px;border:2px solid #c5d1b9;border-radius:12px;background:#fff;color:#304e3c;font-weight:700;cursor:pointer;list-style:none}
+.harvest-screen .fixload>summary::-webkit-details-marker{display:none}
+.harvest-screen .fixload[open]>summary{margin-bottom:12px}
+.harvest-screen #trailerFix button[type=submit]{width:100%;min-height:64px;margin-top:14px}
+.harvest-screen form.undo button,.harvest-screen form.newload button{width:100%;min-height:56px;margin-top:12px}
 .harvest-screen #intakeActive{margin-bottom:14px;font-size:17px;font-weight:600}
-.harvest-screen #followCrew{font-size:14px;min-height:44px}
+.harvest-screen #followOpen{font-size:14px;min-height:44px}
 .harvest-screen .reconcile-table{overflow:auto}.harvest-screen table{border-collapse:collapse;width:100%;font-size:15px;white-space:nowrap}
 .harvest-screen td,.harvest-screen th{text-align:left;padding:15px 12px;border-bottom:1px solid #d7dfcd}
 .harvest-screen th{font-size:12px;color:#60715d}

@@ -29,11 +29,28 @@ import { handleSupersackD1 } from './handlers/supersack-d1.js';
 import { handleIrrigationD1 } from './handlers/irrigation-d1.js';
 import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan,
-  handleCrewScan, handleBarnScan, handleDayEndScan } from './handlers/harvest-d1.js';
+  handleCrewScan, handleBarnScan, handleDayEndScan, handleTrailerScan } from './handlers/harvest-d1.js';
 import { handleHarvestHourly, handleSmsInbound, HOURLY_ACTIONS } from './handlers/harvest-hourly-d1.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { formatError } from './lib/errors.js';
+
+/**
+ * Short paths for the screens nobody scans a sign to reach: the takedown
+ * printer, the hourly crew report and the tools hub. Same shape as /b and
+ * /fin — one word, no query string, typeable on a phone with wet hands.
+ *
+ * Spanish where the crew says it in Spanish (/hora), since that is the
+ * language these screens open in. The long ?action= URLs keep working, so
+ * nothing already printed or bookmarked breaks.
+ */
+const SHORT_SCREENS = new Map([
+  // /tags, not /t: /t/T1-/t/T6 are the trailer decals, and a tag printer one
+  // character away from a trailer route reads as the same screen.
+  ['/tags', 'sack_print'],   // Imprimir Etiquetas — the takedown screen
+  ['/hora', 'crew'],         // Reporte de cuadrilla por hora
+  ['/hub', 'hub'],           // Herramientas / all tools
+]);
 
 export default {
   // Cron Triggers — multiple cron patterns dispatched by inspecting event.cron.
@@ -191,8 +208,20 @@ export default {
         response = HOURLY_ACTIONS.has(url.searchParams.get('action'))
           ? await handleHarvestHourly(request, env, ctx)
           : await handleHarvestD1(request, env, ctx);
-      } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/') || path === '/fin') {
-        // The three crew QR targets. Short on purpose: these are printed on
+      } else if (SHORT_SCREENS.has(path)) {
+        // The screens reached by typing or bookmarking rather than by scanning
+        // a sign. Koa, 2026-09-25, after a saved link lost its query string and
+        // answered with the API's endpoint list: "can we shorten the link to
+        // look more like the other apps we've created".
+        //
+        // A dropped `?action=` is invisible — `/` answers 200 with JSON — so
+        // the fix is a path with no query string to lose.
+        const to = new URL(url);
+        to.pathname = '/api/harvest';
+        to.searchParams.set('action', SHORT_SCREENS.get(path));
+        response = await handleHarvestD1(new Request(to, request), env, ctx);
+      } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/') || path.startsWith('/t/') || path === '/fin') {
+        // The crew QR targets. Short on purpose: these are printed on
         // laminated signs and barn walls for a whole season, and a shorter URL
         // means a lower-version QR with bigger modules — what survives dust,
         // creasing and bad light.
@@ -215,6 +244,8 @@ export default {
           response = await handleZoneScan(request, env, ctx);
         } else if (path.startsWith('/c/')) {
           response = await handleCrewScan(request, env, ctx);
+        } else if (path.startsWith('/t/')) {
+          response = await handleTrailerScan(request, env, ctx);
         } else if (path === '/fin') {
           response = await handleDayEndScan(request, env, ctx);
         } else {

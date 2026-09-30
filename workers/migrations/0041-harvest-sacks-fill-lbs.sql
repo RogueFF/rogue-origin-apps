@@ -10,7 +10,7 @@
 -- with no number, so it is left NULL and its note stands.
 --
 -- Applied by hand (no migrations_dir in wrangler.toml), ALTER first:
---   cd workers && npx wrangler d1 execute rogue-origin-db --remote --file migrations/0040-harvest-sacks-fill-lbs.sql
+--   cd workers && npx wrangler d1 execute rogue-origin-db --remote --file migrations/0041-harvest-sacks-fill-lbs.sql
 
 ALTER TABLE harvest_sacks ADD COLUMN fill_lbs REAL;
 

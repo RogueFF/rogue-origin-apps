@@ -52,6 +52,32 @@ drivers logging their own loads instead of the waterspider.
   trailer to the lot it was cut in.
 - **Both sides at once:** same lot, different bays. Nothing special.
 
+### Added after review
+- The repeat guard is part of the INSERT (`INSERT ... SELECT ... WHERE NOT EXISTS`),
+  so two posts in flight together cannot both pass it.
+- Logging answers with a 303 to a GET receipt (`?action=trailer_done&id=`), so a
+  reload or back button never re-posts a load.
+- An OPEN lot is always eligible, however long ago it opened (a weekend with no
+  End of day scan must not lock trailers out). Closed lots keep the 3-day window.
+- A trailer's first load gets no bay ticked, rather than another trailer's.
+- `/t/<n>` accepts exactly `1`-`6` (or `T3`): `/t/1abc` and `/t/03` are refused.
+
+### One scan (Koa, 2026-09-28, supersedes the confirm screen)
+- Scanning the decal IS the load: open lot (or the one closed inside the
+  6-min grace), 24 bins, this trailer's bay from earlier today. The scan
+  answers 303 to a GET receipt, so the tab never sits on `/t/<n>`.
+- It asks instead, writing nothing, only when guessing would misplace bins:
+  no bay for this trailer yet today (one tap on its first run), or no lot.
+- The receipt shows the bay large and offers **Fix** (bay, bins 1-24, lot)
+  and **Undo** for 10 minutes; the window is enforced in the UPDATE/DELETE.
+  Undo is a hard delete (a mistaken scan was never a load); Telegram keeps
+  the record of loads, fixes and removals.
+- A rescan inside 5 minutes opens that load's receipt, with a one-tap
+  "it is a new load" for the rare real one.
+- Link-preview bots, browser prefetch/prerender and HEAD never log a load.
+- Lot age for the pickers is time since last ACTIVE (now if open, else its
+  close), so a long zone that just closed is still recent.
+
 ### Kept
 - `/b/1`, `/b/2` barn door pages stay as a fallback (torn decal, dead phone),
   without the crew label, using the same one-lot attribution.
