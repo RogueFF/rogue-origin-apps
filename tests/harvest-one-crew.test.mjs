@@ -120,6 +120,79 @@ test('status reports the one open lot', async () => {
   assert.deepEqual(zones.map(z => z.zone), ['Z7']);
 });
 
+// --- a zone continues its cut -------------------------------------------------
+//
+// Koa, 2026-09-30: "not sure why cut 2 was started, this is still zone 11 cut
+// 1". An 8-hour rule started a new cut whenever a zone was re-entered more than
+// 8 h after its last close — every morning. A zone keeps its cut now; a new one
+// starts only when the lead says so on the zone screen.
+
+const cutChange = (env, ctx, sessionId, dir = 'next', method = 'POST') => quiet(() => handleHarvestD1(
+  method === 'POST'
+    ? new Request('https://x/api/harvest?action=cut_change&lang=en', {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ session_id: String(sessionId), dir }),
+      })
+    : new Request(`https://x/api/harvest?action=cut_change&session_id=${sessionId}&dir=${dir}&lang=en`), env, ctx));
+
+test('THE 9/30 BUG: the morning scan of a zone closed the night before is still cut 1', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedSession(sqlite, { zone: 'Z11', opened: minsAgo(60 * 18), closed: minsAgo(60 * 14) });   // closed 14 h ago
+  const html = await (await scanZone(env, ctx, 'Z11')).text();
+  assert.equal(openSessions(sqlite)[0].cut_number, 1);
+  assert.match(html, /Cut 1/);
+  assert.match(html, /<details class="cvfix cutfix">/, 'the "new cut?" question is there, folded shut');
+});
+
+test('even weeks later the scan does not decide — it asks, with the question open', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
+  const html = await (await scanZone(env, ctx, 'Z4')).text();
+  assert.equal(openSessions(sqlite)[0].cut_number, 1, 'still cut 1 until someone says otherwise');
+  assert.match(html, /<details class="cvfix cutfix" open>/);
+  assert.match(html, /last cut 21 days ago/);
+  assert.match(html, /Start cut 2/);
+});
+
+test('"Start cut 2" is how a new cut begins, it sticks, and a mis-tap has a way back', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
+  await scanZone(env, ctx, 'Z4');
+  const id = openSessions(sqlite)[0].id;
+
+  const html = await (await cutChange(env, ctx, id)).text();
+  assert.equal(openSessions(sqlite)[0].cut_number, 2);
+  assert.match(html, /Now cut 2/);
+  assert.match(html, /Back to cut 1/);
+
+  // The next morning's scan carries on with cut 2.
+  sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-20 hours'), closed_at = datetime('now','-14 hours') WHERE id = ?").run(id);
+  await scanZone(env, ctx, 'Z4');
+  assert.equal(openSessions(sqlite)[0].cut_number, 2);
+
+  await cutChange(env, ctx, openSessions(sqlite)[0].id, 'prev');
+  assert.equal(openSessions(sqlite)[0].cut_number, 1);
+  assert.ok((await cutChange(env, ctx, openSessions(sqlite)[0].id, 'prev')).status >= 400, 'there is no cut 0');
+});
+
+test('the cut cannot change by a fetched link, on a closed lot, or once tags are printed', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  await scanZone(env, ctx, 'Z4');
+  const id = openSessions(sqlite)[0].id;
+  assert.ok((await cutChange(env, ctx, id, 'next', 'GET')).status >= 400, 'GET');
+
+  sqlite.prepare(`INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, zone_session_id, is_test)
+    VALUES ('26-SLIFT-1', ?, 1, 'Z4', 'Sour Lifter', 1, ?, 1)`).run(new Date().getUTCFullYear(), id);
+  const tagged = await cutChange(env, ctx, id);
+  assert.ok(tagged.status >= 400);
+  assert.match(await tagged.text(), /tag\(s\) printed/);
+  sqlite.prepare('DELETE FROM harvest_sacks').run();
+
+  sqlite.prepare("UPDATE harvest_scan_log SET closed_at = datetime('now') WHERE id = ?").run(id);
+  assert.ok((await cutChange(env, ctx, id)).status >= 400, 'closed');
+  assert.equal(sessions(sqlite)[0].cut_number, 1, 'nothing moved');
+});
+
 // --- the retired crew card ---------------------------------------------------
 
 test('the old crew card clears the tag off the phone and says why', async () => {
