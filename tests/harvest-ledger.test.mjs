@@ -53,7 +53,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0040-harvest-sacks-fill-lbs.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 /**
@@ -170,13 +170,16 @@ test('a load for a just-closed zone lands on that lot, not on nothing', async ()
   assert.equal(bins, 20);
 });
 
-test('unlabelled intake requires a zone choice instead of guessing from grace', async () => {
+test('the fallback door follows the one open lot, not the one that just closed', async () => {
+  // One crew (2026-09-28): there is one open lot, so any door can follow it.
+  // The just-closed lot is not pre-selected — a trailer from it is caught by
+  // the grace window on submit, or by the lot picker.
   const { sqlite, env, ctx } = freshDb();
   seedEnter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 45, closedMinAgo: 2 });
   seedEnter(sqlite, { zone: 'Z5', cultivar: 'Lifter', openedMinAgo: 2, closedMinAgo: null });
   const html = await intakeForm(env, ctx);
-  assert.equal(/<option value="Z[45]" selected/.test(html), false);
-  assert.ok(html.includes('<option value="">Choose a zone</option>'));
+  assert.match(html, /<option value="Z5" selected/);
+  assert.equal(/<option value="Z4" selected/.test(html), false);
 });
 
 test('an ordinary load goes to the open lot with no correction note', async () => {
@@ -205,7 +208,7 @@ test('the crew screens are Spanish by default', async () => {
 
   const html = await intakeForm(env, ctx, 'es');
   assert.ok(html.includes('Elige una zona'));
-  assert.ok(html.includes('Elige tu recepción'));
+  assert.ok(html.includes('Seguir la zona abierta'));
 });
 
 // --- dry weight at takedown -------------------------------------------------

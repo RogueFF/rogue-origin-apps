@@ -344,8 +344,11 @@ function applyImportMap(html, map) {
 
   // Global: strip EVERY previously generated block before inserting, so a page
   // that somehow acquired two can never keep one behind.
+  // The optional CR: the pages are CRLF on a Windows checkout. Without it the
+  // line break after the old block survived the strip, and every commit
+  // that touched a .js file grew each page by one blank line.
   const existing = new RegExp(
-    `[ \\t]*${escapeRe(START_MARKER)}[\\s\\S]*?${escapeRe(END_MARKER)}\n?`, 'g'
+    `[ \\t]*${escapeRe(START_MARKER)}[\\s\\S]*?${escapeRe(END_MARKER)}\r?\n?`, 'g'
   );
   const stripped = html.replace(existing, '');
 

@@ -52,7 +52,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0040-harvest-sacks-fill-lbs.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -566,19 +566,17 @@ test('the same cultivar resuming is not a switch', async () => {
   assert.doesNotMatch(html, /cultivar in this zone just changed/);
 });
 
-test('the other crew just-closing a different cultivar does not steal the load', async () => {
-  // Both crews can work one zone on different cultivars. Crew B closing Lemon
-  // says nothing about a trailer arriving at Crew A's door, and scoping the
-  // lookback to the session's own crew is what keeps them apart.
+test('a lot just closing in ANOTHER zone does not steal the load', async () => {
+  // The switch lookback is scoped to the zone on the form. Z8 closing three
+  // minutes ago says nothing about a trailer the door has marked Z10.
   const { sqlite, env, ctx } = freshDb();
-  sess(sqlite, { zone: 'Z10', cultivar: 'Lemon', crew: 'B',
-    opened: minsAgo(200), closed: minsAgo(3) });
-  const mine = sess(sqlite, { zone: 'Z10', cultivar: 'Rocket Sauce', crew: 'A', opened: minsAgo(150) });
+  sess(sqlite, { zone: 'Z8', cultivar: 'Lemon', opened: minsAgo(200), closed: minsAgo(3) });
+  const z10 = sess(sqlite, { zone: 'Z10', cultivar: 'Rocket Sauce', opened: minsAgo(2) });
 
   await post(env, ctx, 'action=barn_log&station=1', { zone: 'Z10', bins: '18' });
   const row = sqlite.prepare(
     `SELECT attributed_zone_session_id AS s FROM harvest_scan_log WHERE event_type='barn_load'`).get();
-  assert.equal(row.s, mine, "crew A's own open lot");
+  assert.equal(row.s, z10, 'the open Z10 lot');
 });
 
 // ─── test mode has to be visible ─────────────────────────────────────────────
@@ -860,8 +858,8 @@ test('the bins field arrives pre-filled with a full trailer, and says so', async
   // zone), which is exactly where lots are smallest.
   const { env, ctx } = freshDb();
   const html = await (await call(env, ctx, 'action=barn_intake&lang=en')).text();
-  assert.match(html, /id="bins"[^>]*value="22"/);
-  assert.match(html, /Pre-filled 22/);
+  assert.match(html, /id="bins"[^>]*value="24"/);
+  assert.match(html, /Pre-filled 24/);
   assert.doesNotMatch(html, /id="bins"[^>]*autofocus/,
     'the common case needs no keyboard');
 
