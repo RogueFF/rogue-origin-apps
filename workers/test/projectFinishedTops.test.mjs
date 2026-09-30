@@ -179,3 +179,24 @@ test('without cultivar resolution the projection is unchanged', () => {
   const { cultivars } = projectFinishedTops(stats, inv);
   assert.equal(cultivars[0].rate_source, 'floor_unknown_cultivar');
 });
+
+// --- 2026-09-30: the tops cache expires by its own as_of, not the Cache API ---
+test('a cached projection is served only while its as_of is under five minutes old', async () => {
+  const { freshHit, FRESH_MS } = await import('../src/handlers/supersack-d1.js');
+  const store = new Map();
+  const cache = {
+    async match(k) { const b = store.get(k); return b ? new Response(b) : undefined; },
+    async delete(k) { return store.delete(k); },
+  };
+  const now = Date.parse('2026-09-30T20:30:00Z');
+  store.set('k', JSON.stringify({ finished_tops_lbs: 174, as_of: new Date(now - 60_000).toISOString() }));
+  assert.ok(await freshHit(cache, 'k', now), 'one minute old: served');
+
+  store.set('k', JSON.stringify({ finished_tops_lbs: 113, as_of: new Date(now - FRESH_MS - 1).toISOString() }));
+  assert.equal(await freshHit(cache, 'k', now), null, 'past five minutes: a miss, recomputed');
+  assert.equal(store.has('k'), false, 'and the stale entry is dropped');
+
+  store.set('k', 'not json');
+  assert.equal(await freshHit(cache, 'k', now), null, 'unreadable: a miss');
+  assert.equal(await freshHit(cache, 'absent', now), null);
+});
