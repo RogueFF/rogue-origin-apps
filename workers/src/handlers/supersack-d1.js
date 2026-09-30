@@ -14,7 +14,7 @@
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { buildRates } from '../lib/sack-rates.js';
 import { constantTimeEqual } from '../lib/auth.js';
-import { fullSackLbsForTitle } from '../lib/sack-weight.js';
+import { fullSackLbsForTitle, seasonFromTitle } from '../lib/sack-weight.js';
 
 // A full sack is 37 lb through the 2025 crop and 35 lb from 2026 (Koa,
 // 2026-09-28). Read per strain from its title's crop year, never from the date
@@ -297,7 +297,8 @@ async function topsRemaining(request, env, ctx) {
     const variants = data.variants || [];
 
     // 3. Project.
-    const { finished_tops_lbs, inventory_sacks } = projectFinishedTops(stats, variants);
+    const cultivarOf = await resolveTitleCultivars(env.DB, [...stats.map(s => s.strain), ...variants.map(v => v.title)]);
+    const { finished_tops_lbs, inventory_sacks } = projectFinishedTops(stats, variants, cultivarOf);
     const payload = { finished_tops_lbs, as_of: new Date().toISOString(), inventory_sacks };
 
     const resp = new Response(JSON.stringify(payload), {
@@ -339,6 +340,10 @@ async function topsRemaining(request, env, ctx) {
  * typo; true tops yield is ~10–15% of raw). Biomass correctness is irrelevant here.
  */
 async function getStrainTopsRates(env) {
+  // 'Unknown' is a legacy row with no strain behind it (2 sacks, 2026-06-19).
+  // It set the floor — the rate every cultivar with no history of its own
+  // gets — at 1.9 lb against a ~3.7 lb median, so every 2026 sack projected
+  // at half its real tops (found 2026-09-30).
   return env.DB.prepare(`
     SELECT strain,
            SUM(sacks_opened) AS sacks,
@@ -346,9 +351,42 @@ async function getStrainTopsRates(env) {
     FROM supersack_entries
     WHERE tops_lbs > 0 AND sacks_opened > 0
       AND tops_lbs <= raw_lbs * 0.5
+      AND strain <> 'Unknown'
     GROUP BY strain
     HAVING SUM(sacks_opened) > 0
   `).all().then(r => r.results || []);
+}
+
+/**
+ * Title -> cultivar name, for floor strain titles AND Super Sack variant titles.
+ *
+ * The two spell the same cultivar differently — the floor's "2025 - Rainbow GMO
+ * Quik / Sungrown" against the variant's "2026 - Rainbow GMO / Sungrown / 1st
+ * Cut" — so they are joined on the cultivar, never on the title. Recorded
+ * aliases first (the full title, then without its cut), then the name between
+ * the year and the first slash when it is exactly a cultivar's name. Never a
+ * prefix or a fuzzy match: Platinum is a strict prefix of Platinum M A4.
+ */
+async function resolveTitleCultivars(db, titles) {
+  const list = [...new Set(titles.filter(Boolean).map(String))];
+  const out = new Map();
+  if (!list.length) return out;
+  const withoutCut = t => t.replace(/\s*\/\s*\d+(st|nd|rd|th) Cut\s*$/i, '');
+  const keys = [...new Set(list.flatMap(t => [t, withoutCut(t)]))];
+  const ph = keys.map(() => '?').join(',');
+  const [aliases, cultivars] = await Promise.all([
+    db.prepare(`SELECT a.alias, c.name FROM cultivar_aliases a JOIN cultivars c ON c.id = a.cultivar_id
+                WHERE a.alias IN (${ph}) COLLATE NOCASE`).bind(...keys).all().then(r => r.results || []),
+    db.prepare(`SELECT name FROM cultivars`).all().then(r => r.results || []),
+  ]);
+  const byAlias = new Map(aliases.map(r => [String(r.alias).toLowerCase(), r.name]));
+  const byName = new Map(cultivars.map(r => [String(r.name).toLowerCase(), r.name]));
+  for (const t of list) {
+    const name = byAlias.get(t.toLowerCase()) || byAlias.get(withoutCut(t).toLowerCase())
+      || byName.get((/^\s*\d{4}\s*-\s*(.+?)\s*\//.exec(t)?.[1] || '').toLowerCase());
+    if (name) out.set(t, name);
+  }
+  return out;
 }
 
 /** Raw JSON response (no {data:…} envelope — this endpoint has a fixed public contract). */
@@ -414,7 +452,8 @@ async function topsBreakdown(request, env, ctx) {
     if (data.error) throw new Error(data.error);
     const variants = data.variants || [];
 
-    const { floor_rate, upper_fence, cultivars } = projectFinishedTops(stats, variants);
+    const cultivarOf = await resolveTitleCultivars(env.DB, [...stats.map(s => s.strain), ...variants.map(v => v.title)]);
+    const { floor_rate, upper_fence, cultivars } = projectFinishedTops(stats, variants, cultivarOf);
     // Totals derived from the rounded per-cultivar rows so the response is
     // internally self-checkable (consumer can re-sum and match exactly).
     const total_finished_tops_lbs = Math.round(
@@ -476,7 +515,7 @@ async function topsBreakdown(request, env, ctx) {
  * robust upper fence (median + 3 × scaled MAD). Conservative / high-only:
  * suspiciously-LOW rates are trusted as-is so the estimate never over-promises.
  */
-export function projectFinishedTops(strainStats, inventory) {
+export function projectFinishedTops(strainStats, inventory, cultivarOf = new Map()) {
   // The rate table, the outlier fence and the pessimistic floor now live in
   // lib/sack-rates.js. The order board asks the inverse question — "this line
   // wants N pounds, how much raw is that" — and the two answers must never
@@ -488,6 +527,31 @@ export function projectFinishedTops(strainStats, inventory) {
   const r1 = x => Math.round(x * 10) / 10;     // projected lbs: 1 dp
   const floorR = r2(floor);
 
+  // THE SAME CULTIVAR, ANOTHER CROP YEAR (2026-09-30). A variant is keyed on
+  // its exact title, so every 2026 variant starts with no history of its own
+  // and used to fall straight to the floor. Its cultivar's trusted history
+  // from other crop years is a far better guess: summed as tops per POUND of
+  // sack, because a full sack is 37 lb through 2025 and 35 lb from 2026, then
+  // scaled back up to this variant's own sack. Only rows inside the fence
+  // count, so an anomaly cannot ride in through another year.
+  const perLb = new Map();   // cultivar -> { tops, lbs, sacks }
+  for (const st of strainStats) {
+    const cultivar = cultivarOf.get(st.strain);
+    const own = rateMap.get(st.strain);
+    if (!cultivar || own == null || own > upperFence || seasonFromTitle(st.strain) == null) continue;
+    const c = perLb.get(cultivar) || { tops: 0, lbs: 0, sacks: 0 };
+    c.tops += Number(st.tops) || 0;
+    c.sacks += Number(st.sacks) || 0;
+    c.lbs += (Number(st.sacks) || 0) * fullSackLbsForTitle(st.strain);
+    perLb.set(cultivar, c);
+  }
+  const borrowed = title => {
+    const c = perLb.get(cultivarOf.get(title));
+    if (!c || !c.lbs || seasonFromTitle(title) == null) return null;
+    const rate = (c.tops / c.lbs) * fullSackLbsForTitle(title);
+    return rate <= upperFence ? { rate, sacks: c.sacks } : null;
+  };
+
   let tops = 0;
   let inventory_sacks = 0;
   const cultivars = [];
@@ -495,9 +559,10 @@ export function projectFinishedTops(strainStats, inventory) {
     const qty = Number(v.quantity) || 0;
     if (qty <= 0) continue;
     const own = rateMap.get(v.title);
+    const other = own == null ? borrowed(v.title) : null;
 
-    // --- public rollup math (unchanged: full precision, raw floor/own) ---
-    const rate = (own != null && own <= upperFence) ? own : floor;
+    // --- public rollup math (full precision) ---
+    const rate = (own != null && own <= upperFence) ? own : (other ? other.rate : floor);
     tops += qty * rate;
     inventory_sacks += qty;
 
@@ -506,7 +571,9 @@ export function projectFinishedTops(strainStats, inventory) {
     // projected = round(qty × effective, 1) exactly. Floor branches set
     // effective === floorR so invariant "effective == floor" holds verbatim.
     let measured, effective, rate_source;
-    if (own == null) {
+    if (own == null && other) {
+      measured = null; effective = r2(other.rate); rate_source = 'cultivar_other_crop';
+    } else if (own == null) {
       measured = null; effective = floorR; rate_source = 'floor_unknown_cultivar';
     } else if (own <= upperFence) {
       measured = r2(own); effective = r2(own); rate_source = 'own';
@@ -521,6 +588,8 @@ export function projectFinishedTops(strainStats, inventory) {
       effective_rate_lbs_per_sack: effective,
       rate_source,
       clean_history_sacks: sacksMap.get(v.title) || 0,
+      // The cultivar's other-crop sacks the rate was borrowed from, when it was.
+      borrowed_history_sacks: other ? other.sacks : 0,
       projected_finished_tops_lbs: r1(qty * effective),
     });
   }

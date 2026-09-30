@@ -126,3 +126,56 @@ test('zero MAD (identical rates) → no fence applied', () => {
   assert.equal(upper_fence, null, 'MAD==0 → fence null');
   assert.ok(cultivars.every(c => c.rate_source === 'own'));
 });
+
+// --- 2026-09-30: a new crop year borrows its cultivar's history ---------------
+test('a 2026 variant with no history of its own borrows its cultivar\'s 2025 rate, scaled to the 35 lb sack', () => {
+  // Every 2026 variant is a new title, so it used to fall to the floor. Real
+  // titles, real spellings: the floor's 2025 title and the 2026 variant spell
+  // the cultivar differently, which is why they join on the cultivar.
+  const stats = [
+    { strain: '2025 - Lifter / Sungrown',           sacks: 100, tops: 370 }, // 3.70 per 37 lb sack
+    { strain: '2025 - Sour Lifter / Sungrown',      sacks: 100, tops: 296 }, // 2.96
+    { strain: '2025 - Rainbow GMO Quik / Sungrown', sacks: 100, tops: 333 }, // 3.33
+    { strain: '2025 - Bubba Kush / Sungrown',       sacks: 100, tops: 222 }, // 2.22 (floor)
+    { strain: '2025 - Sugar Cookez / Sungrown',     sacks: 100, tops: 350 }, // 3.50
+  ];
+  const inv = [
+    { id: 'v1', title: '2026 - Lifter / Sungrown / 1st Cut',      quantity: 10 },
+    { id: 'v2', title: '2026 - Rainbow GMO / Sungrown / 1st Cut', quantity: 10 },
+    { id: 'v3', title: '2026 - Angel Cake / Sungrown / 1st Cut',  quantity: 10 },  // never ran in 2025
+    { id: 'v4', title: '2025 - Lifter / Sungrown',                quantity: 10 },  // its own history
+  ];
+  const cultivarOf = new Map([
+    ['2025 - Lifter / Sungrown', 'Lifter'],
+    ['2025 - Sour Lifter / Sungrown', 'Sour Lifter'],
+    ['2025 - Rainbow GMO Quik / Sungrown', 'Rainbow GMO Quik'],
+    ['2025 - Bubba Kush / Sungrown', 'Bubba Kush'],
+    ['2025 - Sugar Cookez / Sungrown', 'Sugar Cookez'],
+    ['2026 - Lifter / Sungrown / 1st Cut', 'Lifter'],
+    ['2026 - Rainbow GMO / Sungrown / 1st Cut', 'Rainbow GMO Quik'],
+    ['2026 - Angel Cake / Sungrown / 1st Cut', 'Angel Cake'],
+  ]);
+  const { floor_rate, cultivars, finished_tops_lbs } = projectFinishedTops(stats, inv, cultivarOf);
+  const by = Object.fromEntries(cultivars.map(c => [c.cultivar_name, c]));
+
+  const lifter26 = by['2026 - Lifter / Sungrown / 1st Cut'];
+  assert.equal(lifter26.rate_source, 'cultivar_other_crop');
+  assert.equal(lifter26.effective_rate_lbs_per_sack, 3.5, '3.70 per 37 lb = 0.1 per lb, x 35');
+  assert.equal(lifter26.measured_rate_lbs_per_sack, null, 'nothing measured on this variant yet');
+  assert.equal(lifter26.borrowed_history_sacks, 100);
+  assert.equal(lifter26.projected_finished_tops_lbs, 35);
+
+  assert.equal(by['2026 - Rainbow GMO / Sungrown / 1st Cut'].rate_source, 'cultivar_other_crop',
+    'joined on the cultivar, not the title');
+  assert.equal(by['2026 - Angel Cake / Sungrown / 1st Cut'].rate_source, 'floor_unknown_cultivar');
+  assert.equal(by['2026 - Angel Cake / Sungrown / 1st Cut'].effective_rate_lbs_per_sack, floor_rate);
+  assert.equal(by['2025 - Lifter / Sungrown'].rate_source, 'own', 'its own history still wins');
+  assert.equal(finished_tops_lbs, Math.round(35 + 10 * 3.33 * 35 / 37 + 10 * 2.22 + 37));
+});
+
+test('without cultivar resolution the projection is unchanged', () => {
+  const stats = [{ strain: '2025 - Lifter / Sungrown', sacks: 10, tops: 37 }];
+  const inv = [{ id: 'v1', title: '2026 - Lifter / Sungrown / 1st Cut', quantity: 4 }];
+  const { cultivars } = projectFinishedTops(stats, inv);
+  assert.equal(cultivars[0].rate_source, 'floor_unknown_cultivar');
+});
