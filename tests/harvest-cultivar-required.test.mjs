@@ -179,10 +179,10 @@ test('the fix moves the lot in place rather than opening a second one', async ()
 
 test('the cut number is re-derived for the cultivar the lot turned out to be', async () => {
   const { sqlite, env, ctx } = freshDb();
-  // Orange Fritter has been cut in R1 before, Animal Muffins has not.
+  // Orange Fritter is on its second cut in R1; Animal Muffins has never been cut.
   sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test, occurred_at, closed_at)
-    VALUES ('enter', 'R1', 'Orange Fritter', ?, 1, 1, datetime('now','-30 days'), datetime('now','-29 days'))
+    VALUES ('enter', 'R1', 'Orange Fritter', ?, 2, 1, datetime('now','-3 days'), datetime('now','-2 days'))
   `).run(new Date().getUTCFullYear());
 
   await scan(env, ctx, `R1?cultivar=${encodeURIComponent('Animal Muffins')}&lang=en`);
@@ -193,7 +193,7 @@ test('the cut number is re-derived for the cultivar the lot turned out to be', a
     `action=cultivar_fix&session_id=${open.id}&cultivar=${encodeURIComponent('Orange Fritter')}&lang=en`);
 
   assert.equal(sessions(sqlite).at(-1).cut_number, 2,
-    'as Orange Fritter it is the second cut — the cut number belongs to zone x cultivar, not to the row');
+    'as Orange Fritter it carries on cut 2 of that cultivar — the cut number belongs to zone x cultivar, not to the row');
 });
 
 test('the fix refuses a cultivar that is not planted in the zone', async () => {

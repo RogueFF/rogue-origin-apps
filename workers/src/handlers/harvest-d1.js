@@ -78,7 +78,7 @@ import {
 } from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
-const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
+const NEW_CUT_PROMPT_DAYS = 7;           // a zone untouched this long: the scan ASKS whether it is a new cut (never decides)
 const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, plus a 13+ link
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
@@ -223,7 +223,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again',
+  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page',
@@ -267,6 +267,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
+        case 'cut_change':
+          return await handleCutChange(ui, db, env, ctx, body, request.method);
         case 'cultivar_fix':
           return await handleCultivarFix(ui, db, env, ctx, params);
         case 'barn_intake':
@@ -822,6 +824,11 @@ async function handleEnter(ui, db, env, ctx, params) {
   await closeOpenSessions(db, isTest);
 
   const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
+  // How long since this lot was last worked — only to decide whether the "new
+  // cut?" question opens unfolded. Read before the INSERT, after the close.
+  const lastHere = await getLastClosedSession(db, zone, cultivar, season, isTest);
+  const daysIdle = lastHere
+    ? (Date.now() - parseSqliteUtc(lastHere.closed_at).getTime()) / 86400000 : null;
 
   const result = await execute(db, `
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test)
@@ -840,6 +847,7 @@ async function handleEnter(ui, db, env, ctx, params) {
   return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
     zone, cultivar, cutNumber, sessionId,
     prevZone: active ? `${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}` : null,
+    daysIdle,
   }));
 }
 
@@ -902,10 +910,16 @@ async function getLastClosedSession(db, zone, cultivar, season, isTest) {
   `, [zone, cultivar, season, isTest]);
 }
 
-// Same-day grace window: a lot re-entered within CUT_RESUME_GRACE_HOURS of its
-// last close is a resumption of the same cut, not a new one — fixes the gap
-// where a crew finishes part of a zone, works elsewhere, then returns
-// same-shift (see 2025 log: "Finished Z8, partial Z7, partial Z5").
+// A ZONE CONTINUES ITS CUT. Re-entering a zone is the same cut, however long
+// it has been — a zone takes days to cut, the crew closes it every night, and
+// they leave for other zones and come back. A new cut starts only when a
+// person says so (handleCutChange, from the zone screen).
+//
+// This replaced an 8-hour rule that started a new cut whenever a zone was
+// re-entered more than 8 h after its last close. That was every morning: Z1,
+// Z2 and Z11 each came up "cut 2" on their second day in 2026 (Koa,
+// 2026-09-30: "this is still zone 11 cut 1"), and the number is printed on
+// supersack tags.
 //
 // Keyed on (zone, cultivar): in a trial zone, Z10 "Lemon" cut 1 is independent
 // of Z10 "Rocket Sauce" cut 1.
@@ -927,10 +941,46 @@ async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam
   if (concurrent) return concurrent.cut_number;
 
   const last = await getLastClosedSession(db, zone, cultivar, season, isTest);
-  if (!last) return 1;
+  return last ? last.cut_number : 1;
+}
 
-  const hoursSinceClose = (Date.now() - parseSqliteUtc(last.closed_at).getTime()) / (1000 * 60 * 60);
-  return hoursSinceClose <= CUT_RESUME_GRACE_HOURS ? last.cut_number : last.cut_number + 1;
+/**
+ * POST from the zone screen: this open lot is the NEXT cut (or, to undo a
+ * mis-tap, the previous one). The only way a cut number moves.
+ *
+ * Refused once tags are printed off the lot, for the reason the cultivar fix
+ * is: the tags carry the number. Loads already logged to the session move with
+ * it — they were cut in this session, so they are the same cut it is.
+ */
+async function handleCutChange(ui, db, env, ctx, body, method) {
+  if (method !== 'POST') throw createError('VALIDATION_ERROR', ui.t('cutChangePost'));
+  const sessionId = parseInt(body.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing or invalid session_id.');
+  }
+  const session = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
+  if (!session) throw createError('NOT_FOUND', ui.t('noSessionFound', { id: sessionId }));
+  refuseRealInTest(ui, env, session);
+  if (session.closed_at) throw createError('VALIDATION_ERROR', ui.t('cutLotClosed'));
+
+  const to = Number(session.cut_number) + (body.dir === 'prev' ? -1 : 1);
+  if (to < 1 || to > 9) throw createError('VALIDATION_ERROR', ui.t('cutRange'));
+
+  const tags = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id = ? AND voided_at IS NULL
+  `, [sessionId]);
+  if (tags && tags.n > 0) throw createError('VALIDATION_ERROR', ui.t('cutHasTags', { n: tags.n }));
+
+  await execute(db, `UPDATE harvest_scan_log SET cut_number = ? WHERE id = ? AND closed_at IS NULL`, [to, sessionId]);
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `✂️ *${session.zone}*${session.cultivar ? ` ${session.cultivar}` : ''} — now Cut ${to} (was ${session.cut_number}), set on the zone screen.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+    zone: session.zone, cultivar: session.cultivar, cutNumber: to, sessionId, prevZone: null,
+    flash: ui.t('cutNow', { n: to }), headcount: session.headcount,
+  }));
 }
 
 // ─── HEADCOUNT (cutters, one-tap follow-up) ────────────
@@ -1574,9 +1624,9 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
  * stretch of a crew being in that zone. They are NOT the same thing, and
  * treating them as the same was a real bug:
  *
- *   - One crew leaves Z8 for Z7 and comes back the same shift. Inside
- *     CUT_RESUME_GRACE_HOURS that is deliberately still cut 1, so the second
- *     entry is a second session of the SAME lot. (See the 2025 log:
+ *   - One crew leaves Z8 for Z7 and comes back, the same shift or the next
+ *     morning. That is deliberately still cut 1 (a zone continues its cut), so
+ *     the second entry is a second session of the SAME lot. (See the 2025 log:
  *     "Finished Z8, partial Z7, partial Z5".)
  *   - From 2026 two cutting crews can be in one zone at once — same plants,
  *     same cut, two sessions.
@@ -4778,7 +4828,7 @@ function cultivarPickerBody(ui, zone, options) {
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null }) {
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null }) {
   return `
 <h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
 <p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
@@ -4786,9 +4836,37 @@ function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash =
 <p class="note">${ui.t('howManyCutters')}</p>
 <div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
 <div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cutChangeBlock(ui, sessionId, cutNumber, daysIdle)}
 ${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
+}
+
+/**
+ * "Is this a new cut?" — the only way the cut number moves. Folded shut,
+ * because nearly every scan is the crew carrying on with the cut they were on.
+ * It opens by itself only when the zone has sat untouched for
+ * NEW_CUT_PROMPT_DAYS, which is when a second cut is actually likely — and even
+ * then it asks, it does not decide. A mis-tap has its own way back.
+ */
+function cutChangeBlock(ui, sessionId, cutNumber, daysIdle) {
+  const n = Number(cutNumber) || 1;
+  const long = daysIdle != null && daysIdle >= NEW_CUT_PROMPT_DAYS;
+  const form = (dir, label, cls) => `
+  <form method="POST" action="${API}?action=cut_change&lang=${ui.lang}"
+        onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+    <input type="hidden" name="session_id" value="${sessionId}">
+    <input type="hidden" name="dir" value="${dir}">
+    <button class="btn ${cls}" type="submit">${label}</button>
+  </form>`;
+  return `
+<details class="cvfix cutfix"${long ? ' open' : ''}>
+  <summary>${ui.t('cutNewAsk')}</summary>
+  ${long ? `<p class="note">${ui.t('cutIdle', { d: Math.floor(daysIdle) })}</p>` : ''}
+  <p class="note"><span class="hint">${ui.t('cutNewHint', { n })}</span></p>
+  ${n < 9 ? form('next', ui.t('cutStart', { n: n + 1 }), '') : ''}
+  ${n > 1 ? form('prev', ui.t('cutBack', { n: n - 1 }), 'alt') : ''}
+</details>`;
 }
 
 /**
