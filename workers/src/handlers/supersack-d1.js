@@ -389,16 +389,18 @@ async function getStrainTopsRates(env) {
  * the year and the first slash when it is exactly a cultivar's name. Never a
  * prefix or a fuzzy match: Platinum is a strict prefix of Platinum M A4.
  */
-async function resolveTitleCultivars(db, titles) {
+export async function resolveTitleCultivars(db, titles) {
   const list = [...new Set(titles.filter(Boolean).map(String))];
   const out = new Map();
   if (!list.length) return out;
   const withoutCut = t => t.replace(/\s*\/\s*\d+(st|nd|rd|th) Cut\s*$/i, '');
-  const keys = [...new Set(list.flatMap(t => [t, withoutCut(t)]))];
-  const ph = keys.map(() => '?').join(',');
+  // The whole alias table, not an IN list: D1 caps a statement at 100 bound
+  // variables, and ~100 variant titles plus their cut-less forms blew past it
+  // — every projection failed from 2026-09-30 18:46 until this. The table is a
+  // few hundred rows; matching it here costs nothing.
   const [aliases, cultivars] = await Promise.all([
-    db.prepare(`SELECT a.alias, c.name FROM cultivar_aliases a JOIN cultivars c ON c.id = a.cultivar_id
-                WHERE a.alias IN (${ph}) COLLATE NOCASE`).bind(...keys).all().then(r => r.results || []),
+    db.prepare(`SELECT a.alias, c.name FROM cultivar_aliases a JOIN cultivars c ON c.id = a.cultivar_id`)
+      .all().then(r => r.results || []),
     db.prepare(`SELECT name FROM cultivars`).all().then(r => r.results || []),
   ]);
   const byAlias = new Map(aliases.map(r => [String(r.alias).toLowerCase(), r.name]));

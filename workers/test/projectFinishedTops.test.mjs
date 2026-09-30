@@ -200,3 +200,27 @@ test('a cached projection is served only while its as_of is under five minutes o
   assert.equal(await freshHit(cache, 'k', now), null, 'unreadable: a miss');
   assert.equal(await freshHit(cache, 'absent', now), null);
 });
+
+// --- 2026-09-30: D1 caps a statement at 100 bound variables ------------------
+test('resolving ~120 titles to cultivars never binds more than D1 allows', async () => {
+  const { resolveTitleCultivars } = await import('../src/handlers/supersack-d1.js');
+  const rowsFor = sql => /FROM cultivar_aliases/.test(sql)
+    ? [{ alias: '2026 - Rainbow GMO / Sungrown', name: 'Rainbow GMO Quik' },
+       { alias: '2025 - Rainbow GMO Quik / Sungrown', name: 'Rainbow GMO Quik' }]
+    : [{ name: 'Rainbow GMO Quik' }, { name: 'Platinum' }, { name: 'Platinum M A4' }, { name: 'Lifter' }];
+  const stmt = (sql, args = []) => {
+    if (args.length > 100) throw new Error('D1_ERROR: too many SQL variables');
+    return { bind: (...a) => stmt(sql, a), all: async () => ({ results: rowsFor(sql) }) };
+  };
+  const db = { prepare: sql => stmt(sql) };
+  const titles = [
+    ...Array.from({ length: 118 }, (_, i) => `2026 - Filler ${i} / Sungrown / 1st Cut`),
+    '2026 - Rainbow GMO / Sungrown / 2nd Cut', '2026 - Platinum M A4 / Sungrown / 1st Cut',
+    '2025 - Lifter / Sungrown',
+  ];
+  const out = await resolveTitleCultivars(db, titles);
+  assert.equal(out.get('2026 - Rainbow GMO / Sungrown / 2nd Cut'), 'Rainbow GMO Quik', 'alias, with the cut dropped');
+  assert.equal(out.get('2026 - Platinum M A4 / Sungrown / 1st Cut'), 'Platinum M A4', 'exact name, never the Platinum prefix');
+  assert.equal(out.get('2025 - Lifter / Sungrown'), 'Lifter');
+  assert.equal(out.has('2026 - Filler 3 / Sungrown / 1st Cut'), false, 'unknown names resolve to nothing');
+});
