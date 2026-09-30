@@ -65,7 +65,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .hourly-log tr:nth-child(even) td{background:#f4f7f0}
 .hourly-log td.sticks{font-weight:700;font-size:16px;color:#2e4b3b}
 .harvest-screen .cvgrid a.sel{background:#edc76b;border-color:#af882f}
-.harvest-screen .cvfix{margin:20px 0 4px}
+.harvest-screen .cvfix{margin:20px 0 4px}.harvest-screen .cutfix form{margin:8px 0}.harvest-screen .cutfix button{width:100%;min-height:56px}
 .harvest-screen .cvfix summary{min-height:44px;padding:11px 0;color:#42623e;font-weight:600;cursor:pointer}
 .harvest-screen #intakeForm{max-width:680px}.harvest-screen #intakeForm button{width:100%;min-height:76px;background:#edc76b;color:#263f32;border-color:#d9b259}
 .harvest-screen #intakeReceipt:not(:empty){padding:20px;background:#e9efdf;border:1px solid #c4d2b5;border-radius:12px;margin:18px 0}
