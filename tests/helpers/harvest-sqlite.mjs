@@ -29,7 +29,7 @@ const MIGRATIONS = [
   '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
   '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
   '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
-  '0040-harvest-load-trailer.sql',
+  '0040-harvest-load-trailer.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 /** A fresh in-memory harvest database, and the env/ctx a handler expects. */

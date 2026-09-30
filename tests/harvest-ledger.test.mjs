@@ -53,7 +53,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 /**
@@ -222,9 +222,10 @@ test('dry lbs are reported with nothing bucked, while finished yield waits', asy
   assert.equal(lot.sacks, 5);
   assert.equal(lot.sacks_opened, 0);
 
-  // Product is weighed into each sack at 37 lb, so this is a measurement and
-  // needs neither bucking nor the floor's day.
-  assert.equal(lot.dry_lbs, 185);
+  // Product is weighed into each sack — 35 lb for the 2026 crop (Koa,
+  // 2026-09-28) — so this is a measurement and needs neither bucking nor the
+  // floor's day.
+  assert.equal(lot.dry_lbs, 175);
   assert.ok(lot.dry_lbs_per_acre > 0);
   assert.ok(lot.dry_lbs_per_plant > 0);
 
@@ -240,10 +241,23 @@ test('the dry figure carries its own convention, overstatement included', async 
   seedSacks(sqlite, { n: 5, zone: 'Z4', cultivar: 'Sour Lifter', sessionId: z4 });
 
   const lot = (await rollup(env, ctx)).lots.find(r => r.zone === 'Z4');
-  // The last sack of a lot goes out light and is counted as full. Stated on the
+  // A light last sack that nobody weighed still counts as full. Stated on the
   // row rather than in documentation nobody reads next to the number.
-  assert.match(lot.dry_lbs_basis, /up to 37 lb high/);
-  assert.match(lot.dry_lbs_basis, /5 sacks/);
+  assert.match(lot.dry_lbs_basis, /5 full sacks x 35 lb/);
+  assert.match(lot.dry_lbs_basis, /not weighed still counts as full/);
+});
+
+test('a bag weighed at takedown counts at its own weight in the dry figure', async () => {
+  // Koa, 2026-09-28: the last bag of a lot goes out light, and the crew now
+  // types its weight instead of writing "18lb" in the note.
+  const { sqlite, env, ctx } = freshDb();
+  const z4 = seedEnter(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', openedMinAgo: 60, closedMinAgo: 30 });
+  seedSacks(sqlite, { n: 5, zone: 'Z4', cultivar: 'Sour Lifter', sessionId: z4 });
+  sqlite.exec(`UPDATE harvest_sacks SET fill_lbs = 18 WHERE id = (SELECT MAX(id) FROM harvest_sacks)`);
+
+  const lot = (await rollup(env, ctx)).lots.find(r => r.zone === 'Z4');
+  assert.equal(lot.dry_lbs, 158, '4 x 35 + 18');
+  assert.match(lot.dry_lbs_basis, /4 full sacks x 35 lb \+ 1 weighed at takedown/);
 });
 
 test('a lot with no sacks reports no dry weight rather than zero', async () => {
@@ -286,6 +300,6 @@ test('season totals carry dry lbs from every tagged lot, opened or not', async (
 
   const totals = (await rollup(env, ctx)).totals;
   assert.equal(totals.sacks, 8);
-  assert.equal(totals.dry_lbs, 296);        // 8 x 37
+  assert.equal(totals.dry_lbs, 280);        // 8 x 35, the 2026 crop's full sack
   assert.equal(totals.tops_lbs, 0);         // nothing bucked yet
 });

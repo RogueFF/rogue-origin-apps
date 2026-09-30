@@ -51,7 +51,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -425,6 +425,87 @@ test('the takedown screen offers Finished on an open lot, and on a finished one 
   assert.match(html, /var locked = true;/, 'a void re-enabling the buttons must not undo the lock');
 });
 
+test('a bag weight typed before PRINT TAG is saved on that tag, and only on one tag', async () => {
+  // Koa, 2026-09-28: the last bag of a lot goes out light; the crew had been
+  // writing "18lb" in the note. Now it is a number the ledger can add up.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  await tagged(env, ctx, lot, 2);
+  const r = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, bay: 9, fill_lbs: '17,5' });
+  assert.equal(r.body.success, true, JSON.stringify(r.body));
+  assert.equal(r.body.fill_on, `${yy}-SLIFT-3`);
+  assert.equal(r.body.fill_lbs, 17.5);
+  assert.equal(r.body.tags[0].fill, 17.5, 'the tag list shows it');
+  const fills = () => sqlite.prepare('SELECT sack_id, fill_lbs FROM harvest_sacks ORDER BY serial').all().map(x => x.fill_lbs);
+  assert.deepEqual(fills(), [null, null, 17.5], 'the full bags stay null');
+
+  const batch = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 3, fill_lbs: 20 });
+  assert.equal(batch.body.success, false, 'a batch is several bags and cannot share one weight');
+  const typo = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 1, fill_lbs: 180 });
+  assert.equal(typo.body.success, false, '180 lb is a typo, not a bag');
+  assert.equal(fills().length, 3, 'refused before any serial is spent');
+
+  const screen = await sessionScreen(env, ctx, lot);
+  assert.match(screen, /<details id="nextFill" class="nextnote">/);
+  assert.match(screen, /placeholder="35"/, 'the 2026 full sack is the hint');
+});
+
+test('a bag weight can be corrected from the bag page until the bag is opened', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const yy = String(SEASON).slice(-2);
+  await tagged(env, ctx, lot, 1);
+  const id = `${yy}-SLIFT-1`;
+  const fill = (v) => handleHarvestD1(new Request('https://x/api/harvest?action=sack_fill&lang=en', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ sack_id: id, fill_lbs: String(v) }).toString(),
+  }), env, ctx).then(async res => ({ status: res.status, html: await res.text() }))
+    .catch(e => ({ status: e.statusCode || 500, html: e.message }));
+  const stored = () => sqlite.prepare('SELECT fill_lbs FROM harvest_sacks WHERE sack_id = ?').get(id).fill_lbs;
+
+  let r = await fill(22);
+  assert.equal(r.status, 200);
+  assert.match(r.html, /Weight saved: 22 lb\./);
+  assert.match(r.html, /22 lb · weighed/);
+  assert.equal(stored(), 22);
+
+  r = await fill('');
+  assert.match(r.html, /Bag marked full \(35 lb\)\./);
+  assert.match(r.html, /35 lb · full/);
+  assert.equal(stored(), null);
+
+  sqlite.exec(`UPDATE harvest_sacks SET opened_at = datetime('now') WHERE sack_id = '${id}'`);
+  r = await fill(20);
+  assert.ok(r.status >= 400, 'the day was split by it — refused once opened');
+  assert.equal(stored(), null);
+});
+
+test('both print screens offer the same screen in Chrome, hidden until an iPhone outside Chrome asks', async () => {
+  // Koa, 2026-09-30: Safari and the iOS home-screen app can only print the tag
+  // at ~3.2 x 1.05 in; Chrome on iOS prints it full size.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedSession(sqlite);
+  const host = 'googlechromes://rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest';
+
+  const pick = await picker(env, ctx);
+  assert.match(pick, /<div id="chromeHandoff" class="notice handoff" hidden>/, 'every other device never sees it');
+  assert.ok(pick.includes(`href="${host}?action=sack_print&amp;lang=en"`));
+  assert.match(pick, /!\/CriOS\/\.test\(ua\)/, 'not offered inside Chrome itself');
+
+  const posted = await handleHarvestD1(new Request('https://x/api/harvest?action=sack_session_start&lang=en', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ session_id: String(lot), cultivar: 'Sour Lifter', bay: '9', storage: 'Supermarket' }).toString(),
+  }), env, ctx).then(res => res.text());
+  // A GET that rebuilds THIS screen — the POST that drew it cannot be replayed
+  // in another browser — with the lot, cultivar, bay and storage it was started with.
+  const href = posted.match(/href="googlechromes:\/\/([^"]+)"/)[1].replace(/&amp;/g, '&');
+  assert.equal(href, `rogue-origin-api.roguefamilyfarms.workers.dev/api/harvest?action=sack_session&session_id=${lot}&cultivar=Sour%20Lifter&lang=en&bay=9&storage=Supermarket`);
+  const reopened = await handleHarvestD1(new Request('https://' + href.replace('rogue-origin-api.roguefamilyfarms.workers.dev', 'x')), env, ctx).then(res => res.text());
+  assert.match(reopened, /<div class="lot-cultivar">Sour Lifter<\/div>/);
+  assert.match(reopened, /bay: 9, storage: "Supermarket"/, 'the next PRINT TAG carries the same bay and storage');
+});
+
 test('every new string renders in both languages', async () => {
   const { sqlite, env, ctx } = freshDb();
   const done = seedSession(sqlite, { zone: 'Z4' });
@@ -440,7 +521,7 @@ test('every new string renders in both languages', async () => {
     if (lang === 'es') assert.match(flash.html + await sessionScreen(env, ctx, open, lang), /¿Marcar Z/);
     for (const key of ['finishLot', 'finishLotHelp', 'confirmFinish', 'finishSection', 'finishSectionHelp',
                        'markFinished', 'finishedLots', 'finishedOn', 'reopenLot', 'lotFinished',
-                       'lotFinishedNotice', 'resumeLot', 'startSection']) {
+                       'lotFinishedNotice', 'resumeLot', 'startSection', 'chromeWhy', 'openInChrome', 'chromeHint']) {
       assert.doesNotMatch(shown, new RegExp(`\\b${key}\\b`), `${lang}: ${key} rendered as a raw key`);
     }
     await finish(env, ctx, done, { reopen: true, lang });

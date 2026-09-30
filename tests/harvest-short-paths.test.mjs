@@ -42,7 +42,7 @@ const MIGRATIONS = [
   '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
   '0032-harvest-hourly.sql', '0033-harvest-sms-queue.sql', '0034-harvest-channel.sql',
   '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
-  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0040-harvest-load-trailer.sql',
+  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0040-harvest-load-trailer.sql',
 ];
 
 function freshEnv() {
