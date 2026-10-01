@@ -31,6 +31,7 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  *
  * Supersack tags (see docs/plans/2026-08-06-supersack-tag-design.md):
  * - GET  ?action=sack_print                              - Lot picker, starts a takedown session (HTML)
+ * - GET  ?action=pipeline                                - What's coming: open lots by cultivar + expected date (HTML, read-only)
  * - POST ?action=sack_session_start (session_id,cultivar) - Enter the session screen (HTML)
  * - GET  ?action=sack_session&session_id=&cultivar=      - The session screen itself (HTML)
  * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
@@ -231,7 +232,7 @@ const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'hub', 'reconcile_page',
+  'lot_finish', 'hub', 'reconcile_page', 'pipeline',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -301,6 +302,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
+        case 'pipeline':
+          return await handlePipeline(ui, db, env);
         case 'sack_session_start':
           return await handleSackSession(ui, db, env, body);
         case 'sack_session':
@@ -5677,6 +5680,133 @@ ${finishedHtml}
 </script>`;
 }
 
+// ─── PIPELINE ───────────────────────────────────────────
+// A read-only "what's coming off the racks" board for the people downstream of
+// the barn. Koa, 2026-10-01: "so Nathan and Inaiah can see what cultivars are
+// in the pipeline, with expected dates on when they will be ready".
+//
+// The SAME open lots the takedown picker offers, ranked by the same lotLevel(),
+// so the two screens can never disagree about what is still on the racks or
+// what is dry. Cultivar, zone, cut and dates only — no weights or projections,
+// nothing sack_print doesn't already show to anyone with the link.
+
+async function handlePipeline(ui, db, env) {
+  const lots = await getRecentLots(db, isTestMode(env) ? 1 : 0);
+  return renderPage(ui, ui.lang === 'es' ? 'Lo que viene' : "What's coming",
+    pipelineBody(ui, lots.filter(l => !l.takedown_done_at)));
+}
+
+/** "YYYY-MM-DD" plus n days, calendar arithmetic only (no clock, no zone). */
+function dayPlus(day, n) {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayDiff(fromDay, toDay) {
+  return Math.round((Date.parse(`${toDay}T12:00:00Z`) - Date.parse(`${fromDay}T12:00:00Z`)) / 86400000);
+}
+
+function pipelineBody(ui, lots, now = new Date()) {
+  const es = ui.lang === 'es';
+  const L = (en, sp) => (es ? sp : en);
+  const today = pacificDay(now);
+  const fmtDay = (day, opts = { weekday: 'short', month: 'short', day: 'numeric' }) =>
+    new Date(`${day}T12:00:00Z`).toLocaleDateString(es ? 'es-US' : 'en-US', { ...opts, timeZone: 'UTC' });
+  const inDays = (n) => n === 1 ? L('tomorrow', 'mañana') : L(`in ${n} days`, `en ${n} días`);
+
+  // Lanes in the order material moves: on the bagging table, dry and next,
+  // still drying. The bucket comes from lotLevel(), the takedown picker's own
+  // badge, so "next up" here is exactly what reads READY there.
+  const LANE_OF = { started: 'now', ready: 'next', old: 'next', green: 'drying' };
+  const LANES = [
+    { key: 'now', color: '#b8841c', title: L('Bagging now', 'Embolsando ahora'),
+      sub: L('Coming off the racks today', 'Bajando de los racks hoy') },
+    { key: 'next', color: '#3f8a5c', title: L('Dry — next up', 'Secos — siguen'),
+      sub: L('Ready to come down', 'Listos para bajar') },
+    { key: 'drying', color: '#2d7f86', title: L('Still drying', 'Todavía secando'),
+      sub: L(`About ${DRY_DAYS_TYPICAL} days after the cut`, `Unos ${DRY_DAYS_TYPICAL} días después del corte`) },
+  ];
+
+  // One card per cultivar + cut + cut day. Seven zones of Sour Lifter cut the
+  // same morning are one thing coming, not seven.
+  const groups = new Map();
+  for (const l of lots) {
+    const lane = LANE_OF[lotLevel(l)];
+    const cutDay = pacificDay(parseSqliteUtc(l.occurred_at));
+    const cultivar = l.cultivar || L('Unknown cultivar', 'Variedad sin nombre');
+    const key = `${lane}|${cultivar}|${cutDay}|${l.cut_number}`;
+    if (!groups.has(key)) groups.set(key, { lane, cultivar, cutDay, cut: l.cut_number, zones: [], sacks: 0 });
+    const g = groups.get(key);
+    if (!g.zones.includes(l.zone)) g.zones.push(l.zone);
+    g.sacks += l.sacks_printed || 0;
+  }
+  const byZone = (a, b) => a.localeCompare(b, 'en', { numeric: true });
+  const cards = [...groups.values()].sort((a, b) =>
+    a.cutDay.localeCompare(b.cutDay) || a.cultivar.localeCompare(b.cultivar));
+
+  const card = (g) => {
+    const due = dayPlus(g.cutDay, DRY_DAYS_TYPICAL);
+    const left = dayDiff(today, due);
+    const dried = dayDiff(g.cutDay, today);
+    const when = {
+      now: L('Now', 'Ahora'),
+      next: L('Ready now', 'Listo ya'),
+      drying: `~${fmtDay(due)}`,
+    }[g.lane];
+    const detail = {
+      now: g.sacks === 1 ? L('1 sack so far', '1 saco hasta ahora') : L(`${g.sacks} sacks so far`, `${g.sacks} sacos hasta ahora`),
+      next: L(`${dried} days drying`, `${dried} días secando`),
+      drying: left > 0 ? inDays(left) : L('any day now', 'cualquier día'),
+    }[g.lane];
+    const where = `${g.zones.sort(byZone).join(', ')} · ${L('cut', 'corte')} ${g.cut} · ${L('cut on', 'cortado')} ${fmtDay(g.cutDay, { month: 'short', day: 'numeric' })}`;
+    return `<article class="pcard"><h3>${escapeHtml(g.cultivar)}</h3><p class="pwhen"><strong>${escapeHtml(when)}</strong> <span>${escapeHtml(detail)}</span></p><p class="pwhere">${escapeHtml(where)}</p></article>`;
+  };
+
+  const lanesHtml = LANES.map(lane => {
+    const mine = cards.filter(g => g.lane === lane.key);
+    return `
+<section class="plane" style="--lane:${lane.color}">
+  <div class="plane-head"><h2>${lane.title}</h2><span class="pcount">${mine.length}</span><span class="plane-sub">${lane.sub}</span></div>
+  ${mine.length ? `<div class="pgrid">${mine.map(card).join('')}</div>`
+    : `<p class="pempty">${L('Nothing here right now.', 'Nada por ahora.')}</p>`}
+</section>`;
+  }).join('');
+
+  const asOf = now.toLocaleString(es ? 'es-US' : 'en-US',
+    { timeZone: HARVEST_TZ, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  return `
+<style>
+body:has(.pipe) { background: #f6f5ef; color: #263f32; }
+.pipe { max-width: 1100px; margin: 0 auto; font-family: 'Quicksand', system-ui, sans-serif; }
+.pipe h1 { font: 800 clamp(30px, 6vw, 46px)/1.05 'Karla', system-ui, sans-serif; letter-spacing: -.03em; margin: 8px 0 8px; color: #263f32; }
+.pipe .psub { color: #5d6d61; font-size: 1rem; line-height: 1.5; margin: 0 0 6px; }
+.pipe .pasof { color: #7a887d; font-size: .85rem; margin: 0 0 26px; }
+.plane { margin: 0 0 30px; }
+.plane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 0 0 10px; margin-bottom: 14px; border-bottom: 4px solid var(--lane); }
+.plane-head h2 { margin: 0; font: 800 1.5rem 'Karla', system-ui, sans-serif; color: var(--lane); text-transform: none; letter-spacing: -.01em; }
+.pcount { background: var(--lane); color: #fff; font-weight: 800; border-radius: 999px; min-width: 1.8rem; padding: 2px 9px; text-align: center; }
+.plane-sub { color: #5d6d61; font-size: .95rem; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 14px; }
+.pcard { background: #fff; border: 1px solid #dde3d6; border-left: 8px solid var(--lane); border-radius: 14px; padding: 16px 18px; }
+.pcard h3 { margin: 0 0 8px; font: 800 1.45rem/1.15 'Karla', system-ui, sans-serif; color: #263f32; }
+.pwhen { margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pwhen strong { font-size: 1.3rem; color: var(--lane); }
+.pwhen span { color: #3d5246; font-weight: 600; }
+.pwhere { margin: 0; color: #6b7a6f; font-size: .9rem; }
+.pempty { color: #7a887d; font-style: italic; margin: 0; }
+</style>
+<div class="pipe">
+<h1>${L("What's coming", 'Lo que viene')}</h1>
+<p class="psub">${L(
+    `Every lot drying in the barn, by cultivar. A lot is ready to bag about ${DRY_DAYS_TYPICAL} days after it's cut, so dates are estimates.`,
+    `Cada lote secando en el granero, por variedad. Un lote está listo para embolsar unos ${DRY_DAYS_TYPICAL} días después del corte; las fechas son estimadas.`)}</p>
+<p class="pasof">${L('As of', 'Al')} ${escapeHtml(asOf)} · ${L('refresh for the latest', 'actualiza para ver lo último')}</p>
+${lanesHtml}
+</div>`;
+}
+
 /**
  * The screen the worker actually lives on during a takedown. Quantity is
  * deliberately NOT asked up front — you don't know how many sacks a rack
@@ -6945,6 +7075,7 @@ ${lane(4, LANE[3], L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a 
     scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
   ])}
 ${lane(5, LANE[4], L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
+    card(`${API}?action=pipeline&${q}`, L("What's coming", 'Lo que viene'), L('Cultivars drying in the barn and when each is expected off the racks.', 'Variedades secando en el granero y cuándo se espera que bajen.')),
     card(`${API}?action=harvest_dash`, L('Harvest dashboard', 'Tablero de cosecha'), L('Rack board, storage, cycle times.', 'Racks, almacén, tiempos de ciclo.'), PW),
     card(`${API}?action=board_page`, L('Lot board', 'Tablero de lotes'), L('Every lot from untested to supersacked.', 'Cada lote, de sin probar a embolsado.'), PW),
     card(`${API}?action=reconcile_page&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
