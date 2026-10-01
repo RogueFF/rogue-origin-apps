@@ -31,7 +31,7 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  *
  * Supersack tags (see docs/plans/2026-08-06-supersack-tag-design.md):
  * - GET  ?action=sack_print                              - Lot picker, starts a takedown session (HTML)
- * - GET  ?action=pipeline                                - What's coming: open lots by cultivar + expected date (HTML, read-only)
+ * - GET  ?action=pipeline                                - What's coming: cultivars drying (bay-dated) + in supersacks (HTML, read-only)
  * - POST ?action=sack_session_start (session_id,cultivar) - Enter the session screen (HTML)
  * - GET  ?action=sack_session&session_id=&cultivar=      - The session screen itself (HTML)
  * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
@@ -5681,19 +5681,49 @@ ${finishedHtml}
 }
 
 // ─── PIPELINE ───────────────────────────────────────────
-// A read-only "what's coming off the racks" board for the people downstream of
-// the barn. Koa, 2026-10-01: "so Nathan and Inaiah can see what cultivars are
-// in the pipeline, with expected dates on when they will be ready".
+// A read-only "what's coming" board for the people downstream of the barn.
+// Koa, 2026-10-01: "so Nathan and Inaiah can see what cultivars are in the
+// pipeline, with expected dates on when they will be ready".
 //
-// The SAME open lots the takedown picker offers, ranked by the same lotLevel(),
-// so the two screens can never disagree about what is still on the racks or
-// what is dry. Cultivar, zone, cut and dates only — no weights or projections,
-// nothing sack_print doesn't already show to anyone with the link.
+// Two lists, and each cultivar is on exactly one of them (Koa, same day: "only
+// need to list a cultivar once, not by zone ... if they are [in supersacks],
+// they don't need to be listed in the pipeline again"):
+//   - ALREADY IN SUPERSACKS: any tag this season. Takedown starts when the
+//     first tag prints, so that is also the only "bagging" signal there is.
+//   - COMING: open lots of every other cultivar, with an expected date.
+//
+// THE DATE IS THE BAY'S, NOT THE LOT'S. "We want to take the whole bay down at
+// once" — so a lot that is dry is still waiting on whatever was hung after it
+// in the same bay. A bay is due DRY_DAYS_TYPICAL days after its newest load
+// from a still-open lot. Open lots, not the rack board's fills: a finished lot
+// has come down, and that is the boundary the fills approximate from tags.
+// A lot with no bay recorded (loads before bays were captured) falls back to
+// its own cut day.
+//
+// Cultivar, bay, dates and sack counts only — no weights or projections.
 
 async function handlePipeline(ui, db, env) {
-  const lots = await getRecentLots(db, isTestMode(env) ? 1 : 0);
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [lots, loads, sacks] = await Promise.all([
+    getRecentLots(db, isTest),
+    // Every bay-tagged load in the picker window, filtered to open lots in JS:
+    // an IN list over session ids would outgrow D1's 100-variable cap.
+    query(db, `
+      SELECT attributed_zone_session_id AS session_id, bay, occurred_at
+      FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT cultivar, COUNT(*) AS tagged, SUM(CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END) AS unopened
+      FROM harvest_sacks
+      WHERE season = ? AND is_test = ? AND voided_at IS NULL AND cultivar IS NOT NULL AND TRIM(cultivar) <> ''
+      GROUP BY cultivar
+    `, [getSeason(), isTest]),
+  ]);
   return renderPage(ui, ui.lang === 'es' ? 'Lo que viene' : "What's coming",
-    pipelineBody(ui, lots.filter(l => !l.takedown_done_at)));
+    pipelineBody(ui, { lots: lots.filter(l => !l.takedown_done_at), loads, sacks }));
 }
 
 /** "YYYY-MM-DD" plus n days, calendar arithmetic only (no clock, no zone). */
@@ -5707,71 +5737,91 @@ function dayDiff(fromDay, toDay) {
   return Math.round((Date.parse(`${toDay}T12:00:00Z`) - Date.parse(`${fromDay}T12:00:00Z`)) / 86400000);
 }
 
-function pipelineBody(ui, lots, now = new Date()) {
+function pipelineBody(ui, { lots, loads, sacks }, now = new Date()) {
   const es = ui.lang === 'es';
   const L = (en, sp) => (es ? sp : en);
   const today = pacificDay(now);
   const fmtDay = (day, opts = { weekday: 'short', month: 'short', day: 'numeric' }) =>
     new Date(`${day}T12:00:00Z`).toLocaleDateString(es ? 'es-US' : 'en-US', { ...opts, timeZone: 'UTC' });
-  const inDays = (n) => n === 1 ? L('tomorrow', 'mañana') : L(`in ${n} days`, `en ${n} días`);
+  const short = (day) => fmtDay(day, { month: 'short', day: 'numeric' });
+  // Sack cultivars are typed at print time; match them to the scan log loosely.
+  const norm = (s) => String(s || '').trim().toLowerCase();
 
-  // Lanes in the order material moves: on the bagging table, dry and next,
-  // still drying. The bucket comes from lotLevel(), the takedown picker's own
-  // badge, so "next up" here is exactly what reads READY there.
-  const LANE_OF = { started: 'now', ready: 'next', old: 'next', green: 'drying' };
-  const LANES = [
-    { key: 'now', color: '#b8841c', title: L('Bagging now', 'Embolsando ahora'),
-      sub: L('Takedown started', 'Ya se empezó a bajar') },
-    { key: 'next', color: '#3f8a5c', title: L('Dry — next up', 'Secos — siguen'),
-      sub: L('Ready to come down', 'Listos para bajar') },
-    { key: 'drying', color: '#2d7f86', title: L('Still drying', 'Todavía secando'),
-      sub: L(`About ${DRY_DAYS_TYPICAL} days after the cut`, `Unos ${DRY_DAYS_TYPICAL} días después del corte`) },
-  ];
-
-  // One card per cultivar + cut + cut day. Seven zones of Sour Lifter cut the
-  // same morning are one thing coming, not seven.
-  const groups = new Map();
-  for (const l of lots) {
-    const lane = LANE_OF[lotLevel(l)];
-    const cutDay = pacificDay(parseSqliteUtc(l.occurred_at));
-    const cultivar = l.cultivar || L('Unknown cultivar', 'Variedad sin nombre');
-    const key = `${lane}|${cultivar}|${cutDay}|${l.cut_number}`;
-    if (!groups.has(key)) groups.set(key, { lane, cultivar, cutDay, cut: l.cut_number, zones: [], sacks: 0 });
-    const g = groups.get(key);
-    if (!g.zones.includes(l.zone)) g.zones.push(l.zone);
-    g.sacks += l.sacks_printed || 0;
+  // ── Already in supersacks ──
+  // Shown under the scan log's spelling when a lot has one, else the spelling
+  // most of its tags carry.
+  const lotName = new Map(lots.filter(l => norm(l.cultivar)).map(l => [norm(l.cultivar), l.cultivar.trim()]));
+  const bagged = new Map();
+  for (const s of sacks) {
+    const k = norm(s.cultivar);
+    const b = bagged.get(k) || { cultivar: lotName.get(k), most: 0, tagged: 0, unopened: 0 };
+    if (!lotName.has(k) && (s.tagged || 0) > b.most) { b.cultivar = String(s.cultivar).trim(); b.most = s.tagged; }
+    b.tagged += s.tagged || 0;
+    b.unopened += s.unopened || 0;
+    bagged.set(k, b);
   }
-  const byZone = (a, b) => a.localeCompare(b, 'en', { numeric: true });
-  const cards = [...groups.values()].sort((a, b) =>
-    a.cutDay.localeCompare(b.cutDay) || a.cultivar.localeCompare(b.cultivar));
 
-  const card = (g) => {
-    const due = dayPlus(g.cutDay, DRY_DAYS_TYPICAL);
-    const left = dayDiff(today, due);
-    const dried = dayDiff(g.cutDay, today);
-    const when = {
-      now: L('Now', 'Ahora'),
-      next: L('Ready now', 'Listo ya'),
-      drying: `~${fmtDay(due)}`,
-    }[g.lane];
-    const detail = {
-      now: g.sacks === 1 ? L('1 sack so far', '1 saco hasta ahora') : L(`${g.sacks} sacks so far`, `${g.sacks} sacos hasta ahora`),
-      next: L(`${dried} days drying`, `${dried} días secando`),
-      drying: left > 0 ? inDays(left) : L('any day now', 'cualquier día'),
-    }[g.lane];
-    const where = `${g.zones.sort(byZone).join(', ')} · ${L('cut', 'corte')} ${g.cut} · ${L('cut on', 'cortado')} ${fmtDay(g.cutDay, { month: 'short', day: 'numeric' })}`;
-    return `<article class="pcard"><h3>${escapeHtml(g.cultivar)}</h3><p class="pwhen"><strong>${escapeHtml(when)}</strong> <span>${escapeHtml(detail)}</span></p><p class="pwhere">${escapeHtml(where)}</p></article>`;
+  // ── Bay due dates, from every open lot (bagged cultivars included: their
+  // leftovers hang in the same bay and come down with it) ──
+  const lotOfSession = new Map();
+  for (const l of lots) for (const id of (l.session_ids || [l.id])) lotOfSession.set(id, l);
+  const bayLast = new Map();               // bay -> newest load day
+  const baysOfLot = new Map();             // lot -> Set(bay)
+  for (const ld of loads) {
+    const lot = lotOfSession.get(ld.session_id);
+    if (!lot) continue;
+    const day = pacificDay(parseSqliteUtc(ld.occurred_at));
+    if (!bayLast.has(ld.bay) || day > bayLast.get(ld.bay)) bayLast.set(ld.bay, day);
+    if (!baysOfLot.has(lot)) baysOfLot.set(lot, new Set());
+    baysOfLot.get(lot).add(ld.bay);
+  }
+  const bayDue = (bay) => dayPlus(bayLast.get(bay), DRY_DAYS_TYPICAL);
+
+  // ── Coming: one entry per cultivar not yet in a supersack ──
+  const coming = new Map();
+  for (const l of lots) {
+    const k = norm(l.cultivar);
+    if (!k || bagged.has(k)) continue;
+    const c = coming.get(k) || { cultivar: l.cultivar.trim(), dues: [], bays: new Set(), unbayed: false };
+    const bays = baysOfLot.get(l);
+    if (bays && bays.size) {
+      for (const b of bays) { c.bays.add(b); c.dues.push(bayDue(b)); }
+    } else {
+      c.unbayed = true;
+      c.dues.push(dayPlus(pacificDay(parseSqliteUtc(l.occurred_at)), DRY_DAYS_TYPICAL));
+    }
+    coming.set(k, c);
+  }
+  const comingCards = [...coming.values()].map(c => {
+    const sorted = c.dues.slice().sort();
+    return { ...c, first: sorted[0], last: sorted[sorted.length - 1] };
+  }).sort((a, b) => a.first.localeCompare(b.first) || a.cultivar.localeCompare(b.cultivar));
+
+  const byNum = (a, b) => a - b;
+  const comingCard = (c) => {
+    const when = c.first === c.last ? `~${fmtDay(c.first)}` : `~${short(c.first)} – ${short(c.last)}`;
+    const left = dayDiff(today, c.first);
+    const detail = left > 1 ? L(`in ${left} days`, `en ${left} días`)
+      : left === 1 ? L('tomorrow', 'mañana')
+      : L('due — waiting on takedown', 'ya toca — esperando la bajada');
+    const bays = [...c.bays].sort(byNum);
+    const where = [
+      bays.length ? `${bays.length > 1 ? L('Bays', 'Bahías') : L('Bay', 'Bahía')} ${bays.join(', ')}` : '',
+      c.unbayed ? L('bay not recorded', 'bahía sin registrar') : '',
+    ].filter(Boolean).join(' · ');
+    return `<article class="pcard"><h3>${escapeHtml(c.cultivar)}</h3><p class="pwhen"><strong>${escapeHtml(when)}</strong> <span>${escapeHtml(detail)}</span></p><p class="pwhere">${escapeHtml(where)}</p></article>`;
   };
 
-  const lanesHtml = LANES.map(lane => {
-    const mine = cards.filter(g => g.lane === lane.key);
-    return `
-<section class="plane" style="--lane:${lane.color}">
-  <div class="plane-head"><h2>${lane.title}</h2><span class="pcount">${mine.length}</span><span class="plane-sub">${lane.sub}</span></div>
-  ${mine.length ? `<div class="pgrid">${mine.map(card).join('')}</div>`
-    : `<p class="pempty">${L('Nothing here right now.', 'Nada por ahora.')}</p>`}
+  const baggedCards = [...bagged.values()].filter(b => b.unopened > 0)
+    .sort((a, b) => a.cultivar.localeCompare(b.cultivar));
+  const baggedCard = (b) => `<article class="pcard"><h3>${escapeHtml(b.cultivar)}</h3><p class="pwhen"><strong>${b.unopened}</strong> <span>${b.unopened === 1
+    ? L('supersack', 'supersaco') : L('supersacks', 'supersacos')}</span></p></article>`;
+
+  const section = (color, title, sub, cards, render, empty) => `
+<section class="plane" style="--lane:${color}">
+  <div class="plane-head"><h2>${title}</h2><span class="pcount">${cards.length}</span><span class="plane-sub">${sub}</span></div>
+  ${cards.length ? `<div class="pgrid">${cards.map(render).join('')}</div>` : `<p class="pempty">${empty}</p>`}
 </section>`;
-  }).join('');
 
   const asOf = now.toLocaleString(es ? 'es-US' : 'en-US',
     { timeZone: HARVEST_TZ, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -5791,19 +5841,22 @@ body:has(.pipe) { background: #f6f5ef; color: #263f32; }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 14px; }
 .pcard { background: #fff; border: 1px solid #dde3d6; border-left: 8px solid var(--lane); border-radius: 14px; padding: 16px 18px; }
 .pcard h3 { margin: 0 0 8px; font: 800 1.45rem/1.15 'Karla', system-ui, sans-serif; color: #263f32; }
-.pwhen { margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pwhen { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .pwhen strong { font-size: 1.3rem; color: var(--lane); }
 .pwhen span { color: #3d5246; font-weight: 600; }
-.pwhere { margin: 0; color: #6b7a6f; font-size: .9rem; }
+.pwhere { margin: 8px 0 0; color: #6b7a6f; font-size: .9rem; }
 .pempty { color: #7a887d; font-style: italic; margin: 0; }
 </style>
 <div class="pipe">
 <h1>${L("What's coming", 'Lo que viene')}</h1>
 <p class="psub">${L(
-    `Every lot drying in the barn, by cultivar. A lot is ready to bag about ${DRY_DAYS_TYPICAL} days after it's cut, so dates are estimates.`,
-    `Cada lote secando en el granero, por variedad. Un lote está listo para embolsar unos ${DRY_DAYS_TYPICAL} días después del corte; las fechas son estimadas.`)}</p>
+    `Each cultivar once. A bay comes down all at once, about ${DRY_DAYS_TYPICAL} days after the last load hung in it, so dates are estimates.`,
+    `Cada variedad una vez. Una bahía se baja completa, unos ${DRY_DAYS_TYPICAL} días después de la última carga colgada; las fechas son estimadas.`)}</p>
 <p class="pasof">${L('As of', 'Al')} ${escapeHtml(asOf)} · ${L('refresh for the latest', 'actualiza para ver lo último')}</p>
-${lanesHtml}
+${section('#2d7f86', L('Coming', 'Por venir'), L('Drying in the barn', 'Secando en el granero'),
+    comingCards, comingCard, L('Nothing drying right now.', 'Nada secando por ahora.'))}
+${section('#b8841c', L('Already in supersacks', 'Ya en supersacos'), L('Bagged this season, not yet opened', 'Embolsado esta temporada, sin abrir'),
+    baggedCards, baggedCard, L('No supersacks yet this season.', 'Todavía no hay supersacos esta temporada.'))}
 </div>`;
 }
 
@@ -7075,7 +7128,7 @@ ${lane(4, LANE[3], L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a 
     scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
   ])}
 ${lane(5, LANE[4], L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
-    card(`${API}?action=pipeline&${q}`, L("What's coming", 'Lo que viene'), L('Cultivars drying in the barn and when each is expected off the racks.', 'Variedades secando en el granero y cuándo se espera que bajen.')),
+    card(`${API}?action=pipeline&${q}`, L("What's coming", 'Lo que viene'), L('Cultivars drying in the barn with expected dates, and what is already in supersacks.', 'Variedades secando en el granero con fechas estimadas, y lo que ya está en supersacos.')),
     card(`${API}?action=harvest_dash`, L('Harvest dashboard', 'Tablero de cosecha'), L('Rack board, storage, cycle times.', 'Racks, almacén, tiempos de ciclo.'), PW),
     card(`${API}?action=board_page`, L('Lot board', 'Tablero de lotes'), L('Every lot from untested to supersacked.', 'Cada lote, de sin probar a embolsado.'), PW),
     card(`${API}?action=reconcile_page&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
