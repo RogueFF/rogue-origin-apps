@@ -50,6 +50,7 @@ const SHORT_SCREENS = new Map([
   ['/tags', 'sack_print'],   // Imprimir Etiquetas — the takedown screen
   ['/hora', 'crew'],         // Reporte de cuadrilla por hora
   ['/hub', 'hub'],           // Herramientas / all tools
+  ['/coming', 'pipeline'],   // What's coming off the racks, by cultivar
 ]);
 
 export default {
