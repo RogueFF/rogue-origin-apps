@@ -5777,12 +5777,15 @@ function pipelineBody(ui, { lots, loads, sacks }, now = new Date()) {
   }
   const bayDue = (bay) => dayPlus(bayLast.get(bay), DRY_DAYS_TYPICAL);
 
-  // ── Coming: one entry per cultivar not yet in a supersack ──
-  const coming = new Map();
+  // ── Still hanging, per cultivar. A cultivar not yet in a supersack is a
+  // Coming card; one already bagged carries it as a "more drying" line
+  // (Koa, 2026-10-01: Sour Lifter's 2 sacks were a small test lot, while the
+  // crop itself is still hanging). ──
+  const drying = new Map();
   for (const l of lots) {
     const k = norm(l.cultivar);
-    if (!k || bagged.has(k)) continue;
-    const c = coming.get(k) || { cultivar: l.cultivar.trim(), dues: [], bays: new Set(), unbayed: false };
+    if (!k) continue;
+    const c = drying.get(k) || { cultivar: l.cultivar.trim(), dues: [], bays: new Set(), unbayed: false };
     const bays = baysOfLot.get(l);
     if (bays && bays.size) {
       for (const b of bays) { c.bays.add(b); c.dues.push(bayDue(b)); }
@@ -5790,32 +5793,42 @@ function pipelineBody(ui, { lots, loads, sacks }, now = new Date()) {
       c.unbayed = true;
       c.dues.push(dayPlus(pacificDay(parseSqliteUtc(l.occurred_at)), DRY_DAYS_TYPICAL));
     }
-    coming.set(k, c);
+    drying.set(k, c);
   }
-  const comingCards = [...coming.values()].map(c => {
+  for (const c of drying.values()) {
     const sorted = c.dues.slice().sort();
-    return { ...c, first: sorted[0], last: sorted[sorted.length - 1] };
-  }).sort((a, b) => a.first.localeCompare(b.first) || a.cultivar.localeCompare(b.cultivar));
+    c.first = sorted[0];
+    c.last = sorted[sorted.length - 1];
+  }
+  const comingCards = [...drying.entries()].filter(([k]) => !bagged.has(k)).map(([, c]) => c).sort((a, b) => a.first.localeCompare(b.first) || a.cultivar.localeCompare(b.cultivar));
 
   const byNum = (a, b) => a - b;
+  const whenOf = (c) => c.first === c.last ? `~${fmtDay(c.first)}` : `~${short(c.first)} – ${short(c.last)}`;
+  const whereOf = (c) => {
+    const bays = [...c.bays].sort(byNum);
+    return [
+      bays.length ? `${bays.length > 1 ? L('Bays', 'Bahías') : L('Bay', 'Bahía')} ${bays.join(', ')}` : '',
+      c.unbayed ? L('bay not recorded', 'bahía sin registrar') : '',
+    ].filter(Boolean).join(' · ');
+  };
   const comingCard = (c) => {
-    const when = c.first === c.last ? `~${fmtDay(c.first)}` : `~${short(c.first)} – ${short(c.last)}`;
+    const when = whenOf(c);
     const left = dayDiff(today, c.first);
     const detail = left > 1 ? L(`in ${left} days`, `en ${left} días`)
       : left === 1 ? L('tomorrow', 'mañana')
       : L('due — waiting on takedown', 'ya toca — esperando la bajada');
-    const bays = [...c.bays].sort(byNum);
-    const where = [
-      bays.length ? `${bays.length > 1 ? L('Bays', 'Bahías') : L('Bay', 'Bahía')} ${bays.join(', ')}` : '',
-      c.unbayed ? L('bay not recorded', 'bahía sin registrar') : '',
-    ].filter(Boolean).join(' · ');
+    const where = whereOf(c);
     return `<article class="pcard"><h3>${escapeHtml(c.cultivar)}</h3><p class="pwhen"><strong>${escapeHtml(when)}</strong> <span>${escapeHtml(detail)}</span></p><p class="pwhere">${escapeHtml(where)}</p></article>`;
   };
 
   const baggedCards = [...bagged.values()].filter(b => b.unopened > 0)
     .sort((a, b) => a.cultivar.localeCompare(b.cultivar));
-  const baggedCard = (b) => `<article class="pcard"><h3>${escapeHtml(b.cultivar)}</h3><p class="pwhen"><strong>${b.unopened}</strong> <span>${b.unopened === 1
-    ? L('supersack', 'supersaco') : L('supersacks', 'supersacos')}</span></p></article>`;
+  const baggedCard = (b) => {
+    const more = drying.get(norm(b.cultivar));
+    const moreHtml = more ? `<p class="pmore">${escapeHtml(`${L('More drying', 'Más secando')} ${whenOf(more)} · ${whereOf(more)}`)}</p>` : '';
+    return `<article class="pcard"><h3>${escapeHtml(b.cultivar)}</h3><p class="pwhen"><strong>${b.unopened}</strong> <span>${b.unopened === 1
+      ? L('supersack', 'supersaco') : L('supersacks', 'supersacos')}</span></p>${moreHtml}</article>`;
+  };
 
   const section = (color, title, sub, cards, render, empty) => `
 <section class="plane" style="--lane:${color}">
@@ -5845,6 +5858,7 @@ body:has(.pipe) { background: #f6f5ef; color: #263f32; }
 .pwhen strong { font-size: 1.3rem; color: var(--lane); }
 .pwhen span { color: #3d5246; font-weight: 600; }
 .pwhere { margin: 8px 0 0; color: #6b7a6f; font-size: .9rem; }
+.pmore { margin: 8px 0 0; color: #2d7f86; font-weight: 700; font-size: .95rem; }
 .pempty { color: #7a887d; font-style: italic; margin: 0; }
 </style>
 <div class="pipe">

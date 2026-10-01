@@ -17,7 +17,10 @@
  *    load from an open lot + 10 days — including a load of a cultivar that is
  *    already bagged, because it hangs there and comes down with the bay.
  * 5. NO BAY RECORDED -> the lot's own cut day + 10 days.
- * 6. NO WEIGHTS. The page is public.
+ * 6. A BAGGED CULTIVAR STILL HANGING SAYS SO on its supersack card ("More
+ *    drying"), with the same bay dates. Koa: Sour Lifter's 2 sacks were a
+ *    small test lot while the crop is still on the racks.
+ * 7. NO WEIGHTS. The page is public.
  *
  * Run with `node --test`.
  */
@@ -116,8 +119,8 @@ const page = (env, ctx, lang = 'en') => handleHarvestD1(
 function sections(html) {
   return Object.fromEntries([...html.matchAll(/<section class="plane"[^>]*>([\s\S]*?)<\/section>/g)].map(([, s]) => [
     s.match(/<h2>([^<]*)<\/h2>/)[1],
-    [...s.matchAll(/<article class="pcard"><h3>([^<]*)<\/h3><p class="pwhen"><strong>([^<]*)<\/strong> <span>([^<]*)<\/span><\/p>(?:<p class="pwhere">([^<]*)<\/p>)?/g)]
-      .map(m => ({ cultivar: m[1], when: m[2], detail: m[3], where: m[4] ?? '' })),
+    [...s.matchAll(/<article class="pcard"><h3>([^<]*)<\/h3><p class="pwhen"><strong>([^<]*)<\/strong> <span>([^<]*)<\/span><\/p>(?:<p class="pwhere">([^<]*)<\/p>)?(?:<p class="pmore">([^<]*)<\/p>)?/g)]
+      .map(m => ({ cultivar: m[1], when: m[2], detail: m[3], where: m[4] ?? '', more: m[5] ?? '' })),
   ]));
 }
 
@@ -189,6 +192,12 @@ test("the date is the bay's: newest open-lot load + 10, bagged leftovers include
 test('no bay recorded falls back to the cut day + 10', { skip: !DatabaseSync }, () => {
   assert.equal(coming('Lifter').when, `~${fmt(7)}`);
   assert.equal(coming('Lifter').where, 'bay not recorded');
+});
+
+test('a bagged cultivar still hanging says so on its supersack card', { skip: !DatabaseSync }, () => {
+  const bag = (cv) => secs['Already in supersacks'].find(c => c.cultivar === cv);
+  assert.equal(bag('Orange Pineapple Quik').more, `More drying ~${fmt(9)} · Bay 10`);
+  assert.equal(bag('Purple Snowman').more, `More drying ~${fmt(1)} · bay not recorded`);
 });
 
 test('no weights on a public page', { skip: !DatabaseSync }, () => {
