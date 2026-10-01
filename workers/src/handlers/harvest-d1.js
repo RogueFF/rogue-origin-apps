@@ -5721,7 +5721,7 @@ function pipelineBody(ui, lots, now = new Date()) {
   const LANE_OF = { started: 'now', ready: 'next', old: 'next', green: 'drying' };
   const LANES = [
     { key: 'now', color: '#b8841c', title: L('Bagging now', 'Embolsando ahora'),
-      sub: L('Coming off the racks today', 'Bajando de los racks hoy') },
+      sub: L('Takedown started', 'Ya se empezó a bajar') },
     { key: 'next', color: '#3f8a5c', title: L('Dry — next up', 'Secos — siguen'),
       sub: L('Ready to come down', 'Listos para bajar') },
     { key: 'drying', color: '#2d7f86', title: L('Still drying', 'Todavía secando'),

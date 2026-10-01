@@ -72,12 +72,18 @@ function freshDb() {
   return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
 }
 
-// Cut at 19:00 UTC (noon Pacific), so the Pacific cut day is the UTC day.
+// Days are Pacific, as the page reads them: after 5pm PDT the UTC date is
+// already tomorrow, and a UTC-dated seed would shift every "in N days" by one.
+const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+const dayPlus = (n) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d; };
+const isoDay = (n) => dayPlus(n).toISOString().slice(0, 10);
+
+// Cut at 19:00 UTC (noon Pacific), so the Pacific cut day is the seeded day.
 function seedLot(sqlite, { zone, cultivar, cut = 1, daysAgo, finished = false }) {
   sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, takedown_done_at, is_test)
-    VALUES ('enter', ?, ?, ?, ?, datetime(date('now', ?), '+19 hours'), datetime(date('now', ?), '+22 hours'), ?, 1)
-  `).run(zone, cultivar, SEASON, cut, `-${daysAgo} days`, `-${daysAgo} days`, finished ? "datetime('now')" : null);
+    VALUES ('enter', ?, ?, ?, ?, ? || ' 19:00:00', ? || ' 22:00:00', ?, 1)
+  `).run(zone, cultivar, SEASON, cut, isoDay(-daysAgo), isoDay(-daysAgo), finished ? new Date().toISOString().replace('T', ' ').slice(0, 19) : null);
   return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
 }
 
@@ -100,7 +106,6 @@ function lanes(html) {
   }));
 }
 
-const dayPlus = (n) => { const d = new Date(); d.setUTCHours(12, 0, 0, 0); d.setUTCDate(d.getUTCDate() + n); return d; };
 const fmt = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 let html;
