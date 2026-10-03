@@ -1480,7 +1480,15 @@ async function proposeLot(db, isTest, trailer) {
   // crew's — crew A changing zones must not pull crew B's trailer onto A's old
   // lot. A trailer on no crew today is ASKED, never sent to the newest lot.
   const crew = trailer ? await crewForTrailer(db, isTest, trailer) : null;
-  if (!crew) return { lot: null, viaGrace: false, crew: null };
+  if (!crew) {
+    // A day nobody has set crews up yet is still a one-crew day (the build
+    // shipped mid-shift, 2026-10-03, with all three crews in one zone): the
+    // open lot, as before. Once any crew is set up, an unassigned trailer asks.
+    if ((await getCrewDays(db, isTest)).length) return { lot: null, viaGrace: false, crew: null };
+    const recentAny = await getLastClosedAnyCultivar(db, isTest);
+    if (inBarnGrace(recentAny)) return { lot: recentAny, viaGrace: true, crew: null };
+    return { lot: await getActiveSession(db, isTest), viaGrace: false, crew: null };
+  }
   const recent = await getLastClosedAnyCultivar(db, isTest, null, crew);
   if (inBarnGrace(recent)) return { lot: recent, viaGrace: true, crew };
   return { lot: await getActiveSession(db, isTest, crew), viaGrace: false, crew };
