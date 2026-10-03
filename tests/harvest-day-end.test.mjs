@@ -106,19 +106,38 @@ test('it closes the open zone', async () => {
   assert.match(html, /After 5\.0 hours/, 'and say how long, so a wrong scan is visible');
 });
 
-test('it closes every open lot, whichever phone scans it', async () => {
-  // ONE CREW (2026-09-28). The two-crew build scoped this to the phone's tag,
-  // and a second untagged phone left a lot open all night that the first
-  // phone's card could not close. Data from that build can still hold two open
-  // lots; one scan ends both, and the crew tag on the phone is ignored.
+test('with several crews open it asks which one, and closes nothing until told', async () => {
+  // THREE CREWS (2026-10-03). One lead finishing early must not close the
+  // other crews' zones. The phone's old crew tag is still ignored.
+  const { sqlite, env, ctx } = freshDb();
+  const a = openSession(sqlite, { zone: 'Z4', crew: 'A' });
+  const b = openSession(sqlite, { zone: 'Z9', crew: 'B' });
+
+  const html = await (await scanFin(env, ctx, 'A')).text();
+  assert.match(html, /Which crew is finishing\?/);
+  assert.match(html, /href="\/fin\?crew=A&lang=en"/);
+  assert.match(html, /href="\/fin\?crew=B&lang=en"/);
+  assert.match(html, /href="\/fin\?crew=all&lang=en"/);
+  assert.ok(!closedAt(sqlite, a) && !closedAt(sqlite, b), 'a question writes nothing');
+
+  await handleDayEndScan(new Request('https://x/fin?crew=A&lang=en'), env, ctx);
+  assert.ok(closedAt(sqlite, a));
+  assert.ok(!closedAt(sqlite, b), "crew B's zone stays open");
+
+  const all = await (await handleDayEndScan(new Request('https://x/fin?crew=all&lang=en'), env, ctx)).text();
+  assert.ok(closedAt(sqlite, b));
+  assert.match(all, /Closed Z9/);
+});
+
+test('"all crews" closes every open lot, an untagged one from the one-crew days too', async () => {
   const { sqlite, env, ctx } = freshDb();
   const a = openSession(sqlite, { zone: 'Z4', crew: 'A' });
   const untagged = openSession(sqlite, { zone: 'Z9', crew: null });
 
-  const html = await (await scanFin(env, ctx, null)).text();
+  const html = await (await handleDayEndScan(new Request('https://x/fin?crew=all&lang=en'), env, ctx)).text();
   assert.ok(closedAt(sqlite, a));
   assert.ok(closedAt(sqlite, untagged));
-  assert.doesNotMatch(html, /still open/, 'nothing is left open to warn about');
+  assert.match(html, /Closed 2 zones/);
 });
 
 test('scanning twice is fine and says so plainly', async () => {

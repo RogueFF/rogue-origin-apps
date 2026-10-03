@@ -29,11 +29,11 @@ const MIGRATIONS = [
   '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
   '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
   '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
-  '0040-harvest-load-trailer.sql', '0041-harvest-sacks-fill-lbs.sql',
+  '0040-harvest-load-trailer.sql', '0041-harvest-sacks-fill-lbs.sql', '0042-harvest-crew-day.sql',
 ];
 
 /** A fresh in-memory harvest database, and the env/ctx a handler expects. */
-export function freshDb() {
+export function freshDb({ crews = true } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   for (const f of MIGRATIONS) {
     const stripped = readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
@@ -59,6 +59,7 @@ export function freshDb() {
       };
     },
   };
+  if (crews) seedCrewDay(sqlite);
   return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true', ORDERS_PASSWORD: 'test-password' }, ctx: { waitUntil() {} } };
 }
 
@@ -88,8 +89,8 @@ export function earlierTodayMins(ideal = 30) {
 export const minsAgo = (m) =>
   new Date(Date.now() - m * 60000).toISOString().replace('T', ' ').slice(0, 19);
 
-/** Insert a zone session directly. Returns its id. `closed` null = still open. */
-export function seedSession(sqlite, { zone = 'Z4', cultivar = 'Sour Lifter', cut = 1, crew = null,
+/** Insert a zone session directly (Crew A unless told otherwise). Returns its id. `closed` null = still open. */
+export function seedSession(sqlite, { zone = 'Z4', cultivar = 'Sour Lifter', cut = 1, crew = 'A',
   opened = minsAgo(60), closed = null } = {}) {
   const r = sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew,
@@ -105,3 +106,21 @@ export const openSessions = (sqlite) => sessions(sqlite).filter(s => s.closed_at
 export const loads = (sqlite) => sqlite.prepare(
   "SELECT * FROM harvest_scan_log WHERE event_type='barn_load' ORDER BY id").all();
 export const lastLoad = (sqlite) => loads(sqlite).at(-1);
+
+/** Today's civil date in Pacific, the key harvest_crew_day is written under. */
+export const pacificToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+
+/**
+ * A crew's trailers and people for the day, as the first zone scan's form
+ * writes them. freshDb() seeds Crew A with every trailer, so suites written
+ * for the one-crew floor read as "Crew A, all six trailers".
+ */
+export function seedCrewDay(sqlite, { crew = 'A', trailers = '1,2,3,4,5,6', cutters = 16, drivers = 4,
+  water_spiders = 4, day = pacificToday(), isTest = 1 } = {}) {
+  sqlite.prepare(`
+    INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (harvest_date, crew, is_test) DO UPDATE SET trailers = excluded.trailers,
+      cutters = excluded.cutters, drivers = excluded.drivers, water_spiders = excluded.water_spiders
+  `).run(day, crew, trailers, cutters, drivers, water_spiders, isTest);
+}

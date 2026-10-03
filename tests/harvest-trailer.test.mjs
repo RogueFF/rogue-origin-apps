@@ -50,7 +50,7 @@ const post = (env, ctx, action, fields) => quiet(() => handleHarvestD1(
     body: new URLSearchParams(Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, String(v)]))),
   }), env, ctx));
 
-const scanZone = (env, ctx, zone) => quiet(() => handleZoneScan(new Request(`https://x/z/${zone}?lang=en`), env, ctx));
+const scanZone = (env, ctx, zone) => quiet(() => handleZoneScan(new Request(`https://x/z/${zone}?crew=A&lang=en`), env, ctx));
 
 /** Earlier today and past the repeat window; see earlierTodayMins. */
 const TODAY = earlierTodayMins();
@@ -92,7 +92,7 @@ test('an ordinary scan logs the load with no tap at all', async () => {
   const row = lastLoad(sqlite);
   assert.deepEqual(
     { trailer: row.trailer, bins: row.bins, bay: row.bay, lot: row.attributed_zone_session_id, zone: row.zone, crew: row.crew },
-    { trailer: 3, bins: 24, bay: 9, lot: r1, zone: 'R1', crew: null });
+    { trailer: 3, bins: 24, bay: 9, lot: r1, zone: 'R1', crew: 'A' }, 'the load carries the crew of its lot');
 
   const html = await (await follow(env, ctx, res)).text();
   assert.match(html, /T3: 24 bins logged/);
