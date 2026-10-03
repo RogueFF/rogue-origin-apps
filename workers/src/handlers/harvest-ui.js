@@ -123,6 +123,7 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen label.countrow{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px;font-size:20px}
 .harvest-screen label.countrow input{max-width:110px;min-height:60px;text-align:center;font-size:26px;font-weight:800;margin:0}
 .harvest-screen form:has(.trgrid) button[type=submit]{width:100%;min-height:76px;font-size:22px;margin-top:12px}
+.harvest-screen .cntgrid{grid-template-columns:repeat(5,minmax(0,1fr))}
 .harvest-screen .crewcard{border:2px solid var(--crew);border-left-width:10px;background:var(--crew-soft);border-radius:12px;padding:16px 18px;margin:18px 0}
 .harvest-screen .crewcard-head{font-size:22px;font-weight:800;color:var(--crew);margin-bottom:8px}
 .harvest-screen .crewcard-tr{font-size:18px;margin-bottom:6px}
