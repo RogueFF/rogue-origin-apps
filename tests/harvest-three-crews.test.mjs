@@ -294,3 +294,15 @@ test('status carries each crew\'s day', async () => {
   assert.deepEqual(crews.map(c => [c.crew, c.lead, c.trailers]),
     [['A', 'Nico', [3, 4]], ['B', 'Jose', [1, 5]], ['C', 'Diego', [6, 2]]]);
 });
+
+test('the barn door asks for the zone when several crews are cutting, instead of guessing the newest', async () => {
+  const { handleBarnScan } = await import(modUrl('workers/src/handlers/harvest-d1.js'));
+  const { sqlite, env, ctx } = freshDb({ crews: false });
+  threeCrews(sqlite);
+  seedSession(sqlite, { zone: 'Z4', crew: 'A' });
+  const one = await (await quiet(() => handleBarnScan(new Request('https://x/b/1?lang=en'), env, ctx))).text();
+  assert.match(one, /<option value="Z4" selected/, 'one zone open: the door follows it');
+  seedSession(sqlite, { zone: 'Z7', crew: 'B', cultivar: 'Lifter' });
+  const two = await (await quiet(() => handleBarnScan(new Request('https://x/b/1?lang=en'), env, ctx))).text();
+  assert.doesNotMatch(two, /<option value="Z\d+" selected/);
+});
