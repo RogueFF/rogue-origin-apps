@@ -13,7 +13,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshDb, quiet, seedSession, modUrl, sqliteAvailable, earlierTodayMins } from './helpers/harvest-sqlite.mjs';
+import { freshDb, quiet, seedSession, seedCrewDay, modUrl, sqliteAvailable, earlierTodayMins } from './helpers/harvest-sqlite.mjs';
 
 const { handleHarvestD1, handleZoneScan, handleTrailerScan } =
   await import(modUrl('workers/src/handlers/harvest-d1.js'));
@@ -32,6 +32,7 @@ function liveDb({ preview }) {
   const db = freshDb();
   db.sqlite.prepare(`INSERT INTO harvest_settings (key, value, updated_at) VALUES ('test_mode', 'false', datetime('now'))`).run();
   db.env = { ...db.env, HARVEST_TEST_MODE: 'false', TELEGRAM_BOT_TOKEN: 'tok', TELEGRAM_TEST_CHAT_ID: '-100live' };
+  seedCrewDay(db.sqlite, { isTest: 0 });   // Crew A on the live floor too
   if (preview) db.env.HARVEST_FORCE_TEST = 'true';
   return db;
 }
@@ -44,7 +45,7 @@ before(function () {
 
 test('a preview build writes only test rows, even with the farm\'s switch off', async () => {
   const { sqlite, env, ctx } = liveDb({ preview: true });
-  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?lang=en'), env, ctx));
+  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?crew=A&lang=en'), env, ctx));
   const lot = rows(sqlite, "event_type='enter'")[0];
   assert.equal(lot.is_test, 1);
 
@@ -59,7 +60,7 @@ test('a preview build writes only test rows, even with the farm\'s switch off', 
 
 test('the live worker does not see what the preview wrote', async () => {
   const { sqlite, env, ctx } = liveDb({ preview: true });
-  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?lang=en'), env, ctx));
+  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?crew=A&lang=en'), env, ctx));
 
   const { HARVEST_FORCE_TEST: _drop, ...live } = env;
   const d = await handleHarvestD1(new Request('https://live/api/harvest?action=status'), live, ctx).then(r => r.json());
@@ -74,7 +75,7 @@ test('a real open lot is never touched by a preview zone scan', async () => {
   const real = sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, is_test)
     VALUES ('enter', 'R1', 'Strawberry Doughnuts', 2026, 1, datetime('now','-1 hour'), 0)`).run().lastInsertRowid;
-  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?lang=en'), env, ctx));
+  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?crew=A&lang=en'), env, ctx));
   await quiet(() => handleHarvestD1(new Request('https://preview/fin?action=day_end&lang=en'), env, ctx));
   assert.equal(sqlite.prepare('SELECT closed_at FROM harvest_scan_log WHERE id = ?').get(real).closed_at, null);
 });
@@ -95,7 +96,7 @@ test('a preview build posts nothing to the floor\'s Telegram chat', async () => 
   const before = netCalls.length;
   const waits = [];
   const c = { waitUntil: (p) => waits.push(p) };
-  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?lang=en'), env, c));
+  await quiet(() => handleZoneScan(new Request('https://preview/z/Z4?crew=A&lang=en'), env, c));
   const lot = rows(sqlite, "event_type='enter'")[0];
   sqlite.prepare(`INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test, occurred_at)
     VALUES ('barn_load', 'Z4', 2026, 24, ?, 9, 3, 1, datetime('now', ?))`).run(lot.id, `-${earlierTodayMins() ?? 6} minutes`);
@@ -110,7 +111,7 @@ test('without the preview flag, the farm\'s switch still rules', async () => {
   const { sqlite, env } = liveDb({ preview: false });
   const waits = [];
   const before = netCalls.length;
-  await quiet(() => handleZoneScan(new Request('https://live/z/Z4?lang=en'), env, { waitUntil: (p) => waits.push(p) }));
+  await quiet(() => handleZoneScan(new Request('https://live/z/Z4?crew=A&lang=en'), env, { waitUntil: (p) => waits.push(p) }));
   await quiet(() => Promise.all(waits));
   assert.equal(rows(sqlite, "event_type='enter'")[0].is_test, 0);
   assert.ok(netCalls.slice(before).some(u => u.includes('telegram')), 'and the live worker still announces it');

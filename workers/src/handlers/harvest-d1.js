@@ -165,19 +165,45 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const API = '/api/harvest';
 
 /**
- * ONE CREW (Koa, 2026-09-28). There are still two cutting groups, but they are
- * always in the same zone on the same cultivar, so there is exactly one open
- * lot at a time and nothing to tell apart.
+ * THREE CREWS (Koa, 2026-10-03). Crew A (Nico), Crew B (Jose) and Crew C
+ * (Diego) each cut their own zone, so each crew has its own open lot and a
+ * zone scan closes only THAT crew's previous lot.
  *
- * The Crew A / Crew B tag this replaced is what lost loads: door 1 only matched
- * Crew A sessions, a second, untagged phone kept scanning zone signs, and every
- * trailer cut under an untagged session saved with no lot. The two tag chains
- * also left two lots open at once, because each phone only closed its own.
+ * The crew is ASKED on every zone scan — three big buttons — and never
+ * remembered on the phone. A remembered tag is what lost loads in September
+ * (the 2026-09-28 one-crew build replaced it): a second, untagged phone kept
+ * scanning signs, and every trailer cut under its sessions saved with no lot.
+ * An unpicked crew writes nothing.
  *
- * Old sessions keep whatever crew they were written with — history is not
- * rewritten — but nothing reads the tag any more, and the /c/ card now clears
- * it off a phone instead of setting it.
+ * Trailers follow their crew. On a crew's first zone scan of the day the lead
+ * names its trailers and how many cutters, drivers and water spiders it has
+ * (harvest_crew_day, migration 0042); after that a driver's scan of /t/3 goes
+ * to the open lot of whichever crew has T3 today.
+ *
+ * Old sessions keep whatever crew they were written with. Pre-September 'A'
+ * and 'B' meant the retired phone tags, not Nico's and Jose's crews.
  */
+const CREWS = [
+  { id: 'A', lead: 'Nico' },
+  { id: 'B', lead: 'Jose' },
+  { id: 'C', lead: 'Diego' },
+];
+const crewById = (raw) => CREWS.find(c => c.id === String(raw ?? '').trim().toUpperCase()) || null;
+/** "Cuadrilla A · Nico" on screen. */
+const crewLabel = (ui, id) => {
+  const c = crewById(id);
+  return c ? ui.t('crewName', { c: c.id, lead: c.lead }) : String(id ?? '?');
+};
+/** "Crew A (Nico)" in Telegram, which is read in English. */
+const crewTg = (id) => { const c = crewById(id); return c ? `Crew ${c.id} (${c.lead})` : 'no crew'; };
+
+/** Per-crew daily ranges for the first-scan form. Cutters are required. */
+const CREW_DAY_FIELDS = [
+  { key: 'cutters', label: 'crewCutters', min: 1, max: 40 },
+  { key: 'drivers', label: 'crewDrivers', min: 0, max: 12 },
+  { key: 'water_spiders', label: 'crewWS', min: 0, max: 12 },
+];
+
 const CREW_COOKIE_CLEAR = 'rf_crew=; Path=/; Max-Age=0; SameSite=Lax';
 
 /**
@@ -229,7 +255,7 @@ function stationCookie(station) {
 }
 
 const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
+  'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page', 'pipeline',
@@ -273,6 +299,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
+        case 'crew_day':
+          return await handleCrewDay(ui, db, env, ctx, request.method === 'POST' ? body : params, request.method);
         case 'cut_change':
           return await handleCutChange(ui, db, env, ctx, body, request.method);
         case 'cultivar_fix':
@@ -369,7 +397,7 @@ export async function handleHarvestD1(request, env, ctx) {
     case 'allocate':
       return await handleAllocate(db, env, params);
     case 'day_end':
-      return await handleDayEnd(ui, db, env, ctx);
+      return await handleDayEnd(ui, db, env, ctx, params.crew);
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
@@ -424,6 +452,7 @@ export async function handleZoneScan(request, env, ctx) {
     const picked = url.searchParams.get('cultivar');
     if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
     if (picked) params.cultivar = picked;
+    if (url.searchParams.get('crew')) params.crew = url.searchParams.get('crew');
 
     // One set of rules, in handleEnter: a trial / split zone with no pick gets
     // the picker back (one sign per zone beats a separate QR per cultivar — no
@@ -450,7 +479,7 @@ export async function handleDayEndScan(request, env, ctx) {
   env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
-    return await handleDayEnd(ui, env.DB, env, ctx);
+    return await handleDayEnd(ui, env.DB, env, ctx, new URL(request.url).searchParams.get('crew'));
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -797,8 +826,17 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
-  const active = await getActiveSession(db, isTest);
   const now = new Date();
+
+  // Which crew, before anything else, and never guessed: an unpicked crew gets
+  // the three buttons back and writes nothing. See CREWS.
+  const crewRaw = String(params.crew ?? '').trim();
+  const crew = crewById(crewRaw);
+  if (crewRaw && !crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: crewRaw }));
+  if (!crew) {
+    return renderPage(ui, zone, crewPickerBody(ui, zone, params));
+  }
+  const active = await getActiveSession(db, isTest, crew.id);
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
   // the planting record. A lot is zone x cultivar x cut throughout.
@@ -816,9 +854,20 @@ async function handleEnter(ui, db, env, ctx, params) {
     throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
   }
   if (!picked && isMultiCultivar(zone)) {
-    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
+    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options, crew.id));
   }
   const cultivar = picked || options[0] || null;
+
+  // The crew's first zone of the day asks for its trailers and people first.
+  // Writes nothing: the form's POST saves them and then opens the lot here.
+  const crewDay = await getCrewDay(db, isTest, crew.id);
+  if (!crewDay) {
+    const [last, today] = await Promise.all([
+      getLastCrewDay(db, isTest, crew.id), getCrewDays(db, isTest)]);
+    return renderPage(ui, crewLabel(ui, crew.id), crewDayFormBody(ui, {
+      crew: crew.id, zone, cultivar, testCut: params.test_cut, prefill: last, today,
+    }));
+  }
 
   // Idempotency guard: a phone refresh/back-button/link-preview re-hitting
   // the same zone's URL moments later shouldn't open a second session. Keyed on
@@ -826,12 +875,13 @@ async function handleEnter(ui, db, env, ctx, params) {
   // lot rather than being swallowed as a duplicate scan.
   if (active && active.zone === zone && active.cultivar === cultivar &&
       (now - parseSqliteUtc(active.occurred_at)) < DEBOUNCE_MS) {
-    return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active));
+    return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active, crewDay));
   }
 
-  // EVERY open lot, not just the newest: one crew means one open lot, and the
-  // first scan after the two-crew build collapses both old chains at once.
-  await closeOpenSessions(db, isTest);
+  // THIS crew's open lots only — the other two crews are still cutting theirs.
+  // Lots from the one-crew days (no crew) close too, so the first scans after
+  // the three-crew build leave no orphan open.
+  await closeOpenSessions(db, isTest, crew.id);
 
   const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
   // How long since this lot was last worked — only to decide whether the "new
@@ -840,46 +890,187 @@ async function handleEnter(ui, db, env, ctx, params) {
   const daysIdle = lastHere
     ? (Date.now() - parseSqliteUtc(lastHere.closed_at).getTime()) / 86400000 : null;
 
+  // The crew's cutters ride on the lot from the day's form, so person-hours
+  // and the hourly cross-check read them without another tap.
+  const cutters = crewDay.cutters ?? null;
   const result = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test)
-    VALUES ('enter', ?, ?, ?, ?, ?)
-  `, [zone, cultivar, season, cutNumber, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, headcount, headcount_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)
+  `, [zone, cultivar, season, cutNumber, crew.id, cutters, cutters, isTest]);
   const sessionId = result.lastRowId;
 
   const prevNote = active
     ? `Previous lot *${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}* auto-closed.`
-    : 'No prior zone was open.';
+    : 'No prior zone was open for this crew.';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
+    text: `🌿 ${crewTg(crew.id)} entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
-    zone, cultivar, cutNumber, sessionId,
+    zone, cultivar, cutNumber, sessionId, crew: crew.id, crewDay,
     prevZone: active ? `${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}` : null,
     daysIdle,
   }));
 }
 
 /**
- * The open lot. One crew, so one at a time; the newest wins if old data ever
- * holds two, and the next zone scan closes both.
+ * The open lot — of one crew, or (no crew) the newest anywhere. Each crew has
+ * at most one; the newest wins if old data holds two.
  */
-async function getActiveSession(db, isTest) {
+async function getActiveSession(db, isTest, crew = null) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ? ${crew ? 'AND crew = ?' : ''}
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest]);
+  `, crew ? [isTest, crew] : [isTest]);
 }
 
-/** Close every open lot. Returns how many it closed. */
-async function closeOpenSessions(db, isTest) {
+/**
+ * Close open lots. With a crew: that crew's, plus any from the one-crew days
+ * (no crew), which belong to nobody now and would otherwise stay open forever.
+ * Without: every open lot. Returns how many it closed.
+ */
+async function closeOpenSessions(db, isTest, crew = null) {
   const r = await execute(db, `
     UPDATE harvest_scan_log SET closed_at = datetime('now')
     WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
-  `, [isTest]);
+      ${crew ? 'AND (crew = ? OR crew IS NULL)' : ''}
+  `, crew ? [isTest, crew] : [isTest]);
   return r.changes || 0;
+}
+
+// ─── CREW DAY (trailers + people, once per crew per day) ─
+
+/** Today's row for one crew, or null. Pacific day. */
+async function getCrewDay(db, isTest, crew, day = pacificDay(new Date())) {
+  return queryOne(db, `
+    SELECT * FROM harvest_crew_day WHERE harvest_date = ? AND crew = ? AND is_test = ?
+  `, [day, crew, isTest]);
+}
+
+/** Every crew's row for a day. */
+async function getCrewDays(db, isTest, day = pacificDay(new Date())) {
+  return query(db, `
+    SELECT * FROM harvest_crew_day WHERE harvest_date = ? AND is_test = ? ORDER BY crew
+  `, [day, isTest]);
+}
+
+/** The crew's most recent earlier day — only to prefill the form. */
+async function getLastCrewDay(db, isTest, crew) {
+  return queryOne(db, `
+    SELECT * FROM harvest_crew_day WHERE crew = ? AND is_test = ? AND harvest_date < ?
+    ORDER BY harvest_date DESC LIMIT 1
+  `, [crew, isTest, pacificDay(new Date())]);
+}
+
+/** Today's crew row for a lot's crew, or null (a lot with no crew has none). */
+async function crewDayFor(db, session) {
+  if (!crewById(session.crew)) return null;
+  return getCrewDay(db, Number(session.is_test) ? 1 : 0, session.crew);
+}
+
+/** '3,4' -> [3, 4]; anything that is not a trailer is dropped. */
+function trailerList(s) {
+  return String(s ?? '').split(',').map(x => parseTrailer(x)).filter(Boolean);
+}
+
+/** Which crew has this trailer today, or null. */
+async function crewForTrailer(db, isTest, trailer) {
+  const rows = await getCrewDays(db, isTest);
+  const hit = rows.find(r => trailerList(r.trailers).includes(trailer));
+  return hit ? hit.crew : null;
+}
+
+/** One whole number in a field's range, or a thrown range error. */
+function parseCount(raw, f, ui) {
+  const s = String(raw ?? '').trim();
+  const n = parseInt(s, 10);
+  if (!Number.isInteger(n) || String(n) !== s || n < f.min || n > f.max) {
+    throw createError('VALIDATION_ERROR', ui.t('crewDayRange', { role: ui.t(f.label), min: f.min, max: f.max }));
+  }
+  return n;
+}
+
+/**
+ * GET: the crew-day form in edit mode (from the zone screen's "change" link).
+ * POST: save the crew's trailers and people for today. A trailer assigned here
+ * comes OFF any other crew that had it today — a trailer runs for one crew.
+ *
+ * Two ways in. From the first zone scan (zone, no session_id): save, then open
+ * the lot exactly as the scan would have. From the zone screen (session_id):
+ * save, move that open lot's cutter count with it, and show the zone screen.
+ */
+async function handleCrewDay(ui, db, env, ctx, input, method) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const crew = crewById(input.crew);
+  if (!crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: input.crew ?? '' }));
+  const sessionId = parseInt(input.session_id, 10);
+  const editing = Number.isInteger(sessionId) && sessionId > 0;
+  const session = editing ? await queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE id = ? AND event_type = 'enter' AND crew = ? AND closed_at IS NULL AND is_test = ?
+  `, [sessionId, crew.id, isTest]) : null;
+  if (editing && !session) throw createError('VALIDATION_ERROR', ui.t('crewDayLotGone'));
+
+  if (method !== 'POST') {
+    if (!editing) throw createError('VALIDATION_ERROR', ui.t('crewDayPost'));
+    const [mine, today] = await Promise.all([getCrewDay(db, isTest, crew.id), getCrewDays(db, isTest)]);
+    return renderPage(ui, crewLabel(ui, crew.id), crewDayFormBody(ui, {
+      crew: crew.id, zone: session.zone, cultivar: session.cultivar, sessionId, prefill: mine, today, editing: true,
+    }));
+  }
+
+  const trailers = TRAILERS.filter(n => truthy(input[`t${n}`]));
+  if (!trailers.length) throw createError('VALIDATION_ERROR', ui.t('crewDayPickTrailer'));
+  const counts = {};
+  for (const f of CREW_DAY_FIELDS) counts[f.key] = parseCount(input[f.key], f, ui);
+
+  const day = pacificDay(new Date());
+  const list = trailers.join(',');
+  // Take these trailers off every other crew first, then write this crew's row.
+  const others = (await getCrewDays(db, isTest, day)).filter(r => r.crew !== crew.id);
+  const moved = [];
+  const stmts = [];
+  for (const r of others) {
+    const had = trailerList(r.trailers);
+    const keep = had.filter(n => !trailers.includes(n));
+    if (keep.length !== had.length) {
+      had.filter(n => trailers.includes(n)).forEach(n => moved.push(`${trailerName(n)} from ${crewTg(r.crew)}`));
+      stmts.push(db.prepare(`UPDATE harvest_crew_day SET trailers = ?, updated_at = datetime('now') WHERE id = ?`)
+        .bind(keep.join(','), r.id));
+    }
+  }
+  stmts.push(db.prepare(`
+    INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (harvest_date, crew, is_test) DO UPDATE SET
+      trailers = excluded.trailers, cutters = excluded.cutters, drivers = excluded.drivers,
+      water_spiders = excluded.water_spiders, updated_at = datetime('now')
+  `).bind(day, crew.id, list, counts.cutters, counts.drivers, counts.water_spiders, isTest));
+  if (session) {
+    stmts.push(db.prepare(`UPDATE harvest_scan_log SET headcount = ?, headcount_at = datetime('now') WHERE id = ?`)
+      .bind(counts.cutters, session.id));
+  }
+  await db.batch(stmts);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `👥 ${crewTg(crew.id)} today: ${trailers.map(trailerName).join(', ')} · ${counts.cutters} cutters`
+      + ` · ${counts.drivers} drivers · ${counts.water_spiders} water spiders`
+      + `${moved.length ? `\nMoved: ${moved.join('; ')}` : ''}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  if (session) {
+    const crewDay = await getCrewDay(db, isTest, crew.id);
+    return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+      zone: session.zone, cultivar: session.cultivar, cutNumber: session.cut_number, sessionId: session.id,
+      crew: crew.id, crewDay, prevZone: null, flash: ui.t('crewDaySaved'),
+    }));
+  }
+  return handleEnter(ui, db, env, ctx, {
+    zone: input.zone, cultivar: input.cultivar, crew: crew.id, test_cut: input.test_cut,
+  });
 }
 
 /** The open lot in one zone — what the fallback door needs once it knows the zone. */
@@ -894,10 +1085,11 @@ async function getOpenSessionForZone(db, isTest, zone) {
 // The most recently closed session — for a given zone, or anywhere.
 // Deliberately cultivar-agnostic: at the barn nobody knows which cultivar of a
 // trial zone a load came off, and the closed session already carries it.
-async function getLastClosedAnyCultivar(db, isTest, zone = null) {
+async function getLastClosedAnyCultivar(db, isTest, zone = null, crew = null) {
   const parts = ["event_type = 'enter'", 'closed_at IS NOT NULL'];
   const args = [];
   if (zone) { parts.push('zone = ?'); args.push(zone); }
+  if (crew) { parts.push('crew = ?'); args.push(crew); }
   parts.push('is_test = ?'); args.push(isTest);
   return queryOne(db, `
     SELECT * FROM harvest_scan_log WHERE ${parts.join(' AND ')}
@@ -990,6 +1182,7 @@ async function handleCutChange(ui, db, env, ctx, body, method) {
   return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
     zone: session.zone, cultivar: session.cultivar, cutNumber: to, sessionId, prevZone: null,
     flash: ui.t('cutNow', { n: to }), headcount: session.headcount,
+    crew: session.crew, crewDay: await crewDayFor(db, session),
   }));
 }
 
@@ -1082,6 +1275,7 @@ async function handleCultivarFix(ui, db, env, ctx, params) {
     zone, cultivar, cutNumber, sessionId, prevZone: null,
     flash: ui.t('cultivarFixed', { cv: cultivar }),
     headcount: session.headcount,
+    crew: session.crew, crewDay: await crewDayFor(db, session),
   }));
 }
 
@@ -1114,30 +1308,76 @@ async function handleCrewTag(ui) {
 // this is the only new habit in the whole chain.
 
 /**
- * Close the open lot. One crew, so whoever scans the card closes it — and
- * anything old data still holds open closes with it.
+ * Close open lots at the end of the day. With one lot open, the card closes it.
+ * With several (three crews), one lead finishing early must not close the
+ * other crews' zones, so it asks which crew — or all of them. `?crew=A` closes
+ * that crew's lot; `?crew=all` closes every one.
  */
-async function handleDayEnd(ui, db, env, ctx) {
+async function handleDayEnd(ui, db, env, ctx, crewParam = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-
-  const open = await getActiveSession(db, isTest);
-  if (!open) {
+  const open = await query(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC
+  `, [isTest]);
+  if (!open.length) {
     // Not an error. Scanning twice, or scanning after the crew already moved
     // on, is a person being careful — it must not look like a fault.
     return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null));
   }
 
-  await closeOpenSessions(db, isTest);
+  const raw = String(crewParam ?? '').trim();
+  const all = raw.toLowerCase() === 'all';
+  const crew = all ? null : crewById(raw);
+  if (raw && !all && !crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: raw }));
+  if (!all && !crew && open.length > 1) {
+    return renderPage(ui, ui.t('dayEnd'), dayEndPickerBody(ui, open));
+  }
 
-  const hours = (Date.now() - parseSqliteUtc(open.occurred_at).getTime()) / 3600000;
+  const closing = crew ? open.filter(s => s.crew === crew.id) : open;
+  if (!closing.length) return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null));
+  await execute(db, `
+    UPDATE harvest_scan_log SET closed_at = datetime('now')
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+      AND id IN (${closing.map(() => '?').join(',')})
+  `, [isTest, ...closing.map(s => s.id)]);
 
+  const withHours = closing.map(s => ({
+    ...s, hours: (Date.now() - parseSqliteUtc(s.occurred_at).getTime()) / 3600000 }));
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌙 Fin del día: *${open.zone}*${open.cultivar ? ` · ${open.cultivar}` : ''}`
-      + ` cerrada tras ${hours.toFixed(1)} h.`,
+    text: '🌙 Fin del día: ' + withHours.map(s => `*${s.zone}*${s.cultivar ? ` · ${s.cultivar}` : ''}`
+      + `${s.crew ? ` (${crewTg(s.crew)})` : ''} cerrada tras ${s.hours.toFixed(1)} h`).join('; ') + '.',
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, { ...open, hours }));
+  return renderPage(ui, ui.t('dayEnd'), withHours.length === 1
+    ? dayEndBody(ui, withHours[0])
+    : dayEndManyBody(ui, withHours));
+}
+
+/** Several crews still open: one button per open lot's crew, and "all". */
+function dayEndPickerBody(ui, open) {
+  const crews = [...new Set(open.map(s => s.crew).filter(c => crewById(c)))].sort();
+  const btn = (c) => {
+    const lots = open.filter(s => s.crew === c).map(s => escapeHtml(s.zone)).join(', ');
+    return `<a class="btn crewbtn crew-${c}" href="/fin?crew=${c}&lang=${ui.lang}"><span class="crewletter">${c}</span>`
+      + `<span class="crewlead">${escapeHtml(crewById(c).lead)} · ${lots}</span></a>`;
+  };
+  return `
+<h1>${ui.t('dayEndWhich')}</h1>
+<div class="crewgrid">${crews.map(btn).join('')}
+<a class="btn alt cvbtn" href="/fin?crew=all&lang=${ui.lang}">${ui.t('dayEndAll')}</a></div>`;
+}
+
+function dayEndManyBody(ui, closed) {
+  const rows = closed.map(s => `<div class="lotmeta"><strong>${escapeHtml(s.zone)}${
+    s.cultivar ? ` · ${escapeHtml(s.cultivar)}` : ''}</strong> · ${ui.t('cut', { n: s.cut_number })}${
+    s.crew ? ` · ${escapeHtml(crewLabel(ui, s.crew))}` : ''}</div>`).join('');
+  return `
+<h1>✅ ${ui.t('dayEndClosedN', { n: closed.length })}</h1>
+<div class="status">${rows}</div>
+<p class="note">${ui.t('dayEndTomorrow')}</p>
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 function dayEndBody(ui, closed) {
@@ -1235,10 +1475,23 @@ async function pickedLot(ui, db, isTest, raw, zone = null) {
  * A null lot means nothing is open and nothing just closed — the driver has to
  * say which lot, because the alternative is bins that belong to no lot.
  */
-async function proposeLot(db, isTest) {
-  const recent = await getLastClosedAnyCultivar(db, isTest);
-  if (inBarnGrace(recent)) return { lot: recent, viaGrace: true };
-  return { lot: await getActiveSession(db, isTest), viaGrace: false };
+async function proposeLot(db, isTest, trailer) {
+  // THREE CREWS: the trailer's crew today decides, and the grace window is that
+  // crew's — crew A changing zones must not pull crew B's trailer onto A's old
+  // lot. A trailer on no crew today is ASKED, never sent to the newest lot.
+  const crew = trailer ? await crewForTrailer(db, isTest, trailer) : null;
+  if (!crew) {
+    // A day nobody has set crews up yet is still a one-crew day (the build
+    // shipped mid-shift, 2026-10-03, with all three crews in one zone): the
+    // open lot, as before. Once any crew is set up, an unassigned trailer asks.
+    if ((await getCrewDays(db, isTest)).length) return { lot: null, viaGrace: false, crew: null };
+    const recentAny = await getLastClosedAnyCultivar(db, isTest);
+    if (inBarnGrace(recentAny)) return { lot: recentAny, viaGrace: true, crew: null };
+    return { lot: await getActiveSession(db, isTest), viaGrace: false, crew: null };
+  }
+  const recent = await getLastClosedAnyCultivar(db, isTest, null, crew);
+  if (inBarnGrace(recent)) return { lot: recent, viaGrace: true, crew };
+  return { lot: await getActiveSession(db, isTest, crew), viaGrace: false, crew };
 }
 
 /**
@@ -1299,15 +1552,15 @@ async function loadNumberFor(db, isTest, zone, occurredAt, id) {
  */
 async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = null, isTest, cutNote }) {
   const res = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, session ? session.id : null, bay, trailer, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, crew, is_test)
+    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [zone, getSeason(), bins, session ? session.id : null, bay, trailer, session?.crew ?? null, isTest]);
 
   const loadNumber = await loadNumberFor(db, isTest, zone, new Date(), res.lastRowId);
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🚚 ${trailer ? `${trailerName(trailer)} · ` : ''}Load: ${bins} bins → *${zone}* (${cutNote})`
+    text: `🚚 ${trailer ? `${trailerName(trailer)} · ` : ''}${session?.crew ? `${crewTg(session.crew)} · ` : ''}Load: ${bins} bins → *${zone}* (${cutNote})`
       + `${bay ? ` · bay ${bay}` : ''}. Load #${loadNumber} today for this zone.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
@@ -1421,7 +1674,7 @@ export async function handleTrailerScan(request, env, ctx) {
 async function logTrailerNow(ui, db, env, ctx, trailer, how) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [proposal, lastFill] = await Promise.all([
-    proposeLot(db, isTest), getLastFilledBay(db, isTest)]);
+    proposeLot(db, isTest, trailer), getLastFilledBay(db, isTest)]);
   const bayToday = lastFill && lastFill.occurred_at &&
     pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
     ? lastFill.bay : null;
@@ -1455,7 +1708,7 @@ async function handleTrailerAgain(ui, db, env, ctx, body, method) {
 async function trailerFormPage(ui, db, env, trailer, keep = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [proposal, lastFill, recentLots] = await Promise.all([
-    proposeLot(db, isTest),
+    proposeLot(db, isTest, trailer),
     getLastFilledBay(db, isTest),
     getRecentEnterSessions(db, isTest),
   ]);
@@ -1499,7 +1752,7 @@ async function handleTrailerLog(ui, db, env, ctx, body) {
   const partial = String(body.partial_bins ?? '').trim();
   const bins = partial ? parseBins(partial, FULL - 1, 'partialRange', ui) : FULL;
 
-  const proposal = await proposeLot(db, isTest);
+  const proposal = await proposeLot(db, isTest, trailer);
   const asProposed = !!(proposal.lot && proposal.lot.id === lot.id);
   const cutNote = `cut ${lot.cut_number}${asProposed ? (proposal.viaGrace ? ', just-closed lot' : '') : ', chosen by driver'}`;
   const saved = await recordLoad(db, env, ctx, {
@@ -1516,7 +1769,7 @@ async function getTrailerLoad(db, isTest, rawId) {
   const id = parseInt(rawId, 10);
   if (!Number.isInteger(id) || id <= 0) return null;
   return queryOne(db, `
-    SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut
+    SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut, s.crew AS lot_crew
     FROM harvest_scan_log l
     JOIN harvest_scan_log s ON s.id = l.attributed_zone_session_id
     WHERE l.id = ? AND l.event_type = 'barn_load' AND l.trailer IS NOT NULL AND l.is_test = ?
@@ -1580,13 +1833,14 @@ async function handleTrailerFix(ui, db, env, ctx, body) {
   // chose it, and an old-but-just-closed lot must not block a bay fix.
   const lotRaw = String(body.lot ?? '').trim();
   const lot = !lotRaw || Number(lotRaw) === row.attributed_zone_session_id
-    ? { id: row.attributed_zone_session_id, zone: row.zone }
+    ? { id: row.attributed_zone_session_id, zone: row.zone, crew: row.lot_crew }
     : await pickedLot(ui, db, isTest, lotRaw);
 
+  // The load's crew follows its lot, so a load moved to crew B's lot counts for B.
   const r = await execute(db, `
-    UPDATE harvest_scan_log SET bay = ?, bins = ?, attributed_zone_session_id = ?, zone = ?
+    UPDATE harvest_scan_log SET bay = ?, bins = ?, attributed_zone_session_id = ?, zone = ?, crew = ?
     WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
-  `, [bay, bins, lot.id, lot.zone, row.id, isTest]);
+  `, [bay, bins, lot.id, lot.zone, lot.crew ?? null, row.id, isTest]);
   if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
 
   const changed = [
@@ -3404,8 +3658,14 @@ async function getStatus(db, env) {
   // Carried on the status poll so a tablet left up all day keeps seeing lots
   // that have closed since it loaded.
   const recent = await getRecentEnterSessions(db, isTest);
+  const crewDays = await getCrewDays(db, isTest);
 
   return successResponse({
+    // Each crew's trailers and people today, as the leads entered them.
+    crews_today: crewDays.map(r => ({
+      crew: r.crew, lead: crewById(r.crew)?.lead ?? null, trailers: trailerList(r.trailers),
+      cutters: r.cutters, drivers: r.drivers, water_spiders: r.water_spiders, updated_at: r.updated_at,
+    })),
     success: true,
     season: getSeason(),
     is_test: !!isTest,
@@ -4550,6 +4810,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   /* Cultivar picker — trial zones can hold 15 cultivars, so a single column of
      full-width targets beats a cramped grid for a gloved thumb. */
   .cvgrid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+
   a.cvbtn { padding: 20px 14px; font-size: 1.15rem; text-align: left; }
   a.findrow { text-align: left; padding: 14px; }
   a.findrow .hint { display: block; margin-top: 3px; }
@@ -4921,25 +5182,112 @@ function headcountScript(ui) {
  * Cultivar picker — shown after scanning a trial/split zone's sign, before the
  * session opens. Big tap targets: this is a gloved thumb in a field.
  */
-function cultivarPickerBody(ui, zone, options) {
+function cultivarPickerBody(ui, zone, options, crew = null) {
   const buttons = options.map(cv =>
-    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
+    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}${crew ? `&crew=${crew}` : ''}&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
   ).join('');
   return `
 <h1>${escapeHtml(zone)}</h1>
-<p class="sub">${ui.t('nCultivars', { n: options.length })}</p>
+<p class="sub">${crew ? `${escapeHtml(crewLabel(ui, crew))} · ` : ''}${ui.t('nCultivars', { n: options.length })}</p>
 <p class="note">${ui.t('whichCutting')}</p>
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null }) {
+/** "Z4 · Sour Lifter · Corte 1 · Cuadrilla A · Nico" — every lot picker. */
+function lotLabelText(ui, l) {
+  return `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}${
+    crewById(l.crew) ? ` · ${escapeHtml(crewLabel(ui, l.crew))}` : ''}`;
+}
+
+/**
+ * Which crew — the first thing a zone sign asks. One big button per crew, in
+ * its own colour so a lead finds theirs before reading it. Links, so a tap is
+ * one GET carrying everything the scan already had (cultivar, test cut).
+ */
+function crewPickerBody(ui, zone, params = {}) {
+  const keep = ['cultivar', 'test_cut'].filter(k => params[k])
+    .map(k => `&${k}=${encodeURIComponent(params[k])}`).join('');
+  const buttons = CREWS.map(c =>
+    `<a class="btn crewbtn crew-${c.id}" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}&crew=${c.id}${keep}">`
+    + `<span class="crewletter">${c.id}</span><span class="crewlead">${escapeHtml(c.lead)}</span></a>`
+  ).join('');
+  return `
+<h1>${escapeHtml(zone)}</h1>
+<p class="sub">${ui.t('whichCrew')}</p>
+<div class="crewgrid">${buttons}</div>
+<p class="note"><span class="hint">${ui.t('whichCrewSub')}</span></p>`;
+}
+
+/**
+ * The crew's day, once: which trailers run for it and how many people it has.
+ * On the first zone scan it opens the lot when saved; from the zone screen's
+ * "change" link it edits in place. Prefilled from the crew's last day (or
+ * today's, when editing) so a crew that did not change taps once.
+ */
+function crewDayFormBody(ui, { crew, zone, cultivar, testCut = null, sessionId = null, prefill = null, today = [], editing = false }) {
+  const mine = prefill ? trailerList(prefill.trailers) : [];
+  const elsewhere = new Map();
+  for (const r of today) {
+    if (r.crew === crew) continue;
+    for (const n of trailerList(r.trailers)) elsewhere.set(n, r.crew);
+  }
+  // Yesterday's trailer that another crew has taken today starts unticked.
+  const ticked = (n) => editing ? mine.includes(n) : (mine.includes(n) && !elsewhere.has(n));
+  const tiles = TRAILERS.map(n => `<label class="trtile"><input type="checkbox" name="t${n}" value="1"${
+    ticked(n) ? ' checked' : ''}><span class="trname">${trailerName(n)}</span>${
+    elsewhere.has(n) ? `<span class="trwith">${ui.t('crewTrailerWith', { c: elsewhere.get(n) })}</span>` : ''}</label>`).join('');
+  const counts = CREW_DAY_FIELDS.map(f => {
+    const v = prefill && prefill[f.key] != null ? prefill[f.key] : '';
+    return `<label class="countrow" for="cd_${f.key}"><span>${ui.t(f.label)}</span>
+  <input id="cd_${f.key}" name="${f.key}" type="number" inputmode="numeric" min="${f.min}" max="${f.max}" required value="${v}"></label>`;
+  }).join('');
+  const hidden = [
+    ['crew', crew], ['zone', zone], ['cultivar', cultivar], ['test_cut', testCut], ['session_id', sessionId],
+  ].filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<input type="hidden" name="${k}" value="${escapeHtml(v)}">`).join('');
+  return `
+<h1>${escapeHtml(crewLabel(ui, crew))}</h1>
+<p class="sub">${ui.t(editing ? 'crewDayEditTitle' : 'crewDayTitle')} · ${escapeHtml(zone)}${cultivar ? ` · ${escapeHtml(cultivar)}` : ''}</p>
+${editing ? '' : `<p class="note">${ui.t('crewDaySub')}</p>`}
+<form method="POST" action="${API}?action=crew_day&lang=${ui.lang}"
+      onsubmit="if(!this.querySelector('.trgrid input:checked')){alert(${escapeHtml(JSON.stringify(ui.t('crewDayPickTrailer')))});return false}var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  ${hidden}
+  <h2>${ui.t('crewTrailers')}</h2>
+  <div class="trgrid">${tiles}</div>
+  ${counts}
+  <button class="btn" type="submit">${editing ? ui.t('crewDaySave') : ui.t('crewDayOpen', { zone: escapeHtml(zone) })}</button>
+</form>`;
+}
+
+/** The crew's day at a glance on the zone screen, with the way to change it. */
+function crewCard(ui, crew, crewDay, sessionId) {
+  if (!crewById(crew)) return '';
+  const tr = crewDay ? trailerList(crewDay.trailers).map(trailerName).join(' · ') : '—';
+  const n = (k) => (crewDay && crewDay[k] != null ? crewDay[k] : '—');
+  return `
+<div class="crewcard crew-${crew}">
+  <div class="crewcard-head">${escapeHtml(crewLabel(ui, crew))}</div>
+  <div class="crewcard-tr">${ui.t('crewSummaryTrailers')}: <strong>${tr}</strong></div>
+  <div class="crewcard-n"><span><strong>${n('cutters')}</strong> ${ui.t('crewCutters')}</span>
+    <span><strong>${n('drivers')}</strong> ${ui.t('crewDrivers')}</span>
+    <span><strong>${n('water_spiders')}</strong> ${ui.t('crewWS')}</span></div>
+  <a class="mini" href="${API}?action=crew_day&lang=${ui.lang}&crew=${crew}&session_id=${sessionId}">✏️ ${ui.t('crewDayEdit')}</a>
+</div>`;
+}
+
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null, crew = null, crewDay = null }) {
+  // A crew lot carries its cutters from the crew card; the old grid stays only
+  // for a lot with no crew (nothing opens one any more, but old links exist).
+  const people = crewById(crew)
+    ? crewCard(ui, crew, crewDay, sessionId)
+    : `<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>`;
   return `
 <h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
-<p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
+<p class="sub">${escapeHtml(zone)} · ${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
-<p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
-<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${people}
 ${cutChangeBlock(ui, sessionId, cutNumber, daysIdle)}
 ${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
@@ -4994,15 +5342,18 @@ function cultivarFixBlock(ui, zone, sessionId, current) {
 </details>`;
 }
 
-function alreadyEnteredBody(ui, active) {
+function alreadyEnteredBody(ui, active, crewDay = null) {
+  const people = crewById(active.crew)
+    ? crewCard(ui, active.crew, crewDay, active.id)
+    : `<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${headcountScript(ui)}`;
   return `
 <h1>${ui.t('alreadyEntered', { zone: active.zone })}</h1>
 <p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}${ui.t('cut', { n: active.cut_number })}</p>
 <p class="note">${ui.t('alreadyEnteredAt', { t: active.occurred_at })}</p>
-<p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
-<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
-${headcountScript(ui)}`;
+${people}`;
 }
 
 function headcountBody(ui, { zone, cutNumber, sessionId, count, cultivar = null }) {
@@ -5054,7 +5405,9 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
   // field selects it, so a partial is typed over rather than edited around.
   const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
   // Follow the open lot; an older arriving trailer uses a manual override.
-  const preselect = active ? active.zone : null;
+  // With several crews' zones open there is no one lot to follow, so the door
+  // asks for the zone rather than guessing the newest (three crews, 2026-10-03).
+  const preselect = active && openZones.length <= 1 ? active.zone : null;
 
   // Only zones harvest actually counts — offering GH here would let a load be
   // logged against a zone no bag will ever be tagged from.
@@ -5129,6 +5482,8 @@ function barnLiveScript(ui) {
   const text = {
     live: es ? 'Zona abierta: ' : 'Open zone: ',
     none: es ? 'Sin zona abierta. Elige una zona.' : 'No zone open. Choose a zone.',
+    several: es ? 'Hay varias zonas abiertas: ' : 'Several zones open: ',
+    pick: es ? '. Elige la zona de esta traila.' : '. Choose the zone this trailer came from.',
     manual: es ? 'Zona manual — se conserva para cargas anteriores. Pulsa Seguir para volver.' : 'Manual zone — held for arriving loads. Press Follow to resume automatic selection.',
     offline: es ? 'No se pudo actualizar la zona. Confírmala antes de registrar.' : 'Zone update unavailable. Confirm the zone before logging.',
     saving: es ? 'Registrando…' : 'Recording…',
@@ -5150,6 +5505,11 @@ function barnLiveScript(ui) {
   var openZones = [], recentLots = null;
   function applyActive() {
     if (manual || busy) return;
+    if (openZones.length > 1) {
+      zone.value = '';
+      status.textContent = T.several + openZones.join(', ') + T.pick;
+      return;
+    }
     zone.value = latest ? latest.zone : '';
     status.textContent = latest ? T.live + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
   }
@@ -5281,7 +5641,7 @@ ${switchNote}
 function trailerFormBody(ui, { trailer, proposal, recentLots, keep, lastBay, bayToday }) {
   const name = trailerName(trailer);
   const FULL = CONSTANTS.binsPerTrailer.value;
-  const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
+  const lotLabel = (l) => lotLabelText(ui, l);
 
   const lots = [...recentLots];
   if (proposal.lot && !lots.some(l => l.id === proposal.lot.id)) lots.unshift(proposal.lot);
@@ -5293,7 +5653,9 @@ function trailerFormBody(ui, { trailer, proposal, recentLots, keep, lastBay, bay
   const lotCard = proposal.lot
     ? `<div class="status trailer-lot"><div class="lotmeta"><strong>→ ${lotLabel(proposal.lot)}</strong></div>${
         proposal.viaGrace ? `<p class="note">${ui.t('trailerGrace')}</p>` : ''}</div>`
-    : `<p class="note">${ui.t('trailerNoLot')}</p>`;
+    : `<p class="note">${proposal.crew
+      ? ui.t('trailerCrewNoLot', { crew: escapeHtml(crewLabel(ui, proposal.crew)) })
+      : ui.t('trailerUnassigned', { t: name })}</p>`;
   const lotPicker = proposal.lot
     ? `<details class="lotother"${keep && keep.lot !== proposal.lot.id ? ' open' : ''}><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>`
     : `<fieldset class="lotother"><legend>${ui.t('trailerWhichLot')}</legend>${lotRadios || `<p class="note">${ui.t('trailerNoRecent')}</p>`}</fieldset>`;
@@ -5345,8 +5707,8 @@ ${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_l
 function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh = false }) {
   const name = trailerName(row.trailer);
   const FULL = CONSTANTS.binsPerTrailer.value;
-  const lotLabel = (l) => `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}`;
-  const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut };
+  const lotLabel = (l) => lotLabelText(ui, l);
+  const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut, crew: row.lot_crew };
 
 
   let fix = `<p class="note">${ui.t('trailerFixClosed')}</p>`;
