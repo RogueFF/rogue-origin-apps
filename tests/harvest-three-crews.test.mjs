@@ -150,17 +150,41 @@ test('giving a crew a trailer takes it off the crew that had it today', async ()
   assert.ok(a);
 });
 
-test("the form shows a trailer another crew has, and leaves yesterday's pick of it unticked", async () => {
+const yesterday = () => new Date(Date.now() - 36 * 3600e3).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+
+test('the form names the trailers a crew keeps if it picks none, and shows who has the rest', async () => {
   const { sqlite, env, ctx } = freshDb({ crews: false });
-  const yesterday = new Date(Date.now() - 36 * 3600e3).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  seedCrewDay(sqlite, { crew: 'C', trailers: '6,2', day: yesterday });
+  seedCrewDay(sqlite, { crew: 'C', trailers: '6,2', day: yesterday() });
   seedCrewDay(sqlite, { crew: 'A', trailers: '2,3' });   // Nico took T2 today
   const html = await (await zone(env, ctx, 'Z9', '&crew=C')).text();
-  assert.match(html, /name="t6" value="1" checked/, "yesterday's trailer is prefilled");
+  assert.doesNotMatch(html, /name="t\d" value="1" checked/, 'nothing pre-ticked: the lead picks, or keeps');
+  assert.match(html, /Pick none to keep the last ones: T6</);
   assert.match(html, /name="t2" value="1"><span class="trname">T2<\/span><span class="trwith">now with A/);
 });
 
-test('the crew card edits the day and the open lot\'s cutters together', async () => {
+test("picking no trailers keeps the crew's last ones, never one another crew already has today", async () => {
+  const { sqlite, env, ctx } = freshDb({ crews: false });
+  seedCrewDay(sqlite, { crew: 'C', trailers: '6,2', day: yesterday() });
+  seedCrewDay(sqlite, { crew: 'A', trailers: '2,3' });
+  const res = await post(env, ctx, 'crew_day', { crew: 'C', zone: 'Z9', cutters: 6, water_spiders: 2, drivers: 2 });
+  assert.equal(res.status, 200);
+  const byCrew = Object.fromEntries(crewDays(sqlite).filter(r => r.harvest_date === pacificToday()).map(r => [r.crew, r.trailers]));
+  assert.deepEqual(byCrew, { A: '2,3', C: '6' });
+  assert.equal(openSessions(sqlite)[0].crew, 'C');
+});
+
+test('the people are tap buttons in the usual ranges, nothing pre-picked', async () => {
+  const { env, ctx } = freshDb({ crews: false });
+  const html = await (await zone(env, ctx, 'Z4', '&crew=A')).text();
+  const vals = (k) => [...html.matchAll(new RegExp(`name="${k}" value="(\\d+)" required>`, 'g'))].map(m => Number(m[1]));
+  assert.deepEqual(vals('cutters'), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(vals('water_spiders'), [0, 1, 2, 3, 4]);
+  assert.deepEqual(vals('drivers'), [1, 2, 3, 4, 5]);
+  assert.ok(html.indexOf('>Cutters<') < html.indexOf('>Water spiders<'));
+  assert.ok(html.indexOf('>Water spiders<') < html.indexOf('>Drivers<'));
+});
+
+test('the crew card changes trailers only; the people stay as counted', async () => {
   const { sqlite, env, ctx } = freshDb({ crews: false });
   threeCrews(sqlite);
   await zone(env, ctx, 'Z4', '&crew=A');
@@ -168,12 +192,12 @@ test('the crew card edits the day and the open lot\'s cutters together', async (
   const form = await (await quiet(() => handleHarvestD1(
     new Request(`https://x/api/harvest?action=crew_day&lang=en&crew=A&session_id=${lot.id}`), env, ctx))).text();
   assert.match(form, /name="t3" value="1" checked/);
-  assert.match(form, /name="cutters"[^>]*value="6"/);
+  assert.doesNotMatch(form, /name="cutters"/, 'people changes go on the hourly report');
 
-  const html = await (await post(env, ctx, 'crew_day', {
-    crew: 'A', session_id: lot.id, t3: 1, t4: 1, cutters: 8, drivers: 2, water_spiders: 2 })).text();
+  const html = await (await post(env, ctx, 'crew_day', { crew: 'A', session_id: lot.id, t3: 1, cutters: 8 })).text();
   assert.match(html, /Saved/);
-  assert.equal(openSessions(sqlite)[0].headcount, 8);
+  assert.equal(crewDays(sqlite).find(r => r.crew === 'A').trailers, '3');
+  assert.equal(openSessions(sqlite)[0].headcount, 6, 'the count from the first scan stands');
   assert.equal(sessions(sqlite).length, 1, 'editing opens no new lot');
 });
 
