@@ -5397,7 +5397,9 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
   // field selects it, so a partial is typed over rather than edited around.
   const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
   // Follow the open lot; an older arriving trailer uses a manual override.
-  const preselect = active ? active.zone : null;
+  // With several crews' zones open there is no one lot to follow, so the door
+  // asks for the zone rather than guessing the newest (three crews, 2026-10-03).
+  const preselect = active && openZones.length <= 1 ? active.zone : null;
 
   // Only zones harvest actually counts — offering GH here would let a load be
   // logged against a zone no bag will ever be tagged from.
@@ -5472,6 +5474,8 @@ function barnLiveScript(ui) {
   const text = {
     live: es ? 'Zona abierta: ' : 'Open zone: ',
     none: es ? 'Sin zona abierta. Elige una zona.' : 'No zone open. Choose a zone.',
+    several: es ? 'Hay varias zonas abiertas: ' : 'Several zones open: ',
+    pick: es ? '. Elige la zona de esta traila.' : '. Choose the zone this trailer came from.',
     manual: es ? 'Zona manual — se conserva para cargas anteriores. Pulsa Seguir para volver.' : 'Manual zone — held for arriving loads. Press Follow to resume automatic selection.',
     offline: es ? 'No se pudo actualizar la zona. Confírmala antes de registrar.' : 'Zone update unavailable. Confirm the zone before logging.',
     saving: es ? 'Registrando…' : 'Recording…',
@@ -5493,6 +5497,11 @@ function barnLiveScript(ui) {
   var openZones = [], recentLots = null;
   function applyActive() {
     if (manual || busy) return;
+    if (openZones.length > 1) {
+      zone.value = '';
+      status.textContent = T.several + openZones.join(', ') + T.pick;
+      return;
+    }
     zone.value = latest ? latest.zone : '';
     status.textContent = latest ? T.live + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
   }
