@@ -42,7 +42,7 @@ const MIGRATIONS = [
   '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
   '0032-harvest-hourly.sql', '0033-harvest-sms-queue.sql', '0034-harvest-channel.sql',
   '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
-  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0040-harvest-load-trailer.sql',
+  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0040-harvest-load-trailer.sql', '0042-harvest-crew-day.sql',
 ];
 
 function freshEnv() {
@@ -54,6 +54,8 @@ function freshEnv() {
   }
   sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
   sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER)');
+  sqlite.prepare("INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test) VALUES (?, 'A', '1,2,3,4,5,6', 16, 4, 4, 1)")
+    .run(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }));
   const DB = {
     async batch(stmts) { return Promise.all(stmts.map(st => st.run())); },
     prepare(sql) {
@@ -135,7 +137,7 @@ test('the long URLs keep working — nothing printed or bookmarked breaks', asyn
 test('the scan routes are untouched by the new table', async () => {
   const { env, ctx } = freshEnv();
 
-  const zone = await (await get(env, ctx, '/z/Z4?lang=en')).text();
+  const zone = await (await get(env, ctx, '/z/Z4?crew=A&lang=en')).text();
   assert.match(zone, /Entered Z4/, '/z/ still opens a zone rather than routing as a short screen');
 
   const barn = await (await get(env, ctx, '/b?lang=en')).text();

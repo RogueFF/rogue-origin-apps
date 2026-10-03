@@ -32,7 +32,7 @@ const { handleHarvestD1, handleZoneScan, handleCrewScan, handleBarnScan,
 
 /** A zone sign scanned from a phone that may still carry an old crew tag. */
 const scanZone = (env, ctx, zone, crew = null) => quiet(() => handleZoneScan(
-  new Request(`https://x/z/${zone}?lang=en`, {
+  new Request(`https://x/z/${zone}?crew=A&lang=en`, {
     headers: crew ? { cookie: `rf_crew=${crew}` } : {},
   }), env, ctx));
 
@@ -79,10 +79,12 @@ test('the first scan after the two-crew build closes BOTH old chains', async () 
   assert.deepEqual(openSessions(sqlite).map(s => s.zone), ['Z4']);
 });
 
-test('a new lot is written with no crew, even from a phone with an old tag', async () => {
+test('a new lot carries the crew the lead tapped, never the phone\'s old tag', async () => {
+  // Three crews (2026-10-03): the crew rides in the tapped link (crew=A), and
+  // an old rf_crew=B cookie on the phone changes nothing.
   const { sqlite, env, ctx } = freshDb();
   await scanZone(env, ctx, 'Z4', 'B');
-  assert.equal(openSessions(sqlite)[0].crew, null);
+  assert.equal(openSessions(sqlite)[0].crew, 'A');
 });
 
 test('re-scanning the open zone later is a resumption, not a new cut', async () => {
@@ -104,11 +106,12 @@ test('a refresh inside the debounce opens nothing new', async () => {
   assert.equal(sessions(sqlite).length, 1);
 });
 
-test('no screen names a crew any more', async () => {
+test('the zone screen names the crew that was tapped, with its lead', async () => {
   const { env, ctx } = freshDb();
-  const html = await (await scanZone(env, ctx, 'Z4', 'A')).text();
+  const html = await (await scanZone(env, ctx, 'Z4', 'B')).text();
   const visible = html.replace(/<style[\s\S]*?<\/style>/g, '');
-  assert.doesNotMatch(visible, /Crew A|Cuadrilla A/);
+  assert.match(visible, /Crew A · Nico/);
+  assert.doesNotMatch(visible, /Crew B/, 'the phone\'s old tag is not a crew');
 });
 
 test('status reports the one open lot', async () => {
@@ -193,12 +196,14 @@ test('the cut cannot change by a fetched link, on a closed lot, or once tags are
   assert.equal(sessions(sqlite)[0].cut_number, 1, 'nothing moved');
 });
 
-test('the cutter buttons run 6 to 20 — the crew is 16-18, one team is 8, 1-5 never happens', async () => {
-  const { env, ctx } = freshDb();
+test('the zone screen shows the crew\'s people from the day\'s form, not a cutter grid', async () => {
+  // Cutters are entered once per crew per day (with drivers and water
+  // spiders) and ride on every lot the crew opens; the crew card changes them.
+  const { sqlite, env, ctx } = freshDb();
   const html = await (await scanZone(env, ctx, 'Z5')).text();
-  const counts = [...html.matchAll(/action=headcount&session_id=\d+&count=(\d+)"/g)].map(m => Number(m[1]));
-  assert.deepEqual(counts, Array.from({ length: 15 }, (_, i) => i + 6));
-  assert.doesNotMatch(html, /13\+/);
+  assert.doesNotMatch(html, /action=headcount&session_id=\d+&count=/);
+  assert.match(html, /<strong>16<\/strong> Cutters/);
+  assert.equal(openSessions(sqlite)[0].headcount, 16, 'the lot carries the crew\'s cutters');
 });
 
 // --- the retired crew card ---------------------------------------------------
@@ -212,7 +217,7 @@ test('the old crew card clears the tag off the phone and says why', async () => 
     assert.equal(res.status, 200, `/c/${card}`);
     const all = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')];
     assert.match(all.join(' | '), /rf_crew=; Path=\/; Max-Age=0/);
-    assert.match(await res.text(), /Crew A and B are retired/);
+    assert.match(await res.text(), /This card is no longer used/);
   }
 });
 
@@ -237,11 +242,11 @@ test('a lot opened under an old crew tag takes the load at either door', async (
   assert.equal(lastLoad(sqlite).attributed_zone_session_id, z10);
 });
 
-test('a door load records no crew', async () => {
+test('a door load carries the crew of the lot it lands on, not the door\'s', async () => {
   const { sqlite, env, ctx } = freshDb();
   await scanZone(env, ctx, 'Z4');
   await logLoadAt(env, ctx, 'Z4', 24, 1);
-  assert.equal(lastLoad(sqlite).crew, null);
+  assert.equal(lastLoad(sqlite).crew, 'A');
 });
 
 test('every door follows the open lot', async () => {
