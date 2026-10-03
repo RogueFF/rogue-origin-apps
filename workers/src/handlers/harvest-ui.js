@@ -106,6 +106,29 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .crew-stepper{display:flex;align-items:center;gap:10px;margin:8px 0 20px}
 .harvest-screen .crew-stepper input{margin:0;max-width:100px;text-align:center}
 .harvest-screen .crew-stepper button{min-width:50px;min-height:50px;border:1px solid #c5d1b9;border-radius:8px;background:#e9eedf;color:#304e3c;font-size:26px}
+.harvest-screen .crew-A{--crew:#2f7a4f;--crew-soft:#e3f0e6}.harvest-screen .crew-B{--crew:#2f6596;--crew-soft:#e2ecf6}.harvest-screen .crew-C{--crew:#a35a1c;--crew-soft:#f6e8da}
+.harvest-screen .crewgrid{display:grid;gap:14px;margin:8px 0 16px}
+.harvest-screen a.crewbtn{display:flex;align-items:center;gap:20px;min-height:96px;padding:16px 22px;text-decoration:none;text-align:left;background:var(--crew);border-color:var(--crew);font-size:28px}
+.harvest-screen a.crewbtn:hover{background:var(--crew);filter:brightness(1.1)}
+.harvest-screen .crewletter{flex:none;display:grid;place-items:center;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.22);font-size:34px;font-weight:800}
+.harvest-screen .crewlead{font-weight:800}
+.harvest-screen .trgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 22px}
+.harvest-screen label.trtile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:76px;border:2px solid #c5d1b9;border-radius:12px;background:#fff;cursor:pointer}
+.harvest-screen label.trtile input{position:absolute;opacity:0;inset:0;margin:0;width:100%;height:100%;cursor:pointer}
+.harvest-screen label.trtile .trname{font-size:28px;font-weight:800;color:#304e3c}
+.harvest-screen label.trtile .trwith{font-size:13px;font-weight:600;color:#8a6a1c}
+.harvest-screen label.trtile:has(input:checked){background:#304e3c;border-color:#304e3c}
+.harvest-screen label.trtile:has(input:checked) :is(.trname,.trwith){color:#fff}
+.harvest-screen label.trtile:has(input:focus-visible){box-shadow:0 0 0 3px #9ba98c}
+.harvest-screen label.countrow{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 12px;font-size:20px}
+.harvest-screen label.countrow input{max-width:110px;min-height:60px;text-align:center;font-size:26px;font-weight:800;margin:0}
+.harvest-screen form:has(.trgrid) button[type=submit]{width:100%;min-height:76px;font-size:22px;margin-top:12px}
+.harvest-screen .crewcard{border:2px solid var(--crew);border-left-width:10px;background:var(--crew-soft);border-radius:12px;padding:16px 18px;margin:18px 0}
+.harvest-screen .crewcard-head{font-size:22px;font-weight:800;color:var(--crew);margin-bottom:8px}
+.harvest-screen .crewcard-tr{font-size:18px;margin-bottom:6px}
+.harvest-screen .crewcard-n{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:14px;color:#40543f;font-size:16px}
+.harvest-screen .crewcard-n strong{font-size:22px;color:#263f32}
+.harvest-screen .crewcard a.mini{display:inline-flex;align-items:center;min-height:48px;padding:10px 16px;border-radius:9px;background:#fff;border:1px solid #c0cfb5;color:#304e3c;font-weight:700;text-decoration:none}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
 @media(min-width:900px){.harvest-screen:has(#intakeForm),.harvest-screen:has(.crew-stepper),.harvest-screen:has(.grid),.harvest-screen:has(#printBtn){max-width:800px}}
 @media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:13px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 12px;font-size:14px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}
