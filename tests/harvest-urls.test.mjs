@@ -125,7 +125,7 @@ test('the takedown screens have none either', async () => {
   }
 });
 
-test('a cutter count changed from a scanned sign is actually recorded', async () => {
+test('a trailer change made from a scanned sign is actually recorded', async () => {
   const { sqlite, env, ctx } = freshDb();
   const enter = await (await quiet(() =>
     handleZoneScan(new Request('https://x/z/Z4?crew=A&lang=en'), env, ctx))).text();
@@ -133,7 +133,7 @@ test('a cutter count changed from a scanned sign is actually recorded', async ()
   // Follow the link the crew lead's thumb actually lands on, resolved the way
   // a browser resolves it — against the page's own URL. That resolution IS the
   // bug: a bare `?action=...` on a page served from /z/Z4 becomes /z/Z4, which
-  // never reaches the harvest API. Cutters now change on the crew card.
+  // never reaches the harvest API. Trailers change on the crew card.
   const href = (enter.match(/href="([^"]*action=crew_day[^"]*)"/) || [])[1];
   assert.ok(href, 'no crew-card link found on the entry screen');
   const editUrl = new URL(href, 'https://x/z/Z4');
@@ -149,12 +149,12 @@ test('a cutter count changed from a scanned sign is actually recorded', async ()
     .map(m => [m[1], m[2]]));
   const res = await quiet(() => handleHarvestD1(new Request(post, {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ ...fields, t1: '1', cutters: '6', drivers: '2', water_spiders: '1' }),
+    body: new URLSearchParams({ ...fields, t1: '1' }),
   }), env, ctx));
 
   assert.equal(res.status, 200);
-  const row = sqlite.prepare("SELECT headcount FROM harvest_scan_log WHERE event_type='enter'").get();
-  assert.equal(row.headcount, 6, 'the save must record the count, not just look like it did');
+  const row = sqlite.prepare("SELECT trailers FROM harvest_crew_day WHERE crew = 'A'").get();
+  assert.equal(row.trailers, '1', 'the save must record the change, not just look like it did');
 });
 
 // ─── the tools home ──────────────────────────────────────────────────────────
