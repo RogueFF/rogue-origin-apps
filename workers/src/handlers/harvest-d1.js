@@ -197,11 +197,17 @@ const crewLabel = (ui, id) => {
 /** "Crew A (Nico)" in Telegram, which is read in English. */
 const crewTg = (id) => { const c = crewById(id); return c ? `Crew ${c.id} (${c.lead})` : 'no crew'; };
 
-/** Per-crew daily ranges for the first-scan form. Cutters are required. */
+/**
+ * The people a crew starts the day with, asked ONCE on its first zone scan as
+ * tap buttons (Koa, 2026-10-03: cutters usually 4-10, water spiders and drivers
+ * usually 1-3). The buttons run a little past the usual range each way; the
+ * min/max are the server's guard. Changes through the day come in on the
+ * hourly report, not here, so the crew card only edits trailers.
+ */
 const CREW_DAY_FIELDS = [
-  { key: 'cutters', label: 'crewCutters', min: 1, max: 40 },
-  { key: 'drivers', label: 'crewDrivers', min: 0, max: 12 },
-  { key: 'water_spiders', label: 'crewWS', min: 0, max: 12 },
+  { key: 'cutters', label: 'crewCutters', min: 1, max: 20, buttons: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+  { key: 'water_spiders', label: 'crewWS', min: 0, max: 10, buttons: [0, 1, 2, 3, 4] },
+  { key: 'drivers', label: 'crewDrivers', min: 0, max: 10, buttons: [1, 2, 3, 4, 5] },
 ];
 
 const CREW_COOKIE_CLEAR = 'rf_crew=; Path=/; Max-Age=0; SameSite=Lax';
@@ -1021,15 +1027,31 @@ async function handleCrewDay(ui, db, env, ctx, input, method) {
     }));
   }
 
-  const trailers = TRAILERS.filter(n => truthy(input[`t${n}`]));
-  if (!trailers.length) throw createError('VALIDATION_ERROR', ui.t('crewDayPickTrailer'));
-  const counts = {};
-  for (const f of CREW_DAY_FIELDS) counts[f.key] = parseCount(input[f.key], f, ui);
-
   const day = pacificDay(new Date());
+  const others = (await getCrewDays(db, isTest, day)).filter(r => r.crew !== crew.id);
+  const mine = await getCrewDay(db, isTest, crew.id, day);
+
+  // Trailers: the ones ticked, or — none ticked — the crew's last assignment
+  // (Koa, 2026-10-03). Today's row when editing; otherwise its last day, less
+  // any trailer another crew has already claimed today: not ticking must never
+  // take a trailer off someone else.
+  let trailers = TRAILERS.filter(n => truthy(input[`t${n}`]));
+  if (!trailers.length) {
+    const claimed = new Set(others.flatMap(r => trailerList(r.trailers)));
+    const last = mine || await getLastCrewDay(db, isTest, crew.id);
+    trailers = last ? trailerList(last.trailers).filter(n => !claimed.has(n)) : [];
+  }
+  if (!trailers.length) throw createError('VALIDATION_ERROR', ui.t('crewDayPickTrailer'));
+
+  // The people are set once, on the first scan; an edit from the crew card
+  // changes trailers only and keeps them.
+  const counts = {};
+  for (const f of CREW_DAY_FIELDS) {
+    counts[f.key] = editing && mine ? mine[f.key] : parseCount(input[f.key], f, ui);
+  }
+
   const list = trailers.join(',');
   // Take these trailers off every other crew first, then write this crew's row.
-  const others = (await getCrewDays(db, isTest, day)).filter(r => r.crew !== crew.id);
   const moved = [];
   const stmts = [];
   for (const r of others) {
@@ -5219,10 +5241,14 @@ function crewPickerBody(ui, zone, params = {}) {
 }
 
 /**
- * The crew's day, once: which trailers run for it and how many people it has.
- * On the first zone scan it opens the lot when saved; from the zone screen's
- * "change" link it edits in place. Prefilled from the crew's last day (or
- * today's, when editing) so a crew that did not change taps once.
+ * The crew's day: which trailers run for it, and — on the first zone scan
+ * only — how many cutters, water spiders and drivers it starts with.
+ *
+ * Trailers are optional: tick none and the crew keeps its last assignment
+ * (named on the form), less any trailer another crew has claimed today. From
+ * the crew card ("change trailers") today's are ticked and only trailers move.
+ * The people are tap buttons with nothing pre-picked: counted fresh each day,
+ * and changes after that come in on the hourly report.
  */
 function crewDayFormBody(ui, { crew, zone, cultivar, testCut = null, sessionId = null, prefill = null, today = [], editing = false }) {
   const mine = prefill ? trailerList(prefill.trailers) : [];
@@ -5231,16 +5257,19 @@ function crewDayFormBody(ui, { crew, zone, cultivar, testCut = null, sessionId =
     if (r.crew === crew) continue;
     for (const n of trailerList(r.trailers)) elsewhere.set(n, r.crew);
   }
-  // Yesterday's trailer that another crew has taken today starts unticked.
-  const ticked = (n) => editing ? mine.includes(n) : (mine.includes(n) && !elsewhere.has(n));
+  const fallback = mine.filter(n => editing || !elsewhere.has(n));
   const tiles = TRAILERS.map(n => `<label class="trtile"><input type="checkbox" name="t${n}" value="1"${
-    ticked(n) ? ' checked' : ''}><span class="trname">${trailerName(n)}</span>${
+    editing && mine.includes(n) ? ' checked' : ''}><span class="trname">${trailerName(n)}</span>${
     elsewhere.has(n) ? `<span class="trwith">${ui.t('crewTrailerWith', { c: elsewhere.get(n) })}</span>` : ''}</label>`).join('');
-  const counts = CREW_DAY_FIELDS.map(f => {
-    const v = prefill && prefill[f.key] != null ? prefill[f.key] : '';
-    return `<label class="countrow" for="cd_${f.key}"><span>${ui.t(f.label)}</span>
-  <input id="cd_${f.key}" name="${f.key}" type="number" inputmode="numeric" min="${f.min}" max="${f.max}" required value="${v}"></label>`;
-  }).join('');
+  const trailerHint = fallback.length
+    ? `<p class="note"><span class="hint">${ui.t(editing ? 'crewTrailersKeepNow' : 'crewTrailersKeep', {
+      t: fallback.map(trailerName).join(' · ') })}</span></p>`
+    : '';
+  const counts = editing ? '' : CREW_DAY_FIELDS.map(f => `
+  <h2>${ui.t(f.label)}</h2>
+  <div class="baygrid cntgrid">${f.buttons.map(n => `<label class="baybtn"><input type="radio" name="${f.key}" value="${n}" required><span>${n}</span></label>`).join('')}</div>`).join('');
+  // With no fallback, a trailer has to be ticked; with one, none ticked is fine.
+  const mustTick = fallback.length ? '' : `if(!this.querySelector('.trgrid input:checked')){alert(${escapeHtml(JSON.stringify(ui.t('crewDayPickTrailer')))});return false}`;
   const hidden = [
     ['crew', crew], ['zone', zone], ['cultivar', cultivar], ['test_cut', testCut], ['session_id', sessionId],
   ].filter(([, v]) => v != null && v !== '')
@@ -5250,10 +5279,11 @@ function crewDayFormBody(ui, { crew, zone, cultivar, testCut = null, sessionId =
 <p class="sub">${ui.t(editing ? 'crewDayEditTitle' : 'crewDayTitle')} · ${escapeHtml(zone)}${cultivar ? ` · ${escapeHtml(cultivar)}` : ''}</p>
 ${editing ? '' : `<p class="note">${ui.t('crewDaySub')}</p>`}
 <form method="POST" action="${API}?action=crew_day&lang=${ui.lang}"
-      onsubmit="if(!this.querySelector('.trgrid input:checked')){alert(${escapeHtml(JSON.stringify(ui.t('crewDayPickTrailer')))});return false}var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+      onsubmit="${mustTick}var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
   ${hidden}
   <h2>${ui.t('crewTrailers')}</h2>
   <div class="trgrid">${tiles}</div>
+  ${trailerHint}
   ${counts}
   <button class="btn" type="submit">${editing ? ui.t('crewDaySave') : ui.t('crewDayOpen', { zone: escapeHtml(zone) })}</button>
 </form>`;
@@ -5271,6 +5301,7 @@ function crewCard(ui, crew, crewDay, sessionId) {
   <div class="crewcard-n"><span><strong>${n('cutters')}</strong> ${ui.t('crewCutters')}</span>
     <span><strong>${n('drivers')}</strong> ${ui.t('crewDrivers')}</span>
     <span><strong>${n('water_spiders')}</strong> ${ui.t('crewWS')}</span></div>
+  <p class="hint">${ui.t('crewPeopleHourly')}</p>
   <a class="mini" href="${API}?action=crew_day&lang=${ui.lang}&crew=${crew}&session_id=${sessionId}">✏️ ${ui.t('crewDayEdit')}</a>
 </div>`;
 }
