@@ -306,3 +306,20 @@ test('the barn door asks for the zone when several crews are cutting, instead of
   const two = await (await quiet(() => handleBarnScan(new Request('https://x/b/1?lang=en'), env, ctx))).text();
   assert.doesNotMatch(two, /<option value="Z\d+" selected/);
 });
+
+test('a day with no crew set up yet still logs trailers to the open lot, as the one-crew build did', async () => {
+  // Shipped mid-shift 2026-10-03: until the first lead scans in, there are no
+  // crew rows today, and every trailer must keep landing on the open lot.
+  const { sqlite, env, ctx } = freshDb({ crews: false });
+  const z15 = seedSession(sqlite, { zone: 'Z15', crew: null });
+  bayToday(sqlite, z15);
+  const res = await trailer(env, ctx, 5);
+  assert.equal(res.status, 303);
+  assert.equal(lastLoad(sqlite).attributed_zone_session_id, z15);
+
+  // The first crew set up today switches the rules on for everyone.
+  seedCrewDay(sqlite, { crew: 'A', trailers: '3,4' });
+  const before = loads(sqlite).length;
+  assert.equal((await trailer(env, ctx, 5)).status, 200, 'T5 is on no crew now: asked');
+  assert.equal(loads(sqlite).length, before);
+});
