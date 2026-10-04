@@ -147,12 +147,14 @@ test('THE 9/30 BUG: the morning scan of a zone closed the night before is still 
   assert.match(html, /<details class="cvfix cutfix">/, 'the "new cut?" question is there, folded shut');
 });
 
-test('even weeks later the scan does not decide — it asks, with the question open', async () => {
+test('even weeks later the scan does not decide, and the new-cut question stays closed', async () => {
   const { sqlite, env, ctx } = freshDb();
   seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
   const html = await (await scanZone(env, ctx, 'Z4')).text();
   assert.equal(openSessions(sqlite)[0].cut_number, 1, 'still cut 1 until someone says otherwise');
-  assert.match(html, /<details class="cvfix cutfix" open>/);
+  // Koa 2026-10-04: a cut changes only on Koa's word; idle days must not open the question
+  assert.match(html, /<details class="cvfix cutfix">/);
+  assert.doesNotMatch(html, /<details class="cvfix cutfix" open>/);
   assert.match(html, /last cut 21 days ago/);
   assert.match(html, /Start cut 2/);
 });

@@ -5326,11 +5326,13 @@ ${headcountScript(ui)}`;
 }
 
 /**
- * "Is this a new cut?" — the only way the cut number moves. Folded shut,
- * because nearly every scan is the crew carrying on with the cut they were on.
- * It opens by itself only when the zone has sat untouched for
- * NEW_CUT_PROMPT_DAYS, which is when a second cut is actually likely — and even
- * then it asks, it does not decide. A mis-tap has its own way back.
+ * "Is this a new cut?" — the only way the cut number moves. ALWAYS folded shut
+ * (Koa, 2026-10-04): a cut changes only when Koa says the cultivar's cut is
+ * finished, and most retail strains only ever have one. It used to open by
+ * itself after NEW_CUT_PROMPT_DAYS idle, and on Oct 4 that put Z8 Rainbow Cake
+ * on "cut 2" when the crew was finishing cut 1 ten days later — retail trial
+ * blocks are cut in pieces days apart. Idle days are still named inside, for
+ * whoever opens it. A mis-tap has its own way back.
  */
 function cutChangeBlock(ui, sessionId, cutNumber, daysIdle) {
   const n = Number(cutNumber) || 1;
@@ -5343,7 +5345,7 @@ function cutChangeBlock(ui, sessionId, cutNumber, daysIdle) {
     <button class="btn ${cls}" type="submit">${label}</button>
   </form>`;
   return `
-<details class="cvfix cutfix"${long ? ' open' : ''}>
+<details class="cvfix cutfix">
   <summary>${ui.t('cutNewAsk')}</summary>
   ${long ? `<p class="note">${ui.t('cutIdle', { d: Math.floor(daysIdle) })}</p>` : ''}
   <p class="note"><span class="hint">${ui.t('cutNewHint', { n })}</span></p>
