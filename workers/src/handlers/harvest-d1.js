@@ -63,6 +63,7 @@ import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
+import { bayFills, bayCards, percentShares } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
@@ -266,7 +267,7 @@ const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'hub', 'reconcile_page', 'pipeline',
+  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -348,6 +349,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleLotResume(ui, db, env, params);
         case 'lot_finish':
           return await handleLotFinish(ui, db, env, ctx, body);
+        case 'bay_finish':
+          return await handleBayFinish(ui, db, env, ctx, body);
         case 'sack_label':
           return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
@@ -1903,7 +1906,206 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, lastBay, lastStorage] = await Promise.all([
     getRecentLots(db, isTest), getLastBay(db, isTest), getLastStorage(db, isTest)]);
-  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash));
+  await attachDryingBays(db, isTest, lots);
+  const bays = await getBayTakedown(db, isTest, lots);
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash, bays));
+}
+
+const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
+
+/**
+ * Takedown by BAY (Koa, 2026-10-05). Sour Lifter from two or three zones hangs
+ * in every bay and the sticks carry no zone, so the crew can see which bay is
+ * coming down but not which zone a stick grew in. The picker offers one card
+ * per bay, cultivar and cut, with each zone's share by bins (Koa chose bins
+ * over acres: they are what was physically hung in that bay).
+ *
+ * Sacks still hang off ONE lot, the zone with the most bins in the bay, so the
+ * rest of the system (serials, Shopify, the scan page) is unchanged. The bay on
+ * every sack is what carries the real lineage; zone yields are to be split from
+ * the bay's bin shares, never read off the lot the sack happens to hang on.
+ *
+ * Lots with no bay on any load keep their zone card.
+ */
+async function getBayTakedown(db, isTest, lots) {
+  const [loads, tags, done] = await Promise.all([
+    // A lot with no barn loads at all can carry its bay on its own enter row:
+    // material trucked in from McLoughlin, or hung on tables, is never scanned
+    // at the barn door (Koa, 2026-10-05). It joins the bay with zero bins.
+    query(db, `
+      SELECT attributed_zone_session_id AS session_id, bay, bins, occurred_at FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+      UNION ALL
+      SELECT e.id AS session_id, e.bay, 0 AS bins, e.occurred_at FROM harvest_scan_log e
+      WHERE e.event_type = 'enter' AND e.is_test = ? AND e.bay IS NOT NULL
+        AND julianday('now') - julianday(e.occurred_at) <= ?
+        AND NOT EXISTS (SELECT 1 FROM harvest_scan_log b
+                        WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id)
+    `, [isTest, LOT_PICKER_DAYS, isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT bay, printed_at, cultivar, cut_number FROM harvest_sacks
+      WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL
+        AND julianday('now') - julianday(printed_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    // Before migration 0043 the table is absent: no bay has been finished yet.
+    query(db, `SELECT bay, cultivar, cut_number, fill_start, done_at FROM harvest_bay_done WHERE is_test = ?`, [isTest])
+      .catch(() => []),
+  ]);
+  const fills = bayFills(loads);
+  const lotOfSession = new Map();
+  for (const l of lots) for (const id of (l.session_ids || [l.id])) lotOfSession.set(id, l);
+  const doneByKey = new Map(done.map(d => [bayKey(d.bay, d.cultivar, d.cut_number, d.fill_start), d]));
+
+  const cards = bayCards(fills, lotOfSession, tags).map(c => {
+    const fillStart = sqliteUtc(new Date(c.fillStartMs));
+    const d = doneByKey.get(bayKey(c.bay, c.cultivar, c.cut, fillStart));
+    // Sacks hang off the biggest lot still open: a finished lot refuses tags.
+    const open = c.zones.filter(z => !z.lot.takedown_done_at);
+    return { ...c, fillStart, doneAt: d ? d.done_at : null,
+      primary: (open[0] || c.zones[0]).lot, allLotsFinished: open.length === 0 };
+  });
+  const active = cards.filter(c => !c.doneAt && !c.allLotsFinished);
+  const finished = cards.filter(c => c.doneAt)
+    .sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt)));
+  const covered = new Set();
+  for (const c of [...active, ...finished]) for (const z of c.zones) covered.add(z.lot.id);
+  return { cards, active, finished, covered, fills, doneByKey };
+}
+
+/** True once every bay fill holding this lot's loads is down (finished, or refilled since). */
+function lotAllBaysDown(lot, info) {
+  const ids = new Set(lot.session_ids || [lot.id]);
+  for (const [bay, fills] of info.fills) {
+    for (const f of fills) {
+      if (f.closed || !f.loads.some(l => ids.has(l.session_id))) continue;
+      if (!info.doneByKey.has(bayKey(bay, lot.cultivar, lot.cut_number, sqliteUtc(new Date(f.startMs))))) return false;
+    }
+  }
+  return true;
+}
+
+/** "Sep 28" / "28 sept" — a Pacific calendar day without the year. */
+function shortDay(ui, ms) {
+  return new Date(ms).toLocaleDateString(ui.lang === 'es' ? 'es-MX' : 'en-US',
+    { timeZone: HARVEST_TZ, month: 'short', day: 'numeric' });
+}
+
+function hungDates(ui, c) {
+  const a = shortDay(ui, c.firstMs), b = shortDay(ui, c.lastMs);
+  return ui.t('hungDates', { d: a === b ? a : `${a}–${b}` });
+}
+
+/** The zone chips of a bay card: "Z1+Z2 66%" "Z11 34%" (zones harvested together merged). */
+function zoneMix(c) {
+  const shown = c.groups || c.zones;
+  const pct = percentShares(shown);
+  return `<span class="zonemix">${shown.map((z, i) =>
+    `<span class="zchip">${escapeHtml(z.zone)} <b>${pct[i]}%</b></span>`).join('')}</span>`;
+}
+
+/**
+ * POST ?action=bay_finish — "Bay 9 is down" (or reopen it). Records the bay
+ * fill as finished, then closes every lot it held whose bays are now ALL down,
+ * so a zone hung across bays 9 and 10 stays open until both are. Like Finished
+ * on a lot, it touches no sack, no storage and no Shopify count.
+ */
+async function handleBayFinish(ui, db, env, ctx, body) {
+  const bay = parseBay(body.bay, ui);
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const cut = parseInt(body.cut, 10) || 1;
+  const fillStart = String(body.fill_start || '').trim();
+  if (!bay || !cultivar || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(fillStart)) {
+    throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+  }
+  const reopen = String(body.reopen ?? '') === '1';
+  const isTest = isTestMode(env) ? 1 : 0;
+  await execute(db, reopen
+    ? `DELETE FROM harvest_bay_done WHERE bay = ? AND cultivar = ? AND cut_number = ? AND fill_start = ? AND is_test = ?`
+    : `INSERT OR IGNORE INTO harvest_bay_done (bay, cultivar, cut_number, fill_start, is_test) VALUES (?, ?, ?, ?, ?)`,
+    [bay, cultivar, cut, fillStart, isTest]);
+
+  const lots = await getRecentLots(db, isTest);
+  const info = await getBayTakedown(db, isTest, lots);
+  const card = info.cards.find(c => c.bay === bay && c.cultivar === cultivar
+    && Number(c.cut) === cut && c.fillStart === fillStart);
+  for (const z of (card ? card.zones : [])) {
+    const lot = await requireLot(db, z.lot.id);
+    const f = lotSessionsWhere(lot);
+    if (reopen) {
+      await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = NULL
+                         WHERE ${f.where} AND takedown_done_at IS NOT NULL`, f.params);
+    } else if (lotAllBaysDown(z.lot, info)) {
+      await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = ?
+                         WHERE ${f.where} AND takedown_done_at IS NULL`, [sqliteUtc(new Date()), ...f.params]);
+    }
+  }
+
+  const sacks = card ? card.sacks : 0;
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: reopen
+      ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
+      : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  if (reopen && card) {
+    return new Response(null, { status: 303, headers: {
+      Location: `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  }
+  return handleSackPrintForm(ui, db, env,
+    ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+}
+
+/**
+ * The bay(s) each lot is drying in, as `lot.bays` — shown on its picker card
+ * (Koa, 2026-10-05: "can we also put what bay it's drying in?").
+ *
+ * From the lot's barn loads, which carry the bay they were hung in. A lot with
+ * none (cut before bays were captured, or entered by hand) falls back to the
+ * bay its tags came down from. Neither: no bay shown, never a guess.
+ * Whole-window reads filtered in JS, as in handlePipeline: an IN list over
+ * session ids would outgrow D1's 100-variable cap.
+ */
+async function attachDryingBays(db, isTest, lots) {
+  const [loads, tags] = await Promise.all([
+    query(db, `
+      SELECT DISTINCT attributed_zone_session_id AS session_id, bay FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT DISTINCT zone_session_id AS session_id, bay FROM harvest_sacks
+      WHERE is_test = ? AND bay IS NOT NULL AND zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(printed_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+  ]);
+  const bySession = (rows) => {
+    const m = new Map();
+    for (const r of rows) {
+      if (!m.has(r.session_id)) m.set(r.session_id, new Set());
+      m.get(r.session_id).add(Number(r.bay));
+    }
+    return m;
+  };
+  const loadBays = bySession(loads), tagBays = bySession(tags);
+  const collect = (m, ids) => [...new Set(ids.flatMap(id => [...(m.get(id) || [])]))];
+  for (const l of lots) {
+    const ids = l.session_ids || [l.id];
+    const found = collect(loadBays, ids);
+    l.bays = (found.length ? found : collect(tagBays, ids)).sort((a, b) => a - b);
+  }
+  return lots;
+}
+
+/** "Bay 7" / "Bays 7, 9" — empty when the lot's bay is unknown. */
+function bayPill(ui, lot) {
+  const bays = lot.bays || [];
+  if (!bays.length) return '';
+  const text = bays.length === 1 ? ui.t('bayN', { n: bays[0] }) : ui.t('baysN', { n: bays.join(', ') });
+  return `<span class="baypill">${escapeHtml(text)}</span>`;
 }
 
 /**
@@ -2088,8 +2290,18 @@ async function handleSackSession(ui, db, env, input, flash = null) {
 
   const tags = await getLotTags(db, sessionId, isTest);
 
-  return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, tags, bay, storage, finishedAt, variantCheck, flash }));
+  // Taking down a whole bay: the screen names the bay and its zone mix, and
+  // closes out the bay rather than the lot.
+  let bayCard = null;
+  if (bay) {
+    const info = await getBayTakedown(db, isTest, await getRecentLots(db, isTest));
+    bayCard = info.cards.find(c => c.bay === bay && c.cultivar === lot.cultivar
+      && Number(c.cut) === Number(lot.cut_number ?? 1)
+      && c.zones.some(z => (z.lot.session_ids || [z.lot.id]).includes(sessionId))) || null;
+  }
+
+  return renderPage(ui, `${ui.t('printTags')} — ${bayCard ? ui.t('bayN', { n: bay }) : lot.zone}`,
+    sackSessionBody(ui, { lot, cultivar, stats, tags, bay, storage, finishedAt, variantCheck, flash, bayCard }));
 }
 
 /**
@@ -2125,6 +2337,9 @@ async function handleLotResume(ui, db, env, params) {
   }
   const lot = await requireLot(db, sessionId);
   const resume = await getLotResume(db, lot);
+  // A bay card's Resume names its bay: the lot's newest tag may have come out
+  // of another bay the same zone was hung in.
+  if (params.bay) resume.bay = parseBay(params.bay, ui);
   const flash = String(params.reopened || '') === '1' ? ui.t('lotReopened', { lot: lotLabel(ui, lot, resume.cultivar) }) : null;
   return handleSackSession(ui, db, env, { session_id: sessionId, ...resume }, flash);
 }
@@ -4867,6 +5082,14 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .lotbody { display: block; min-width: 0; }
   .lothead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 1.1rem; }
   .lotmeta { display: block; color: #9fc2ac; font-size: 0.88rem; margin-top: 4px; }
+  .baypill { font-size: 0.8rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+             background: #e9c462; color: #1b2b20; }
+  /* Takedown by bay: the bay leads the card, the zones it holds sit under it. */
+  .baybig { display: inline-block; font-size: 1.15rem; font-weight: 800; padding: 2px 10px; border-radius: 8px;
+            background: #e9c462; color: #1b2b20; white-space: nowrap; }
+  .zonemix { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .zchip { font-size: 0.92rem; padding: 3px 10px; border-radius: 999px; background: #2c4a36; color: #f2f6f2; white-space: nowrap; }
+  .zchip b { color: #e9c462; }
   .badge { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em;
            padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
   .badge.ok   { background: #2f7a4f; color: #fff; }
@@ -5948,12 +6171,19 @@ function chromeHandoff(ui, path) {
 </script>`;
 }
 
-function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null) {
-  // A finished lot is not a takedown candidate, so it never reaches the radio
-  // list — nor the pre-selection, which reads the top of that list.
-  const lots = allLots.filter(l => !l.takedown_done_at);
-  const finished = allLots.filter(l => l.takedown_done_at)
+function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null, bays = null) {
+  // Lots hung in a bay are offered by BAY (getBayTakedown); only lots with no
+  // bay on any load keep a zone card. A finished lot is not a takedown
+  // candidate, so it never reaches the radio list — nor the pre-selection.
+  const bayInfo = bays || { active: [], finished: [], covered: new Set() };
+  const lots = allLots.filter(l => !l.takedown_done_at && !bayInfo.covered.has(l.id));
+  const finished = allLots.filter(l => l.takedown_done_at && !bayInfo.covered.has(l.id))
     .sort((a, b) => String(b.takedown_done_at).localeCompare(String(a.takedown_done_at)));
+  // Drying days from the bay's FIRST load, as a lot counts from its cut date.
+  const bayDays = (c) => Math.floor((Date.now() - c.firstMs) / 86400000);
+  const bayLevel = (c) => lotLevel({ days_since_cut: bayDays(c), sacks_printed: c.sacks });
+  const activeBays = bayInfo.active.slice().sort((a, b) =>
+    LOT_RANK[bayLevel(a)] - LOT_RANK[bayLevel(b)] || a.bay - b.bay);
   const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
 
   const closeForm = (l, reopen) => `
@@ -5961,7 +6191,7 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
       : ` data-confirm="${escapeHtml(ui.t('confirmFinish', { lot: lotLabel(ui, l), n: l.sacks_printed }))}"`}>
       <input type="hidden" value="${l.id}" name="session_id">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
       <span class="lotbody">
-        <strong>${escapeHtml(lotLabel(ui, l))}</strong>
+        <strong>${escapeHtml(lotLabel(ui, l))}</strong> ${bayPill(ui, l)}
         <span class="lotmeta">${reopen
           ? ui.t('finishedOn', { date: escapeHtml(finishedDate(ui, l.takedown_done_at)), n: l.sacks_printed })
           : escapeHtml(ui.t('noteStarted', { n: l.sacks_printed }))}</span>
@@ -5970,14 +6200,33 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
       <button class="btn${reopen ? '' : ' alt'}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
     </form>`;
 
+  // A bay in progress or finished: Resume / Finished, or Reopen.
+  const bayForm = (c, reopen) => `
+    <form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}" class="finishrow${reopen ? ' done' : ''}"${reopen ? ''
+      : ` data-confirm="${escapeHtml(ui.t('confirmBayFinish', { bay: c.bay, cv: c.cultivar, n: c.sacks }))}"`}>
+      <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
+      <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
+      <span class="lotbody">
+        <span class="lothead"><span class="baybig">${ui.t('bayN', { n: c.bay })}</span>
+          <strong>${escapeHtml(c.cultivar)}</strong> <span class="hint">${ui.t('cut', { n: c.cut })}</span></span>
+        ${zoneMix(c)}
+        <span class="lotmeta">${reopen
+          ? ui.t('bayFinishedOn', { date: escapeHtml(finishedDate(ui, c.doneAt)), n: c.sacks })
+          : escapeHtml(ui.t('noteStartedBay', { n: c.sacks }))}</span>
+      </span>
+      ${reopen ? '' : `<a class="btn" href="${API}?action=lot_resume&session_id=${c.primary.id}&bay=${c.bay}&lang=${ui.lang}">${ui.t('resumeLot')}</a>`}
+      <button class="btn${reopen ? '' : ' alt'}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
+    </form>`;
+
   // Open, not collapsed (Koa, 2026-09-28): tucked away, nobody found Reopen.
-  const finishedHtml = finished.length ? `
+  const nFinished = finished.length + bayInfo.finished.length;
+  const finishedHtml = nFinished ? `
 <details class="batch finished" open>
-  <summary>${ui.t('finishedLots', { n: finished.length })}</summary>
-  <div class="lotlist">${finished.map(l => closeForm(l, true)).join('')}</div>
+  <summary>${ui.t('finishedLots', { n: nFinished })}</summary>
+  <div class="lotlist">${bayInfo.finished.map(c => bayForm(c, true)).join('')}${finished.map(l => closeForm(l, true)).join('')}</div>
 </details>` : '';
 
-  if (!lots.length) {
+  if (!lots.length && !activeBays.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
 ${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
@@ -5989,10 +6238,11 @@ ${finishedHtml}`;
   // Only a lot with tags can be resumed or closed out from here. A lot never started has
   // nothing to finish, and listing every lot twice would bury the ones that do.
   const started = lots.filter(l => l.sacks_printed > 0);
-  const finishHtml = started.length ? `
+  const startedBays = activeBays.filter(c => c.sacks > 0);
+  const finishHtml = started.length || startedBays.length ? `
 <h2>${ui.t('finishSection')}</h2>
 <p class="note">${ui.t('finishSectionHelp')}</p>
-<div class="lotlist">${started.map(l => closeForm(l, false)).join('')}</div>` : '';
+<div class="lotlist">${startedBays.map(c => bayForm(c, false)).join('')}${started.map(l => closeForm(l, false)).join('')}</div>` : '';
 
   const BADGE = {
     ready:   { cls: 'ok',   text: ui.t('badgeReady') },
@@ -6003,8 +6253,32 @@ ${finishedHtml}`;
 
   // Pre-select ONLY when the best candidate is genuinely plausible. If the top
   // of the list is overdue/green/already-started, pre-filling it would make the
-  // dangerous option the default — force a deliberate choice instead.
-  const topIsReady = lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
+  // dangerous option the default — force a deliberate choice instead. Never
+  // with bay cards: which bay is coming down is the crew's call to make.
+  const topIsReady = !activeBays.length && lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
+
+  const bayCard = (c) => {
+    const level = bayLevel(c);
+    const p = lotPlausibility(ui, { days_since_cut: bayDays(c), sacks_printed: c.sacks });
+    const b = BADGE[level];
+    const label = `${ui.t('bayN', { n: c.bay })} · ${c.cultivar} ${ui.t('cut', { n: c.cut })}`;
+    return `
+    <label class="lot baycard ${level}">
+      <input type="radio" name="session_id" value="${c.primary.id}"
+             data-cultivar="${escapeHtml(c.cultivar)}" data-level="${level}" data-bay="${c.bay}"
+             data-desc="${escapeHtml(label)}"
+             data-confirm="${escapeHtml(ui.t('confirmLot', { lot: label, note: p.note }))}" required>
+      <span class="lotbody">
+        <span class="lothead">
+          <span class="baybig">${ui.t('bayN', { n: c.bay })}</span>
+          <strong>${escapeHtml(c.cultivar)}</strong>
+          <span class="badge ${b.cls}">${b.text}</span>
+        </span>
+        ${zoneMix(c)}
+        <span class="lotmeta">${ui.t('cut', { n: c.cut })} · ${escapeHtml(hungDates(ui, c))} · ${escapeHtml(p.note)}${c.bins ? ` · ${ui.t('binsN', { n: c.bins.toLocaleString('en-US') })}` : ''}</span>
+      </span>
+    </label>`;
+  };
 
   const card = (l, i) => {
     const p = lotPlausibility(ui, l);
@@ -6014,6 +6288,7 @@ ${finishedHtml}`;
     <label class="lot ${p.level}">
       <input type="radio" name="session_id" value="${l.id}"
              data-cultivar="${escapeHtml(cv)}" data-level="${p.level}"
+             data-bay="${(l.bays || []).length === 1 ? l.bays[0] : ''}"
              data-desc="${escapeHtml(`${l.zone}${cv ? ` · ${cv}` : ''} cut ${l.cut_number}`)}"
              data-confirm="${escapeHtml(ui.t('confirmLot', {
                lot: `${l.zone}${cv ? ` · ${cv}` : ''} ${ui.t('cut', { n: l.cut_number })}`,
@@ -6023,6 +6298,7 @@ ${finishedHtml}`;
         <span class="lothead">
           <strong>${escapeHtml(l.zone)}${cv ? ` · ${escapeHtml(cv)}` : ''}</strong>
           <span class="badge ${b.cls}">${b.text}</span>
+          ${bayPill(ui, l)}
         </span>
         <span class="lotmeta">${ui.t('cut', { n: l.cut_number })} · ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
       </span>
@@ -6031,12 +6307,15 @@ ${finishedHtml}`;
   // Too-green lots fold into a closed section under the list (Koa, 2026-10-05:
   // "anything that is too green should be minimized"). Still pickable — the
   // tape can beat the dry clock — just not in the way of the lots coming down.
-  const cards = lots.map((l, i) => lotLevel(l) === 'green' ? '' : card(l, i)).join('');
+  const cards = activeBays.map(c => bayLevel(c) === 'green' ? '' : bayCard(c)).join('')
+    + lots.map((l, i) => lotLevel(l) === 'green' ? '' : card(l, i)).join('');
+  const greenBays = activeBays.filter(c => bayLevel(c) === 'green');
   const greenLots = lots.filter(l => lotLevel(l) === 'green');
-  const greenHtml = greenLots.length ? `
+  const nGreen = greenBays.length + greenLots.length;
+  const greenHtml = nGreen ? `
   <details class="batch greenlots">
-    <summary>${ui.t('greenLots', { n: greenLots.length })}</summary>
-    <div class="lotlist">${greenLots.map(l => card(l, lots.indexOf(l))).join('')}</div>
+    <summary>${ui.t('greenLots', { n: nGreen })}</summary>
+    <div class="lotlist">${greenBays.map(bayCard).join('')}${greenLots.map(l => card(l, lots.indexOf(l))).join('')}</div>
   </details>` : '';
 
   const firstCv = topIsReady ? (lots[0].cultivar || '') : '';
@@ -6047,7 +6326,7 @@ ${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
 ${flashHtml}
 ${finishHtml}
 ${finishHtml ? `<h2>${ui.t('startSection')}</h2>` : ''}
-<p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
+<p class="note">${ui.t(activeBays.length ? 'pickBayHelp' : 'pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
 <form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
   ${cards ? `<div class="lotlist">${cards}</div>` : ''}${greenHtml}
@@ -6089,11 +6368,19 @@ ${finishedHtml}
 
   // Cultivar was captured at the zone scan, so it carries through rather than
   // being retyped at takedown — one less place for a mismatch.
-  form.addEventListener('change', function (e) {
-    if (e.target.name !== 'session_id') return;
-    var v = e.target.getAttribute('data-cultivar');
+  function applyLot(r) {
+    var v = r.getAttribute('data-cultivar');
     if (v) cv.value = v;
+    // A lot hung in one bay is taken down from that bay: set it, so the bay
+    // printed on every tag matches the card that was picked. Two bays, or
+    // none known: the field is left alone for the operator.
+    var bay = r.getAttribute('data-bay'), sel = document.getElementById('bay');
+    if (bay && sel && sel.querySelector('option[value="' + bay + '"]')) sel.value = bay;
+  }
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'session_id') applyLot(e.target);
   });
+  if (selected()) applyLot(selected());
 
   // Advisory guard, never a block: the tape and the operator's eyes beat our
   // heuristic, so an implausible pick asks for confirmation and then proceeds.
@@ -6311,7 +6598,11 @@ ${section('#b8841c', L('Already in supersacks', 'Ya en supersacos'), L('Bagged t
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, storage = null, finishedAt = null, variantCheck = null, flash = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, storage = null, finishedAt = null, variantCheck = null, flash = null, bayCard = null }) {
+  // Taking down a whole bay: it is finished as a bay, not as this lot.
+  if (bayCard) finishedAt = bayCard.doneAt || null;
+  const bayHidden = bayCard ? `<input type="hidden" name="bay" value="${bayCard.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(bayCard.cultivar)}">
+    <input type="hidden" name="cut" value="${bayCard.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(bayCard.fillStart)}">` : '';
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -6325,13 +6616,19 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
     : ui.t('storageNotSet')}</div>`;
   // A finished lot says so above everything, with Reopen right there: the print
   // buttons are off, and whoever needs one more tag should not hunt for why.
-  const notice = finishedAt ? `
+  const notice = finishedAt ? (bayCard ? `
+<div class="notice">${ui.t('bayFinishedNotice', { bay: bayCard.bay, date: escapeHtml(finishedDate(ui, finishedAt)) })}
+  <form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}">
+    ${bayHidden}<input type="hidden" name="reopen" value="1">
+    <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
+  </form>
+</div>` : `
 <div class="notice">${ui.t('lotFinishedNotice', { date: escapeHtml(finishedDate(ui, finishedAt)) })}
   <form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}">
     <input type="hidden" value="${lot.id}" name="session_id"><input type="hidden" name="reopen" value="1">
     <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
   </form>
-</div>` : '';
+</div>`) : '';
   // Printing still works when there is no variant — a Shopify gap must not stop
   // a takedown — but the crew lead sees it on the first screen, not months later.
   // A check that could not run (ok === null) stays quiet: an outage is not news
@@ -6351,7 +6648,9 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   return `${topNav}${handoff}${flashHtml}${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
-  <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
+  ${bayCard ? `<div class="lot-meta"><span class="baybig">${ui.t('bayN', { n: bayCard.bay })}</span> ${ui.t('cut', { n: bayCard.cut })} · ${escapeHtml(hungDates(ui, bayCard))}</div>
+  <div class="lot-meta">${ui.t('bayMixLabel')} ${zoneMix(bayCard)}</div>`
+  : `<div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>`}
   ${bayLine}
   ${storageLine}
 </div>
@@ -6408,7 +6707,11 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   </div>
 </details>
 
-${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
+${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
+  ${bayHidden}
+  <button class="btn alt" type="submit">${ui.t('finishBay', { bay: bayCard.bay })}</button>
+  <span class="hint">${ui.t('finishBayHelp')}</span>
+</form>` : `<form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
   <input type="hidden" value="${lot.id}" name="session_id">
   <button class="btn alt" type="submit">${ui.t('finishLot')}</button>
   <span class="hint">${ui.t('finishLotHelp')}</span>

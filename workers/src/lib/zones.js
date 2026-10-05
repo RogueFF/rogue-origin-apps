@@ -23,3 +23,17 @@ export function normalizeZone(raw) {
   if (/^\d+$/.test(z)) z = `Z${z}`;                    // bare number → Z-number
   return z;
 }
+
+/**
+ * Zones harvested as one: Z1 and Z2 were cut together in one serpentine pass
+ * and their loads were scanned mostly to Z2, so every harvest figure treats
+ * them as a single zone, "Z1+Z2" (Koa, 2026-10-05; the harvest dashboard has
+ * keyed them that way since 9/28). Planting, acreage and irrigation keep the
+ * two zones apart; this is only for what came off the field.
+ */
+export const HARVEST_ZONE_GROUPS = { Z1: 'Z1+Z2', Z2: 'Z1+Z2' };
+
+/** The zone as harvest figures report it: Z1 and Z2 -> "Z1+Z2", others unchanged. */
+export function harvestZone(zone) {
+  return HARVEST_ZONE_GROUPS[zone] || zone;
+}
