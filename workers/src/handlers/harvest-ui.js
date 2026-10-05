@@ -38,6 +38,9 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .badge.ok{background:#e5eddb;color:#345c38}
 .harvest-screen .badge.warn{background:#f8ebcb;color:#77511a}
 .harvest-screen .badge.bad{background:#f4e0d8;color:#954431}
+.harvest-screen .baybig,.harvest-screen .baypill{background:#f8ebcb;color:#5b3d0e}
+.harvest-screen .zchip{background:#edf1e5;color:#263f32;border:1px solid #d9dfd1}
+.harvest-screen .zchip b{color:#77511a}
 .harvest-screen .lot:not(label){padding:24px;background:#668971;color:#fff;border:0;border-radius:15px}
 .harvest-screen .lot:not(label) .lot-meta{color:#fff;font-size:15px;line-height:1.6}
 .harvest-screen .lot-cultivar{font-size:30px}
