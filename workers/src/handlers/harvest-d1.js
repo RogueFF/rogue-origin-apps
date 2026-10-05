@@ -1,5 +1,6 @@
 import { practicePage } from './harvest-practice.js';
 import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew-hourly.js';
+import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './harvest-takedown-hourly.js';
 /**
  * Harvest Zone-Entry & Barn-Intake API Handler — D1
  *
@@ -15,6 +16,7 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  * - GET  ?action=barn_intake                             - Barn-intake form (HTML)
  * - POST ?action=barn_log            (body: zone, bins)  - Barn-intake submit (HTML)
  * - GET  ?action=crew                                     - Crew roster form (HTML)
+ * - GET  ?action=bajada                                   - Hourly takedown report (HTML); POST bajada_set saves an hour
  * - POST ?action=crew_set   (drivers,cutter_water_spiders,
  *                            hangers,hanging_water_spiders) - Update roster (HTML)
  * - GET  ?action=test                                    - Health check (JSON)
@@ -263,7 +265,7 @@ function stationCookie(station) {
 const HTML_ACTIONS = new Set([
   'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
   'lot_finish', 'hub', 'reconcile_page', 'pipeline',
 ]);
 
@@ -363,6 +365,18 @@ export async function handleHarvestD1(request, env, ctx) {
             ? `Guardado ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Arriba' : 'Abajo'}`
             : `Saved ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Upper' : 'Bottom'}`;
           return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data, flash));
+        }
+        case 'bajada': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const data = await loadTakedownHourly(db, env, params, isTest);
+          return renderPage(ui, ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown', takedownHourlyBody(ui, data));
+        }
+        case 'bajada_set': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const saved = await submitTakedownHourly(db, env, body, isTest);
+          const data = await loadTakedownHourly(db, env, { hour: saved.row.hour_start }, isTest);
+          const flash = `${ui.lang === 'es' ? 'Guardado' : 'Saved'} ${saved.row.hour_start}`;
+          return renderPage(ui, ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown', takedownHourlyBody(ui, data, flash));
         }
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
@@ -6400,7 +6414,7 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
   <span class="hint">${ui.t('finishLotHelp')}</span>
 </form>`}
 
-<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a> · <a href="${API}?action=bajada&lang=${ui.lang}">${ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown'}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
@@ -7558,6 +7572,7 @@ ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y 
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
+    card(`${API}?action=bajada&${q}`, L('Hourly takedown report', 'Bajada por hora'), L('On the hour: people by role and sticks taken down. Sacks come from the tags.', 'Cada hora: personas por puesto y palos bajados. Las bolsas salen de las etiquetas.')),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
   ])}
