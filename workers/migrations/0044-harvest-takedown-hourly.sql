@@ -10,7 +10,7 @@
 -- "how many sacks at 10 AM" and it is the tags.
 --
 -- Apply before deploying the worker that reads it:
---   npx wrangler d1 execute rogue-origin-db --remote --file migrations/0043-harvest-takedown-hourly.sql
+--   npx wrangler d1 execute rogue-origin-db --remote --file migrations/0044-harvest-takedown-hourly.sql
 
 CREATE TABLE IF NOT EXISTS harvest_takedown_hourly (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
