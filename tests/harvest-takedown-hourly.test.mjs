@@ -124,7 +124,7 @@ test('the table shows sacks per takedown person, and a dash with nobody counted'
   const html = takedownHourlyBody({ lang: 'en' }, data);
   const table = html.slice(html.indexOf('<table'));
 
-  assert.match(table, /9-10<\/strong><\/td><td>4<\/td><td class="sticks">30<\/td><td class="sacks">2<\/td>/);
+  assert.match(table, /9-10<\/strong>.*?<\/td><td>4<\/td><td class="sticks">30<\/td><td class="sacks">2<\/td>/);
   assert.match(table, /<td class="per">0\.5<\/td>/, '2 sacks / 4 on takedown');
   assert.match(table, /8-9<\/strong><\/td><td>—<\/td><td class="sticks">—<\/td><td class="sacks">1<\/td>/,
     'an hour with tags but no report still shows its sacks');
@@ -237,4 +237,22 @@ test('sticks per sack is a dash when no hour has both', async () => {
   const html = takedownHourlyBody({ lang: 'en' }, await loadTakedownHourly(env.DB, env, {}, 1, NOW));
 
   assert.match(html, /sticks per sack —/);
+});
+
+test('the breaks are marked on their hours, in the picker and the day table', async () => {
+  const { sqlite, env } = freshDb();
+  sack(sqlite, { printed: '2026-10-05 16:15:00' });          // 9-10 (10-min break)
+  sack(sqlite, { printed: '2026-10-05 19:10:00' });          // 12-1 (30-min lunch)
+  sack(sqlite, { printed: '2026-10-05 18:10:00' });          // 11-12, no break
+
+  const html = takedownHourlyBody({ lang: 'es' }, await loadTakedownHourly(env.DB, env, {}, 1, NOW));
+
+  assert.match(html, /<option value="09:00"[^>]*>9-10 · descanso 10 min<\/option>/);
+  assert.match(html, /<option value="12:00"[^>]*>12-1 · comida 30 min<\/option>/);
+  assert.match(html, /<option value="14:00"[^>]*>2-3 · descanso 10 min<\/option>/);
+  assert.match(html, /<option value="11:00"[^>]*>11-12<\/option>/, 'an hour without a break has no label');
+  const table = html.slice(html.indexOf('<table'));
+  assert.match(table, /9-10<\/strong><br><span class="hint">descanso 10 min<\/span>/);
+  assert.match(table, /12-1<\/strong><br><span class="hint">comida 30 min<\/span>/);
+  assert.doesNotMatch(table, /11-12<\/strong><br>/);
 });
