@@ -41,6 +41,17 @@ const ROLES = [
   { key: 'hangers', es: 'Colgadores', en: 'Hangers', hint: { es: 'colgando', en: 'hanging' } },
 ];
 
+/**
+ * The crew's breaks (Koa, 2026-10-05), shown on their hours so a low hour reads
+ * as a break rather than a slow crew. Labels only: the counts are not adjusted.
+ */
+const BREAKS = {
+  '09:00': { min: 10, es: 'descanso', en: 'break' },
+  '12:00': { min: 30, es: 'comida', en: 'lunch' },
+  '14:00': { min: 10, es: 'descanso', en: 'break' },
+};
+const breakLabel = (h, es) => (BREAKS[h] ? `${es ? BREAKS[h].es : BREAKS[h].en} ${BREAKS[h].min} min` : '');
+
 const STICKS = { key: 'sticks_down', es: 'Palos bajados esta hora', en: 'Sticks taken down this hour' };
 
 const COUNT_MAX = 50;
@@ -226,7 +237,7 @@ export function takedownHourlyBody(ui, data, flash = null) {
   const opts = [];
   for (let h = FIRST_HOUR; h <= LAST_HOUR; h++) {
     const v = hh(h);
-    opts.push(`<option value="${v}"${v === hour ? ' selected' : ''}>${hourSpan(v)}</option>`);
+    opts.push(`<option value="${v}"${v === hour ? ' selected' : ''}>${hourSpan(v)}${BREAKS[v] ? ` · ${breakLabel(v, es)}` : ''}</option>`);
   }
 
   // What the tags say for the hour being reported — shown, never typed.
@@ -257,7 +268,7 @@ export function takedownHourlyBody(ui, data, flash = null) {
   <thead><tr><th>${L('Hour', 'Hora')}</th><th>${L('Takedown', 'Bajada')}</th><th>${L('Sticks', 'Palos')}</th>
     <th>${L('Sacks', 'Bolsas')}</th><th>${L('Sacks / person', 'Bolsas / persona')}</th><th>${L('Lot · bay', 'Lote · bahía')}</th>
     <th>${L('Crew', 'Cuadrilla')}</th><th>${L('Sent', 'Enviado')}</th></tr></thead>
-  <tbody>${hours.map(h => `<tr><td><strong>${hourSpan(h.hour_start)}</strong></td><td>${dash(h.row?.takedown)}</td><td class="sticks">${dash(h.row?.sticks_down)}</td><td class="sacks">${h.sacks}</td><td class="per">${per(h)}</td>
+  <tbody>${hours.map(h => `<tr><td><strong>${hourSpan(h.hour_start)}</strong>${BREAKS[h.hour_start] ? `<br><span class="hint">${breakLabel(h.hour_start, es)}</span>` : ''}</td><td>${dash(h.row?.takedown)}</td><td class="sticks">${dash(h.row?.sticks_down)}</td><td class="sacks">${h.sacks}</td><td class="per">${per(h)}</td>
     <td style="white-space:normal;min-width:11em">${h.lots.map(l => `${l.n} · ${lotText(l)}`).join('<br>') || '—'}</td>
     <td>${h.row ? ROLES.slice(1).map(r => `${esc(es ? r.es : r.en)}&nbsp;${dash(h.row[r.key])}`).join('<br>') : '—'}</td>
     <td>${esc(localTime(h.row?.answered_at) || '')}${h.row?.notes ? ` <span class="hint">${esc(h.row.notes)}</span>` : ''}</td></tr>`).join('')}</tbody>
