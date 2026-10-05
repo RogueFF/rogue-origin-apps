@@ -631,3 +631,17 @@ test('test mode can be flipped from the dashboard, and the setting outranks the 
   const back = await call('GET');
   assert.equal(back.body.data?.test_mode ?? back.body.test_mode, false, 'and it flips back');
 });
+
+test('the takedown screen leads with a way back to another cultivar and to the tools home', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const id = seedSession(sqlite);
+  for (const [lang, back, home] of [['es', '← Otra variedad', '⌂ Inicio'], ['en', '← Other cultivar', '⌂ Home']]) {
+    const html = await sessionScreen(env, ctx, id, lang);
+    const nav = html.match(/<nav class="topnav">[\s\S]*?<\/nav>/)?.[0];
+    assert.ok(nav, `top nav rendered (${lang})`);
+    assert.ok(nav.includes(`action=sack_print&lang=${lang}`) && nav.includes(back), `back to the lot list (${lang})`);
+    assert.ok(nav.includes(`action=hub&lang=${lang}`) && nav.includes(home), `home (${lang})`);
+    assert.ok(html.indexOf('class="topnav"') < html.indexOf('class="lot-cultivar"'), 'above the lot header');
+    assert.ok(html.indexOf('class="topnav"') < html.indexOf('id="printBtn"'), 'above PRINT TAG');
+  }
+});
