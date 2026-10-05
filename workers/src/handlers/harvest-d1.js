@@ -1983,10 +1983,11 @@ function hungDates(ui, c) {
   return ui.t('hungDates', { d: a === b ? a : `${a}–${b}` });
 }
 
-/** The zone chips of a bay card: "Z2 62%" "Z11 35%" "Z1 4%". */
+/** The zone chips of a bay card: "Z1+Z2 66%" "Z11 34%" (zones harvested together merged). */
 function zoneMix(c) {
-  const pct = percentShares(c.zones);
-  return `<span class="zonemix">${c.zones.map((z, i) =>
+  const shown = c.groups || c.zones;
+  const pct = percentShares(shown);
+  return `<span class="zonemix">${shown.map((z, i) =>
     `<span class="zchip">${escapeHtml(z.zone)} <b>${pct[i]}%</b></span>`).join('')}</span>`;
 }
 
