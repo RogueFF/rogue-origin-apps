@@ -92,22 +92,25 @@ const picker = (env, ctx, lang = 'en') => handleHarvestD1(
 /** The radio card for one lot. */
 const card = (html, id) => html.match(new RegExp(`<label class="lot[^"]*">\\s*<input type="radio" name="session_id" value="${id}"[\\s\\S]*?</label>`))?.[0];
 
-test('a lot shows the bay its loads were hung in, and picking it sets the Bay field', { skip: !DatabaseSync }, async () => {
+// Since 2026-10-05 a lot whose loads carry a bay is offered as a BAY card
+// (tests/harvest-bay-takedown.test.mjs); the pill below is for zone cards.
+test('a lot hung in a bay is offered as that bay, which sets the Bay field', { skip: !DatabaseSync }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const id = seedLot(sqlite, { zone: 'Z4' });
   seedLoad(sqlite, id, 7); seedLoad(sqlite, id, 7);
   const c = card(await picker(env, ctx), id);
-  assert.match(c, /<span class="baypill">Bay 7<\/span>/);
+  assert.match(c, /class="lot baycard/);
+  assert.match(c, /<span class="baybig">Bay 7<\/span>/);
   assert.match(c, /data-bay="7"/);
 });
 
-test('a lot across two bays lists both and leaves the Bay field alone', { skip: !DatabaseSync }, async () => {
+test('a lot across two bays is offered once per bay', { skip: !DatabaseSync }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const id = seedLot(sqlite, { zone: 'Z5' });
   seedLoad(sqlite, id, 9); seedLoad(sqlite, id, 3);
-  const c = card(await picker(env, ctx, 'es'), id);
-  assert.match(c, /<span class="baypill">Bahías 3, 9<\/span>/);
-  assert.match(c, /data-bay=""/);
+  const html = await picker(env, ctx, 'es');
+  const bays = [...html.matchAll(new RegExp(`value="${id}"[^>]*?data-bay="(\\d+)"`, 'g'))].map(m => Number(m[1]));
+  assert.deepEqual(bays.sort((a, b) => a - b), [3, 9]);
 });
 
 test('no loads with a bay: the bay its tags came down from', { skip: !DatabaseSync }, async () => {
