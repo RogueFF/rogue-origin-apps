@@ -145,8 +145,18 @@ export async function loadTakedownHourly(db, env, params, isTest, now = new Date
     };
   });
 
+  // Sticks per sack only over hours that have BOTH a stick count and tags. A
+  // skipped hour's sacks would otherwise sit under sticks nobody reported, and
+  // this is the figure that replaces the working 3 sticks/sack in the outlook.
+  const both = hours.filter(h => h.row && h.row.sticks_down !== null && h.row.sticks_down !== undefined && h.sacks > 0);
+  const matched = {
+    hours: both.length,
+    sticks: both.reduce((s, h) => s + Number(h.row.sticks_down), 0),
+    sacks: both.reduce((s, h) => s + h.sacks, 0),
+  };
+
   return {
-    day, hour, existing, hours,
+    day, hour, existing, hours, matched,
     first: answered.length === 0,
     prefill: carried,
     carriedFrom,
@@ -248,12 +258,15 @@ export function takedownHourlyBody(ui, data, flash = null) {
     <th>${L('Sacks', 'Bolsas')}</th><th>${L('Sacks / person', 'Bolsas / persona')}</th><th>${L('Lot · bay', 'Lote · bahía')}</th>
     <th>${L('Crew', 'Cuadrilla')}</th><th>${L('Sent', 'Enviado')}</th></tr></thead>
   <tbody>${hours.map(h => `<tr><td><strong>${hourSpan(h.hour_start)}</strong></td><td>${dash(h.row?.takedown)}</td><td class="sticks">${dash(h.row?.sticks_down)}</td><td class="sacks">${h.sacks}</td><td class="per">${per(h)}</td>
-    <td>${h.lots.map(l => `${l.n} · ${lotText(l)}`).join('<br>') || '—'}</td>
-    <td>${h.row ? ROLES.slice(1).map(r => `${esc(es ? r.es : r.en)} ${dash(h.row[r.key])}`).join(' · ') : '—'}</td>
+    <td style="white-space:normal;min-width:11em">${h.lots.map(l => `${l.n} · ${lotText(l)}`).join('<br>') || '—'}</td>
+    <td>${h.row ? ROLES.slice(1).map(r => `${esc(es ? r.es : r.en)}&nbsp;${dash(h.row[r.key])}`).join('<br>') : '—'}</td>
     <td>${esc(localTime(h.row?.answered_at) || '')}${h.row?.notes ? ` <span class="hint">${esc(h.row.notes)}</span>` : ''}</td></tr>`).join('')}</tbody>
 </table></div>
-<p class="note">${L('Sacks today', 'Bolsas hoy')}: <strong>${data.totalSacks}</strong> · ${L('Sticks today', 'Palos hoy')}: <strong>${data.totalSticks}</strong>${
-    data.totalSticks && data.totalSacks ? ` · ${L('sticks per sack', 'palos por bolsa')} <strong>${Math.round((data.totalSticks / data.totalSacks) * 10) / 10}</strong>` : ''}</p>`
+<p class="note">${L('Sacks today', 'Bolsas hoy')}: <strong>${data.totalSacks}</strong> · ${L('Sticks today', 'Palos hoy')}: <strong>${data.totalSticks}</strong> · ${L('sticks per sack', 'palos por bolsa')} ${
+    data.matched.hours
+      ? `<strong>${Math.round((data.matched.sticks / data.matched.sacks) * 10) / 10}</strong> (${data.matched.hours} ${
+          data.matched.hours === 1 ? L('hour with sticks', 'hora con palos') : L('hours with sticks', 'horas con palos')})`
+      : '—'}</p>`
     : `<p class="note">${L('Nothing yet today. The first report is the morning head count.',
         'Todavía nada hoy. El primer reporte es el conteo de la mañana.')}</p>`;
 
@@ -265,7 +278,7 @@ export function takedownHourlyBody(ui, data, flash = null) {
         'Personas por puesto y palos bajados, cada hora. Las bolsas salen de las etiquetas.')}</p>
 
 <form method="POST" action="${API}?action=bajada_set&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
-  <label for="hour">${L('Which hour?', '¿Cuál hora?')}</label>
+  <label for="hour">${L('Which hour?', '¿Cuál hora?')} <span class="hint">${L('pick it first — changing it reloads the form', 'escógela primero — al cambiarla se recarga')}</span></label>
   <select id="hour" name="hour" onchange="location.href='${API}?action=bajada&lang=${ui.lang}&hour='+encodeURIComponent(this.value)">${opts.join('')}</select>
   ${existing && existing.answered_at ? `<p class="note">${L('This hour was already sent at', 'Esta hora ya se envió a las')} ${esc(localTime(existing.answered_at))} — ${L('saving again updates it.', 'al guardar otra vez se actualiza.')}</p>` : ''}
 
