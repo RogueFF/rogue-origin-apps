@@ -134,16 +134,29 @@ test('percentShares always adds to 100', () => {
 
 test('one card per bay, zones by bin share, sacks on the biggest zone', { skip: !DatabaseSync }, async () => {
   const { sqlite, env, ctx } = freshDb();
-  const z2 = seedLot(sqlite, { zone: 'Z2' });
-  const z1 = seedLot(sqlite, { zone: 'Z1' });
-  for (let i = 0; i < 3; i++) seedLoad(sqlite, z2, 9);
-  seedLoad(sqlite, z1, 9);
+  const z5 = seedLot(sqlite, { zone: 'Z5' });
+  const z6 = seedLot(sqlite, { zone: 'Z6' });
+  for (let i = 0; i < 3; i++) seedLoad(sqlite, z5, 9);
+  seedLoad(sqlite, z6, 9);
   const cards = bayCardsIn(await picker(env, ctx));
   assert.equal(cards.length, 1, 'one card for bay 9, not one per zone');
   assert.equal(cards[0].bay, 9);
-  assert.equal(cards[0].value, z2, 'tags hang off the zone with the most bins');
-  assert.deepEqual(chips(cards[0].html), ['Z2 75%', 'Z1 25%']);
+  assert.equal(cards[0].value, z5, 'tags hang off the zone with the most bins');
+  assert.deepEqual(chips(cards[0].html), ['Z5 75%', 'Z6 25%']);
   assert.match(cards[0].html, /96 bins/);
+});
+
+test('Z1 and Z2 were harvested together, so they show as one zone, Z1+Z2', { skip: !DatabaseSync }, async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const z2 = seedLot(sqlite, { zone: 'Z2' });
+  const z1 = seedLot(sqlite, { zone: 'Z1' });
+  const z11 = seedLot(sqlite, { zone: 'Z11' });
+  for (let i = 0; i < 5; i++) seedLoad(sqlite, z2, 9);
+  seedLoad(sqlite, z1, 9);
+  for (let i = 0; i < 4; i++) seedLoad(sqlite, z11, 9);
+  const [card] = bayCardsIn(await picker(env, ctx));
+  assert.deepEqual(chips(card.html), ['Z1+Z2 60%', 'Z11 40%']);
+  assert.equal(card.value, z2, 'sacks still hang off a real lot, the biggest');
 });
 
 test('a zone in two bays stays open until both bays are down; reopen brings it back', { skip: !DatabaseSync }, async () => {
@@ -201,7 +214,7 @@ test('the takedown screen for a bay names the bay and its mix, and finishes the 
   const withBay = await handleHarvestD1(new Request(
     `https://x/api/harvest?action=sack_session&session_id=${z2}&cultivar=Sour%20Lifter&bay=9&lang=en`), env, ctx).then(r => r.text());
   assert.match(withBay, /<span class="baybig">Bay 9<\/span>/);
-  assert.match(withBay, /Z2 <b>50%<\/b>[\s\S]*Z11 <b>50%<\/b>/);
+  assert.match(withBay, /Z1\+Z2 <b>50%<\/b>[\s\S]*Z11 <b>50%<\/b>/);
   assert.match(withBay, /action=bay_finish[\s\S]*Bay 9 is down/);
   assert.ok(!/action=lot_finish&lang=en" id="finishForm"/.test(withBay), 'no per-lot Finished in bay mode');
 

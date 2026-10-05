@@ -20,6 +20,7 @@
  *
  * Pure functions: every input is a plain row, so they test without a database.
  */
+import { harvestZone } from './zones.js';
 
 /** A refill comes a drying cycle later; a fill's own loads land within ~2 days. */
 export const FILL_GAP_DAYS = 3;
@@ -75,8 +76,9 @@ export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
  * @param {Array} tags        {bay, printed_at, cultivar, cut_number}
  * @returns {Array<{bay, cultivar, cut, fillStartMs, firstMs, lastMs, bins, loads,
  *                  zones: Array<{lot, zone, bins, share}>, primary, sacks}>}
- *   `zones` largest share first. `primary` is the lot sacks hang off: the one
- *   with the most bins in this bay. Loads of finished lots are left out — that
+ *   `zones` (one per lot) largest share first. `groups` is what the card
+ *   shows: the same shares with zones harvested together merged (Z1+Z2).
+ *   `primary` is the lot sacks hang off: the one with the most bins here. Loads of finished lots are left out — that
  *   material is already down.
  */
 export function bayCards(fills, lotOfSession, tags) {
@@ -113,9 +115,19 @@ export function bayCards(fills, lotOfSession, tags) {
         .sort((a, b) => b.bins - a.bins || String(a.zone).localeCompare(String(b.zone), 'en', { numeric: true }));
       const sacks = tags.filter(t => Number(t.bay) === bay && t.cultivar === cultivar
         && Number(t.cut_number ?? 1) === Number(cut) && ts(t.printed_at) > fill.startMs).length;
+      // What the card shows: zones harvested together (Z1+Z2) as one share.
+      const byGroup = new Map();
+      for (const z of zones) {
+        const k = harvestZone(z.zone);
+        const e = byGroup.get(k) || { zone: k, bins: 0, share: 0 };
+        e.bins += z.bins;
+        e.share += z.share;
+        byGroup.set(k, e);
+      }
+      const groups = [...byGroup.values()].sort((a, b) => b.bins - a.bins || a.zone.localeCompare(b.zone, 'en', { numeric: true }));
       cards.push({
         bay, cultivar, cut, fillStartMs: fill.startMs, firstMs: g.firstMs, lastMs: g.lastMs,
-        bins: g.bins, loads: g.loads, zones, primary: zones[0].lot, sacks,
+        bins: g.bins, loads: g.loads, zones, groups, primary: zones[0].lot, sacks,
       });
     }
   }
