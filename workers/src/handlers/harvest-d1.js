@@ -1889,7 +1889,58 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, lastBay, lastStorage] = await Promise.all([
     getRecentLots(db, isTest), getLastBay(db, isTest), getLastStorage(db, isTest)]);
+  await attachDryingBays(db, isTest, lots);
   return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash));
+}
+
+/**
+ * The bay(s) each lot is drying in, as `lot.bays` — shown on its picker card
+ * (Koa, 2026-10-05: "can we also put what bay it's drying in?").
+ *
+ * From the lot's barn loads, which carry the bay they were hung in. A lot with
+ * none (cut before bays were captured, or entered by hand) falls back to the
+ * bay its tags came down from. Neither: no bay shown, never a guess.
+ * Whole-window reads filtered in JS, as in handlePipeline: an IN list over
+ * session ids would outgrow D1's 100-variable cap.
+ */
+async function attachDryingBays(db, isTest, lots) {
+  const [loads, tags] = await Promise.all([
+    query(db, `
+      SELECT DISTINCT attributed_zone_session_id AS session_id, bay FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT DISTINCT zone_session_id AS session_id, bay FROM harvest_sacks
+      WHERE is_test = ? AND bay IS NOT NULL AND zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(printed_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+  ]);
+  const bySession = (rows) => {
+    const m = new Map();
+    for (const r of rows) {
+      if (!m.has(r.session_id)) m.set(r.session_id, new Set());
+      m.get(r.session_id).add(Number(r.bay));
+    }
+    return m;
+  };
+  const loadBays = bySession(loads), tagBays = bySession(tags);
+  const collect = (m, ids) => [...new Set(ids.flatMap(id => [...(m.get(id) || [])]))];
+  for (const l of lots) {
+    const ids = l.session_ids || [l.id];
+    const found = collect(loadBays, ids);
+    l.bays = (found.length ? found : collect(tagBays, ids)).sort((a, b) => a - b);
+  }
+  return lots;
+}
+
+/** "Bay 7" / "Bays 7, 9" — empty when the lot's bay is unknown. */
+function bayPill(ui, lot) {
+  const bays = lot.bays || [];
+  if (!bays.length) return '';
+  const text = bays.length === 1 ? ui.t('bayN', { n: bays[0] }) : ui.t('baysN', { n: bays.join(', ') });
+  return `<span class="baypill">${escapeHtml(text)}</span>`;
 }
 
 /**
@@ -4853,6 +4904,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .lotbody { display: block; min-width: 0; }
   .lothead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 1.1rem; }
   .lotmeta { display: block; color: #9fc2ac; font-size: 0.88rem; margin-top: 4px; }
+  .baypill { font-size: 0.8rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+             background: #e9c462; color: #1b2b20; }
   .badge { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em;
            padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
   .badge.ok   { background: #2f7a4f; color: #fff; }
@@ -5947,7 +6000,7 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
       : ` data-confirm="${escapeHtml(ui.t('confirmFinish', { lot: lotLabel(ui, l), n: l.sacks_printed }))}"`}>
       <input type="hidden" value="${l.id}" name="session_id">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
       <span class="lotbody">
-        <strong>${escapeHtml(lotLabel(ui, l))}</strong>
+        <strong>${escapeHtml(lotLabel(ui, l))}</strong> ${bayPill(ui, l)}
         <span class="lotmeta">${reopen
           ? ui.t('finishedOn', { date: escapeHtml(finishedDate(ui, l.takedown_done_at)), n: l.sacks_printed })
           : escapeHtml(ui.t('noteStarted', { n: l.sacks_printed }))}</span>
@@ -6000,6 +6053,7 @@ ${finishedHtml}`;
     <label class="lot ${p.level}">
       <input type="radio" name="session_id" value="${l.id}"
              data-cultivar="${escapeHtml(cv)}" data-level="${p.level}"
+             data-bay="${(l.bays || []).length === 1 ? l.bays[0] : ''}"
              data-desc="${escapeHtml(`${l.zone}${cv ? ` · ${cv}` : ''} cut ${l.cut_number}`)}"
              data-confirm="${escapeHtml(ui.t('confirmLot', {
                lot: `${l.zone}${cv ? ` · ${cv}` : ''} ${ui.t('cut', { n: l.cut_number })}`,
@@ -6009,6 +6063,7 @@ ${finishedHtml}`;
         <span class="lothead">
           <strong>${escapeHtml(l.zone)}${cv ? ` · ${escapeHtml(cv)}` : ''}</strong>
           <span class="badge ${b.cls}">${b.text}</span>
+          ${bayPill(ui, l)}
         </span>
         <span class="lotmeta">${ui.t('cut', { n: l.cut_number })} · ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
       </span>
@@ -6075,11 +6130,19 @@ ${finishedHtml}
 
   // Cultivar was captured at the zone scan, so it carries through rather than
   // being retyped at takedown — one less place for a mismatch.
-  form.addEventListener('change', function (e) {
-    if (e.target.name !== 'session_id') return;
-    var v = e.target.getAttribute('data-cultivar');
+  function applyLot(r) {
+    var v = r.getAttribute('data-cultivar');
     if (v) cv.value = v;
+    // A lot hung in one bay is taken down from that bay: set it, so the bay
+    // printed on every tag matches the card that was picked. Two bays, or
+    // none known: the field is left alone for the operator.
+    var bay = r.getAttribute('data-bay'), sel = document.getElementById('bay');
+    if (bay && sel && sel.querySelector('option[value="' + bay + '"]')) sel.value = bay;
+  }
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'session_id') applyLot(e.target);
   });
+  if (selected()) applyLot(selected());
 
   // Advisory guard, never a block: the tape and the operator's eyes beat our
   // heuristic, so an implausible pick asks for confirmation and then proceeds.

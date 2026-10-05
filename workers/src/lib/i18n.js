@@ -287,7 +287,7 @@ const S = {
     tlNoPlant: 'sin fecha de siembra', tlNoDates: 'Sin fechas todavía.',
     wTotal: 'la bolsa entera', wFull: 'bolsa llena',
     // — bays (1-8 bodega de abajo, 9-12 bodega de arriba) —
-    bay: 'Bahía', bayN: 'Bahía {n}',
+    bay: 'Bahía', bayN: 'Bahía {n}', baysN: 'Bahías {n}',
     bottomBarn: 'Bodega de abajo (1-8)', topBarn: 'Bodega de arriba (9-12)',
     bayHint: '¿De cuál bahía se está bajando?',
     bayHintLast: 'La última fue la {n} — cámbiala si esta es otra',
@@ -610,7 +610,7 @@ const S = {
     tlGrow: '{d} growing', tlRack: '{d} on the rack', tlSack: '{d} in the sack',
     tlNoPlant: 'plant date unknown', tlNoDates: 'No dates yet.',
     wTotal: 'the whole sack', wFull: 'full sack',
-    bay: 'Bay', bayN: 'Bay {n}',
+    bay: 'Bay', bayN: 'Bay {n}', baysN: 'Bays {n}',
     bottomBarn: 'Bottom barn (1-8)', topBarn: 'Top barn (9-12)',
     bayHint: 'Which bay is coming down?',
     bayHintLast: 'Last was {n} — change it if this one is different',
