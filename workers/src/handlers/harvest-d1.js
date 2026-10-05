@@ -4764,6 +4764,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 
   /* Takedown session screen — big targets, gloves on, one job per press. */
   .lot { border-left: 4px solid #2f7a4f; padding-left: 12px; margin-bottom: 22px; }
+  .topnav { display: flex; gap: 10px; margin: 0 0 18px; }
+  .topnav a.btn { flex: 1; padding: 14px 8px; font-size: 1.05rem; }
   .lot-cultivar { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
   .lot-meta { color: #9fc2ac; margin-top: 2px; }
   .bigbtn {
@@ -6325,7 +6327,14 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
   const handoff = chromeHandoff(ui, `${API}?action=sack_session&${q}`
     + (bay === null ? '' : `&bay=${bay}`) + (storage ? `&storage=${encodeURIComponent(storage)}` : ''));
-  return `${handoff}${flashHtml}${notice}${variantWarn}
+  // Back out to another cultivar from the top, not only from the small footer
+  // link (Koa, 2026-10-05: crews work several cultivars at once). The picker's
+  // Resume brings a started lot back with its bay, so nothing is retyped.
+  const topNav = `<nav class="topnav">
+  <a class="btn alt" href="${API}?action=sack_print&lang=${ui.lang}">${ui.t('otherCultivar')}</a>
+  <a class="btn alt" href="${API}?action=hub&lang=${ui.lang}">${ui.t('homeTools')}</a>
+</nav>`;
+  return `${topNav}${handoff}${flashHtml}${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
   <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
