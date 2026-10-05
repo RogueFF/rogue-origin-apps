@@ -4846,6 +4846,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   label.lot input { margin: 3px 0 0; width: auto; flex: none; transform: scale(1.4); }
   label.lot:has(input:checked) { border-color: #4a9d6a; background: #21402c; }
   label.lot.green { opacity: 0.72; }
+  details.greenlots { margin: 0 0 20px; }
+  details.greenlots .lotlist { margin-top: 6px; }
   .lotbody { display: block; min-width: 0; }
   .lothead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 1.1rem; }
   .lotmeta { display: block; color: #9fc2ac; font-size: 0.88rem; margin-top: 4px; }
@@ -5988,7 +5990,7 @@ ${finishedHtml}`;
   // dangerous option the default — force a deliberate choice instead.
   const topIsReady = lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
 
-  const cards = lots.map((l, i) => {
+  const card = (l, i) => {
     const p = lotPlausibility(ui, l);
     const b = BADGE[p.level];
     const cv = l.cultivar || '';
@@ -6009,7 +6011,17 @@ ${finishedHtml}`;
         <span class="lotmeta">${ui.t('cut', { n: l.cut_number })} · ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
       </span>
     </label>`;
-  }).join('');
+  };
+  // Too-green lots fold into a closed section under the list (Koa, 2026-10-05:
+  // "anything that is too green should be minimized"). Still pickable — the
+  // tape can beat the dry clock — just not in the way of the lots coming down.
+  const cards = lots.map((l, i) => lotLevel(l) === 'green' ? '' : card(l, i)).join('');
+  const greenLots = lots.filter(l => lotLevel(l) === 'green');
+  const greenHtml = greenLots.length ? `
+  <details class="batch greenlots">
+    <summary>${ui.t('greenLots', { n: greenLots.length })}</summary>
+    <div class="lotlist">${greenLots.map(l => card(l, lots.indexOf(l))).join('')}</div>
+  </details>` : '';
 
   const firstCv = topIsReady ? (lots[0].cultivar || '') : '';
 
@@ -6022,7 +6034,7 @@ ${finishHtml ? `<h2>${ui.t('startSection')}</h2>` : ''}
 <p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
 <form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
-  <div class="lotlist">${cards}</div>
+  ${cards ? `<div class="lotlist">${cards}</div>` : ''}${greenHtml}
   <label for="cultivar">${ui.t('cultivar')} <span class="hint">${ui.t('cultivarHint')}</span></label>
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
   <label for="bay">${ui.t('bay')} <span class="hint">${lastBay ? ui.t('bayHintLast', { n: lastBay }) : ui.t('bayHint')}</span></label>
@@ -6050,6 +6062,14 @@ ${finishedHtml}
   });
 
   function selected() { return form.querySelector('input[name=session_id]:checked'); }
+
+  // With every lot too green, the only radios sit in the closed section, and
+  // the browser cannot point at a required field it cannot show — so a submit
+  // with nothing picked unfolds it rather than failing silently.
+  var greenBox = form.querySelector('details.greenlots');
+  form.addEventListener('invalid', function (e) {
+    if (greenBox && e.target.name === 'session_id' && !form.querySelector('.lotlist > label.lot')) greenBox.open = true;
+  }, true);
 
   // Cultivar was captured at the zone scan, so it carries through rather than
   // being retyped at takedown — one less place for a mismatch.
