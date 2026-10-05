@@ -213,3 +213,28 @@ test('each role carries its own last number, so a one-box hour does not blank th
   assert.match(html, /id="stick_removers"[^>]*value="2"/);
   assert.match(html, /id="sticks_down"[^>]*value=""/);
 });
+
+test('sticks per sack only counts hours where sticks were reported', async () => {
+  const { sqlite, env } = freshDb();
+  sack(sqlite, { printed: '2026-10-05 16:15:00' });                       // 9-10: 2 sacks, 30 sticks
+  sack(sqlite, { printed: '2026-10-05 16:20:00' });
+  for (const m of ['10', '20', '30', '40']) sack(sqlite, { printed: `2026-10-05 15:${m}:00` }); // 8-9: 4 sacks, no report
+  sqlite.prepare(`INSERT INTO harvest_takedown_hourly (season, harvest_date, hour_start, takedown, sticks_down, answered_at, is_test)
+    VALUES (2026, '2026-10-05', '09:00', 4, 30, '2026-10-05 17:01:00', 1)`).run();
+
+  const data = await loadTakedownHourly(env.DB, env, {}, 1, NOW);
+  const html = takedownHourlyBody({ lang: 'en' }, data);
+
+  assert.equal(data.totalSacks, 6, 'the day total still counts every tag');
+  assert.match(html, /sticks per sack <strong>15<\/strong> \(1 hour with sticks\)/,
+    '30 sticks over the 2 sacks of the reported hour, not over all 6');
+});
+
+test('sticks per sack is a dash when no hour has both', async () => {
+  const { sqlite, env } = freshDb();
+  sack(sqlite, { printed: '2026-10-05 16:15:00' });
+
+  const html = takedownHourlyBody({ lang: 'en' }, await loadTakedownHourly(env.DB, env, {}, 1, NOW));
+
+  assert.match(html, /sticks per sack —/);
+});
