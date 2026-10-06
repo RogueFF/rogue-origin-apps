@@ -140,13 +140,30 @@ export function salidaMain(boot, S, decoderUrl) {
   }
 
   // ---- typed path ----
+  // Phones show the most-used cultivars first and fold the rest behind one
+  // "N más…" chip; a desk has the room to show them all. The selected cultivar
+  // is always among the visible ones.
+  let chipsOpen = false;
+  const CHIP_FOLD = 4;
   function renderChips() {
     const host = $('schips'); host.textContent = '';
-    for (const ch of orderChips(today.chips, store.get(RKEY, []))) {
+    const all = orderChips(today.chips, store.get(RKEY, []));
+    const narrow = !(window.matchMedia && matchMedia('(min-width: 900px)').matches);
+    let list = all;
+    if (narrow && !chipsOpen && all.length > CHIP_FOLD + 1) {
+      list = all.slice(0, CHIP_FOLD);
+      const sel = all.find((c) => c.code === code);
+      if (sel && !list.includes(sel)) list = [...list.slice(0, CHIP_FOLD - 1), sel];
+    }
+    for (const ch of list) {
       const b = button((ch.code === code ? '✓ ' : '') + (ch.cultivar || ch.code), 'chip' + (ch.code === code ? ' on' : ''), () => { code = ch.code; store.set(CKEY, code); store.set(RKEY, rememberCode(store.get(RKEY, []), code)); renderChips(); focusNum(); });
       b.setAttribute('aria-pressed', ch.code === code ? 'true' : 'false');
       const cd = document.createElement('small'); cd.textContent = ch.code; const n = document.createElement('em'); n.textContent = ch.in_inventory ?? '';
       b.append(cd, n); host.appendChild(b);
+    }
+    if (narrow && all.length > CHIP_FOLD + 1) {
+      const hidden = all.length - list.length;
+      host.appendChild(button(chipsOpen ? S.less : S.more.replace('{n}', hidden), 'chip more', () => { chipsOpen = !chipsOpen; renderChips(); }));
     }
   }
   // Desktop only: on a phone a focused field pops the soft keyboard over the camera and pad.
