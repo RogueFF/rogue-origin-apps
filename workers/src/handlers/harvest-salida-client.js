@@ -7,6 +7,11 @@
  * feeds those strings through the scan path one after another (1.2 s apart,
  * debounce bypassed) after load, so a headless screenshot shows the result.
  */
+/* global parseTag, isScannerBurst, debounceSeen, queueReduce, pacificTime, countText, busyRetry,
+          undoNeedsConfirm, orderChips, rememberCode, queueLoad, feedbackFor, groupToday, escapeHtml, embedJson,
+          BarcodeDetector */
+// The names above are the LOGIC_SOURCE functions inlined ahead of this code in
+// the page (same order as harvest-salida-logic.js), plus the browser's QR API.
 export function salidaMain(boot, S, decoderUrl) {
   const $ = (id) => document.getElementById(id);
   const api = boot.api || '/api/harvest';
