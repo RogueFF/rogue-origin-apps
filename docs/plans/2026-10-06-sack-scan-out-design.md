@@ -251,3 +251,49 @@ Each step is test-first with `node --test`, in the style of the existing
 
 Steps 1 to 5 are the scan-out itself and can ship alone. Steps 6 and 7 must be
 live before the first real 2026 sack is trimmed, or the form double-subtracts.
+
+## 12. Decisions made during the build (2026-10-06)
+
+Recorded here because none of them is visible from the contract alone.
+
+- **Order matching is by cultivar id as text.** Ids are slugs (`sour-lifter`),
+  not numbers. The first build compared them as numbers, which made every
+  sack go to the top order in the queue regardless of cultivar; a test against
+  the real `computeQueue` caught it.
+- **Smalls-only orders are never proposed.** Sacks are driven by tops, so an
+  order wanting only smalls of a cultivar has no remaining tops and is skipped.
+- **One Shopify operation per sack at a time.** An in-flight marker in the
+  row's error column is the signal. A scan while an undo's add-back is in
+  flight answers `busy` and the page retries; undo waits up to 4 s for an
+  in-flight subtract to settle before deciding.
+- **A marker older than two minutes is abandoned, not busy.** A worker's
+  background call cannot outlive that. Stale markers are treated as "unknown,
+  a person must check", so a sack can never be stuck busy and a void is never
+  blocked forever. The forced sweep acts only on abandoned calls.
+- **The sweep re-reads each sack right before acting**, lays its own marker,
+  and guards every write-back on that marker. A scan or undo during a sweep
+  can no longer be doubled or lost.
+- **A late add on a sack already out** is recorded as owed (`add landed after
+  out`) and settled by the next sweep. A failed add on a sack that is out is
+  not a debt: it and the missing subtract cancel.
+- **Rescan after a failed undo add-back** sends nothing: the owed +1 and the
+  new -1 cancel.
+- **Refused and unknown-order responses carry a localised `message`.**
+- **The end-of-day form never trusts a late-loading script for the 2026
+  guard.** The year check is inline on the page as well as in the shared
+  module; if the module is missing, 2026 rows are forced read-only at 0 and
+  the form refuses to save.
+- **A scanned sack maps to a form row by its Shopify variant id**, so 1st Cut
+  and 2nd Cut stay on their own rows; a 2nd Cut with scans gets a row even
+  when the scoreboard never named it. The floor's pounds for a cultivar stay
+  on the row the scoreboard matched, with a note when two cuts share a day.
+- **Yield is keyed by season, cultivar, cut and harvest type**, not cultivar
+  alone. Floor strain titles with a `/ Nth Cut` suffix resolve through the
+  cut-less alias. When one cut-less floor row faces two cuts of bags, the
+  output is split by weight and reported as `pooled_across_cuts`.
+- **Saving re-reads the scans for that date first** and tells the water
+  spider if the count changed since the page was opened.
+- **"bolsa" is the word** on the crew screens, matching ABRIR BOLSA; "sack" in
+  English. Needed counts are shown as whole bags, rounded up.
+- **The `/salida` page needs no password**, like the other crew screens. It
+  shows order nicknames and sack counts, no prices.

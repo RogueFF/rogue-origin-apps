@@ -259,8 +259,17 @@ test('sweep --apply will not guess at an unknown row without force', async () =>
     'that call may have landed; replaying it would subtract twice and look identical to an honest count');
   assert.ok(sack(sqlite).shopify_added_at);
 
+  // Force is the deliberate override — but not while the call it would repeat
+  // may still be running. A marker under two minutes old is LIVE (a worker's
+  // waitUntil cannot outlive that), so even force waits; once it is stale the
+  // operator's judgement takes over.
+  const tooSoon = await (await sweep(env, ctx, '&apply=1&force=1')).json();
+  assert.equal((tooSoon.data?.rows ?? tooSoon.rows)[0].acted, false, 'a live marker is never replayed, even forced');
+  const old = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  sqlite.prepare(`UPDATE harvest_sacks SET shopify_add_error = 'in flight since ' || ? || substr(shopify_add_error, 16 + 24 + 1) WHERE sack_id = '26-PURPSNOW-2'`).run(old);
+  assert.match(sack(sqlite).shopify_add_error, /^in flight since .* \(void rollback\)$/);
   const forced = await (await sweep(env, ctx, '&apply=1&force=1')).json();
-  assert.equal((forced.data?.rows ?? forced.rows)[0].acted, true, 'force is the deliberate override');
+  assert.equal((forced.data?.rows ?? forced.rows)[0].acted, true, 'force is the deliberate override once the marker is stale');
   assert.equal(sack(sqlite).shopify_added_at, null);
 });
 

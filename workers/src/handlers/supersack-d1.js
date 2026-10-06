@@ -15,6 +15,7 @@ import { successResponse, errorResponse, parseBody, getAction, getQueryParams } 
 import { buildRates } from '../lib/sack-rates.js';
 import { constantTimeEqual } from '../lib/auth.js';
 import { fullSackLbsForTitle, seasonFromTitle } from '../lib/sack-weight.js';
+import { handleScannedDay, handleDayYield } from './supersack-day-yield.js';
 
 // A full sack is 37 lb through the 2025 crop and 35 lb from 2026 (Koa,
 // 2026-09-28). Read per strain from its title's crop year, never from the date
@@ -64,6 +65,14 @@ export async function handleSupersackD1(request, env, ctx) {
       return await topsRemaining(request, env, ctx);
     case 'tops_breakdown':
       return await topsBreakdown(request, env, ctx);
+    // End of day for scanned (2026+) sacks. Same no-password posture as submit:
+    // scanned_day is a read, and day_yield only re-runs the idempotent allocation.
+    case 'scanned_day':
+      return await handleScannedDay(env.DB, env, params);
+    case 'day_yield':
+      // It writes (re-runs allocation), so a stray GET/link must not trigger it.
+      if (request.method !== 'POST') return errorResponse('day_yield requires POST', 'METHOD_NOT_ALLOWED', 405);
+      return await handleDayYield(env.DB, env, body);
     case 'backfill':
       return await backfill(body, env);
     default:
