@@ -751,6 +751,7 @@
 
   // i18n
   const LANG = { en: {
+    fromScans: 'From scans (not typed)', scanOwned: '2026 sack counts come from the scans and cannot be corrected here.', cutsPoundsCombined: 'Pounds for both cuts are combined on the first row:', scansMore: '{n} more sacks scanned since you opened this page — count updated.', scansFewer: '{n} fewer sacks scanned than when you opened this page — count updated.', scansUnreadableShort: 'Scans not read', scansUnreadable: 'Could not read the sack scans for this day. 2026 sack counts will save as 0 and nothing is taken from Shopify for them. Check signal and reload before saving.', scansUnmapped: 'Scanned sacks with no row here — tell the office:', scansModuleMissing: 'Page did not load fully. Reload before saving.', noScansWarn: 'Weights entered for a 2026 strain with no sacks scanned today. That output will reach no sack. Scan the sacks at /salida first, then save (or save now and save again after scanning).', dayYieldTitle: 'Yield for the scanned sacks:', dayYieldFailed: 'Saved. Could not load the per-sack yield; it will run tonight.', mismatch: 'scanned count differs from the floor count — check for a missed scan', outputNoScans: 'output with no sacks scanned — scan them, then save again', scansNoOutput: 'sacks scanned with no output entered', unknownStrain: 'strain unknown to the system — tell the office', cut: 'cut', stock: 'stock', sacksWord: 'sacks', topsWord: 'tops', smallsWord: 'smalls',
     title: 'Supersack Tracker', supersacksOpened: 'Supersacks Opened',
     waterSpiderEntry: 'Water Spider Entry', biomass: 'Biomass #2 Trim',
     premiumTrim: 'Premium #1 Trim', productionData: 'Production Data (auto-pulled)',
@@ -766,6 +767,7 @@
     swap: 'Swap', saveFailed: 'Entry not saved',
     dayTotalsHint: 'Whole day, every strain together — the floor separates by quality, not by strain.',
   }, es: {
+    fromScans: 'De escaneos (no se escribe)', scanOwned: 'Los conteos de sacos 2026 vienen de los escaneos y no se corrigen aquí.', cutsPoundsCombined: 'Las libras de los dos cortes van juntas en la primera fila:', scansMore: '{n} sacos más escaneados desde que abrió esta página — conteo actualizado.', scansFewer: '{n} sacos menos escaneados que cuando abrió esta página — conteo actualizado.', scansUnreadableShort: 'Escaneos no leídos', scansUnreadable: 'No se pudieron leer los escaneos de hoy. Los sacos 2026 se guardan en 0 y no se descuenta nada en Shopify por ellos. Revise la señal y recargue antes de guardar.', scansUnmapped: 'Sacos escaneados sin fila aquí — avise a la oficina:', scansModuleMissing: 'La página no cargó completa. Recargue antes de guardar.', noScansWarn: 'Hay pesos para una cepa 2026 sin sacos escaneados hoy. Ese producto no llegará a ningún saco. Escanee los sacos en /salida primero y luego guarde (o guarde ahora y otra vez después de escanear).', dayYieldTitle: 'Rendimiento de los sacos escaneados hoy:', dayYieldFailed: 'Guardado. No se pudo cargar el rendimiento por saco; se calcula esta noche.', mismatch: 'el conteo escaneado no coincide con el del piso — revise si faltó un escaneo', outputNoScans: 'producto sin sacos escaneados — escanéelos y guarde otra vez', scansNoOutput: 'sacos escaneados sin producto ingresado', unknownStrain: 'cepa desconocida para el sistema — avise a la oficina', cut: 'corte', stock: 'inventario', sacksWord: 'sacos', topsWord: 'tops', smallsWord: 'smalls',
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
     waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa #2 (recorte)',
     premiumTrim: 'Recorte Premium #1', productionData: 'Datos de Producción (automático)',
@@ -798,6 +800,52 @@
   const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
   const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
   const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
+  // 2026+ strains are counted by the trim-line scan, which already took each
+  // sack off Shopify. Decision logic lives in ../js/shared/supersack-scans.js
+  // (one copy, also under node --test); the module sets window.SupersackScans.
+  const SS = () => window.SupersackScans;
+  // Load-order-proof copy of the module's year rule: the guard below must hold
+  // even before the module loads, or if it never does. Keep in step with
+  // isScanCounted in supersack-scans.js (tests/supersack-scans.test.mjs pins both).
+  function yearScanCounted(title) {
+    const t = String(title || '');
+    const m = t.match(/^\s*(\d{4})\s*-/);
+    if (m && Number(m[1]) >= 2026) return true;
+    return (t.match(/\b20\d\d\b/g) || []).some(y => Number(y) >= 2026);
+  }
+  const isScanRow = (title) => yearScanCounted(title) || !!(SS() && SS().isScanCounted(title));
+  // The ONLY way this page may change a strain's supersack count in Shopify.
+  function guardedSupersackOp(title, delta, date, mode) {
+    if (yearScanCounted(title)) return null;  // the scan already moved Shopify
+    if (!SS() || SS().isScanCounted(title)) return null;
+    return SS().supersackOp(title, delta, title, date, mode);
+  }
+  const escHtml = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let scanState = { ok: false, date: null, byStrain: [], counts: {}, unmapped: [] };
+  async function loadScans(date, timeoutMs) {
+    scanState = { ok: false, date, byStrain: [], counts: {}, unmapped: [] };
+    const ctl = timeoutMs ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+    try {
+      const raw = await (await fetch(`${SS_API}?action=scanned_day&date=${date}`, ctl ? { signal: ctl.signal } : undefined)).json();
+      const d = raw.data || raw;
+      if (d.success === false || !Array.isArray(d.by_strain)) throw new Error('bad payload');
+      scanState = { ok: true, date, byStrain: d.by_strain, counts: {}, unmapped: [] };
+    } catch (e) { console.error('[supersack] scans', e); }
+    finally { if (timer) clearTimeout(timer); }
+  }
+  // Scan-counted rows take the scanned count, never a typed or saved one. When
+  // the scans could not be read they show 0 and say so: no fallback to typing,
+  // and supersackOp never subtracts for these rows either way.
+  function applyScans() {
+    if (!SS()) { for (const [title, s] of Object.entries(strainData)) if (yearScanCounted(title)) s.sacks = 0; return; }
+    const rows = Object.entries(strainData).map(([title, s]) => ({ title, productId: s.productId }));
+    // Scans read for another date are never counted for this one.
+    if (scanState.ok && scanState.date !== dateInput.value) scanState = { ok: false, date: scanState.date, byStrain: [], counts: {}, unmapped: [] };
+    const r = scanState.ok ? SS().scanCountsForRows(rows, scanState.byStrain) : { counts: {}, unmapped: [] };
+    scanState.counts = r.counts; scanState.unmapped = r.unmapped;
+    for (const [title, s] of Object.entries(strainData)) if (isScanRow(title)) s.sacks = r.counts[title] || 0;
+  }
   const LBS_TO_GRAMS = 453.592;
   // A full sack by crop year: 37 lb through 2025, 35 lb from the 2026 crop
   // (Koa, 2026-09-28). The year comes from the strain title, not today's date —
@@ -875,8 +923,26 @@
       return;
     }
 
-    container.innerHTML = strains.map(name => {
+    applyScans();
+    const tl = LANG[(window.getLang && window.getLang()) || 'en'];
+    const unm = escHtml(scanState.unmapped.map(u => `${u.season} ${u.cultivar}: ${u.sacks}`).join(', '));
+    const scanNote = (strains.some(isScanRow) && !scanState.ok)
+      ? `<div class="strain-production" style="color:var(--danger)">${tl.scansUnreadable}</div>`
+      : (unm ? `<div class="strain-production" style="color:var(--danger)">${tl.scansUnmapped} ${unm}</div>` : '');
+    container.innerHTML = scanNote + strains.map(name => {
       const s = strainData[name];
+      if (isScanRow(name)) {
+        return `
+        <div class="strain-row" data-strain="${escHtml(name)}">
+          <div class="strain-row-main">
+            <div class="strain-name">${escHtml(shortStrain(name))}
+              <div class="strain-production">${scanState.ok ? tl.fromScans : tl.scansUnreadableShort}</div>
+              ${s.poundsOn ? `<div class="strain-production">${tl.cutsPoundsCombined} ${escHtml(shortStrain(s.poundsOn))}</div>` : ''}
+            </div>
+            <div class="strain-counter"><input type="number" value="${s.sacks}" readonly tabindex="-1" aria-label="${tl.fromScans}"></div>
+          </div>
+        </div>`;
+      }
       const shortName = shortStrain(name);
       return `
         <div class="strain-row" data-strain="${name}">
@@ -900,12 +966,14 @@
   }
 
   // Strain counter controls (exposed to window for inline handlers)
-  window._strainInc = (name) => { strainData[name].sacks++; renderStrainCounters(); recalc(); };
-  window._strainDec = (name) => {
+  window._rerenderStrains = () => { renderStrainCounters(); recalc(); };
+  const scanLocked = isScanRow;
+  window._strainInc = (name) => { if (scanLocked(name)) return; strainData[name].sacks++; renderStrainCounters(); recalc(); };
+  window._strainDec = (name) => { if (scanLocked(name)) return;
     if (strainData[name].sacks > 0) strainData[name].sacks--;
     renderStrainCounters(); recalc();
   };
-  window._strainSet = (name, val) => {
+  window._strainSet = (name, val) => { if (scanLocked(name)) return;
     strainData[name].sacks = Math.max(0, parseInt(val) || 0);
     renderStrainCounters(); recalc();
   };
@@ -1014,7 +1082,7 @@
       const sections = strainsWithSacks.map(([name, s]) => {
         const shortName = name.replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, '');
         const n = s.sacks;
-        const remaining = (s.poolValue || 0) - n; // sacks left after today
+        const remaining = (isScanRow(name) ? (s.poolValue || 0) : (s.poolValue || 0) - n); // sacks left after today
         if (remaining <= 0) return '';
 
         // Calculate per-sack averages from today's actual data
@@ -1064,8 +1132,36 @@
   }
 
   // Fetch scoreboard (per-strain production) + supersack variants + pool products in parallel
+  async function showDayYield(date) {
+    const t = LANG[(window.getLang && window.getLang()) || 'en'];
+    let box = document.getElementById('day-yield');
+    if (!box) { box = document.createElement('div'); box.id = 'day-yield'; box.className = 'strain-production';
+      box.style.cssText = 'margin-top:12px;white-space:pre-line'; submitBtn.after(box); }
+    try {
+      const raw = await (await fetch(`${SS_API}?action=day_yield`, { method: 'POST',
+        headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'day_yield', date }) })).json();
+      const d = raw.data || raw;
+      if (d.success === false) throw new Error(d.error || 'failed');
+      const lines = (d.groups || []).map(g => `${g.season} ${g.cultivar} · ${g.zone} · ${t.cut} ${g.cut_number} · ${g.order ? (g.order.nickname || g.order.id) : t.stock}: ${g.sacks} ${t.sacksWord} — ${t.topsWord} ${g.tops}, ${t.smallsWord} ${g.smalls}, bio ${g.biomass}, trim ${g.trim}`);
+      for (const m of (d.mismatches || [])) lines.push(`⚠ ${m.season} ${m.cultivar}: ${t.mismatch}`);
+      for (const u of (d.unallocated || [])) {
+        if (u.kind === 'output_without_scans') lines.push(`⚠ ${u.season} ${u.cultivar}: ${t.outputNoScans}`);
+        else if (u.kind === 'scanned_without_output') lines.push(`⚠ ${u.season} ${u.cultivar} (${u.sacks}): ${t.scansNoOutput}`);
+        else if (u.kind === 'unknown_strain') lines.push(`⚠ ${u.strain}: ${t.unknownStrain}`);
+      }
+      box.textContent = lines.length ? `${t.dayYieldTitle}\n${lines.join('\n')}` : '';
+    } catch (e) {
+      console.error('[supersack] day_yield', e);
+      box.textContent = t.dayYieldFailed;   // the save itself already succeeded
+    }
+  }
+
   async function loadAll() {
     const date = dateInput.value;
+    await loadScans(date);
+    // The rows of a 2026 day come from the module (rowsForDay); give the
+    // module script up to 3 s to land before building them the old way.
+    for (let i = 0; i < 30 && !SS(); i++) await new Promise(r => setTimeout(r, 100));
     topsEl.textContent = 'loading...'; topsEl.classList.add('loading');
     smallsEl.textContent = 'loading...'; smallsEl.classList.add('loading');
 
@@ -1111,6 +1207,17 @@
 
     // Build per-strain production from scoreboard hourly data
     const perStrainProd = {}; // { strainTitle: { tops, smalls } }
+    // Scoreboard pounds are per cut-less strain: they go on the row the strain
+    // matched. A scan-only row (another cut) gets 0 and points at that row.
+    const dayRows = (strains, totalsBy) => {
+      const variants = supersackRes.status === 'fulfilled' ? (supersackRes.value.variants || []) : [];
+      const scans = scanState.ok && scanState.date === dateInput.value ? scanState.byStrain : [];
+      const day = SS().rowsForDay({ scoreboardStrains: strains, variants, scans });
+      if (day.missing.length) console.warn('[supersack] scanned variants not in Shopify list', day.missing);
+      for (const r of day.rows) {
+        perStrainProd[r.title] = r.strain ? totalsBy[r.strain] : { tops: 0, smalls: 0, poundsOn: r.poundsOn };
+      }
+    };
     if (scoreboardRes.status === 'fulfilled') {
       const sb = scoreboardRes.value.scoreboard || scoreboardRes.value || {};
       const hours = sb.hourlyRates || [];
@@ -1127,8 +1234,10 @@
           strainTotals[strain].smalls += (h.smalls || 0);
         });
         
-        // Fuzzy match strain names to supersack variant titles
-        for (const [strain, totals] of Object.entries(strainTotals)) {
+        // Map strain names to supersack variants. With the module, 2026+ rows
+        // follow the scans (a 2nd Cut gets its own row); 2025 is unchanged.
+        if (SS()) dayRows(Object.keys(strainTotals), strainTotals);
+        else for (const [strain, totals] of Object.entries(strainTotals)) {
           // Try exact match first
           if (supersackMap[strain]) {
             perStrainProd[strain] = totals;
@@ -1150,7 +1259,9 @@
       } else {
         // Fallback to single strain if no hourly data
         const strain = sb.strain || 'Unknown';
-        const matchingVariant = Object.keys(supersackMap).find(title => 
+        if (SS()) dayRows([strain], { [strain]: { tops: sb.todayLbs || 0, smalls: sb.todaySmalls || 0 } });
+        else {
+        const matchingVariant = Object.keys(supersackMap).find(title =>
           title.toLowerCase().includes(strain.toLowerCase().trim())
         ) || strain;
         
@@ -1158,8 +1269,11 @@
           tops: sb.todayLbs || 0,
           smalls: sb.todaySmalls || 0
         };
+        }
       }
     }
+    // No scoreboard: scanned 2026 variants still get their rows.
+    if (SS() && scoreboardRes.status !== 'fulfilled') dayRows([], {});
 
     // Pool products (biomass/trim)
     for (const res of [smallsPoolRes, topsPoolRes, trimPoolRes]) {
@@ -1207,6 +1321,7 @@
         inventoryItemId: variant?.inventoryItemId || null,
         locationId: variant?.locationId || null,
         poolValue: variant?.quantity || 0,
+        poundsOn: prod.poundsOn || null,
       };
     }
 
@@ -1245,6 +1360,7 @@
         const d = new Date(e.timestamp);
         allEntries.push({
           name: (e.variantTitle || '').replace(/^\d{4} - /, '').replace(/ \/ Sungrown$/, ''),
+          title: e.variantTitle || '', // full title: the year decides scan-counted
           action: e.action,
           amount: e.changeAmount,
           unit: 'sacks',
@@ -1309,9 +1425,10 @@
         const sign = isSubtract ? '−' : '+';
         const cls = isSubtract ? 'subtract' : 'add';
         const noteHtml = e.note ? `<div class="change-note">${e.note}</div>` : '';
-        const editable = (e.fullNote || '').includes('Supersack Tracker') || e.isSupersack;
+        const editable = ((e.fullNote || '').includes('Supersack Tracker') || e.isSupersack)
+          && !(e.isSupersack && isScanRow(e.title || e.name)); // 2026 counts belong to the scans
         const entryData = editable ? JSON.stringify({
-          name: e.name, action: e.action, amount: e.amount, unit: e.unit,
+          name: e.name, title: e.title, action: e.action, amount: e.amount, unit: e.unit,
           productId: e.productId, poolType: e.poolType, isSupersack: e.isSupersack,
         }).replace(/"/g, '&quot;') : '';
         const pencilHtml = editable
@@ -1466,6 +1583,32 @@
 
   // Submit — per-strain supersack updates
   submitBtn.addEventListener('click', async () => {
+    const tw = LANG[(window.getLang && window.getLang()) || 'en'];
+    // Without the module the page cannot tell which strains are scan-counted,
+    // and guessing could subtract a 2026 sack from Shopify twice.
+    if (!SS()) { setStatus(tw.scansModuleMissing, 'error'); return; }
+    // Re-read the scans for the date being saved: sacks scanned after the
+    // page loaded must be in sacks_opened. A failed read leaves scanState not
+    // ok, which is the existing fail-safe (no typed fallback, confirm below).
+    let scanMsg = '';
+    if (Object.keys(strainData).some(isScanRow)) {
+      const saveDate = dateInput.value;
+      const loaded = { date: scanState.date, ok: scanState.ok, counts: { ...scanState.counts } };
+      submitBtn.disabled = true; // no second tap while the scans are re-read
+      try { await loadScans(saveDate, 6000); } finally { submitBtn.disabled = false; }
+      applyScans();
+      const ref = SS().scanRefresh({ date: saveDate, loaded, fresh: scanState.ok ? { date: scanState.date, ok: true, counts: scanState.counts } : null });
+      if (!ref.ok) { scanState.ok = false; applyScans(); }
+      renderStrainCounters(); recalc();
+      if (ref.ok && ref.delta) scanMsg = (ref.delta > 0 ? tw.scansMore : tw.scansFewer).replace('{n}', Math.abs(ref.delta));
+      if (scanMsg) setStatus(scanMsg, 'success');
+    }
+    applyScans();
+    if (Object.keys(strainData).some(isScanRow) && !scanState.ok
+        && !confirm(tw.scansUnreadable)) return;
+    const orphan = SS().weightsWithoutScans(
+      Object.entries(strainData).map(([title, s]) => ({ title, tops: s.tops, smalls: s.smalls })), scanState.counts);
+    if (orphan.length && !confirm(`${tw.noScansWarn}\n\n${orphan.join('\n')}`)) return;
     const sackCount = totalSacks();
     if (sackCount === 0 && !editMode) { setStatus('Enter supersack count first', 'error'); return; }
 
@@ -1501,12 +1644,9 @@
         const newSacks = s.sacks;
         const delta = newSacks - oldSacks;
 
-        if (delta !== 0 && s.productId) {
-          const operation = delta > 0 ? 'subtract' : 'add'; // reversed logic: if increased, subtract more; if decreased, add back
-          const amount = Math.abs(delta);
-          const note = `[Supersack Tracker] Correction: ${name} ${delta > 0 ? '+' : ''}${delta} sacks (${date})`;
-          
-          const r = await updatePool(s.productId, operation, amount, note, true);
+        const op = guardedSupersackOp(name, delta, date, 'edit'); // null for scan-counted (2026+) strains: the scan already moved Shopify
+        if (op && s.productId) {
+          const r = await updatePool(s.productId, op.operation, op.amount, op.note, true);
           if (!r.success) {
             poolErrors.push(`${name}: ${r.error || 'failed'}`);
           } else {
@@ -1550,8 +1690,9 @@
       
       // 1. Subtract supersacks per strain
       for (const [name, s] of Object.entries(strainData)) {
-        if (s.sacks > 0 && s.productId) {
-          const r = await updatePool(s.productId, 'subtract', s.sacks, `[Supersack Tracker] ${s.sacks} supersacks opened — ${name} (${date})`, true);
+        const op = guardedSupersackOp(name, s.sacks, date, 'new'); // null for scan-counted (2026+) strains
+        if (op && s.productId) {
+          const r = await updatePool(s.productId, op.operation, op.amount, op.note, true);
           if (!r.success) poolErrors.push(`${name}: ${r.error || 'failed'}`);
         }
       }
@@ -1606,10 +1747,11 @@
       submitBtn.textContent = '✓ Saved';
       
       if (editMode && changesSummary.length > 0) {
-        setStatus('✓ Updated: ' + changesSummary.join(', '), 'success');
+        setStatus((scanMsg ? scanMsg + ' ' : '') + '✓ Updated: ' + changesSummary.join(', '), 'success');
       } else {
-        setStatus('Pools updated + data saved', 'success');
+        setStatus((scanMsg ? scanMsg + ' ' : '') + 'Pools updated + data saved', 'success');
       }
+      showDayYield(date);
       
       // Return to locked state after successful save
       editMode = false;
@@ -1630,6 +1772,15 @@
   }
 
   // Inline edit for recent changes
+  // Put a history row back exactly as it was before the pencil was tapped.
+  function restoreEditRow(row) {
+    row.classList.remove('saving', 'editing');
+    const input = row.querySelector('.change-edit-input');
+    if (input) input.closest('div').parentElement.innerHTML = row._originalAmountHtml;
+    const pencil = row.querySelector('.change-edit-btn');
+    if (pencil) pencil.style.display = '';
+  }
+
   window._editChange = function(btn) {
     const row = btn.closest('.change-row');
     if (!row || row.classList.contains('editing')) return;
@@ -1697,15 +1848,17 @@
     }
 
     if (!productId) {
-      row.classList.remove('saving', 'editing');
-      const container = row.querySelector('.change-edit-input').closest('div').parentElement;
-      container.innerHTML = row._originalAmountHtml;
-      const pencil = row.querySelector('.change-edit-btn');
-      if (pencil) pencil.style.display = '';
+      restoreEditRow(row);
       setStatus('Could not find pool product to update', 'error');
       return;
     }
 
+    // A 2026+ sack count is owned by the scans; never correct it from here.
+    if (entry.isSupersack && isScanRow(entry.title || entry.name)) {
+      restoreEditRow(row);
+      setStatus(LANG[(window.getLang && window.getLang()) || 'en'].scanOwned, 'error');
+      return;
+    }
     // Calculate correction direction
     let operation;
     if (entry.isSupersack) {
@@ -1764,5 +1917,6 @@
 </script>
 <!-- module-hashes:end -->
 <script type="module" src="../js/shared/i18n.js?h=6c5893f7"></script>
+<script type="module">import * as S from "../js/shared/supersack-scans.js"; window.SupersackScans = S; if (window._rerenderStrains) window._rerenderStrains();</script>
 </body>
 </html>

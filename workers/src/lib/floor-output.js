@@ -39,18 +39,61 @@
  * whose title carries a suffix, and cultivar_aliases exists precisely so
  * nobody has to guess at that.
  */
-async function resolveCultivars(db, titles) {
+const CUT_RE = /\/\s*(\d+)(st|nd|rd|th) Cut\s*$/i;
+const TYPE_RE = /\/\s*(Greenhouse|Sungrown)\s*(?=\/|$)/i;
+
+/** "… / 2nd Cut" -> 2. A title without a cut suffix (every pre-2026 one) -> null. */
+export function cutFromStrainTitle(title) {
+  const m = String(title || '').match(CUT_RE);
+  return m ? Number(m[1]) : null;
+}
+
+/** "… / Greenhouse / 1st Cut" -> 'Greenhouse'. Neither word present -> null. */
+export function harvestTypeFromStrainTitle(title) {
+  const m = String(title || '').match(TYPE_RE);
+  if (!m) return null;
+  return m[1].toLowerCase() === 'greenhouse' ? 'Greenhouse' : 'Sungrown';
+}
+
+/**
+ * The alias lookups to try for one title, most specific first: the title as
+ * typed, then without its cut, then without its cut and harvest type. 2026
+ * variants are titled "… / Sungrown / 1st Cut" while the alias table holds the
+ * cut-less "… / Sungrown" — the cut is read off the title separately, so
+ * stripping it here loses nothing.
+ */
+export function aliasCandidates(title) {
+  const t = String(title || '').trim();
+  if (!t) return [];
+  const noCut = t.replace(CUT_RE, '').trim();
+  const noType = noCut.replace(TYPE_RE, '').trim();
+  return [...new Set([t, noCut, noType].filter(Boolean))];
+}
+
+/**
+ * Not parsed for the NAME — the alias table resolves that, because titles carry
+ * real-world noise ("2025 - Sugar Cookez (Cookies) / Sungrown" -> "Sugar
+ * Cookez"). Only the structural cut and harvest-type segments are stripped
+ * before a retry. One round-trip for every candidate of every title.
+ */
+export async function resolveCultivars(db, titles) {
   const list = [...new Set(titles.filter(Boolean))];
   if (!list.length) return new Map();
-  const ph = list.map(() => '?').join(',');
+  const cands = [...new Set(list.flatMap(aliasCandidates))];
+  const ph = cands.map(() => '?').join(',');
   const rows = await db.prepare(`
     SELECT a.alias, c.name
     FROM cultivar_aliases a
     JOIN cultivars c ON c.id = a.cultivar_id
     WHERE a.alias IN (${ph}) COLLATE NOCASE
-  `).bind(...list).all();
+  `).bind(...cands).all();
+  const byAlias = new Map();
+  for (const r of (rows.results || [])) byAlias.set(String(r.alias).toLowerCase(), r.name);
   const out = new Map();
-  for (const r of (rows.results || [])) out.set(String(r.alias).toLowerCase(), r.name);
+  for (const t of list) {
+    const hit = aliasCandidates(t).find(c => byAlias.has(c.toLowerCase()));
+    if (hit) out.set(String(t).toLowerCase(), byAlias.get(hit.toLowerCase()));
+  }
   return out;
 }
 
@@ -69,8 +112,9 @@ function seasonFromStrainTitle(title) {
 }
 
 /**
- * @returns { byKey: Map<"season|cultivar", {season, cultivar, tops, smalls,
- *                       biomass, trim, waste, floorSacks}>,
+ * @returns { byKey: Map<floorKey(season, cultivar, cut, type), {season, cultivar,
+ *                       cut, harvest_type, titles, tops, smalls, biomass, trim,
+ *                       waste, floorSacks}>,
  *            unresolved: string[] }
  *
  * `floorSacks` is the FLOOR'S OWN count of sacks opened that day. It is a
@@ -84,6 +128,8 @@ function seasonFromStrainTitle(title) {
  * season prefix matters just as much: the floor spends part of 2026 trimming
  * 2025 material, and that output must not land on 2026 bags.
  */
+export const floorKey = (season, cultivar, cut, type) => `${season}|${cultivar}|${cut ?? ''}|${type ?? ''}`;
+
 export async function floorOutputByCultivar(db, env, dayIso) {
   const rows = await db.prepare(`
     SELECT strain, sacks_opened, tops_lbs, smalls_lbs, biomass_lbs, trim_lbs, waste_lbs
@@ -110,9 +156,17 @@ export async function floorOutputByCultivar(db, env, dayIso) {
     // A title without a resolvable cultivar OR without a year cannot be
     // attributed to a bag. Report it rather than pick a season.
     if (!name || !season) { if (r.title) unresolved.add(r.title); continue; }
-    const key = `${season}|${name}`;
+    // Cut and harvest type are part of the key: 1st and 2nd Cut of one cultivar
+    // (or its Greenhouse and Sungrown lots) trimmed the same day are different
+    // bags with different yields. Either may be null (pre-2026 titles carry no
+    // cut); the allocator decides what a null may match.
+    const cut = cutFromStrainTitle(r.title);
+    const type = harvestTypeFromStrainTitle(r.title);
+    const key = floorKey(season, name, cut, type);
     const cur = byKey.get(key)
-      || { season, cultivar: name, tops: 0, smalls: 0, biomass: 0, trim: 0, waste: 0, floorSacks: 0 };
+      || { season, cultivar: name, cut, harvest_type: type, titles: [],
+           tops: 0, smalls: 0, biomass: 0, trim: 0, waste: 0, floorSacks: 0 };
+    cur.titles.push(r.title);
     // Summed rather than assigned: one cultivar can appear under several strain
     // titles that all alias to it (a cultivar renamed mid-season, say).
     for (const k of ['tops', 'smalls', 'biomass', 'trim', 'waste', 'floorSacks']) cur[k] += r[k];

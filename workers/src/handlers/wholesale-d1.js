@@ -662,7 +662,7 @@ function nowPT() {
  * Shared by getQueue and the cron that advances statuses, so the board and the
  * automation can never disagree about how far along an order is.
  */
-async function computeQueue(db, crewOverride) {
+export async function computeQueue(db, crewOverride) {
   const queued = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
            i.form, i.qty_lbs AS qtyLbs, i.credited_lbs AS creditedLbs, i.sort_order AS sortOrder,

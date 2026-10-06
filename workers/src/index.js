@@ -31,6 +31,7 @@ import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan,
   handleCrewScan, handleBarnScan, handleDayEndScan, handleTrailerScan } from './handlers/harvest-d1.js';
 import { handleHarvestHourly, handleSmsInbound, HOURLY_ACTIONS } from './handlers/harvest-hourly-d1.js';
+import { salidaDecoderResponse, SALIDA_DECODER_PATH } from './handlers/harvest-salida-decoder.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
 import { formatError } from './lib/errors.js';
@@ -50,6 +51,8 @@ const SHORT_SCREENS = new Map([
   ['/tags', 'sack_print'],   // Imprimir Etiquetas — the takedown screen
   ['/hora', 'crew'],         // Reporte de cuadrilla por hora
   ['/hub', 'hub'],           // Herramientas / all tools
+  ['/salida', 'salida'],     // Salida de bolsas — scan sacks out to an order
+  ['/out', 'salida'],        // the same screen, English
   ['/coming', 'pipeline'],   // What's coming off the racks, by cultivar
 ]);
 
@@ -221,6 +224,9 @@ export default {
         to.pathname = '/api/harvest';
         to.searchParams.set('action', SHORT_SCREENS.get(path));
         response = await handleHarvestD1(new Request(to, request), env, ctx);
+      } else if (url.pathname === SALIDA_DECODER_PATH) {
+        // The QR decoder /salida loads, served from here so the page needs no CDN.
+        response = salidaDecoderResponse();
       } else if (path.startsWith('/s/') || path === '/b' || path.startsWith('/b/') || path.startsWith('/z/') || path.startsWith('/c/') || path.startsWith('/t/') || path === '/fin') {
         // The crew QR targets. Short on purpose: these are printed on
         // laminated signs and barn walls for a whole season, and a shorter URL
