@@ -158,6 +158,39 @@ export function embedJson(value) {
     .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-export const LOGIC_SOURCE = [parseTag, isScannerBurst, debounceSeen, queueReduce, pacificTime, countText, busyRetry,
-  undoNeedsConfirm, orderChips, rememberCode, queueLoad,
-  feedbackFor, groupToday, escapeHtml, embedJson].map((f) => f.toString()).join('\n');
+/**
+ * Inline these functions into the page under the names the client code uses.
+ *
+ * THE NAME IN THE SOURCE IS NOT THE NAME WE WROTE. Wrangler bundles the worker
+ * with esbuild, and when two modules declare the same identifier (harvest-d1
+ * has its own `escapeHtml`) esbuild renames one of them — `parseTag` shipped as
+ * `function parseTag2(...)`. The client code references the written names as
+ * free globals, so on the live worker every call threw ReferenceError and the
+ * page rendered as an empty shell (2026-10-06), while tests on the unbundled
+ * source passed. Each function is therefore emitted under whatever name the
+ * bundle gave it AND aliased to the name we wrote.
+ */
+export function logicSource(entries) {
+  // Wrangler's esbuild also keeps function names by wrapping every function
+  // expression in its `__name(fn, "name")` helper — a helper that exists in the
+  // bundle, not in the browser. The serialised source carries those calls, so
+  // the page defines the helper as a pass-through before anything runs. (This
+  // was the second half of the empty-shell failure: with the aliases fixed the
+  // script still died on `__name is not defined` on its first line.)
+  const shim = 'var __name = typeof __name === "function" ? __name : function (f) { return f; };';
+  return [shim, ...entries.map(([name, fn]) => {
+    const src = fn.toString();
+    const m = /^(?:async\s+)?function\s*\*?\s*([\w$]+)/.exec(src);
+    const bundled = m && m[1];
+    if (!bundled) return `var ${name} = ${src};`;
+    return bundled === name ? src : `${src}\nvar ${name} = ${bundled};`;
+  })].join('\n');
+}
+
+export const LOGIC_SOURCE = logicSource([
+  ['parseTag', parseTag], ['isScannerBurst', isScannerBurst], ['debounceSeen', debounceSeen],
+  ['queueReduce', queueReduce], ['pacificTime', pacificTime], ['countText', countText],
+  ['busyRetry', busyRetry], ['undoNeedsConfirm', undoNeedsConfirm], ['orderChips', orderChips],
+  ['rememberCode', rememberCode], ['queueLoad', queueLoad], ['feedbackFor', feedbackFor],
+  ['groupToday', groupToday], ['escapeHtml', escapeHtml], ['embedJson', embedJson],
+]);
