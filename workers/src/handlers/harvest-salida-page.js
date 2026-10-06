@@ -51,7 +51,10 @@ const STYLE = `
 .salida .chip{padding:6px 14px;display:inline-flex;align-items:center;gap:8px;text-align:left;max-width:100%}
 .salida .chip small{font:600 13px ui-monospace,Menlo,monospace;color:#60715d}
 .salida .chip em{font-style:normal;font-size:14px;background:#fff;border:1px solid #c4d0ba;border-radius:99px;padding:1px 8px;color:#304e3c}
-.salida #schips{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x proximity;padding:3px}.salida #schips .chip{flex:none}
+/* Chips wrap into rows — a sideways scroller hid most cultivars behind a
+   scrollbar. On a phone the first rows show and a "más" chip opens the rest, so
+   the number pad stays within thumb reach. */
+.salida #schips{padding:3px}.salida #schips .chip.more{background:#fff;border-style:dashed}
 .salida #snum::placeholder{font:600 22px Karla,system-ui,sans-serif;color:#8a9a86}
 .salida .chip.on{background:#304e3c;color:#fff;border-color:#304e3c;box-shadow:0 0 0 3px #e4aa4f}
 .salida .chip.on small{color:#e9f0e2}
