@@ -771,7 +771,9 @@ test('a real tag carries no example band', async () => {
   // The rendered element and the label's modifier class — the .exbar rule
   // itself ships in every sheet's stylesheet whether or not a tag uses it.
   assert.doesNotMatch(html, /class="exbar"/);
-  assert.doesNotMatch(html, /EJEMPLO/);
+  // The rendered word, not the stylesheet's comment about it (which ships on
+  // every sheet and mentions the bar by name).
+  assert.doesNotMatch(html, /<span>EJEMPLO<\/span>/);
 });
 
 test('the example mark is ink, not a background fill', async () => {

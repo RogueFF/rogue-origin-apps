@@ -73,8 +73,10 @@ import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
 import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
+import { salidaPageBody } from './harvest-salida-page.js';
+import { SACK_OUT_ACTIONS, handleSackOutAction, sackOutToday } from './harvest-sack-out.js';
 import {
-  IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
+  IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL, isLiveInFlight, isStaleInFlight, ADD_LANDED_AFTER_OUT_SQL,
 } from '../lib/inventory-debt.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
@@ -263,7 +265,7 @@ function stationCookie(station) {
   return `rf_barn=${station}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-const HTML_ACTIONS = new Set([
+const HTML_ACTIONS = new Set(['salida', 
   'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
@@ -295,6 +297,10 @@ export async function handleHarvestD1(request, env, ctx) {
 
   // The lot stage board is its own module (D1-backed, password-gated) so this
   // file doesn't grow another 400 lines. See harvest-board-d1.js.
+  if (SACK_OUT_ACTIONS.has(action)) {
+    return await handleSackOutAction(action, { request, env, ctx, db, ui, body, params }, SACK_OUT_DEPS);
+  }
+
   if (BOARD_ACTIONS.has(action)) {
     return await handleHarvestBoard(request, env, ctx, { action, params, body });
   }
@@ -331,6 +337,11 @@ export async function handleHarvestD1(request, env, ctx) {
           // after the operator types the password, the same way the lot board
           // does — so the public HTML never carries the season's numbers.
           return dashPage();
+        case 'salida': {
+          const today = await sackOutToday(db, env, {}, SACK_OUT_DEPS);
+          return renderPage(ui, ui.lang === 'es' ? 'Salida de bolsas' : 'Sack scan-out',
+            salidaPageBody(ui, { api: '/api/harvest', lang: ui.lang, is_test: isTestMode(env), today }));
+        }
         case 'reconcile_page':
           return renderPage(ui, ui.lang === 'es' ? 'Inventario' : 'Inventory comparison', reconcileBody(ui));
         case 'hub':
@@ -2615,9 +2626,10 @@ async function handleSackAlloc(db, env, ctx, body) {
       });
       await execute(db, `
         UPDATE harvest_sacks
-        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?),
+            shopify_sync_error = ${ADD_LANDED_AFTER_OUT_SQL}
         WHERE sack_id IN (${ph})
-      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, ...ids]);
+      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, r.ok ? 1 : 0, ...ids]);
       if (!r.ok) console.error(`[harvest][inventory] add ${ids.length}: ${r.error}`);
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
@@ -2754,7 +2766,8 @@ async function handlePrintCheck(db, body) {
  */
 async function loadInventoryDebts(db, env) {
   const rows = await query(db, `
-    SELECT sack_id, voided_at, shopify_added_at, shopify_add_error
+    SELECT sack_id, voided_at, shopify_added_at, shopify_add_error,
+           opened_at, shopify_synced_at, shopify_sync_error
     FROM harvest_sacks
     WHERE is_test = ? AND (${DEBT_SQL})
     ORDER BY printed_at DESC
@@ -2785,7 +2798,8 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 
   const rows = await query(db, `
     SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
-           shopify_added_at, shopify_add_error, voided_at
+           shopify_added_at, shopify_add_error, voided_at,
+           opened_at, shopify_synced_at, shopify_sync_error
     FROM harvest_sacks
     WHERE is_test = ? AND (${DEBT_SQL})
     ORDER BY printed_at
@@ -2793,13 +2807,42 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 
   const out = [];
   for (const row of rows) {
-    const { owes: delta, state } = classifyDebt(row);
+    const { owes: delta, state, kind, error } = classifyDebt(row);
     const unknown = state === 'unknown';
     const item = {
-      sack_id: row.sack_id, owes: delta, state,
-      error: row.shopify_add_error, acted: false, ok: null,
+      sack_id: row.sack_id, owes: delta, state, kind,
+      error, acted: false, ok: null,
     };
-    if (apply && (!unknown || force)) {
+    // owes 0 is shown, never acted on — not even forced: there is no move
+    // that is right whichever way the unanswered call went.
+    if (apply && delta !== 0 && (!unknown || force)) {
+      // The list above was read once; each call below takes seconds, and the
+      // floor keeps scanning. Re-read THIS row now and act only if it still
+      // owes exactly what it owed (P2/P2b/P3/P4, 2026-10-06).
+      const col = (kind === 'out' || kind === 'undo') ? 'shopify_sync_error' : 'shopify_add_error';
+      const fresh = await queryOne(db, `
+        SELECT sack_id, shopify_added_at, shopify_add_error, voided_at,
+               opened_at, shopify_synced_at, shopify_sync_error
+        FROM harvest_sacks WHERE sack_id = ? AND (${DEBT_SQL})
+      `, [row.sack_id]);
+      const now = fresh && classifyDebt(fresh);
+      const same = now && now.kind === kind && now.owes === delta && now.state === state
+        && (fresh[col] ?? null) === (row[col] ?? null)
+        && !isLiveInFlight(fresh[col]); // even force never doubles a live call
+      // One pool operation per sack at a time: lay the marker BEFORE the call,
+      // guarded on the exact value read, so a second sweep or a floor action
+      // that got there first wins and this one stands down.
+      const isNull = (v) => (v ? 'IS NOT NULL' : 'IS NULL');
+      const shape = `opened_at ${isNull(fresh?.opened_at)} AND voided_at ${isNull(fresh?.voided_at)}`;
+      const marker = inFlight(`sweep ${kind}`);
+      const laid = same && await execute(db,
+        `UPDATE harvest_sacks SET ${col} = ? WHERE sack_id = ? AND ${col} IS ? AND ${shape}`,
+        [marker, row.sack_id, fresh[col] ?? null]);
+      if (!laid || !laid.changes) {
+        item.changed = true;
+        out.push(item);
+        continue;
+      }
       const r = await adjustSupersackCount(env, {
         db,
         season: row.season, cultivar: row.cultivar, zone: row.zone, cut: row.cut_number,
@@ -2809,17 +2852,31 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
       item.acted = true;
       item.ok = r.ok;
       item.error = r.ok ? null : r.error;
-      if (r.ok && delta < 0) {
-        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?`, [row.sack_id]);
+      // Every write-back is guarded on OUR marker still being there: if the
+      // crew moved the sack meanwhile, they replaced it, and the row now says
+      // what a person must check rather than what this call assumed.
+      const mine = `sack_id = ? AND ${col} = ?`;
+      if (kind === 'undo') {
+        await execute(db, `UPDATE harvest_sacks SET shopify_sync_error = ? WHERE ${mine} AND ${shape}`,
+          [r.ok ? null : `undo add-back failed: sweep failed: ${r.error}`, row.sack_id, marker]);
+      } else if (kind === 'out') {
+        await execute(db, `UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ? WHERE ${mine} AND ${shape}`,
+          [r.ok ? new Date().toISOString() : null, r.ok ? null : `sweep failed: ${r.error}`, row.sack_id, marker]);
+      } else if (r.ok && delta < 0) {
+        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL, shopify_sync_error = NULL WHERE ${mine} AND ${shape}`,
+          [row.sack_id, marker]);
       } else if (r.ok) {
+        // An add may land on a sack scanned out while it was in flight (P4):
+        // the scan sent no -1, so the row becomes an out-debt (CASE), not lost.
         await execute(db, `
           UPDATE harvest_sacks
-          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?)
-          WHERE sack_id = ?
-        `, [new Date().toISOString(), r.variantId, row.sack_id]);
+          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?),
+              shopify_sync_error = ${ADD_LANDED_AFTER_OUT_SQL}
+          WHERE ${mine} AND voided_at ${isNull(fresh.voided_at)}
+        `, [new Date().toISOString(), r.variantId, 1, row.sack_id, marker]);
       } else {
-        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
-          [`sweep failed: ${r.error}`, row.sack_id]);
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE ${mine}`,
+          [`sweep failed: ${r.error}`, row.sack_id, marker]);
       }
     }
     out.push(item);
@@ -2888,7 +2945,33 @@ async function handleSackVoid(db, env, ctx, body) {
   // No finished-lot check here, unlike sack_alloc, on purpose: retiring a
   // mistaken tag after the lot is closed out is a correction, not more
   // takedown. It spends no serial, and the rollback below keeps Shopify honest.
-  await execute(db, `UPDATE harvest_sacks SET voided_at = datetime('now') WHERE sack_id = ? AND voided_at IS NULL`, [sackId]);
+  // Void after a scan-out undo whose +1 back has not landed (the out's -1 did):
+  // in flight -> wait; failed -> Shopify holds nothing for this tag, so the void
+  // sends nothing and cancels the undo's debt instead.
+  const undoErr = String(sack.shopify_sync_error || '');
+  if (sack.shopify_added_at && isLiveInFlight(undoErr)) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is still settling with Shopify — try again in a minute.`);
+  }
+  const undoFailed = !!sack.shopify_added_at && undoErr.startsWith('undo add-back failed');
+  // Count already in doubt (a stale add-back, or "undone; check Shopify"):
+  // Shopify holds 0 or 1 for this sack and the target is now 0. Void it, send
+  // nothing (a -1 on a 0 is as wrong as a missing one), and keep it listed as
+  // an unknown void debt so a person checks the variant.
+  const voidUnknown = !!sack.shopify_added_at && undoErr.startsWith(IN_FLIGHT);
+  const unknownText = `${undoErr.includes('check Shopify') ? undoErr : `${undoErr} — never answered`}`
+    + ' — voided; check Shopify holds 0 for this sack';
+  // Guarded on opened_at too: a scan-out that flipped the row after it was read
+  // has already taken this tag's one off Shopify; a second -1 would end 2 low.
+  const v = await execute(db, `
+    UPDATE harvest_sacks SET voided_at = datetime('now')
+      ${undoFailed ? ', shopify_added_at = NULL, shopify_sync_error = NULL' : ''}
+      ${voidUnknown ? ', shopify_sync_error = ?' : ''}
+    WHERE sack_id = ? AND voided_at IS NULL AND opened_at IS NULL
+      ${voidUnknown ? 'AND shopify_sync_error = ?' : ''}
+  `, voidUnknown ? [unknownText, sackId, undoErr] : [sackId]);
+  if (!v || !v.changes) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is already out or voided — it can't be voided.`);
+  }
 
   const isTest = isTestMode(env) ? 1 : 0;
   const stats = await getLotTagStats(db, sack.zone_session_id, isTest);
@@ -2901,7 +2984,7 @@ async function handleSackVoid(db, env, ctx, body) {
   // Take back the +1 that printing added. A voided tag is a retired number with
   // no sack behind it; leaving the increment would be phantom inventory. Only
   // undo it if the add actually landed.
-  if (!isTestMode(env) && sack.shopify_added_at) {
+  if (!isTestMode(env) && sack.shopify_added_at && !undoFailed && !voidUnknown) {
     ctx.waitUntil((async () => {
       await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
         [inFlight('void rollback'), sackId]);
@@ -3418,31 +3501,103 @@ async function handleSackOpen(ui, db, env, ctx, body) {
     return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, ui.t('alreadyOpen')));
   }
 
-  await execute(db, `UPDATE harvest_sacks SET opened_at = datetime('now') WHERE sack_id = ?`, [sackId]);
+  const took = await takeSackOut(db, env, ctx, sack, { by: 'page' });
+  if (took === 'already') {
+    const now = await getSackView(db, sackId);
+    return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, now || view, ui.t('alreadyOpen')));
+  }
+  if (took === 'busy') {
+    // An undo's +1 back is still unanswered: one inventory call per sack at a time.
+    const msg = ui.lang === 'es' ? 'Intenta de nuevo en un momento.' : 'Try again in a moment.';
+    return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, msg));
+  }
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('sackOpened')));
+}
+
+/**
+ * THE one way a sack leaves inventory — the ABRIR BOLSA button and the
+ * /salida scan both come through here, so the count can only move one way.
+ *
+ * The UPDATE is guarded on opened_at IS NULL: two scans racing for one bag
+ * both reach here, and only the one that actually flips the row may take the
+ * one off Shopify. Returns 'out' (this call flipped the row), 'already' (out
+ * or voided before) or 'busy' (an undo's +1 back is still unanswered).
+ *
+ * A re-scan after an undo is decided from shopify_sync_error, and the UPDATE
+ * is guarded on that exact value so a racing answer makes it miss:
+ *   'undo add-back failed…'   -1 landed, +1 back did not: Shopify holds nothing
+ *                             for this sack, so they cancel. Out, settled, no call.
+ *   '…undone; check Shopify'  nobody knows if the -1 landed: out again, no
+ *                             call, still flagged for a person.
+ *   'in flight since…'        the undo's +1 is still running: 'busy'.
+ *
+ * The pool -1 gets the same IN_FLIGHT marker the +1 at tagging has, written
+ * BEFORE the call (see lib/inventory-debt.js): a waitUntil that dies mid-call
+ * otherwise leaves a row that looks like a subtract that never ran.
+ */
+export async function takeSackOut(db, env, ctx, sack, { by, orderId = null, orderSource = null } = {}) {
+  const sackId = sack.sack_id;
+  const live = !isTestMode(env);
+  const cur = await queryOne(db,
+    `SELECT opened_at, voided_at, shopify_added_at, shopify_sync_error FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!cur || cur.opened_at || cur.voided_at) return 'already';
+  const prior = cur.shopify_sync_error ?? null;
+  const priorText = String(prior || '');
+  let subtract = false, syncedAt = null, marker = null;
+  // A LIVE marker is another pool call on this sack: busy, the page retries.
+  // A STALE one (or one already saying "check Shopify") will never be
+  // answered: go out, send nothing, leave a person the question.
+  if (priorText.includes('check Shopify') || isStaleInFlight(priorText)) {
+    marker = `${priorText} — out again; check Shopify`;
+  } else if (priorText.startsWith('undo add-back failed')) {
+    // The earlier -1 landed and the +1 back did not, so Shopify already holds
+    // nothing for this sack: the owed +1 and this -1 cancel. No pool call.
+    syncedAt = new Date().toISOString();
+  } else if (isLiveInFlight(priorText)) {
+    return 'busy';
+  } else {
+    // Only a sack whose +1 landed has a one to take off; anything else would
+    // push Shopify below what it was ever told.
+    subtract = live && !!cur.shopify_added_at;
+    marker = subtract ? inFlight('out') : null;
+  }
+  const r = await execute(db, `
+    UPDATE harvest_sacks
+    SET opened_at = datetime('now'), out_by = ?, out_order_id = ?, out_order_source = ?,
+        shopify_synced_at = ?, shopify_sync_error = ?
+    WHERE sack_id = ? AND opened_at IS NULL AND voided_at IS NULL AND shopify_sync_error IS ?
+  `, [by, orderId, orderSource, syncedAt, marker, sackId, prior]);
+  if (!r || !r.changes) {
+    const now = await queryOne(db, `SELECT opened_at, voided_at FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+    return (!now || now.opened_at || now.voided_at) ? 'already' : 'busy';
+  }
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `📂 Abierta *${sackId}* — ${sack.cultivar || '?'} ${sack.zone} corte ${sack.cut_number}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  if (!isTestMode(env)) {
+  if (subtract) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
         // Where this sack's +1 landed, so the -1 takes it off the same count.
         variantId: sack.shopify_variant_id, delta: -1,
-        note: `[Harvest] ${sackId} opened (${sack.zone} cut ${sack.cut_number})`,
+        note: `[Harvest] ${sackId} out (${by}, ${sack.zone} cut ${sack.cut_number})`,
       });
+      // Guarded on the marker: an undo that ran meanwhile cleared it, and its
+      // own bookkeeping must not be overwritten by this late answer.
       await execute(db, `
-        UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ? WHERE sack_id = ?
-      `, [r.ok ? new Date().toISOString() : null, r.error, sackId]);
-      if (!r.ok) console.error(`[harvest][inventory] open ${sackId}: ${r.error}`);
+        UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ?
+        WHERE sack_id = ? AND opened_at IS NOT NULL AND shopify_sync_error = ?
+      `, [r.ok ? new Date().toISOString() : null, r.ok ? null : (r.error || 'unknown error'), sackId, marker]);
+      if (!r.ok) console.error(`[harvest][inventory] out ${sackId}: ${r.error}`);
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
-
-  const updated = await getSackView(db, sackId);
-  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('sackOpened')));
+  return 'out';
 }
 
 /**
@@ -3464,7 +3619,7 @@ async function handleSackOpen(ui, db, env, ctx, body) {
  *
  * Never touches a bag whose weights were actually measured.
  */
-async function handleAllocate(db, env, params) {
+export async function handleAllocate(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   // Pacific, not UTC: the floor types its own civil day into
   // `supersack_entries.date`, and this has to name the same day they did.
@@ -3477,23 +3632,31 @@ async function handleAllocate(db, env, params) {
   // One row per bag, grouped here rather than in SQL, because each bag's share
   // now depends on its own weight (Koa, 2026-09-28): a bag weighed at 18 lb
   // takes 18/35 of a full bag's share, not a full one.
+  // Also grouped by CUT and HARVEST TYPE (Greenhouse when the zone starts GH —
+  // the same rule as supersack-inventory's harvestTypeForZone): 1st and 2nd
+  // Cut of one cultivar opened the same day are different bags with different
+  // yields, and pooling them gave every bag the same average.
   const bags = await query(db, `
-    SELECT sack_id, season, cultivar, fill_lbs FROM harvest_sacks
+    SELECT sack_id, season, cultivar, cut_number, fill_lbs,
+           CASE WHEN zone LIKE 'GH%' THEN 'Greenhouse' ELSE 'Sungrown' END AS harvest_type
+    FROM harvest_sacks
     WHERE opened_at >= ? AND opened_at < ? AND is_test = ? AND voided_at IS NULL
       AND (weights_source IS NULL OR weights_source = 'allocated')
-    ORDER BY season, cultivar, sack_id
+    ORDER BY season, cultivar, cut_number, sack_id
   `, [dayStart, dayEnd, isTest]);
   const groups = new Map();
   for (const b of bags) {
-    const k = `${b.season}|${b.cultivar}`;
-    const g = groups.get(k) || { season: b.season, cultivar: b.cultivar, n: 0, lbs: 0, bags: [] };
+    const cut = b.cut_number == null ? null : Number(b.cut_number);
+    const k = `${b.season}|${b.cultivar}|${cut ?? ''}|${b.harvest_type}`;
+    const g = groups.get(k)
+      || { season: b.season, cultivar: b.cultivar, cut, harvest_type: b.harvest_type, n: 0, lbs: 0, bags: [] };
     const w = sackLbs(b);
     g.n += 1; g.lbs += w; g.bags.push({ sack_id: b.sack_id, lbs: w, weighed: b.fill_lbs != null });
     groups.set(k, g);
   }
-  const rows = [...groups.values()];
+  const bagGroups = [...groups.values()];
 
-  if (!rows.length) {
+  if (!bagGroups.length) {
     return successResponse({ success: true, date: day, allocated: [], note: 'No bags opened that day.' });
   }
 
@@ -3511,17 +3674,59 @@ async function handleAllocate(db, env, params) {
 
   const r2 = x => Math.round(x * 100) / 100;
 
+  // MATCHING. Each floor row takes the bag groups of its season and cultivar
+  // whose cut and harvest type equal the row's. A row whose title carries no
+  // cut (or no type) may take any cut (or type) — but ONLY when no other row of
+  // the cultivar could compete on that dimension that day (for cut: no other
+  // row of a compatible type; for type: none of a compatible cut). Beside a
+  // cut-specific row it matches only bags with no cut either, so it never
+  // steals that row's output. A cut-less Greenhouse row beside a cut-less
+  // Sungrown row (every 2025 title has a type and no cut) still takes its cut.
+  // A lone cut-less row facing two cuts cannot be attributed by cut: it is
+  // split across both by weight, and said so in `pooled_across_cuts`.
+  const floorRows = [...floor.values()];
+  const cultivarOf = x => `${x.season}|${x.cultivar}`;
+  const pools = [];
+  const claimed = new Set();
+  for (const f of floorRows) {
+    // "Only row" is judged among the rows that could compete on that dimension:
+    // a cut-less Greenhouse row is still alone on cut beside a Sungrown row.
+    const compat = (x, y) => x == null || y == null || x === y;
+    const rivals = pick => floorRows.filter(o => cultivarOf(o) === cultivarOf(f) && pick(o)).length === 1;
+    const aloneCut = rivals(o => compat(o.harvest_type, f.harvest_type));
+    const aloneType = rivals(o => compat(o.cut, f.cut));
+    const fits = (want, have, alone) => (want == null ? (alone || have == null) : want === have);
+    const gs = bagGroups.filter(g => cultivarOf(g) === cultivarOf(f)
+      && fits(f.cut, g.cut, aloneCut) && fits(f.harvest_type, g.harvest_type, aloneType) && !claimed.has(g));
+    if (!gs.length) continue;
+    gs.forEach(g => claimed.add(g));
+    pools.push({ f, groups: gs });
+  }
+
   const done = [];
   const countMismatches = [];
-  for (const r of rows) {
-    const f = floor.get(`${r.season}|${r.cultivar}`);
-    if (!f) {
-      done.push({
-        season: r.season, cultivar: r.cultivar, sacks: r.n,
-        skipped: `floor logged no ${r.season} ${r.cultivar} that day`,
+  const pooledAcrossCuts = [];
+  for (const g of bagGroups.filter(g => !claimed.has(g))) {
+    done.push({
+      season: g.season, cultivar: g.cultivar, cut_number: g.cut, harvest_type: g.harvest_type, sacks: g.n,
+      skipped: `floor logged no ${g.season} ${g.cultivar}${g.cut != null ? ` cut ${g.cut}` : ''} (${g.harvest_type}) that day`,
+    });
+  }
+  for (const { f, groups: gs } of pools) {
+    const cuts = [...new Set(gs.map(g => g.cut))].sort();
+    if (cuts.length > 1) {
+      pooledAcrossCuts.push({
+        season: f.season, cultivar: f.cultivar, cuts,
+        reason: `the floor logged one ${f.season} ${f.cultivar} row with no cut, and bags of ${cuts.length} cuts were opened; its output is split across all of them by bag weight, not by cut`,
       });
-      continue;
     }
+    const r = {
+      season: f.season, cultivar: f.cultivar,
+      cut: cuts.length === 1 ? cuts[0] : null,
+      harvest_type: new Set(gs.map(g => g.harvest_type)).size === 1 ? gs[0].harvest_type : null,
+      n: gs.reduce((s, g) => s + g.n, 0), lbs: gs.reduce((s, g) => s + g.lbs, 0),
+      bags: gs.flatMap(g => g.bags),
+    };
 
     // The floor counts the sacks it opened; this counts the sacks carrying tags.
     // They should be the same number. When they are not, someone missed an
@@ -3535,7 +3740,7 @@ async function handleAllocate(db, env, params) {
     // and skipping the check there would be a silent pass rather than a number.
     if (f.floorSacks !== r.n) {
       countMismatches.push({
-        season: r.season, cultivar: r.cultivar,
+        season: r.season, cultivar: r.cultivar, cut_number: r.cut, harvest_type: r.harvest_type,
         floor_sacks_opened: f.floorSacks, tagged_bags_opened: r.n,
         effect: f.floorSacks > r.n
           ? `each tagged bag credited ~${Math.round((f.floorSacks / r.n) * 100 - 100)}% high`
@@ -3564,17 +3769,19 @@ async function handleAllocate(db, env, params) {
                      weights_source = 'allocated', weights_allocated_at = datetime('now')`;
     const full = fullSackLbs(r.season);
     const fullShare = shareFor(full);
-    // One write for every full bag in the group, one per weighed bag — so a
-    // replayed window costs about what it did before bags had weights.
+    // One write per 80 full bags in the pool (named by sack_id, since a pool is
+    // now a cut, not a whole cultivar; chunked under D1's bound-parameter cap),
+    // one per weighed bag.
+    const fullIds = r.bags.filter(b => !b.weighed).map(b => b.sack_id);
+    const fullChunks = [];
+    for (let i = 0; i < fullIds.length; i += 80) fullChunks.push(fullIds.slice(i, i + 80));
     await transaction(db, [
-      {
+      ...fullChunks.map(ids => ({
         sql: `UPDATE harvest_sacks ${SET}
-              WHERE opened_at >= ? AND opened_at < ? AND season = ? AND cultivar = ?
-                AND is_test = ? AND voided_at IS NULL AND fill_lbs IS NULL
+              WHERE sack_id IN (${ids.map(() => '?').join(',')}) AND fill_lbs IS NULL
                 AND (weights_source IS NULL OR weights_source = 'allocated')`,
-        params: [fullShare.tops, fullShare.smalls, fullShare.biomass, fullShare.trim, fullShare.waste,
-                 dayStart, dayEnd, r.season, r.cultivar, isTest],
-      },
+        params: [fullShare.tops, fullShare.smalls, fullShare.biomass, fullShare.trim, fullShare.waste, ...ids],
+      })),
       ...r.bags.filter(b => b.weighed).map(b => {
         const sh = shareFor(b.lbs);
         return {
@@ -3585,7 +3792,8 @@ async function handleAllocate(db, env, params) {
       }),
     ]);
     done.push({
-      season: r.season, cultivar: r.cultivar, sacks: r.n, sack_lbs: round1(r.lbs),
+      season: r.season, cultivar: r.cultivar, cut_number: r.cut, harvest_type: r.harvest_type,
+      sacks: r.n, sack_lbs: round1(r.lbs),
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
       // What a full bag got. A weighed bag got the same four parts scaled by
       // its weight, and its own remainder as waste.
@@ -3600,10 +3808,11 @@ async function handleAllocate(db, env, params) {
   // Floor output with no tagged bags behind it. During the changeover that is
   // the ordinary case — 2025 sacks are untagged — but it is worth seeing,
   // because it is also what a missed scan looks like.
-  const untagged = [...floor.values()]
-    .filter(f => !rows.some(r => r.season === f.season && r.cultivar === f.cultivar))
+  const untagged = floorRows
+    .filter(f => !pools.some(p => p.f === f))
     .map(f => ({
-      season: f.season, cultivar: f.cultivar,
+      season: f.season, cultivar: f.cultivar, cut_number: f.cut, harvest_type: f.harvest_type,
+      strain_titles: f.titles,
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
       floor_sacks_opened: f.floorSacks,
     }));
@@ -3618,7 +3827,10 @@ async function handleAllocate(db, env, params) {
     // the per-bag figures for that cultivar are scaled wrong, so it belongs in
     // the result rather than in a log line nobody reads.
     sack_count_mismatches: countMismatches,
-    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure: each bag's is what is left of its own weight after the four weighed parts.",
+    // A cut-less floor row split across bags of several cuts: those per-bag
+    // figures are a cultivar average, not the yield of each cut.
+    pooled_across_cuts: pooledAcrossCuts,
+    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON, cultivar, cut and harvest type (a floor row with no cut or type matches any only when it is the cultivar's only row that day), split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure: each bag's is what is left of its own weight after the four weighed parts.",
   });
 }
 
@@ -8286,3 +8498,8 @@ ${noteList}
 <div class="footer"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a> · <a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
 </div>`;
 }
+
+const SACK_OUT_DEPS = {
+  isTestMode, getSeason, normalizeSackId, demoKey, pacificToday, pacificDayRange,
+  takeSackOut: (...a) => takeSackOut(...a), adjustSupersackCount,
+};
