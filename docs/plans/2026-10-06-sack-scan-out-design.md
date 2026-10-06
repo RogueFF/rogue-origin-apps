@@ -59,8 +59,9 @@ points at a tag; the sack is taken out; the camera keeps running for the next
 one. No button between sacks.
 
 - Uses the browser's built-in `BarcodeDetector` where it exists.
-- iPhone Safari does not have it, and the crew phones are iPhones, so a small QR
-  decoder is vendored into the page as the fallback. No CDN.
+- Crew phones are a mix of Android and iPhone. Android Chrome has it; iPhone
+  Safari does not, so a small QR decoder is vendored into the page as the
+  fallback. No CDN. Both paths are tested on a real phone of each kind.
 - The tag's QR is the `/s/<id>` URL. The page reads the id out of it and ignores
   any QR that is not a sack tag.
 - The same sack seen again within a few seconds is ignored, so holding the phone
@@ -77,7 +78,30 @@ the tag, press the one large button.
 - If the camera is refused or unavailable, the page opens straight in type mode
   and says nothing about an error.
 
-### 4.2 What the water spider gets back
+### 4.2 The station desktop
+
+The water spider also gets a desktop computer at his station, used for orders
+and scheduling as well. The same `/salida` page serves it:
+
+- **Typing is the main way in.** The page opens with the number field focused.
+  Cultivar chips answer to the keyboard, digits go straight into the bag number,
+  and Enter takes the sack out. A run of one cultivar is number, Enter, number,
+  Enter.
+- **A handheld USB or Bluetooth scanner works with no setup.** Those scanners
+  type what they read and press Enter. The page recognises a scanned tag URL
+  arriving as keystrokes and treats it exactly like a camera scan, so a cheap
+  scanner on the desk is the fastest option of all.
+- **The camera is offered only if the computer has one.** No webcam means no
+  camera panel and no error.
+- **Wide layout.** Entry on the left, today's list on the right, both visible at
+  once, with a link through to the wholesale queue he manages from the same
+  desk.
+- Sound replaces the buzz, since a desktop cannot vibrate.
+
+Phone and desktop show the same list. A sack scanned on the phone in the barn
+appears on the desktop within a few seconds, and the reverse.
+
+### 4.3 What the water spider gets back
 
 Built to be read at arm's length, with gloves on, in a barn:
 
@@ -90,7 +114,7 @@ Built to be read at arm's length, with gloves on, in a barn:
 - The screen stays awake while the page is open.
 - Every touch target is at least 56 px. Nothing needs a second hand.
 
-### 4.3 Today's list
+### 4.4 Today's list
 
 Under the scanner, grouped by cultivar and order:
 
@@ -106,7 +130,7 @@ still needs for that cultivar. It is the "how much to pull" number, on the same
 screen as the scanning. It uses the queue's existing `sacksNeeded`; nothing new
 is computed.
 
-### 4.4 Working without signal
+### 4.5 Working without signal
 
 A scan that cannot reach the server is kept on the phone, shown in the list as
 pending, and sent when the connection returns. The server treats a repeat of the
@@ -213,13 +237,16 @@ Each step is test-first with `node --test`, in the style of the existing
       number refused, undo, undo refused after allocation, test-mode refusing
       real sacks.
 - [ ] **5. The `/salida` page.** Camera loop, vendored decoder, type mode,
-      feedback, undo, today's list, offline queue. Routing test for the short
+      feedback, undo, today's list, offline queue, the desktop layout with
+      keyboard and handheld-scanner entry. Routing test for the short
       path.
 - [ ] **6. End-of-day form.** Scan-filled counts, skipped subtract, the
       no-scans warning. Playwright spec alongside the existing one.
 - [ ] **7. Allocate on submit** and the yield view.
-- [ ] **8. Verify on a phone** against the example sacks in test mode: scan,
-      type, repeat, undo, airplane mode. Both languages, both themes.
+- [ ] **8. Verify on an Android phone, an iPhone and a desktop** against the
+      example sacks in test mode: scan, type, keyboard-only entry, a handheld
+      scanner if one is on hand, repeat, undo, airplane mode. Both languages,
+      both themes.
 - [ ] **9. Docs:** the harvest SOP in the wiki and the hub's tool list.
 
 Steps 1 to 5 are the scan-out itself and can ship alone. Steps 6 and 7 must be
