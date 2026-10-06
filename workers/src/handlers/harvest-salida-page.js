@@ -93,7 +93,7 @@ export function salidaPageBody(ui, boot) {
     <div>
       <div id="scam" hidden><video id="svideo" playsinline muted autoplay></video><div class="aim" aria-hidden="true"></div><p id="sstat" class="camstat" aria-live="polite"></p>
         <div class="camtools"><button type="button" id="storch" hidden>🔦 ${e('torch')}</button></div></div>
-      <div id="snocam" hidden><p class="hint">${e('noCam')}</p><button type="button" id="sretry" class="big">📷 ${e('retryCam')}</button></div>
+      <div id="snocam" hidden><p class="hint">${e('noCam')} <span id="snocamwhy"></span></p><button type="button" id="sretry" class="big">📷 ${e('retryCam')}</button></div>
       <div id="sfb" class="sfb" role="status" aria-live="assertive"><span id="sfbicon" aria-hidden="true"></span><span id="sfbline"></span></div>
       <div id="spick"></div>
       <div id="slast" hidden></div>
