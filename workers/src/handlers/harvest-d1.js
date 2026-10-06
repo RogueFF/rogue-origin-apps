@@ -8092,6 +8092,7 @@ ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
   ])}
 ${lane(4, LANE[3], L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a abrirlas'), [
+    card(`/salida?${q}`, L('Sack scan-out', 'Salida de bolsas'), L('Scan or type a sack as it goes to the line: off the Shopify count and onto its order.', 'Escanea o escribe la bolsa al salir a la línea: baja del conteo de Shopify y queda en su pedido.'), null, true),
     card(`${API}?action=find&${q}`, L('Find a sack', 'Buscar bolsa'), L('Look up any tag by code or number; recent tags listed.', 'Busca cualquier etiqueta por código o número; muestra las recientes.')),
     scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
   ])}
