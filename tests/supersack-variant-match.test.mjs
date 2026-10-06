@@ -30,7 +30,7 @@ import { dirname, join } from 'node:path';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mod = (p) => join(REPO, p).replace(/\\/g, '/').replace(/^/, 'file:///');
 
-const { adjustSupersackCount, checkSupersackVariant, variantTitle, cutLabel, harvestTypeForZone, findVariant } =
+const { adjustSupersackCount, checkSupersackVariant, variantTitle, cutLabel, harvestTypeForZone, findVariant, resetVariantCache } =
   await import(mod('workers/src/lib/supersack-inventory.js'));
 const { ZONE_CULTIVARS } = await import(mod('workers/src/lib/zone-cultivars.js'));
 
@@ -70,6 +70,9 @@ const env = () => ({ POOL_INVENTORY_API_URL: 'https://pool.test', POOL_INVENTORY
 
 /** Stub global fetch for the pool calls; `down` makes the variant list fail. */
 function withPool(moves, { down = false } = {}) {
+  // Each case is its own pool: a variant list kept from the previous case
+  // would hide an outage this one is simulating.
+  resetVariantCache();
   const real = globalThis.fetch;
   globalThis.fetch = async (_url, init) => {
     const body = JSON.parse(init.body);
