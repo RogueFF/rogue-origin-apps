@@ -62,14 +62,74 @@ async function poolCall(env, action, body) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); }
-  catch { throw new Error(`Pool API returned non-JSON: ${text.slice(0, 160)}`); }
+  catch { throw new Error(`Pool API returned non-JSON (HTTP ${res.status}): ${pageText(text)}`); }
   if (data.error) throw new Error(data.error);
   return data;
 }
 
+/**
+ * What an HTML answer actually says. When the Apps Script throws, Google sends
+ * an error page that opens with a script and a style block, so its first bytes
+ * are `<!doctype html><script nonce=…>window['ppConfig']…` and the exception
+ * sits at the end. Keeping the first 160 characters (as this did until
+ * 2026-10-06) threw the exception away on every failure.
+ */
+export function pageText(html) {
+  const text = String(html || '')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (text || String(html || '').trim()).slice(0, 240);
+}
+
+/** Always fresh: the reconcile screen reads quantities from this. */
 export async function listSupersackVariants(env) {
   const data = await poolCall(env, 'get_supersack_variants', {});
   return Array.isArray(data.variants) ? data.variants : [];
+}
+
+/**
+ * The variant list as a tag needs it — ids and titles, not quantities — kept
+ * for a few minutes.
+ *
+ * 2026-10-06: every tag made two Apps Script calls inside the ~30 s waitUntil
+ * gives it (the full list, then the +1). The list is the same all morning, so
+ * fetching it per tag only spent the budget, and the tags that ran out of it
+ * were left "in flight". Kept per isolate; a busy takedown keeps one warm.
+ *
+ * Callers must treat a miss in a kept list as unproven and look again with
+ * `fresh` — see `withVariants`.
+ */
+const VARIANT_KEEP_MS = 5 * 60 * 1000;
+let kept = null;   // { url, at, variants }
+
+export function resetVariantCache() { kept = null; }
+
+async function variantsForTags(env, { fresh = false } = {}) {
+  const url = env.POOL_INVENTORY_API_URL;
+  if (!fresh && kept && kept.url === url && Date.now() - kept.at < VARIANT_KEEP_MS) {
+    return { variants: kept.variants, wasKept: true };
+  }
+  const variants = await listSupersackVariants(env);
+  kept = { url, at: Date.now(), variants };
+  return { variants, wasKept: false };
+}
+
+/**
+ * Run `pick` against the kept list; if it finds nothing and the list was a
+ * kept one, run it again against a fresh list. A variant created mid-takedown
+ * is therefore found on the next tag, and a tag is only refused on a list
+ * fetched for it.
+ */
+async function withVariants(env, pick) {
+  const first = await variantsForTags(env);
+  const hit = await pick(first.variants);
+  if (hit.found || !first.wasKept) return hit;
+  return pick((await variantsForTags(env, { fresh: true })).variants);
 }
 
 /** Exact title match, case/whitespace tolerant. */
@@ -177,8 +237,10 @@ export async function matchSupersackVariant(variants, db, { season, cultivar, zo
  */
 export async function checkSupersackVariant(env, db, lot) {
   try {
-    const variants = await listSupersackVariants(env);
-    const m = await matchSupersackVariant(variants, db, lot);
+    const m = await withVariants(env, async (variants) => {
+      const r = await matchSupersackVariant(variants, db, lot);
+      return { ...r, found: !!r.variant };
+    });
     return m.variant ? { ok: true, title: m.variant.title, error: null } : { ok: false, title: m.title, error: m.error };
   } catch (e) {
     return { ok: null, title: null, error: String(e.message || e).slice(0, 300) };
@@ -199,18 +261,23 @@ export async function checkSupersackVariant(env, db, lot) {
  */
 export async function adjustSupersackCount(env, { season, cultivar, zone, cut, delta, note, db = null, variantId = null }) {
   try {
-    const variants = await listSupersackVariants(env);
     let v, matchedBy;
 
     if (variantId) {
-      v = variants.find(x => String(x.id) === String(variantId)) || null;
+      v = (await withVariants(env, async (variants) => {
+        const hit = variants.find(x => String(x.id) === String(variantId)) || null;
+        return { hit, found: !!hit };
+      })).hit;
       matchedBy = 'id';
       if (!v) {
         return { ok: false, variantId: null, matchedBy: null,
           error: `The Super Sack Inventory variant this sack was counted on (${variantId}) no longer exists — refusing to move a different one.` };
       }
     } else {
-      const m = await matchSupersackVariant(variants, db, { season, cultivar, zone, cut });
+      const m = await withVariants(env, async (variants) => {
+        const r = await matchSupersackVariant(variants, db, { season, cultivar, zone, cut });
+        return { ...r, found: !!r.variant };
+      });
       if (!m.variant) return { ok: false, variantId: null, matchedBy: null, error: m.error };
       v = m.variant;
       matchedBy = m.matchedBy;
