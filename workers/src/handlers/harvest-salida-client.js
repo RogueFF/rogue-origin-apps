@@ -206,7 +206,13 @@ export function salidaMain(boot, S, decoderUrl) {
       $('scam').hidden = false; $('snocam').hidden = true; $('sstat').textContent = S.looking;
       const caps = track.getCapabilities ? track.getCapabilities() : {}; $('storch').hidden = !caps.torch;
       tick();
-    } catch (e) { $('scam').hidden = true; $('snocam').hidden = false; $('snum').focus(); }
+    } catch (e) {
+      // Say WHY in one word, because "no camera" on a phone that has one is a
+      // permission or a browser problem, and the fix differs: NotAllowedError
+      // is the site blocked in settings; NotFoundError is no camera at all.
+      $('scam').hidden = true; $('snocam').hidden = false; $('snum').focus();
+      $('snocamwhy').textContent = e && e.name ? `(${e.name})` : '';
+    }
   }
   const canvas = document.createElement('canvas'), cx = canvas.getContext('2d', { willReadFrequently: true });
   async function tick() {
