@@ -244,3 +244,22 @@ test('queue survives a reload through localStorage text; corrupt storage is empt
   assert.deepEqual(back.map((x) => x.key), ['q:26-SLIFT-7', 't:SLIFT-8']);
   assert.deepEqual(queueLoad('{oops'), []); assert.deepEqual(queueLoad(null), []);
 });
+
+test('inlined logic survives the bundler renaming a function', async () => {
+  // esbuild shipped `function parseTag2(` on the live worker while the client
+  // called `parseTag`; the page rendered as an empty shell. logicSource must
+  // define BOTH names, whatever the bundle calls the function.
+  const { logicSource } = await import('../workers/src/handlers/harvest-salida-logic.js');
+  function parseTag2(t) { return `seen:${t}`; }
+  const src = logicSource([['parseTag', parseTag2]]);
+  const ctx = {}; vm.createContext(ctx);
+  vm.runInContext(`${src}
+this.a = parseTag('x'); this.b = parseTag2('y');`, ctx);
+  assert.equal(ctx.a, 'seen:x');
+  assert.equal(ctx.b, 'seen:y');
+  assert.equal(logicSource([['same', function same() { return 1; }]]).includes('var same'), false);  // esbuild's keep-names helper rides along in the serialised source.
+  const kept = {}; vm.createContext(kept);
+  vm.runInContext(`${logicSource([['f', function f() { return 2; }]])}
+this.r = /* @__PURE__ */ __name(() => 3, "g")();`, kept);
+  assert.equal(kept.r, 3);
+});
