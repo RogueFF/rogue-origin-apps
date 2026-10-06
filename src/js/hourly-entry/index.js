@@ -5,6 +5,7 @@
 
 import { makeApi } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
+import { buildCultivarOptions } from './cultivar-options.mjs';
 
 const productionApi = makeApi('production');
 const poolApi = makeApi('pool');
@@ -1037,14 +1038,14 @@ function populateForm(slot) {
   document.getElementById('buckers1').value = data.buckers1 || 0;
   document.getElementById('trimmers1').value = data.trimmers1 || 0;
   document.getElementById('tzero1').value = data.tzero1 ?? 1;  // Default to 1
-  document.getElementById('cultivar1').value = data.cultivar1 || '';
+  setCultivarValue(document.getElementById('cultivar1'), data.cultivar1);
   document.getElementById('tops1').value = data.tops1 || 0;
   document.getElementById('smalls1').value = data.smalls1 || 0;
 
   document.getElementById('buckers2').value = data.buckers2 || 0;
   document.getElementById('trimmers2').value = data.trimmers2 || 0;
   document.getElementById('tzero2').value = data.tzero2 ?? 1;  // Default to 1
-  document.getElementById('cultivar2').value = data.cultivar2 || '';
+  setCultivarValue(document.getElementById('cultivar2'), data.cultivar2);
   document.getElementById('tops2').value = data.tops2 || 0;
   document.getElementById('smalls2').value = data.smalls2 || 0;
 
@@ -1131,14 +1132,14 @@ function copyCrewFromPrevious() {
   document.getElementById('trimmers1').value = prevData.trimmers1 || 0;
   document.getElementById('tzero1').value = prevData.tzero1 || 0;
   document.getElementById('qcperson').value = prevData.qcperson || 0;
-  document.getElementById('cultivar1').value = prevData.cultivar1 || '';
+  setCultivarValue(document.getElementById('cultivar1'), prevData.cultivar1);
 
   // Copy Line 2 if it has data
   if (prevData.trimmers2 > 0) {
     document.getElementById('buckers2').value = prevData.buckers2 || 0;
     document.getElementById('trimmers2').value = prevData.trimmers2 || 0;
     document.getElementById('tzero2').value = prevData.tzero2 || 0;
-    document.getElementById('cultivar2').value = prevData.cultivar2 || '';
+    setCultivarValue(document.getElementById('cultivar2'), prevData.cultivar2);
     document.getElementById('line2-section').classList.add('expanded');
   }
 
@@ -1699,15 +1700,40 @@ async function loadDayData(date) {
 }
 
 async function loadCultivars() {
+  // The logged spellings come from D1 and are quick; the 2026 roster comes from
+  // Shopify through Apps Script and can take seconds. So the list goes up at
+  // once and fills in when Shopify answers, never holding the page.
+  let history = [];
   try {
     const data = await productionApi.get('getCultivars');
-
-    // Filter to only 2025 cultivars
-    cultivarOptions = (data.cultivars || []).filter(c => c.startsWith('2025'));
-    populateCultivarSelects();
+    history = data.cultivars || [];
   } catch (error) {
     console.error('Failed to load cultivars:', error);
   }
+  cultivarOptions = buildCultivarOptions(history, []);
+  populateCultivarSelects();
+
+  poolApi.post('get_supersack_variants', {})
+    .then((result) => {
+      cultivarOptions = buildCultivarOptions(history, result.variants || []);
+      populateCultivarSelects();
+    })
+    .catch((error) => console.error('Failed to load 2026 cultivars:', error));
+}
+
+/**
+ * Set a cultivar select, adding the value as an option when the list no longer
+ * offers it — an older date's strain, or one that came off the carryover list.
+ * Left blank instead, the next save would wipe the cultivar off that hour.
+ */
+function setCultivarValue(select, value) {
+  if (value && ![...select.options].some((o) => o.value === value)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  }
+  select.value = value || '';
 }
 
 function populateCultivarSelects() {
@@ -1750,7 +1776,7 @@ function populateCultivarSelects() {
 
     // Never write a value. The queue is a prediction; the burn-down reads these
     // entries back, so a prefilled field would let it feed on its own guess.
-    select.value = currentValue;
+    setCultivarValue(select, currentValue);
   });
 }
 
