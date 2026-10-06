@@ -53,3 +53,7 @@ session. Decision needed on which of these:
 
 - [ ] Tests + mutation on both parts
 - [ ] SOP §1 gains the end-of-day step; the review page item ticks
+
+## Sack scan-out (2026-10-06)
+
+Design and checklist: `docs/plans/2026-10-06-sack-scan-out-design.md` §11. Branch `feat/sack-scan-out`. Awaiting Koa's go before build.
