@@ -11,7 +11,7 @@ export const SALIDA_STRINGS = {
     not_a_tag: 'No es una etiqueta', error: 'Error — intenta otra vez', queued: 'Sin señal — guardado en el teléfono. Se enviará cuando vuelva la señal',
     too_late: 'Ya no se puede deshacer — ya tiene pesos registrados', undone: 'Deshecho', not_out: 'Esa bolsa no estaba fuera',
     today: 'Hoy', count1: '{n} bolsa', count: '{n} bolsas', countOf: '{n} de {m}', cut: 'Corte', pending: 'Pendiente de enviar',
-    queue: 'Cola de pedidos', test: 'MODO PRUEBA — no cuenta', pickCultivar: 'Elige la variedad', idle: 'Escanea una etiqueta, o elige variedad y escribe el número', wait: 'Un momento…', stuck: 'Sigue ocupado — espera y vuelve a escanear', waiting: '{n} esperando señal', rowUndo: 'Deshacer', confirm: 'Toca otra vez para deshacer', looking: 'Buscando etiqueta…', clr: 'Borrar todo',
+    queue: 'Cola de pedidos', test: 'MODO PRUEBA — no cuenta', pickCultivar: 'Elige la variedad', idle: 'Escanea una etiqueta, o elige variedad y escribe el número', wait: 'Un momento…', stuck: 'Sigue ocupado — espera y vuelve a escanear', waiting: '{n} esperando señal', rowUndo: 'Deshacer', confirm: 'Toca otra vez para deshacer', looking: 'Buscando etiqueta…', clr: 'Borrar todo', more: '{n} más…', less: 'Menos',
   },
   en: {
     title: 'Sack scan-out', scanHint: 'Scan the tag or type the number',
@@ -22,6 +22,6 @@ export const SALIDA_STRINGS = {
     not_a_tag: 'Not a tag', error: 'Error — try again', queued: 'No signal — saved on this phone. It will send when signal returns',
     too_late: 'Too late to undo — weights already recorded', undone: 'Undone', not_out: 'That sack was not out',
     today: 'Today', count1: '{n} sack', count: '{n} sacks', countOf: '{n} of {m}', cut: 'Cut', pending: 'Waiting to send',
-    queue: 'Order queue', test: 'TEST MODE — does not count', pickCultivar: 'Pick the cultivar', idle: 'Scan a tag, or pick the cultivar and type the number', wait: 'One moment…', stuck: 'Still busy — wait and scan again', waiting: '{n} waiting for signal', rowUndo: 'Undo', confirm: 'Tap again to undo', looking: 'Looking for a tag…', clr: 'Clear all',
+    queue: 'Order queue', test: 'TEST MODE — does not count', pickCultivar: 'Pick the cultivar', idle: 'Scan a tag, or pick the cultivar and type the number', wait: 'One moment…', stuck: 'Still busy — wait and scan again', waiting: '{n} waiting for signal', rowUndo: 'Undo', confirm: 'Tap again to undo', looking: 'Looking for a tag…', clr: 'Clear all', more: '{n} more…', less: 'Fewer',
   },
 };
