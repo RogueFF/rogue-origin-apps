@@ -239,3 +239,20 @@ test('the scan page shows where it dried, on the drying leg', async () => {
   assert.match(html, /on the rack/);
   assert.match(html, /dried in bay 7/);
 });
+
+test('the tag notification names the bay the sacks came down from', async () => {
+  // Koa, 2026-10-07: "on the notifications, can we specify what bay". The chat
+  // line read "Sour Lifter Z2 cut 1"; with takedown by bay, the bay is what
+  // the floor talks in.
+  const { sqlite, env, ctx } = freshDb();
+  const lot = seedLot(sqlite);
+  const said = [];
+  const log = console.log;
+  console.log = (...a) => said.push(a.join(' '));
+  try {
+    const r = await alloc(env, ctx, { session_id: lot, cultivar: 'Sour Lifter', qty: 3, bay: 9 });
+    assert.equal(r.body.success, true);
+  } finally { console.log = log; }
+
+  assert.match(said.join('\n'), /3 sack tags — \*Sour Lifter\* · \*Bay 9\* · Z4 cut 1/);
+});
