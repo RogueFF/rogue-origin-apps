@@ -38,6 +38,7 @@ import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './
  * - GET  ?action=sack_session&session_id=&cultivar=      - The session screen itself (HTML)
  * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
  * - POST ?action=sack_void       (sack_id)               - Void a mis-printed tag (JSON)
+ * - POST ?action=sack_unvoid     (sack_id)               - Undo a void: the tag was on a real sack after all (JSON)
  * - GET  ?action=sack_label&id=|ids=                     - Label sheet; reprint reuses SAME serial (HTML)
  * - GET  ?action=sack_label&...&sheet=avery5163[&skip=N]  - Same tags on an Avery 5163 laser sheet (fallback)
  * - GET  ?action=sack_label&sheet=avery5163&calibrate=1   - Empty slot outlines, to check printer alignment
@@ -453,6 +454,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
+    case 'sack_unvoid':
+      return await handleSackUnvoid(db, env, ctx, body);
     default:
       throw createError('NOT_FOUND', ui.t('unknownAction', { a: action }));
   }
@@ -3012,6 +3015,76 @@ async function handleSackVoid(db, env, ctx, body) {
   }
 
   return successResponse({ success: true, voided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId,
+    tags: await getLotTags(db, sack.zone_session_id, isTest) });
+}
+
+/**
+ * Undo a void — the tag was on a real sack after all.
+ *
+ * Koa, 2026-10-07: 26-SLIFT-156 was voided by mistake and the only way back
+ * was raw SQL plus a hand-made +1 in Shopify. The number was never reused
+ * (serials are MAX+1 and a void keeps its row), so the same tag simply goes
+ * live again.
+ *
+ * Shopify is read off the row the way the void left it:
+ *   marker clear — the void's -1 landed, Shopify holds 0 for this tag: send +1
+ *                  back, onto the variant the tag was counted on;
+ *   marker set   — the rollback failed or never ran, Shopify still holds the
+ *                  +1: send nothing (a second +1 would count it twice), just
+ *                  clear the stale rollback error;
+ *   in flight    — a call is still out: refuse until it settles.
+ * A failed +1 is recorded as `unvoid add failed: …`, which reads as an owed
+ * +1 on every debt screen — never as counted.
+ */
+async function handleSackUnvoid(db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  const sack = await queryOne(db, `SELECT * FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!sack) throw createError('NOT_FOUND', `No sack found with ID "${sackId}".`);
+  refuseRealInTest(makeUi(new Request('https://x/')), env, sack);
+  if (!sack.voided_at) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is not voided.`);
+  }
+  if (isLiveInFlight(String(sack.shopify_add_error || ''))) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is still settling with Shopify — try again in a minute.`);
+  }
+
+  const holds = !!sack.shopify_added_at;
+  const u = await execute(db, `
+    UPDATE harvest_sacks SET voided_at = NULL${holds ? ', shopify_add_error = NULL' : ''}
+    WHERE sack_id = ? AND voided_at IS NOT NULL
+  `, [sackId]);
+  if (!u || !u.changes) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is not voided.`);
+  }
+
+  const isTest = isTestMode(env) ? 1 : 0;
+  const stats = await getLotTagStats(db, sack.zone_session_id, isTest);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `♻️ Un-voided tag *${sackId}* (${sack.cultivar || '?'} ${sack.zone}). ${stats.printed} for this lot.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  if (!isTestMode(env) && !holds) {
+    ctx.waitUntil((async () => {
+      await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
+        [inFlight('unvoid'), sackId]);
+      const r = await adjustSupersackCount(env, {
+        db,
+        season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
+        variantId: sack.shopify_variant_id || null, delta: 1,
+        note: `[Harvest] ${sackId} un-voided — tag back on its sack`,
+      });
+      await execute(db, `
+        UPDATE harvest_sacks
+        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+        WHERE sack_id = ?
+      `, [r.ok ? new Date().toISOString() : null, r.ok ? null : `unvoid add failed: ${r.error}`, r.variantId, sackId]);
+      if (!r.ok) console.error(`[harvest][inventory] unvoid ${sackId}: ${r.error}`);
+    })().catch(e => console.error('[harvest][inventory]', e)));
+  }
+
+  return successResponse({ success: true, unvoided: sackId, printed: stats.printed, last_sack_id: stats.lastSackId,
     tags: await getLotTags(db, sack.zone_session_id, isTest) });
 }
 
@@ -6950,6 +7023,7 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     printTagFill: ui.t('printTagFill', { n: '{n}' }), fillSavedOn: ui.t('fillSavedOn', { id: '{id}', n: '{n}' }),
     reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
     tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
+    unvoid: ui.t('unvoid'), confirmUnvoid: ui.t('confirmUnvoid', { id: '{id}' }), unvoidFailed: ui.t('unvoidFailed', { e: '{e}' }),
     printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
     printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
     printAgentFailed: ui.lang === 'es'
@@ -7004,6 +7078,9 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
       var acts = el('span', 'tagacts');
       if (t.voided) {
         acts.appendChild(el('span', 'hint', T.tagVoided));
+        var uv = el('a', 'mini', T.unvoid); uv.href = '#';
+        uv.setAttribute('data-act', 'unvoid'); uv.setAttribute('data-id', t.id);
+        acts.appendChild(uv);
       } else {
         var rp = el('a', 'mini', T.reprint); rp.href = '#';
         rp.setAttribute('data-act', 'reprint'); rp.setAttribute('data-id', t.id);
@@ -7227,6 +7304,23 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
   }
 
+  function unvoidTag(id) {
+    if (!id || busy) return;
+    if (!confirm(T.confirmUnvoid.replace('{id}', id))) return;
+    setBusy(true);
+    fetch('${API}?action=sack_unvoid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sack_id: id })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) throw new Error(d.error || 'Unvoid failed');
+        refresh(d); setBusy(false);
+      })
+      .catch(function (e) { setBusy(false); alert(T.unvoidFailed.replace('{e}', e.message)); });
+  }
+
   reprint.addEventListener('click', function (e) { e.preventDefault(); reprintTag(lastId); });
   voidLink.addEventListener('click', function (e) { e.preventDefault(); voidTag(lastId); });
   tagRows.addEventListener('click', function (e) {
@@ -7234,7 +7328,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     if (!a) return;
     e.preventDefault();
     var id = a.getAttribute('data-id');
-    if (a.getAttribute('data-act') === 'void') voidTag(id); else reprintTag(id);
+    var act = a.getAttribute('data-act');
+    if (act === 'void') voidTag(id); else if (act === 'unvoid') unvoidTag(id); else reprintTag(id);
   });
   renderTags();
 
