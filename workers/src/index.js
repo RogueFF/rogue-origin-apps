@@ -117,6 +117,17 @@ export default {
       }
     }
 
+    // Every 5 min: the Super Sack retry queue — pay the Shopify debts the owed
+    // tags explain, once the count has been quiet (lib/inventory-heal.js).
+    if (isFiveMinCron) {
+      try {
+        const { runInventoryHeal } = await import('./handlers/harvest-d1.js');
+        await runInventoryHeal(env);
+      } catch (e) {
+        console.error(`[Cron] Inventory heal failed: ${e.message}`);
+      }
+    }
+
     // Every 5 min: JD Operations Center telemetry ingest (Field Ops Tracking, Phase 1)
     if (isFiveMinCron) {
       try {

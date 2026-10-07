@@ -48,6 +48,8 @@ export function harvestTypeForZone(zone) {
   return /^GH/i.test(String(zone || '')) ? 'Greenhouse' : 'Sungrown';
 }
 
+import { stampInventoryCall } from './inventory-heal.js';
+
 async function poolCall(env, action, body) {
   if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) {
     throw new Error('Pool Inventory API not configured');
@@ -283,6 +285,8 @@ export async function adjustSupersackCount(env, { season, cultivar, zone, cut, d
       matchedBy = m.matchedBy;
     }
 
+    // Before the call: the heal waits until Shopify has been quiet since this.
+    await stampInventoryCall(db);
     await poolCall(env, 'update_supersack_inventory', {
       variantId: v.id,
       inventoryItemId: v.inventoryItemId,
