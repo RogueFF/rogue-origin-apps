@@ -62,6 +62,7 @@ import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT }
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
+import { decideHeal, settleStatement, latestMarkerAt, HEAL_QUIET_MS, LAST_CALL_KEY } from '../lib/inventory-heal.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
 import { bayFills, bayCards, percentShares } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
@@ -4423,6 +4424,45 @@ async function getReconcile(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   const season = parseInt(params.season, 10) || getSeason();
 
+  let variants = [];
+  let variantsError = null;
+  try { variants = await listSupersackVariants(env); }
+  catch (e) { variantsError = String(e.message || e); }
+
+  const lines = (await reconcileLines(db, season, isTest, variants))
+    .map(({ key, variant_id, ...line }) => line);
+
+  return successResponse({
+    success: true,
+    season,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    variants_error: variantsError,
+    basis: 'Bags tagged and not yet opened, against the Super Sack Inventory count for the same cultivar-year.',
+    note: 'Read-only. Drift is reported, never corrected here — the heal (every 5 min) pays only drift the owed tags explain; anything else is a question about the physical count, not something to paper over.',
+    lines,
+    unmatched_variants: variants
+      .filter(v => String(v.title || '').startsWith(`${season} -`))
+      .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
+      .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
+    // Tags whose Shopify write never settled. Reconcile compares tagged bags
+    // against the Shopify count, so a debt here is the difference — and until
+    // 2026-09-22 it was invisible on every screen while the sweep endpoint sat
+    // there knowing about it.
+    inventory_debts: await loadInventoryDebts(db, env),
+  });
+}
+
+/** Which reconcile line a sack falls on: cultivar, field or glass, cut. */
+const reconcileKey = (r) =>
+  `${String(r.cultivar).toLowerCase()}|${/^GH/i.test(String(r.zone || '')) ? 'GH' : 'FIELD'}|${r.cut_number}`;
+
+/**
+ * Unopened bags against the Shopify count, one line per cultivar, field/glass
+ * and cut. Shared by the reconcile screen and the heal so the two can never
+ * disagree about what "off" means.
+ */
+async function reconcileLines(db, season, isTest, variants) {
   const rows = await query(db, `
     SELECT cultivar, zone, cut_number,
            COUNT(*) AS tagged,
@@ -4435,20 +4475,17 @@ async function getReconcile(db, env, params) {
     ORDER BY cultivar, cut_number
   `, [season, isTest]);
 
-  let variants = [];
-  let variantsError = null;
-  try { variants = await listSupersackVariants(env); }
-  catch (e) { variantsError = String(e.message || e); }
-
   // Per cut, through the same matcher (aliases included) that moves the count —
   // a reconcile that matched differently would report drift that isn't there.
-  const lines = await Promise.all(rows.map(async r => {
+  return Promise.all(rows.map(async r => {
     const m = await matchSupersackVariant(variants, db,
       { season, cultivar: r.cultivar, zone: r.zone, cut: r.cut_number });
     const v = m.variant;
     const title = v ? v.title : m.title;
     const shopify = v ? Number(v.quantity) || 0 : null;
     return {
+      key: reconcileKey(r),
+      variant_id: v ? v.id : null,
       cultivar: r.cultivar,
       cut: r.cut_number,
       variant_title: title,
@@ -4463,26 +4500,85 @@ async function getReconcile(db, env, params) {
       drift: shopify === null ? null : r.unopened - shopify,
     };
   }));
+}
 
-  return successResponse({
-    success: true,
-    season,
-    is_test: !!isTest,
-    generated_at: new Date().toISOString(),
-    variants_error: variantsError,
-    basis: 'Bags tagged and not yet opened, against the Super Sack Inventory count for the same cultivar-year.',
-    note: 'Read-only. Drift is reported, never corrected — a mismatch is a question about the physical count, not something to paper over.',
-    lines,
-    unmatched_variants: variants
-      .filter(v => String(v.title || '').startsWith(`${season} -`))
-      .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
-      .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
-    // Tags whose Shopify write never settled. Reconcile compares tagged bags
-    // against the Shopify count, so a debt here is the difference — and until
-    // 2026-09-22 it was invisible on every screen while the sweep endpoint sat
-    // there knowing about it.
-    inventory_debts: await loadInventoryDebts(db, env),
-  });
+// ─── INVENTORY HEAL (the retry queue) ───────────────────
+//
+// Every 5 minutes: pay the debts reconcile can explain. The rules, and the
+// 2026-10-07 evidence behind them, live in lib/inventory-heal.js. This part
+// only gathers what they need — Shopify first, then D1, then a check that no
+// count call started in between.
+
+async function readLastCall(db) {
+  const row = await queryOne(db, `SELECT value FROM harvest_settings WHERE key = ?`, [LAST_CALL_KEY]);
+  const at = row ? Date.parse(row.value) : NaN;
+  return Number.isFinite(at) ? at : null;
+}
+
+const loadRealDebts = (db) => query(db, `
+  SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
+         opened_at, voided_at, shopify_added_at, shopify_add_error,
+         shopify_synced_at, shopify_sync_error
+  FROM harvest_sacks WHERE is_test = 0 AND (${DEBT_SQL})
+`);
+
+export async function runInventoryHeal(env, { now = Date.now() } = {}) {
+  if (isPreviewBuild(env)) return { skipped: 'preview build' };
+  const db = env.DB;
+
+  // Cheap first: most ticks owe nothing and must not touch Google at all.
+  const before = await loadRealDebts(db);
+  if (!before.length) return { skipped: 'nothing owed' };
+  const lastCall = await readLastCall(db);
+  const quietSince = Math.max(lastCall ?? 0, latestMarkerAt(before) ?? 0) || null;
+  if (quietSince !== null && now - quietSince < HEAL_QUIET_MS) return { skipped: 'not quiet' };
+
+  // Shopify, THEN D1: a tag already counted in what Shopify said is already a row.
+  const variants = await listSupersackVariants(env);
+  const debts = await loadRealDebts(db);
+  if ((await readLastCall(db)) !== lastCall) return { skipped: 'a call started while reading' };
+
+  const results = [];
+  for (const season of [...new Set(debts.map(d => d.season))]) {
+    const lines = await reconcileLines(db, season, 0, variants);
+    const byKey = new Map(lines.map(l => [l.key, l]));
+    // Two lines on one variant would each see the whole count and each heal it.
+    const shared = new Set(lines.map(l => l.variant_id).filter((id, i, a) => id && a.indexOf(id) !== i));
+    const groups = new Map();
+    for (const d of debts.filter(x => x.season === season)) {
+      const k = reconcileKey(d);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(d);
+    }
+    for (const [key, owed] of groups) {
+      const line = byKey.get(key);
+      const usable = line && line.variant_id && !shared.has(line.variant_id);
+      const d = decideHeal({ drift: usable ? line.drift : null, debts: owed, lastCallAt: quietSince, now });
+      const result = { variant: line ? line.variant_title : `${season} ${key}`, owed: owed.length,
+        drift: line ? line.drift : null, ...d };
+      if (d.action === 'send') {
+        const r = await adjustSupersackCount(env, {
+          db, variantId: line.variant_id, delta: d.amount,
+          note: `[Harvest] auto-heal ${d.amount > 0 ? '+' : ''}${d.amount} — ${owed.length} tag${owed.length === 1 ? '' : 's'} owed, Shopify off by ${d.amount} (the rest had landed)`,
+        });
+        result.ok = r.ok;
+        result.error = r.error;
+      } else if (d.action === 'settle') {
+        let settled = 0;
+        for (const row of owed) {
+          const { sql, params } = settleStatement(row, { variantId: line.variant_id });
+          settled += (await execute(db, sql, params))?.changes || 0;
+        }
+        result.settled = settled;
+      }
+      results.push(result);
+    }
+  }
+  for (const r of results) {
+    console.log(`[harvest][heal] ${r.variant}: ${r.action}${r.amount ? ` ${r.amount}` : ''}`
+      + ` (owed ${r.owed}, drift ${r.drift})${r.reason ? ` — ${r.reason}` : ''}${r.error ? ` — ${r.error}` : ''}`);
+  }
+  return { results };
 }
 
 // ─── PROVENANCE (downstream) ────────────────────────────
