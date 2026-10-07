@@ -1215,18 +1215,48 @@ async function handleCutChange(ui, db, env, ctx, body, method) {
   refuseRealInTest(ui, env, session);
   if (session.closed_at) throw createError('VALIDATION_ERROR', ui.t('cutLotClosed'));
 
-  const to = Number(session.cut_number) + (body.dir === 'prev' ? -1 : 1);
+  const dir = body.dir === 'prev' ? 'prev' : 'next';
+  const to = Number(session.cut_number) + (dir === 'prev' ? -1 : 1);
   if (to < 1 || to > 9) throw createError('VALIDATION_ERROR', ui.t('cutRange'));
 
+  // EVERY OPEN CREW IN THIS ZONE MOVES TOGETHER. On 2026-10-07 crew B's lead
+  // advanced Z16 to cut 2 while crew A was still cutting the same plants on
+  // cut 1, and both leads did it again in Z17 (cuts 2 and 3) — one rack of
+  // plants under three lot numbers. The cut is a fact about the zone, not
+  // about whichever phone pressed the button.
+  const open = await query(db, `
+    SELECT id, crew, cut_number FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND cultivar IS ? AND season = ?
+      AND closed_at IS NULL AND is_test = ?
+  `, [session.zone, session.cultivar, session.season, session.is_test]);
+  const ids = open.map(o => o.id);
+  if (!ids.includes(sessionId)) ids.push(sessionId);
+  const ph = ids.map(() => '?').join(',');
+
   const tags = await queryOne(db, `
-    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id = ? AND voided_at IS NULL
-  `, [sessionId]);
+    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id IN (${ph}) AND voided_at IS NULL
+  `, ids);
   if (tags && tags.n > 0) throw createError('VALIDATION_ERROR', ui.t('cutHasTags', { n: tags.n }));
 
-  await execute(db, `UPDATE harvest_scan_log SET cut_number = ? WHERE id = ? AND closed_at IS NULL`, [to, sessionId]);
+  // ASK ONCE. The same three mis-taps showed the button reads as "I am back in
+  // this zone" rather than "the whole zone was cut and we are starting over".
+  // The first press shows what will happen — including the other crew it will
+  // move — and the second press does it. Nothing changes on the first.
+  if (body.confirm !== '1') {
+    const others = open.filter(o => o.id !== sessionId && o.crew).map(o => o.crew);
+    return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+      zone: session.zone, cultivar: session.cultivar, cutNumber: session.cut_number, sessionId, prevZone: null,
+      flash: ui.t('cutConfirmAsk', { zone: session.zone, n: to }), headcount: session.headcount,
+      crew: session.crew, crewDay: await crewDayFor(db, session),
+      cutConfirm: { dir, to, others },
+    }));
+  }
+
+  await execute(db, `UPDATE harvest_scan_log SET cut_number = ? WHERE id IN (${ph}) AND closed_at IS NULL`, [to, ...ids]);
+  const moved = ids.length;
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `✂️ *${session.zone}*${session.cultivar ? ` ${session.cultivar}` : ''} — now Cut ${to} (was ${session.cut_number}), set on the zone screen.`,
+    text: `✂️ *${session.zone}*${session.cultivar ? ` ${session.cultivar}` : ''} — now Cut ${to} (was ${session.cut_number}), set on the zone screen by crew ${session.crew || '?'}${moved > 1 ? `; ${moved} open crews moved together` : ''}.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
@@ -5759,7 +5789,7 @@ function crewCard(ui, crew, crewDay, sessionId) {
 </div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null, crew = null, crewDay = null }) {
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null, crew = null, crewDay = null, cutConfirm = null }) {
   // A crew lot carries its cutters from the crew card; the old grid stays only
   // for a lot with no crew (nothing opens one any more, but old links exist).
   const people = crewById(crew)
@@ -5771,6 +5801,7 @@ function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash =
 <h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
 <p class="sub">${escapeHtml(zone)} · ${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
+${cutConfirm ? cutConfirmBlock(ui, sessionId, cutConfirm) : ''}
 ${people}
 ${cutChangeBlock(ui, sessionId, cutNumber, daysIdle)}
 ${cultivarFixBlock(ui, zone, sessionId, cultivar)}
@@ -5787,6 +5818,28 @@ ${headcountScript(ui)}`;
  * blocks are cut in pieces days apart. Idle days are still named inside, for
  * whoever opens it. A mis-tap has its own way back.
  */
+/**
+ * The second press. Says what the first press asked for, names the other crew
+ * it will move, and offers the way out first. Posts confirm=1 to the same
+ * action; the plain next/prev forms in cutChangeBlock never carry it.
+ */
+function cutConfirmBlock(ui, sessionId, { dir, to, others = [] }) {
+  const who = others.length ? `<p class="note">${ui.t('cutConfirmOthers', { crews: others.map(escapeHtml).join(', ') })}</p>` : '';
+  return `
+<div class="card cutconfirm">
+  <p class="note"><strong>${ui.t('cutConfirmWhat', { n: to })}</strong></p>
+  ${who}
+  <form method="POST" action="${API}?action=cut_change&lang=${ui.lang}"
+        onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+    <input type="hidden" name="session_id" value="${sessionId}">
+    <input type="hidden" name="dir" value="${dir}">
+    <input type="hidden" name="confirm" value="1">
+    <button class="bigbtn" type="submit">${ui.t('cutConfirmYes', { n: to })}</button>
+  </form>
+  <p class="note" style="margin-top:10px">${ui.t('cutConfirmNo')}</p>
+</div>`;
+}
+
 function cutChangeBlock(ui, sessionId, cutNumber, daysIdle) {
   const n = Number(cutNumber) || 1;
   const long = daysIdle != null && daysIdle >= NEW_CUT_PROMPT_DAYS;

@@ -130,11 +130,14 @@ test('status reports the one open lot', async () => {
 // 8 h after its last close — every morning. A zone keeps its cut now; a new one
 // starts only when the lead says so on the zone screen.
 
+// The zone screen asks once before moving the cut (2026-10-07); this plays the
+// confirmed second press. The first press has its own tests in
+// harvest-cut-change.test.mjs.
 const cutChange = (env, ctx, sessionId, dir = 'next', method = 'POST') => quiet(() => handleHarvestD1(
   method === 'POST'
     ? new Request('https://x/api/harvest?action=cut_change&lang=en', {
         method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ session_id: String(sessionId), dir }),
+        body: new URLSearchParams({ session_id: String(sessionId), dir, confirm: '1' }),
       })
     : new Request(`https://x/api/harvest?action=cut_change&session_id=${sessionId}&dir=${dir}&lang=en`), env, ctx));
 
