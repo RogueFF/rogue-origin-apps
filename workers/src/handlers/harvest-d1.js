@@ -2639,7 +2639,7 @@ async function handleSackAlloc(db, env, ctx, body) {
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}* ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.${note ? `\n📝 ${note}` : ''}`,
+    text: `🏷️ ${qty} sack tag${qty === 1 ? '' : 's'} — *${cultivar}*${bay ? ` · *Bay ${bay}*` : ''} · ${lot.zone} cut ${lot.cut_number} (${ids[0]}${qty > 1 ? `–${ids[ids.length - 1]}` : ''}). ${stats.printed} for this lot.${note ? `\n📝 ${note}` : ''}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   // Resolved HERE, per allocation, and handed to the client with the ids —
@@ -2981,7 +2981,7 @@ async function handleSackVoid(db, env, ctx, body) {
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🚫 Voided tag *${sackId}* (${sack.cultivar || '?'} ${sack.zone}). ${stats.printed} for this lot.`,
+    text: `🚫 Voided tag *${sackId}* (${sack.cultivar || '?'}${sack.bay ? ` · Bay ${sack.bay}` : ''} · ${sack.zone}). ${stats.printed} for this lot.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   // Take back the +1 that printing added. A voided tag is a retired number with
@@ -3062,7 +3062,7 @@ async function handleSackUnvoid(db, env, ctx, body) {
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `♻️ Un-voided tag *${sackId}* (${sack.cultivar || '?'} ${sack.zone}). ${stats.printed} for this lot.`,
+    text: `♻️ Un-voided tag *${sackId}* (${sack.cultivar || '?'}${sack.bay ? ` · Bay ${sack.bay}` : ''} · ${sack.zone}). ${stats.printed} for this lot.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   if (!isTestMode(env) && !holds) {
