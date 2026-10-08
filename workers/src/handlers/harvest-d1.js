@@ -260,10 +260,10 @@ const LOGGED_FLASH_FRESH_MS = 30 * 1000;
  * background, logs a load by itself (Koa, 2026-10-08: tapping the icon IS the
  * scan). iOS resumes an open web app instead of reloading its start page, so
  * without this the second tap of the day would only show the old receipt.
- * Shorter than any real trip (the fastest seen is ~12 min), longer than a
- * glance at a text message.
+ * Two minutes: the same line the data already draws for a double scan (Koa,
+ * 2026-10-08, after an 8-minute rule swallowed the second tap of a test).
  */
-const RESUME_LOG_MS = 8 * 60 * 1000;
+const RESUME_LOG_MS = 2 * 60 * 1000;
 
 function parseTrailer(raw) {
   // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so

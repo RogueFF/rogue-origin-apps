@@ -614,7 +614,7 @@ test('the receipt offers Add to Home Screen and carries the install tags', async
   assert.match(html, /rel="manifest" href="\/t\/3\/manifest\.webmanifest"/);
   assert.match(html, /apple-mobile-web-app-title" content="T3"/);
   assert.match(html, /wakeLock/, 'the receipt keeps the screen on between loads');
-  assert.match(html, /var MIN = 480000, hiddenAt = null;/, 'a home-screen app logs by itself after 8 minutes in the background');
+  assert.match(html, /var MIN = 120000, hiddenAt = null;/, 'a home-screen app logs by itself after 2 minutes in the background');
   assert.match(html, /if \(!standalone\) return;/, 'but never from a plain browser tab');
   assert.match(html, /var AGE = \d+;\s*if \(AGE >= MIN\) \{ press\(\); return; \}/, 'a stale receipt reopened as an app logs the next load');
   assert.match(html, /var AGE = [0-9]{1,5};/, 'a receipt served right after its scan is seconds old, not minutes');
