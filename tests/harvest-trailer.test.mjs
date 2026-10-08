@@ -560,7 +560,7 @@ test('what the driver saw on the ask screen is what is saved, even if the zone c
 
 test('an unknown trailer is refused, not guessed at', async () => {
   const { env, ctx } = freshDb();
-  for (const n of ['8', '0', 'abc', '1abc', '2/x', '03']) {
+  for (const n of ['9', '0', 'abc', '1abc', '2/x', '03']) {
     assert.ok((await scan(env, ctx, n)).status >= 400, `/t/${n}`);
   }
 });

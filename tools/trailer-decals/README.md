@@ -1,6 +1,6 @@
 # Trailer decals (4x6 thermal)
 
-Seven 4x6 in labels, T1-T7, for the Zebra ZP 450 (203 dpi). Each carries the
+Eight 4x6 in labels, T1-T8, for the Zebra ZP 450 (203 dpi). Each carries the
 live decal link `/t/<n>` — the same target as the app's print sheet
 (`?action=print_codes&packet=trailers`).
 

@@ -23,7 +23,7 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 // The sealed preview alias (wrangler versions upload --preview-alias trailer-test
 // --var HARVEST_FORCE_TEST:true): always test mode, never the floor's records.
 const PREVIEW_BASE = 'https://trailer-test-rogue-origin-api.roguefamilyfarms.workers.dev';
-const TRAILERS = [1, 2, 3, 4, 5, 6, 7];
+const TRAILERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 const W = 812;          // 4 in at 203 dpi
 const H = 1218;         // 6 in
@@ -102,6 +102,6 @@ if (args[0] === '--grid') {
   process.stdout.write(JSON.stringify({ target, grid, dot, x0, y0, W, H }));
 } else {
   const picks = nums.length ? nums : (test ? [1] : TRAILERS);
-  for (const n of picks) if (!TRAILERS.includes(n)) throw new Error(`No trailer T${n}; there are T1-T7.`);
+  for (const n of picks) if (!TRAILERS.includes(n)) throw new Error(`No trailer T${n}; there are T1-T8.`);
   process.stdout.write(picks.map(n => decalZpl(n, test)).join('\n') + '\n');
 }
