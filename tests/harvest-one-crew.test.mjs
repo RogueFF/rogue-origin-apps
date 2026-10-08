@@ -444,12 +444,12 @@ test('the barn sheet is end of day plus one page per door, and no crew cards', a
   assert.doesNotMatch(html, /CUADRILLA [AB]|\/c\/A/);
 });
 
-test('the trailer sheet is one decal per trailer, T1 to T7', async () => {
+test('the trailer sheet is one decal per trailer, T1 to T8', async () => {
   const { env, ctx } = freshDb();
   const html = await codeSheet(env, ctx, 'trailers');
-  assert.deepEqual(qrTargets(html), [1, 2, 3, 4, 5, 6, 7].map(n => `${BASE}/t/${n}`));
+  assert.deepEqual(qrTargets(html), [1, 2, 3, 4, 5, 6, 7, 8].map(n => `${BASE}/t/${n}`));
   // The printed number is the trailer's name — they had none before these.
-  for (const n of [1, 7]) assert.match(html, new RegExp(`class="big trailer-num">T${n}<`));
+  for (const n of [1, 8]) assert.match(html, new RegExp(`class="big trailer-num">T${n}<`));
   assert.match(html, /El chofer lo escanea <strong>cada vez que deja una carga<\/strong>/);
 });
 

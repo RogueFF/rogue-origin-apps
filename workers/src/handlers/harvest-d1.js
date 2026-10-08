@@ -240,7 +240,7 @@ function pickStation(request, body = {}) {
  * DRIVER scans it on drop-off — the trailer, not a door or a crew, is the fact
  * that arrives at the barn. Stored as the bare number; shown as "T3".
  */
-const TRAILERS = [1, 2, 3, 4, 5, 6, 7];
+const TRAILERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const trailerName = (n) => `T${n}`;
 
 /*
