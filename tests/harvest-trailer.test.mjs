@@ -618,6 +618,9 @@ test('the receipt offers Add to Home Screen and carries the install tags', async
   assert.match(html, /if \(!standalone\) return;/, 'but never from a plain browser tab');
   assert.match(html, /var AGE = \d+;\s*if \(AGE >= MIN\) \{ press\(\); return; \}/, 'a stale receipt reopened as an app logs the next load');
   assert.match(html, /setInterval\(function \(\) \{\s*var now = Date\.now\(\);\s*if \(now - last >= MIN\)/, 'a frozen-then-woken app sees the gap on its clock and logs, without needing a visibility event');
+  for (const ev of ['pagehide', 'blur', 'freeze', 'pageshow', 'focus', 'resume']) {
+    assert.match(html, new RegExp(`addEventListener\\('${ev}'`), `listens for ${ev} on the way out or back in`);
+  }
   assert.match(html, /var AGE = [0-9]{1,5};/, 'a receipt served right after its scan is seconds old, not minutes');
 });
 
