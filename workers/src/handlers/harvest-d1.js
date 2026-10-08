@@ -260,10 +260,10 @@ const LOGGED_FLASH_FRESH_MS = 30 * 1000;
  * background, logs a load by itself (Koa, 2026-10-08: tapping the icon IS the
  * scan). iOS resumes an open web app instead of reloading its start page, so
  * without this the second tap of the day would only show the old receipt.
- * Two minutes: the same line the data already draws for a double scan (Koa,
- * 2026-10-08, after an 8-minute rule swallowed the second tap of a test).
+ * No cooldown (Koa, 2026-10-08: "take the 2 minute cooldown off"). 15 s is only
+ * what tells a frozen app waking up from the page's own 5-second tick.
  */
-const RESUME_LOG_MS = 2 * 60 * 1000;
+const RESUME_LOG_MS = 15 * 1000;
 
 function parseTrailer(raw) {
   // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
