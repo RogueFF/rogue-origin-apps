@@ -591,6 +591,8 @@ test('the home-screen launcher opens with one button and logs nothing by itself'
   assert.match(html, /rel="apple-touch-icon" href="\/t\/3\/icon-180\.png"/);
   assert.match(html, /apple-mobile-web-app-title" content="T3"/);
   assert.doesNotMatch(html, /how\.hidden = false;/, 'the steps stay folded unless asked for');
+  // iOS keeps the page the icon was added from, so the launcher itself is the scan when it runs as an app
+  assert.match(html, /if \(!standalone\) return;\s*var f = document\.querySelector\('form\.again'\)/, 'as a home-screen app the launcher submits at once');
 });
 
 test('arriving from the receipt button unfolds the install steps', async () => {
@@ -614,6 +616,8 @@ test('the receipt offers Add to Home Screen and carries the install tags', async
   assert.match(html, /wakeLock/, 'the receipt keeps the screen on between loads');
   assert.match(html, /var MIN = 480000, hiddenAt = null;/, 'a home-screen app logs by itself after 8 minutes in the background');
   assert.match(html, /if \(!standalone\) return;/, 'but never from a plain browser tab');
+  assert.match(html, /var AGE = \d+;\s*if \(AGE >= MIN\) \{ press\(\); return; \}/, 'a stale receipt reopened as an app logs the next load');
+  assert.match(html, /var AGE = [0-9]{1,5};/, 'a receipt served right after its scan is seconds old, not minutes');
 });
 
 test('the home-screen icon start page logs like a scan, and says it came from the icon', async () => {
@@ -634,6 +638,7 @@ test('each trailer has its own manifest, naming it and opening its launcher', as
   const res = await getT(env, ctx, '3/manifest.webmanifest?lang=es');
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /application\/manifest\+json/);
+  assert.match(res.headers.get('cache-control'), /max-age=300/, 'short-lived, so a re-added icon sees the current manifest');
   const m = JSON.parse(await res.text());
   assert.equal(m.short_name, 'T3');
   assert.equal(m.start_url, '/t/3?app&lang=es', 'the icon opens the logging URL: tapping it IS the scan (Koa, 2026-10-08)');
