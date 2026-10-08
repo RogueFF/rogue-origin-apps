@@ -564,3 +564,92 @@ test('an unknown trailer is refused, not guessed at', async () => {
     assert.ok((await scan(env, ctx, n)).status >= 400, `/t/${n}`);
   }
 });
+
+// ─── "Add to Home Screen" (Koa, 2026-10-08) ──────────────────────────────
+// The icon opens /t/<n>?home: one big button, nothing logged until it is
+// tapped. Each trailer has its own manifest and icon so the phone shows "T3".
+
+/** A GET of a trailer URL with its own query string, the way a home-screen icon or a manifest fetch does it. */
+const getT = (env, ctx, pathAndQuery, headers = {}) =>
+  quiet(() => handleTrailerScan(new Request(`https://x/t/${pathAndQuery}`, { headers }), env, ctx));
+
+test('the home-screen launcher opens with one button and logs nothing by itself', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const r1 = seedSession(sqlite, { zone: 'R1', cultivar: 'Strawberry Doughnuts', opened: minsAgo(120) });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: r1 });
+  const before = lastLoad(sqlite).id;
+
+  const res = await getT(env, ctx, '3?home&lang=en');
+  assert.equal(res.status, 200, 'a page, not the 303 a real scan answers');
+  assert.equal(lastLoad(sqlite).id, before, 'opening the launcher is not a load');
+  const html = await res.text();
+  assert.match(html, /action=trailer_again/, 'the button posts what the decal scan does');
+  assert.match(html, /name="trailer" value="3"/);
+  assert.match(html, /Log a load · T3/);
+  assert.match(html, /id="a2hsBtn"/, 'the launcher itself offers Add to Home Screen');
+  assert.match(html, /rel="manifest" href="\/t\/3\/manifest\.webmanifest"/);
+  assert.match(html, /rel="apple-touch-icon" href="\/t\/3\/icon-180\.png"/);
+  assert.match(html, /apple-mobile-web-app-title" content="T3"/);
+  assert.doesNotMatch(html, /how\.hidden = false;/, 'the steps stay folded unless asked for');
+});
+
+test('arriving from the receipt button unfolds the install steps', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  seedSession(sqlite, {});
+  const html = await (await getT(env, ctx, '3?home&add&lang=en')).text();
+  assert.match(html, /how\.hidden = false;/);
+  assert.match(html, /Add to Home Screen/);
+  assert.match(html, /tap Share/, 'the iPhone steps are on the page');
+  assert.match(html, /Add to Home screen" or "Install"/, 'and the Android steps');
+});
+
+test('the receipt offers Add to Home Screen and carries the install tags', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const r1 = seedSession(sqlite, { zone: 'R1', cultivar: 'Strawberry Doughnuts', opened: minsAgo(120) });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: r1 });
+  const html = await scanPage(env, ctx, 3);
+  assert.match(html, /href="\/t\/3\?home&add&lang=en"[^>]*>📲 Add to Home Screen/);
+  assert.match(html, /rel="manifest" href="\/t\/3\/manifest\.webmanifest"/);
+  assert.match(html, /apple-mobile-web-app-title" content="T3"/);
+  assert.match(html, /wakeLock/, 'the receipt keeps the screen on between loads');
+});
+
+test('each trailer has its own manifest, naming it and opening its launcher', async () => {
+  const { env, ctx } = freshDb();
+  const res = await getT(env, ctx, '3/manifest.webmanifest?lang=es');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /application\/manifest\+json/);
+  const m = JSON.parse(await res.text());
+  assert.equal(m.short_name, 'T3');
+  assert.equal(m.start_url, '/t/3?home&lang=es', 'the icon opens the launcher, never the logging URL');
+  assert.equal(m.display, 'standalone');
+  assert.deepEqual(m.icons.map(i => [i.src, i.sizes, i.type]),
+    [['/t/3/icon-192.png', '192x192', 'image/png'], ['/t/3/icon-512.png', '512x512', 'image/png']]);
+});
+
+test('the icons are real PNGs, and only the sizes and trailers that exist', async () => {
+  const { env, ctx } = freshDb();
+  for (const size of [180, 192, 512]) {
+    const res = await getT(env, ctx, `3/icon-${size}.png`);
+    assert.equal(res.status, 200, `icon-${size}`);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    assert.deepEqual([...bytes.slice(0, 4)], [0x89, 0x50, 0x4e, 0x47], 'PNG signature');
+  }
+  assert.ok((await getT(env, ctx, '3/icon-64.png')).status >= 400, 'no such size');
+  assert.ok((await getT(env, ctx, '9/manifest.webmanifest')).status >= 400, 'no such trailer');
+  assert.ok((await getT(env, ctx, '9/icon-180.png')).status >= 400);
+});
+
+test('fetching the manifest or an icon never logs a load, even with a lot open and a bay set', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const r1 = seedSession(sqlite, { zone: 'R1', cultivar: 'Strawberry Doughnuts', opened: minsAgo(120) });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: r1 });
+  const before = lastLoad(sqlite).id;
+  await getT(env, ctx, '3/manifest.webmanifest');
+  await getT(env, ctx, '3/icon-192.png');
+  assert.equal(lastLoad(sqlite).id, before);
+  // and the plain scan still logs, so the asset branch did not swallow it
+  assert.equal((await scan(env, ctx, 3)).status, 303);
+  assert.equal(lastLoad(sqlite).id, before + 1);
+});
