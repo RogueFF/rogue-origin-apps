@@ -612,6 +612,21 @@ test('the receipt offers Add to Home Screen and carries the install tags', async
   assert.match(html, /rel="manifest" href="\/t\/3\/manifest\.webmanifest"/);
   assert.match(html, /apple-mobile-web-app-title" content="T3"/);
   assert.match(html, /wakeLock/, 'the receipt keeps the screen on between loads');
+  assert.match(html, /var MIN = 480000, hiddenAt = null;/, 'a home-screen app logs by itself after 8 minutes in the background');
+  assert.match(html, /if \(!standalone\) return;/, 'but never from a plain browser tab');
+});
+
+test('the home-screen icon start page logs like a scan, and says it came from the icon', async () => {
+  const { sqlite, env, ctx } = freshDb();
+  const r1 = seedSession(sqlite, { zone: 'R1', cultivar: 'Strawberry Doughnuts', opened: minsAgo(120) });
+  ranEarlier(sqlite, { trailer: 3, bay: 9, lot: r1 });
+  const before = lastLoad(sqlite).id;
+  const res = await getT(env, ctx, '3?app&lang=en');
+  assert.equal(res.status, 303, 'the icon tap writes and lands on the receipt');
+  const row = lastLoad(sqlite);
+  assert.equal(row.id, before + 1);
+  assert.deepEqual({ trailer: row.trailer, bins: row.bins, bay: row.bay }, { trailer: 3, bins: 24, bay: 9 });
+  // The 'home icon' wording goes to the Telegram message only; the row itself cannot tell an icon tap from a scan.
 });
 
 test('each trailer has its own manifest, naming it and opening its launcher', async () => {
@@ -621,7 +636,7 @@ test('each trailer has its own manifest, naming it and opening its launcher', as
   assert.match(res.headers.get('content-type'), /application\/manifest\+json/);
   const m = JSON.parse(await res.text());
   assert.equal(m.short_name, 'T3');
-  assert.equal(m.start_url, '/t/3?home&lang=es', 'the icon opens the launcher, never the logging URL');
+  assert.equal(m.start_url, '/t/3?app&lang=es', 'the icon opens the logging URL: tapping it IS the scan (Koa, 2026-10-08)');
   assert.equal(m.display, 'standalone');
   assert.deepEqual(m.icons.map(i => [i.src, i.sizes, i.type]),
     [['/t/3/icon-192.png', '192x192', 'image/png'], ['/t/3/icon-512.png', '512x512', 'image/png']]);
