@@ -255,6 +255,16 @@ const trailerName = (n) => `T${n}`;
 /** A receipt this new is the scan landing: show the full-screen confirmation. */
 const LOGGED_FLASH_FRESH_MS = 30 * 1000;
 
+/**
+ * The home-screen app, brought back to the front after this long in the
+ * background, logs a load by itself (Koa, 2026-10-08: tapping the icon IS the
+ * scan). iOS resumes an open web app instead of reloading its start page, so
+ * without this the second tap of the day would only show the old receipt.
+ * Shorter than any real trip (the fastest seen is ~12 min), longer than a
+ * glance at a text message.
+ */
+const RESUME_LOG_MS = 8 * 60 * 1000;
+
 function parseTrailer(raw) {
   // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
   // a mangled QR would still log — to a trailer nobody chose.
@@ -1757,7 +1767,9 @@ export async function handleTrailerScan(request, env, ctx) {
         200, { head: trailerHead(ui, trailer) });
     }
     if (isNotAPerson(request)) return await trailerFormPage(ui, env.DB, env, trailer);
-    return await logTrailerNow(ui, env.DB, env, ctx, trailer, 'one scan');
+    // ?app is the home-screen icon's own start page (Koa, 2026-10-08: "when
+    // they tap the app, it scans it in"). It logs like a decal scan and says so.
+    return await logTrailerNow(ui, env.DB, env, ctx, trailer, url.searchParams.has('app') ? 'home icon' : 'one scan');
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -1773,7 +1785,7 @@ function trailerAssetResponse(ui, trailer, file, size) {
     const name = trailerName(trailer);
     const manifest = {
       name: `${name} · Rogue Origin`, short_name: name,
-      start_url: `/t/${trailer}?home&lang=${ui.lang}`, scope: '/',
+      start_url: `/t/${trailer}?app&lang=${ui.lang}`, scope: '/',
       display: 'standalone', background_color: '#14251a', theme_color: '#14251a',
       icons: TRAILER_ICON_SIZES.filter(sz => sz !== 180).map(sz => ({
         src: `/t/${trailer}/icon-${sz}.png`, sizes: `${sz}x${sz}`, type: 'image/png', purpose: 'any',
@@ -6473,7 +6485,7 @@ function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh =
 
   const home = `
 <a class="btn alt home-add" href="/t/${row.trailer}?home&add&lang=${ui.lang}">📲 ${ui.t('homeAdd')}</a>
-<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}`;
+<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}${resumeLogScript()}`;
 
   return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
@@ -6536,6 +6548,29 @@ function a2hsBlock(ui, autoOpen) {
     how.hidden = !how.hidden;
   });
   ${autoOpen ? 'how.hidden = false;' : ''}
+})();</script>`;
+}
+
+/**
+ * Home-screen app only (never a browser tab): when the receipt comes back to
+ * the front after RESUME_LOG_MS or more in the background, press the "Log
+ * another load" button for the driver. A cold start goes through ?app and
+ * logs on its own; this covers the warm one.
+ */
+function resumeLogScript() {
+  return `
+<script>(function () {
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  var MIN = ${RESUME_LOG_MS}, hiddenAt = null;
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    if (!hiddenAt || Date.now() - hiddenAt < MIN) return;
+    hiddenAt = null;
+    var f = document.querySelector('form.again'), b = f && f.querySelector('button');
+    if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+  });
 })();</script>`;
 }
 
