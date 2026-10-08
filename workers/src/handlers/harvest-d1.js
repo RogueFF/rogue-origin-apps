@@ -1792,7 +1792,7 @@ function trailerAssetResponse(ui, trailer, file, size) {
       })),
     };
     return new Response(JSON.stringify(manifest), {
-      headers: { 'content-type': 'application/manifest+json', 'cache-control': 'public, max-age=86400' },
+      headers: { 'content-type': 'application/manifest+json', 'cache-control': 'public, max-age=300' },
     });
   }
   const png = trailerIconPng(trailer, Number(size));
@@ -6485,7 +6485,7 @@ function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh =
 
   const home = `
 <a class="btn alt home-add" href="/t/${row.trailer}?home&add&lang=${ui.lang}">📲 ${ui.t('homeAdd')}</a>
-<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}${resumeLogScript()}`;
+<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}${resumeLogScript(Date.now() - parseSqliteUtc(row.occurred_at).getTime())}`;
 
   return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
@@ -6515,6 +6515,16 @@ function trailerHomeBody(ui, trailer, { autoOpen = false } = {}) {
   <button class="btn again-btn launch-btn" type="submit">+ ${ui.t('homeLog', { t: name })}</button>
   <p class="hint">${ui.t('trailerAgainHint')}</p>
 </form>
+<script>(function () {
+  // Opened from the home-screen icon (iOS keeps the page it was added from,
+  // whatever the manifest says): this IS the scan. Submit at once. In a
+  // browser tab the page waits for the tap, as the text above it says.
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  var f = document.querySelector('form.again'), b = f && f.querySelector('button');
+  if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+})();</script>
 ${a2hsBlock(ui, autoOpen)}${wakeLockScript()}`;
 }
 
@@ -6557,19 +6567,26 @@ function a2hsBlock(ui, autoOpen) {
  * another load" button for the driver. A cold start goes through ?app and
  * logs on its own; this covers the warm one.
  */
-function resumeLogScript() {
+function resumeLogScript(ageMs = 0) {
   return `
 <script>(function () {
   var standalone = window.navigator.standalone === true ||
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
   if (!standalone) return;
   var MIN = ${RESUME_LOG_MS}, hiddenAt = null;
+  var press = function () {
+    var f = document.querySelector('form.again'), b = f && f.querySelector('button');
+    if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+  };
+  // Relaunched onto an old receipt (iOS reopens the last page after the app
+  // was closed): if that load is older than a trip, this open is the next one.
+  var AGE = ${Math.max(0, Math.round(ageMs))};
+  if (AGE >= MIN) { press(); return; }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
     if (!hiddenAt || Date.now() - hiddenAt < MIN) return;
     hiddenAt = null;
-    var f = document.querySelector('form.again'), b = f && f.querySelector('button');
-    if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+    press();
   });
 })();</script>`;
 }
