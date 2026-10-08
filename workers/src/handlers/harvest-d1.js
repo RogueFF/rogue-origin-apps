@@ -50,6 +50,7 @@ import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './
  */
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
+import { trailerIconPng, TRAILER_ICON_SIZES } from '../lib/trailer-icons.js';
 import { HARVEST_UI_STYLE } from './harvest-ui.js';
 import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
 import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
@@ -1735,15 +1736,69 @@ export async function handleTrailerScan(request, env, ctx) {
   env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
-    const raw = new URL(request.url).pathname.replace(/^\/t\//, '').trim();
+    const url = new URL(request.url);
+    const raw = url.pathname.replace(/^\/t\//, '').trim();
+    // /t/3/icon-180.png and /t/3/manifest.webmanifest: what a phone fetches
+    // once the page is on its home screen. Static, never a load.
+    const asset = raw.match(/^([1-9]\d?)\/(manifest\.webmanifest|icon-(\d+)\.png)$/);
+    if (asset) {
+      const trailer = parseTrailer(asset[1]);
+      if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: asset[1] }));
+      return trailerAssetResponse(ui, trailer, asset[2], asset[3]);
+    }
     const trailer = parseTrailer(raw);
     if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: raw }));
+    // The home-screen icon opens /t/<n>?home: a page with one big button and
+    // nothing logged until it is tapped — so a pocket launch, an iOS reload on
+    // resume, or a curious tap on the icon can never make a phantom load.
+    if (url.searchParams.has('home')) {
+      return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`,
+        trailerHomeBody(ui, trailer, { autoOpen: url.searchParams.has('add') }),
+        200, { head: trailerHead(ui, trailer) });
+    }
     if (isNotAPerson(request)) return await trailerFormPage(ui, env.DB, env, trailer);
     return await logTrailerNow(ui, env.DB, env, ctx, trailer, 'one scan');
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
   }
+}
+
+/**
+ * The web-app manifest and icons behind "Add to Home Screen". One manifest per
+ * trailer, so the icon says T3 and opens T3's launcher, never a generic page.
+ */
+function trailerAssetResponse(ui, trailer, file, size) {
+  if (file === 'manifest.webmanifest') {
+    const name = trailerName(trailer);
+    const manifest = {
+      name: `${name} · Rogue Origin`, short_name: name,
+      start_url: `/t/${trailer}?home&lang=${ui.lang}`, scope: '/',
+      display: 'standalone', background_color: '#14251a', theme_color: '#14251a',
+      icons: TRAILER_ICON_SIZES.filter(sz => sz !== 180).map(sz => ({
+        src: `/t/${trailer}/icon-${sz}.png`, sizes: `${sz}x${sz}`, type: 'image/png', purpose: 'any',
+      })),
+    };
+    return new Response(JSON.stringify(manifest), {
+      headers: { 'content-type': 'application/manifest+json', 'cache-control': 'public, max-age=86400' },
+    });
+  }
+  const png = trailerIconPng(trailer, Number(size));
+  if (!png) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  return new Response(png, {
+    headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' },
+  });
+}
+
+/** <head> extras that make a trailer page installable with its own icon and name. */
+function trailerHead(ui, trailer) {
+  const name = trailerName(trailer);
+  return `<link rel="manifest" href="/t/${trailer}/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/t/${trailer}/icon-180.png">
+<meta name="apple-mobile-web-app-title" content="${name}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#14251a">`;
 }
 
 /**
@@ -1801,7 +1856,7 @@ async function trailerFormPage(ui, db, env, trailer, keep = null) {
   return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`, trailerFormBody(ui, {
     trailer, proposal, recentLots, keep,
     lastBay: lastFill ? lastFill.bay : null, bayToday: today,
-  }));
+  }), 200, { head: trailerHead(ui, trailer) });
 }
 
 /** Bins from a form field: 1..max, the whole value, or a thrown range error. */
@@ -1874,7 +1929,7 @@ async function handleTrailerDone(ui, db, env, params) {
   const fresh = Date.now() - parseSqliteUtc(row.occurred_at).getTime() < LOGGED_FLASH_FRESH_MS;
   return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
     row, loadNumber, editable, recentLots, fresh,
-  }));
+  }), 200, { head: trailerHead(ui, row.trailer) });
 }
 
 /**
@@ -5264,7 +5319,7 @@ function codeSheetBody(ui, packet = 'crew') {
 
 // ─── HTML RENDERING ─────────────────────────────────────
 
-function renderPage(ui, title, bodyHtml, status = 200) {
+function renderPage(ui, title, bodyHtml, status = 200, { head = '' } = {}) {
   const lang = ui.lang;
   const working = !bodyHtml.includes('class="sd"') && !bodyHtml.includes('class="harvest-hub"') && !bodyHtml.includes('class="codesheet"');
   const chrome = `<header class="harvest-header"><img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="54" height="54"><div><strong>ROGUE ORIGIN</strong><small>${lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</small></div><nav aria-label="${lang === 'es' ? 'Navegación' : 'Navigation'}"><a href="${API}?action=hub&lang=${lang}">${lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></nav></header>`;
@@ -5274,6 +5329,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)} — Harvest</title>
+${head}
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 20px; background: #14251a; color: #f2f6f2; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
@@ -6415,6 +6471,10 @@ function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh =
   <p class="hint">${ui.t('trailerAgainHint')}</p>
 </form>`;
 
+  const home = `
+<a class="btn alt home-add" href="/t/${row.trailer}?home&add&lang=${ui.lang}">📲 ${ui.t('homeAdd')}</a>
+<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}`;
+
   return `${flash}
 <h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
 <div class="status trailer-lot">
@@ -6423,7 +6483,71 @@ function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh =
 </div>
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(row.zone) })}</p>
 ${again}
-${fix}`;
+${fix}
+${home}`;
+}
+
+/**
+ * What the home-screen icon opens (Koa, 2026-10-08: "an add to Home Screen
+ * button on each scan page"). One big button that posts exactly what the
+ * decal scan does. Opening this page logs nothing.
+ */
+function trailerHomeBody(ui, trailer, { autoOpen = false } = {}) {
+  const name = trailerName(trailer);
+  return `
+<h1 class="trailer-name">${name}</h1>
+<p class="sub">${ui.t('homeLaunchHint', { t: name })}</p>
+<form method="POST" action="${API}?action=trailer_again&lang=${ui.lang}" class="again"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${trailer}">
+  <button class="btn again-btn launch-btn" type="submit">+ ${ui.t('homeLog', { t: name })}</button>
+  <p class="hint">${ui.t('trailerAgainHint')}</p>
+</form>
+${a2hsBlock(ui, autoOpen)}${wakeLockScript()}`;
+}
+
+/**
+ * "Add to Home Screen". Android Chrome fires beforeinstallprompt and the
+ * button can open the real install sheet; iOS has no such thing, so the
+ * button shows the two taps (Share, then Add to Home Screen). Already
+ * installed: the button says so and does nothing.
+ */
+function a2hsBlock(ui, autoOpen) {
+  return `
+<div class="a2hs">
+  <button type="button" class="btn alt a2hs-btn" id="a2hsBtn">📲 ${ui.t('homeAdd')}</button>
+  <div class="a2hs-how" id="a2hsHow" hidden>
+    <p class="a2hs-ios">${ui.t('homeHowIos')}</p>
+    <p class="a2hs-android">${ui.t('homeHowAndroid')}</p>
+    <p class="hint">${ui.t('homeWhy')}</p>
+  </div>
+</div>
+<script>(function () {
+  var b = document.getElementById('a2hsBtn'), how = document.getElementById('a2hsHow');
+  if (!b || !how) return;
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (standalone) { b.textContent = '✓ ' + ${JSON.stringify(ui.t('homeAdded'))}; b.disabled = true; return; }
+  how.className += /iphone|ipad|ipod/i.test(navigator.userAgent) ? ' ios' : ' android';
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; });
+  b.addEventListener('click', function () {
+    if (deferred) { deferred.prompt(); deferred = null; return; }
+    how.hidden = !how.hidden;
+  });
+  ${autoOpen ? 'how.hidden = false;' : ''}
+})();</script>`;
+}
+
+/** Keep the screen on while the page is open, so the next load is one tap, not unlock-then-tap. Best effort. */
+function wakeLockScript() {
+  return `
+<script>(function () {
+  if (!('wakeLock' in navigator)) return;
+  function hold() { navigator.wakeLock.request('screen').catch(function () {}); }
+  hold();
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') hold(); });
+})();</script>`;
 }
 
 /** A stored UTC timestamp (or a Date) as a Pacific wall-clock time, "2:14 PM". */
