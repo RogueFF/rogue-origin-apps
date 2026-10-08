@@ -6592,12 +6592,23 @@ function resumeLogScript(ageMs = 0) {
     if (now - last >= MIN) { last = now; press(); return; }
     last = now;
   }, 5000);
+  // Every signal iOS might send on the way out and on the way back in; on
+  // Koa's iPhone a warm return delivered no visibilitychange at all.
+  var away = function () { if (!hiddenAt) hiddenAt = Date.now(); };
+  var back = function () {
+    if (!hiddenAt) return;
+    var gone = Date.now() - hiddenAt; hiddenAt = null;
+    if (gone >= MIN) press();
+  };
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
-    if (!hiddenAt || Date.now() - hiddenAt < MIN) return;
-    hiddenAt = null;
-    press();
+    if (document.visibilityState === 'hidden') away(); else back();
   });
+  window.addEventListener('pagehide', away);
+  window.addEventListener('blur', away);
+  document.addEventListener('freeze', away);
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', back);
+  document.addEventListener('resume', back);
 })();</script>`;
 }
 
