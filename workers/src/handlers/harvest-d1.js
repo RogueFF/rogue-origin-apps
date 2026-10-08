@@ -6582,6 +6582,16 @@ function resumeLogScript(ageMs = 0) {
   // was closed): if that load is older than a trip, this open is the next one.
   var AGE = ${Math.max(0, Math.round(ageMs))};
   if (AGE >= MIN) { press(); return; }
+  // Brought back to the front without a reload. iOS did not deliver
+  // visibilitychange to Koa's phone (2026-10-08: a warm return only showed the
+  // old receipt), so the clock is the witness instead: a backgrounded web app
+  // is frozen, and the first tick after it wakes sees the whole gap at once.
+  var last = Date.now();
+  setInterval(function () {
+    var now = Date.now();
+    if (now - last >= MIN) { last = now; press(); return; }
+    last = now;
+  }, 5000);
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
     if (!hiddenAt || Date.now() - hiddenAt < MIN) return;
