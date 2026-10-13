@@ -93,3 +93,65 @@ test('lot_add dates the lot at the bay fill start so drying days read right, and
   const html = await page.text();
   assert.match(html, /Runtz/);
 });
+
+const pacificToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+
+test('lot_add dates a second add at the hand-added fill, so both cultivars stay on the bay', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Critical Berries', 'CB'), ('Runtz', 'RUN')`);
+  // A McLoughlin bay nobody scans: no barn loads, only hand-added lots.
+  const cb = await (await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Critical Berries' })).json();
+  sqlite.prepare(`UPDATE harvest_scan_log SET occurred_at = datetime(occurred_at, '-4 days'),
+                  closed_at = datetime(closed_at, '-4 days') WHERE id = ?`).run(cb.session_id);
+  const cbAt = sqlite.prepare(`SELECT occurred_at FROM harvest_scan_log WHERE id = ?`).get(cb.session_id).occurred_at;
+  const rz = await (await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Runtz' })).json();
+  const rzAt = sqlite.prepare(`SELECT occurred_at FROM harvest_scan_log WHERE id = ?`).get(rz.session_id).occurred_at;
+  assert.equal(rzAt, cbAt, 'same fill as the hand-added Critical Berries, not a new one');
+  const html = await (await handleHarvestD1(new Request(`${API}?action=bay_tags&lang=en`), env, ctx)).text();
+  const bay12 = html.slice(html.indexOf('data-bay="12" data-fill'));
+  assert.match(bay12, /data-cultivar="Critical Berries"/);
+  assert.match(bay12, /data-cultivar="Runtz"/);
+});
+
+test('lot_add refuses a cultivar already in the bay, pointing at its row', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Critical Berries', 'CB')`);
+  const first = await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Critical Berries' });
+  assert.equal(first.status, 200);
+  const firstId = (await first.json()).session_id;
+  const again = await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'critical berries' });
+  assert.equal(again.status, 400);
+  const j = await again.json();
+  assert.match(j.error, /already in bay 12/);
+  assert.equal(j.details.session_id, firstId);
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_scan_log WHERE event_type = 'enter' AND cultivar = 'Critical Berries'`).get().n, 1);
+});
+
+test('lot_add refuses Sour Lifter in a bay where Egg Farm Sour Lifter already hangs', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const z14 = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, z14, 4, { minutesAgo: 5 * 1440, bins: 48 });
+  const res = await post(env, ctx, 'lot_add', { bay: 4, cultivar: 'Sour Lifter' });
+  assert.equal(res.status, 400);
+  const j = await res.json();
+  assert.match(j.error, /already in bay 4/);
+  assert.equal(j.details.session_id, z14);
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_scan_log WHERE zone = 'MZ4'`).get().n, 0);
+});
+
+test('lot_add in an empty bay dates the lot 8 AM Pacific today, never the next UTC day', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Runtz', 'RUN')`);
+  const j = await (await post(env, ctx, 'lot_add', { bay: 7, cultivar: 'Runtz' })).json();
+  const at = sqlite.prepare(`SELECT occurred_at FROM harvest_scan_log WHERE id = ?`).get(j.session_id).occurred_at;
+  const day = pacificToday();
+  const eight = `${day} 15:00:00`;
+  assert.ok(at.startsWith(day), `${at} is today's Pacific day`);
+  assert.ok(at <= eight, 'never in the future');
+  const nowUtc = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  if (nowUtc > eight) assert.equal(at, eight);
+});

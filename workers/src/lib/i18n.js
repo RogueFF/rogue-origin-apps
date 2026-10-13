@@ -276,6 +276,7 @@ const S = {
     addPickZone: '{c} está en dos zonas de McLoughlin — escoge una.',
     addZoneWrong: '{c} no está sembrado en {z}.',
     addNoCode: '{c} no tiene código de etiqueta todavía (tabla cultivars). Pídeselo a Koa antes de imprimir.',
+    addAlready: '{c} ya está en la bahía {bay}. Imprime desde su fila.',
 
     // — sack detail —
     sack: 'Bolsa',
@@ -648,6 +649,7 @@ const S = {
     addPickZone: '{c} is in two McLoughlin zones — pick one.',
     addZoneWrong: '{c} is not planted in {z}.',
     addNoCode: '{c} has no tag code yet (cultivars table). Ask Koa before printing.',
+    addAlready: '{c} is already in bay {bay}. Print from its row.',
 
     sack: 'Sack',
     zoneCut: 'Zone <strong>{zone}</strong> · Cut {n}',
