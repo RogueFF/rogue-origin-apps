@@ -145,13 +145,18 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .baydrawer.finished{background:#f3f5ef;opacity:.75}
 .harvest-screen .storagechip{margin-left:auto;padding:6px 12px;border-radius:20px;background:#edf1e4;border:1px solid #c0cfb5;color:#304e3c;font-size:14px;font-weight:700;white-space:nowrap}
 .harvest-screen .lasttag{font-size:15px;color:#40543f;margin:4px 0 10px;overflow-wrap:anywhere}
-.harvest-screen .cvrow{display:flex;flex-direction:column;gap:8px;padding:12px;margin:10px 0;border:1px solid #d9dfd1;border-radius:12px;background:#fbfcf8}
-.harvest-screen .cvname{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 0;color:#263f32;font:inherit;cursor:pointer;min-height:44px}
-.harvest-screen .cvname>b{display:block;font-size:20px}
-.harvest-screen .cvname .zonemix{margin-top:4px}
-.harvest-screen .printbtn{width:100%;min-height:72px;font-size:22px;background:#edc76b;color:#263f32;border-color:#d9b259;overflow-wrap:anywhere}
+.harvest-screen .cvrow{display:block;padding:8px 8px 8px 12px;margin:8px 0;border:1px solid #d9dfd1;border-radius:12px;background:#fbfcf8}
+.harvest-screen .cvtop{display:flex;align-items:stretch;gap:10px;min-height:72px}
+.harvest-screen .cvname{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;text-align:left;background:none;border:0;padding:4px 0;color:#263f32;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.harvest-screen .cvname>b{display:block;font-size:19px;line-height:1.2}
+.harvest-screen .cvname .lotmeta{font-size:14px}
+.harvest-screen .cvname .zonemix{margin-top:2px}
+.harvest-screen .printbtn{flex:0 0 40%;min-width:120px;max-width:200px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#edc76b;color:#263f32;border-color:#d9b259;text-align:center;line-height:1.15}
+.harvest-screen .printbtn .printword{font-size:20px;letter-spacing:.04em;white-space:nowrap}
+.harvest-screen .printbtn .printcv{font-size:13px;font-weight:600;overflow-wrap:anywhere;max-width:100%}
 .harvest-screen .printbtn:hover{background:#e3bb57}
-.harvest-screen .cvdrawer{display:flex;flex-direction:column;gap:8px;padding-top:6px}
+.harvest-screen .printbtn:disabled{opacity:.55;cursor:default}
+.harvest-screen .cvdrawer{display:flex;flex-direction:column;gap:8px;padding-top:10px}
 .harvest-screen .cvdrawer .batchrow{display:flex;gap:8px}.harvest-screen .cvdrawer .batchrow input{max-width:110px}
 .harvest-screen .noloads{display:block;font-size:13px;color:#7a6a3c;font-style:italic}
 .harvest-screen .addcv{width:100%;margin:6px 0}
