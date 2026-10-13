@@ -1,3 +1,5 @@
+import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
+
 /** Shared working-screen theme. Print sheets and sack labels keep their geometry. */
 export const HARVEST_UI_STYLE = `
 [hidden]{display:none!important}
@@ -133,6 +135,41 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .crewcard-n{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:14px;color:#40543f;font-size:16px}
 .harvest-screen .crewcard-n strong{font-size:22px;color:#263f32}
 .harvest-screen .crewcard a.mini{display:inline-flex;align-items:center;min-height:48px;padding:10px 16px;border-radius:9px;background:#fff;border:1px solid #c0cfb5;color:#304e3c;font-weight:700;text-decoration:none}
+/* Tags by bay (bay_tags): bays as drawers, a PRINT per cultivar. Scoped to its own classes. */
+.harvest-screen .baydrawer{background:#fff;border:1px solid #d9dfd1;border-radius:14px;margin:12px 0;padding:0 14px}
+.harvest-screen .baydrawer>summary{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-height:64px;padding:10px 0;list-style:none;cursor:pointer}
+.harvest-screen .baydrawer>summary::-webkit-details-marker{display:none}
+.harvest-screen .baydrawer>summary .baybig{font-size:30px;margin:0;padding:2px 12px;border-radius:9px}
+.harvest-screen .baydrawer>summary .lotmeta{flex:1 1 auto;font-size:15px}
+.harvest-screen .baydrawer[open]>summary{border-bottom:1px solid #e3e8dc;margin-bottom:10px}
+.harvest-screen .baydrawer.finished{background:#f3f5ef;opacity:.75}
+.harvest-screen .storagechip{margin-left:auto;padding:6px 12px;border-radius:20px;background:#edf1e4;border:1px solid #c0cfb5;color:#304e3c;font-size:14px;font-weight:700;white-space:nowrap}
+.harvest-screen .lasttag{font-size:15px;color:#40543f;margin:4px 0 10px;overflow-wrap:anywhere}
+.harvest-screen .cvrow{display:block;padding:8px 8px 8px 12px;margin:8px 0;border:1px solid #d9dfd1;border-radius:12px;background:#fbfcf8}
+.harvest-screen .cvtop{display:flex;align-items:stretch;gap:10px;min-height:72px}
+.harvest-screen .cvname{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;text-align:left;background:none;border:0;padding:4px 0;color:#263f32;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+.harvest-screen .cvname>b{display:block;font-size:19px;line-height:1.2}
+.harvest-screen .cvname .lotmeta{font-size:14px}
+.harvest-screen .cvname .zonemix{margin-top:2px}
+.harvest-screen .printbtn{flex:0 0 40%;min-width:120px;max-width:200px;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#edc76b;color:#263f32;border-color:#d9b259;text-align:center;line-height:1.15}
+.harvest-screen .printbtn .printword{font-size:20px;letter-spacing:.04em;white-space:nowrap}
+.harvest-screen .printbtn .printcv{font-size:13px;font-weight:600;overflow-wrap:anywhere;max-width:100%}
+.harvest-screen .printbtn:hover{background:#e3bb57}
+.harvest-screen .printbtn:disabled{opacity:.55;cursor:default}
+.harvest-screen .cvdrawer{display:flex;flex-direction:column;gap:8px;padding-top:10px}
+.harvest-screen .cvdrawer .batchrow{display:flex;gap:8px}.harvest-screen .cvdrawer .batchrow input{max-width:110px}
+.harvest-screen .noloads{display:block;font-size:13px;color:#7a6a3c;font-style:italic}
+.harvest-screen .addcv{width:100%;margin:6px 0}
+.harvest-screen .baydrawer .finishlot{margin:6px 0 14px}.harvest-screen .baydrawer .finishlot button{width:100%}
+.harvest-screen #lastMsg{position:sticky;top:0;z-index:5;box-shadow:0 2px 8px rgba(38,63,50,.15)}
+.harvest-screen .flash.bad{background:#f4e0d8;color:#954431;border-color:#d7b2a4}
+.harvest-screen .storagechip{cursor:pointer;min-height:36px;display:inline-flex;align-items:center}
+.harvest-screen dialog{border:1px solid #d9dfd1;border-radius:14px;padding:20px;width:min(92vw,420px);color:#263f32;background:#fff}
+.harvest-screen dialog::backdrop{background:rgba(38,63,50,.45)}
+.harvest-screen dialog h2{margin-top:0}
+.harvest-screen dialog .batchrow{display:flex;gap:8px;margin-top:14px}.harvest-screen dialog .batchrow button{flex:1}
+.harvest-screen #addZones .zpick{min-height:48px;padding:10px 18px;margin:10px 8px 0 0;font-size:18px;font-weight:700;border-radius:10px;cursor:pointer}
+.harvest-screen #addZones .zpick.sel{background:#304e3c;color:#fff;border-color:#304e3c}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
 @media(min-width:900px){.harvest-screen:has(#intakeForm),.harvest-screen:has(.crew-stepper),.harvest-screen:has(.grid),.harvest-screen:has(#printBtn){max-width:800px}}
 @media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:13px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 12px;font-size:14px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}
@@ -145,4 +182,148 @@ export const OFFICE_UI_STYLE = `
 .split>*{min-width:0}svg{max-width:100%}.rack.vacant,.bay.empty{opacity:1;background:var(--bg)}.rack.vacant .bn{color:var(--muted)}.k-tag{background:#f4e7c8;color:#76561d}.testpill{background:#f4e7c8;color:#76561d;border-color:#c6a964}details>summary{cursor:pointer;font-weight:700;padding:18px 0}details>summary:focus-visible{outline:3px solid #997223}
 body{font-family:Karla,system-ui,sans-serif}.wrap{padding-top:24px}h1{font-size:36px;letter-spacing:-.04em}.card{border-radius:15px}.tile{border-radius:12px}.tile .k{font-size:12px}.card>.lede{font-size:15px}.card>.caveat{font-size:14px}.axis{font-size:12px}.barlbl,.barval{font-size:12px}button{min-height:48px;background:#304e3c;color:#fff}button.ghost{color:#304e3c}.tile.alarm{background:#f7e6dc;border-color:#d9af98}.demobar{background:#f5e8c5;border-color:#d7bf7d;color:#71511b}#gate{background:white;padding:28px;border-radius:16px}.office-home{display:inline-flex;padding:12px 18px;color:#304e3c;text-decoration:none;border:1px solid #c5d0ba;border-radius:24px;margin-bottom:20px;font-weight:600}
 @media(max-width:600px){.racks,.bays{grid-template-columns:repeat(2,minmax(0,1fr))}.racks.market{grid-template-columns:1fr}.rack .n{flex-wrap:wrap}.rack li{flex-wrap:wrap}.rack .st{font-size:12px}.rack li,.bay .l{font-size:13px}.card{overflow-x:auto}h1{font-size:28px}.wrap{padding:20px 16px}.card{padding:20px 16px}.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.row{flex-wrap:wrap}}
+`;
+
+/**
+ * The print flow both tag screens share (sack_session and bay_tags), injected
+ * as <script>${HARVEST_PRINT_CLIENT}</script> by each body that prints, so
+ * there is one copy of the iframe / named-tab / agent decision instead of two
+ * that drift. Plain ES5 for whatever handset the crew carries; defines window.RO.
+ *
+ *   RO.allocTags(api, body)          POST sack_alloc → the response, or throws its error
+ *   RO.printIds(api, ids, via, opts) via 'agent' → poll print_check into opts.status;
+ *                                    otherwise load sack_label (iframe on a desktop,
+ *                                    a named tab on a handset, in place in the iOS app)
+ *   RO.reprintTag(api, id, opts)     POST print_reprint, then printIds the way the server says
+ *   RO.voidTag(api, id)              POST sack_void → the response, or throws its error
+ *
+ * opts: { frame (an iframe, or a function returning one; created offscreen when
+ * absent), status (the element agent mode writes into), statusClass (its base
+ * class, default 'hcstat'; ' ok' / ' bad' are added), T (printingOnAgent,
+ * printedOnAgent, printAgentFailed {id} {e}, printAgentSlow) }.
+ *
+ * Authored with string concatenation only: this is a template literal, so a
+ * dollar-brace or a backslash in here would be eaten before the browser sees it.
+ */
+export const HARVEST_PRINT_CLIENT = `
+(function () {
+  var RO = window.RO = window.RO || {};
+  // Who prints is the server's call, per allocation (print_via), never a
+  // page-level flag: a page open for an hour would print the tag twice.
+  // WebKit scopes window.print() to the TOP-LEVEL document, and Android never
+  // prints a 0x0 offscreen iframe, so any handset gets a top-level tab and only
+  // a desktop (the barn PC) keeps the hidden iframe. See lib/print-client.js.
+  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
+  var topLevelPrint = iframePrintUnreliable(
+    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+  var ownFrame = null;
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); });
+  }
+  function ok(fallback) {
+    return function (d) {
+      if (!d || !d.success) throw new Error((d && d.error) || fallback);
+      return d;
+    };
+  }
+  function frameFor(opts) {
+    if (typeof opts.frame === 'function') return opts.frame();
+    if (opts.frame) return opts.frame;
+    if (!ownFrame) {
+      ownFrame = document.createElement('iframe');
+      ownFrame.title = 'print';
+      ownFrame.setAttribute('style', 'position:absolute;width:0;height:0;border:0;left:-9999px');
+      document.body.appendChild(ownFrame);
+    }
+    return ownFrame;
+  }
+
+  RO.allocTags = function (api, body) {
+    return postJson(api + '?action=sack_alloc', body).then(ok('Print failed'));
+  };
+
+  RO.printIds = function (api, ids, via, opts) {
+    opts = opts || {};
+    if (via === 'agent') { watchPrint(api, ids, opts); return; }  // the barn PC prints it
+    var url = api + '?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    if (window.navigator.standalone === true) {
+      // An iOS home-screen app (Koa, 2026-09-25) has no tabs: window.open fails
+      // or strands the crew. Go to the label page in place; it offers
+      // history.back() to return for the next bag.
+      window.location.href = url + '&back=1';
+      return;
+    }
+    if (topLevelPrint) {
+      // A separate tab so window.print() runs at top level. NAMED, not _blank:
+      // every tag reuses the one tab, and popup=1 has the label page close
+      // itself when printing is done (Koa, 2026-09-21).
+      var w = window.open(url + '&popup=1', 'rf_tag_print');
+      // Blocked anyway: navigate rather than silently printing nothing.
+      if (!w) window.location.href = url;
+      return;
+    }
+    frameFor(opts).src = url;
+  };
+
+  // In agent mode the crew no longer watches a tag appear, so the screen has to
+  // say whether one did. Queued is NOT printed: the serial is already spent, so
+  // a tick on the strength of an enqueue would hide the failure the ack is for.
+  function watchPrint(api, ids, opts) {
+    var T = opts.T || {};
+    var el = opts.status;
+    var base = opts.statusClass || 'hcstat';
+    function say(cls, text) {
+      if (!el) return;
+      el.hidden = false;
+      el.className = base + (cls ? ' ' + cls : '');
+      el.textContent = text;
+    }
+    var tries = 0;
+    say('', T.printingOnAgent || '');
+    (function poll() {
+      tries += 1;
+      postJson(api + '?action=print_check', { ids: ids })
+        .then(function (d) {
+          var st = (d && d.status) || {};
+          var states = ids.map(function (id) { return (st[id] || {}).status; });
+          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
+          if (failed.length) {
+            say('bad', String(T.printAgentFailed || '')
+              .replace('{id}', failed[0])
+              .replace('{e}', (st[failed[0]] || {}).error || ''));
+            return;
+          }
+          if (states.every(function (x) { return x === 'done'; })) {
+            say('ok', T.printedOnAgent || '');
+            return;
+          }
+          // ~30s: long enough for a rack of tags, short enough that a stopped
+          // agent is noticed while the crew is still at the printer.
+          if (tries < 40) return setTimeout(poll, 750);
+          say('bad', T.printAgentSlow || '');
+        })
+        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
+    })();
+  }
+
+  // A jam is the most time-critical recovery there is. ALWAYS ask the server
+  // which way to print: the page may not have allocated anything, and guessing
+  // 'browser' is the path WebKit breaks.
+  RO.reprintTag = function (api, id, opts) {
+    return postJson(api + '?action=print_reprint', { sack_id: id })
+      .then(ok('Reprint failed'))
+      .then(function (d) {
+        RO.printIds(api, [id], d.print_via === 'agent' ? 'agent' : 'browser', opts);
+        return d;
+      });
+  };
+
+  RO.voidTag = function (api, id) {
+    return postJson(api + '?action=sack_void', { sack_id: id }).then(ok('Void failed'));
+  };
+})();
 `;

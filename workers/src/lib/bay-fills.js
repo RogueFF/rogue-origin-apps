@@ -143,3 +143,39 @@ export function percentShares(zones) {
   for (const [, i] of order) { if (left-- <= 0) break; floor[i]++; }
   return floor;
 }
+
+/**
+ * The bay screen: one group per bay, rows = that bay's cards by bins (largest
+ * first), the bay's last tag (for the header's Void) and its sacks today.
+ * Active bays first, bay number ascending; a bay whose every card is finished
+ * comes after them. Pure: `tags` carry `printed_day` (a Pacific calendar day)
+ * set by the caller, and `today` is the same kind of day. Like bayCards, only
+ * tags printed after the bay's current fill started count (cards carry
+ * `fillStartMs`; a card without one applies no filter).
+ */
+export function bayScreenGroups(cards, tags, { today } = {}) {
+  const newestFirst = (a, b) => String(b.printed_at).localeCompare(String(a.printed_at));
+  const inFill = (t, startMs) => startMs == null || ts(t.printed_at) > startMs;
+  const tagRef = (t) => (t ? { sack_id: t.sack_id, cultivar: t.cultivar } : null);
+  const byBay = new Map();
+  for (const c of cards) {
+    if (!byBay.has(c.bay)) {
+      byBay.set(c.bay, { bay: c.bay, rows: [], lastTag: null, sacksToday: 0, finished: true,
+        fillStartMs: c.fillStartMs });
+    }
+    const g = byBay.get(c.bay);
+    const mine = tags.filter(t => Number(t.bay) === c.bay && t.cultivar === c.cultivar
+      && Number(t.cut_number ?? 1) === Number(c.cut) && inFill(t, c.fillStartMs)).sort(newestFirst);
+    g.rows.push({ ...c, noLoads: !(c.bins > 0), lastTag: tagRef(mine[0]) });
+    if (!c.doneAt) g.finished = false;
+  }
+  const out = [];
+  for (const { fillStartMs, ...g } of byBay.values()) {
+    g.rows.sort((a, b) => b.bins - a.bins || a.cultivar.localeCompare(b.cultivar, 'en'));
+    const mine = tags.filter(t => Number(t.bay) === g.bay && inFill(t, fillStartMs)).sort(newestFirst);
+    g.lastTag = tagRef(mine[0]);
+    g.sacksToday = today ? mine.filter(t => t.printed_day === today).length : 0;
+    out.push(g);
+  }
+  return out.sort((a, b) => Number(a.finished) - Number(b.finished) || a.bay - b.bay);
+}
