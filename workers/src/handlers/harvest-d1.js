@@ -366,10 +366,13 @@ export async function handleHarvestD1(request, env, ctx) {
         case 'bay_tags': {
           // ?flash= carries lot_add's variant warning (⚠️) or, with ok=1, a
           // finish's result (✅) across the redirect.
+          // ?open=N comes back open after an add, so the new row is in view.
           const flash = params.flash ? String(params.flash).substring(0, 300) : null;
+          const warn = params.warn ? String(params.warn).substring(0, 300) : null;
+          const openBay = parseInt(params.open, 10) || null;
           return String(params.ok || '') === '1'
-            ? await handleBayTags(ui, db, env, flash, null)
-            : await handleBayTags(ui, db, env, null, flash);
+            ? await handleBayTags(ui, db, env, flash, warn, openBay)
+            : await handleBayTags(ui, db, env, null, flash || warn, openBay);
         }
         case 'pipeline':
           return await handlePipeline(ui, db, env);
@@ -2058,7 +2061,7 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
  * 17-cultivar retail bay is not 17 round trips through the picker. Same bay
  * cards as the picker; bayScreenGroups folds them by bay.
  */
-async function handleBayTags(ui, db, env, flash = null, warn = null) {
+async function handleBayTags(ui, db, env, flash = null, warn = null, openBay = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, storages] = await Promise.all([getRecentLots(db, isTest), getBayStoragesToday(db, isTest)]);
   await attachDryingBays(db, isTest, lots);
@@ -2068,7 +2071,7 @@ async function handleBayTags(ui, db, env, flash = null, warn = null) {
   const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
   // Which last tags were printed today, so voiding one can take it off "sacks today".
   const todayIds = new Set(tags.filter(t => t.printed_day === today).map(t => t.sack_id));
-  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, storages, flash, { today, todayIds, warn }));
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, storages, flash, { today, todayIds, warn, openBay }));
 }
 
 const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
@@ -7168,7 +7171,7 @@ ${finishedHtml}
  * PRINT, the storage chip and "+ Add a cultivar" work, printing through the
  * same HARVEST_PRINT_CLIENT as the session screen.
  */
-function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '', todayIds = new Set(), warn = null } = {}) {
+function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '', todayIds = new Set(), warn = null, openBay = null } = {}) {
   const L = `lang=${ui.lang}`;
   const flashHtml = (flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '')
     + (warn ? `<div class="notice">⚠️ ${escapeHtml(warn)}</div>` : '');
@@ -7230,7 +7233,7 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
     <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
   </form>`;
     return `
-<details class="baydrawer${g.finished ? ' finished' : ''}" data-bay="${g.bay}" data-fill="${escapeHtml(fill)}">
+<details class="baydrawer${g.finished ? ' finished' : ''}" data-bay="${g.bay}" data-fill="${escapeHtml(fill)}"${g.bay === openBay ? ' open' : ''}>
   <summary>
     <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
     <span class="lotmeta">${meta}</span>
@@ -7252,7 +7255,7 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
     printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
     voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
     printedOk: ui.t('printedOk', { id: '{id}' }),
-    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), addNoMatch: ui.t('addNoMatch'), tagVoided: ui.t('tagVoided'),
+    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), addNoMatch: ui.t('addNoMatch'), addedOk: ui.t('addedOk', { c: '{c}', bay: '{bay}' }), tagVoided: ui.t('tagVoided'),
     lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
     sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
     sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
@@ -7540,8 +7543,11 @@ ${groups.map(drawer).join('')}
       .then(function (res) {
         var d = res.d;
         if (res.status === 200 && d.success) {
-          location.href = API + '?action=bay_tags&lang=' + LANG
-            + (d.variant_error ? '&flash=' + encodeURIComponent(d.variant_error) : '');
+          // Never silent: a clean add used to reload a page of closed drawers,
+          // which read as "nothing happened" (Koa, 2026-10-13).
+          location.href = API + '?action=bay_tags&lang=' + LANG + '&ok=1&open=' + addBay
+            + '&flash=' + encodeURIComponent(fmt(fmt(T.addedOk, 'c', d.cultivar || body.cultivar), 'bay', addBay))
+            + (d.variant_error ? '&warn=' + encodeURIComponent(d.variant_error) : '');
           return;
         }
         if (d.details && d.details.zones) renderZones(d.details.zones);
