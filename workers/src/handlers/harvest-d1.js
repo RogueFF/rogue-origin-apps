@@ -58,7 +58,8 @@ import { successResponse, parseBody, getAction, getQueryParams } from '../lib/re
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar, isHarvestTracked,
-  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
+  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal,
+  mcloughlinZonesFor, mcloughlinCultivars } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
@@ -465,6 +466,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
+    case 'lot_add':
+      return await handleLotAdd(ui, db, env, body);
     default:
       throw createError('NOT_FOUND', ui.t('unknownAction', { a: action }));
   }
@@ -2165,6 +2168,59 @@ async function handleBayFinish(ui, db, env, ctx, body) {
   }
   return handleSackPrintForm(ui, db, env,
     ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+}
+
+/**
+ * POST ?action=lot_add — "+ Add a cultivar" on the bay screen.
+ *
+ * A cultivar that is hanging but was never scanned. Always McLoughlin (Koa,
+ * 2026-10-12): Egg Farm and Gary's material is entered at the zone sign and
+ * the barn door. So the zone is looked up from the planting layout, not asked,
+ * except for the two cultivars planted in two McLoughlin zones — that refusal
+ * carries `details.zones` so the screen can offer them.
+ *
+ * Writes the same row the SOP had Claude insert by hand (sop-harvest-tracking
+ * §5, "a lot that was never scanned"): a CLOSED enter row carrying its bay.
+ * Closed because an open crew-less lot would pick up today's trailer loads.
+ * Dated at the bay's current fill start, so "7d drying" on its card is the
+ * bay's truth; a bay with no fill is dated now. No bins: bins live on loads.
+ */
+async function handleLotAdd(ui, db, env, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('addBayBad'));
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const cut = Math.max(1, Math.min(3, parseInt(body.cut, 10) || 1));
+  const zones = mcloughlinZonesFor(cultivar);
+  if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotMcloughlin', { c: cultivar }));
+  const canonical = mcloughlinCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
+  let zone = String(body.zone || '').trim().toUpperCase();
+  if (!zone && zones.length === 1) zone = zones[0];
+  if (!zone) throw createError('VALIDATION_ERROR', ui.t('addPickZone', { c: canonical }), { zones });
+  if (!zones.includes(zone)) throw createError('VALIDATION_ERROR', ui.t('addZoneWrong', { c: canonical, z: zone }));
+  // PRINT TAG would refuse the same way; say it now, naming the cultivar.
+  try { await cultivarCode(db, canonical); }
+  catch { throw createError('VALIDATION_ERROR', ui.t('addNoCode', { c: canonical })); }
+
+  const loads = await query(db, `
+    SELECT bay, occurred_at FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND is_test = ? AND bay = ?
+      AND julianday('now') - julianday(occurred_at) <= ?
+  `, [isTest, bay, LOT_PICKER_DAYS]);
+  const fills = bayFills(loads).get(bay) || [];
+  const current = fills[fills.length - 1];
+  const occurredAt = sqliteUtc(current ? new Date(current.startMs) : new Date());
+  const season = getSeason();
+  const { lastRowId: id } = await execute(db, `
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, bay, occurred_at, closed_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+  `, [zone, canonical, season, cut, bay, occurredAt, occurredAt, isTest]);
+  const variant = isTest ? null : await checkSupersackVariant(env, db, { season, cultivar: canonical, zone, cut });
+  return successResponse({
+    success: true, session_id: id, zone, cultivar: canonical, cut, bay, occurred_at: occurredAt,
+    variant_ok: variant ? variant.ok : null,
+    variant_error: variant && variant.ok === false ? variant.error : null,
+  });
 }
 
 /**
