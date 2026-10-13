@@ -51,21 +51,22 @@ import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { trailerIconPng, TRAILER_ICON_SIZES } from '../lib/trailer-icons.js';
-import { HARVEST_UI_STYLE } from './harvest-ui.js';
+import { HARVEST_UI_STYLE, HARVEST_PRINT_CLIENT } from './harvest-ui.js';
 import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
 import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar, isHarvestTracked,
-  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
+  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal,
+  mcloughlinZonesFor, mcloughlinCultivars } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { decideHeal, settleStatement, latestMarkerAt, HEAL_QUIET_MS, LAST_CALL_KEY } from '../lib/inventory-heal.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
-import { bayFills, bayCards, percentShares } from '../lib/bay-fills.js';
+import { bayFills, bayCards, bayScreenGroups, percentShares } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
@@ -73,7 +74,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
+import { APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import { salidaPageBody } from './harvest-salida-page.js';
 import { SACK_OUT_ACTIONS, handleSackOutAction, sackOutToday } from './harvest-sack-out.js';
@@ -281,7 +282,7 @@ const HTML_ACTIONS = new Set(['salida',
   'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline',
+  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline', 'bay_tags',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -362,6 +363,14 @@ export async function handleHarvestD1(request, env, ctx) {
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
+        case 'bay_tags': {
+          // ?flash= carries lot_add's variant warning (⚠️) or, with ok=1, a
+          // finish's result (✅) across the redirect.
+          const flash = params.flash ? String(params.flash).substring(0, 300) : null;
+          return String(params.ok || '') === '1'
+            ? await handleBayTags(ui, db, env, flash, null)
+            : await handleBayTags(ui, db, env, null, flash);
+        }
         case 'pipeline':
           return await handlePipeline(ui, db, env);
         case 'sack_session_start':
@@ -465,6 +474,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
+    case 'lot_add':
+      return await handleLotAdd(ui, db, env, body);
     default:
       throw createError('NOT_FOUND', ui.t('unknownAction', { a: action }));
   }
@@ -731,6 +742,27 @@ async function getLastStorage(db, isTest) {
   if (!row) return null;
   const today = !!row.printed_at && pacificDay(parseSqliteUtc(row.printed_at)) === pacificToday();
   return { storage: row.storage, today };
+}
+
+/**
+ * Per bay, where that bay's newest live tag printed TODAY (Pacific) was stored.
+ *
+ * The bay screen's chips (Koa, 2026-10-12). The barn-wide getLastStorage made
+ * every chip read the same place: Bay 3's tag went to Bay 7, so Bay 4's chip
+ * said Bay 7 too and its next PRINT stored there without anyone choosing it.
+ * A bay with no tag today is absent (not set); a newest tag stored nowhere maps
+ * to null, which is also not set.
+ */
+async function getBayStoragesToday(db, isTest) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
+  const rows = await query(db, `
+    SELECT bay, storage FROM harvest_sacks
+    WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL AND printed_at >= ? AND printed_at < ?
+    ORDER BY printed_at DESC, id DESC
+  `, [isTest, dayStart, dayEnd]);
+  const byBay = new Map();
+  for (const r of rows) if (!byBay.has(Number(r.bay))) byBay.set(Number(r.bay), r.storage || null);
+  return byBay;
 }
 
 /**
@@ -2020,6 +2052,25 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
   return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash, bays));
 }
 
+/**
+ * GET ?action=bay_tags — tags by bay (Koa, 2026-10-12). One screen: every bay
+ * a drawer, every cultivar hanging in it a row with its own PRINT, so a
+ * 17-cultivar retail bay is not 17 round trips through the picker. Same bay
+ * cards as the picker; bayScreenGroups folds them by bay.
+ */
+async function handleBayTags(ui, db, env, flash = null, warn = null) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [lots, storages] = await Promise.all([getRecentLots(db, isTest), getBayStoragesToday(db, isTest)]);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const today = pacificDay(new Date());
+  const tags = info.tags.map(t => ({ ...t, printed_day: pacificDay(parseSqliteUtc(t.printed_at)) }));
+  const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
+  // Which last tags were printed today, so voiding one can take it off "sacks today".
+  const todayIds = new Set(tags.filter(t => t.printed_day === today).map(t => t.sack_id));
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, storages, flash, { today, todayIds, warn }));
+}
+
 const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
 
 /**
@@ -2054,7 +2105,7 @@ async function getBayTakedown(db, isTest, lots) {
                         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id)
     `, [isTest, LOT_PICKER_DAYS, isTest, LOT_PICKER_DAYS]),
     query(db, `
-      SELECT bay, printed_at, cultivar, cut_number FROM harvest_sacks
+      SELECT sack_id, bay, printed_at, cultivar, cut_number FROM harvest_sacks
       WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL
         AND julianday('now') - julianday(printed_at) <= ?
     `, [isTest, LOT_PICKER_DAYS]),
@@ -2080,7 +2131,7 @@ async function getBayTakedown(db, isTest, lots) {
     .sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt)));
   const covered = new Set();
   for (const c of [...active, ...finished]) for (const z of c.zones) covered.add(z.lot.id);
-  return { cards, active, finished, covered, fills, doneByKey };
+  return { cards, active, finished, covered, fills, doneByKey, tags };
 }
 
 /** True once every bay fill holding this lot's loads is down (finished, or refilled since). */
@@ -2121,6 +2172,53 @@ function zoneMix(c) {
  * on a lot, it touches no sack, no storage and no Shopify count.
  */
 async function handleBayFinish(ui, db, env, ctx, body) {
+  // Pressed on the tags-by-bay screen: land back there with a 303, so a
+  // refresh re-GETs the screen instead of re-POSTing the finish. ok=1 shows
+  // the flash as a ✅; without it, as a ⚠️ notice.
+  const fromBayTags = String(body.back || '') === 'bay_tags';
+  const backTo = (flash, ok = true) => (fromBayTags
+    ? new Response(null, { status: 303, headers: { Location:
+      `${API}?action=bay_tags&lang=${ui.lang}${ok ? '&ok=1' : ''}&flash=${encodeURIComponent(flash)}` } })
+    : handleSackPrintForm(ui, db, env, flash));
+  // "Whole bay down" (or reopen it): every cultivar card in the bay's current
+  // fill, in one tap, so a 17-cultivar retail bay is not 17 taps (Koa,
+  // 2026-10-12). Each card takes the single-card path, quietly and on one
+  // takedown read; Telegram gets one message for the bay.
+  if (String(body.all ?? '') === '1') {
+    const bayAll = parseBay(body.bay, ui);
+    if (!bayAll) throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+    const reopenAll = String(body.reopen ?? '') === '1';
+    const isTest = isTestMode(env) ? 1 : 0;
+    const lots = await getRecentLots(db, isTest);
+    await attachDryingBays(db, isTest, lots);
+    const info = await getBayTakedown(db, isTest, lots);
+    let cards;
+    if (reopenAll) {
+      const fills = info.fills.get(bayAll) || [];
+      const current = fills[fills.length - 1];
+      const fillStart = current ? sqliteUtc(new Date(current.startMs)) : null;
+      cards = info.finished.filter(c => c.bay === bayAll && c.fillStart === fillStart);
+    } else {
+      cards = info.active.filter(c => c.bay === bayAll);
+    }
+    if (!cards.length) return backTo(ui.t('bayNothingToFinish', { bay: bayAll }), false);
+    for (const c of cards) {
+      await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1,
+        fillStart: c.fillStart, reopen: reopenAll, quiet: true, takedown: info });
+    }
+    const n = cards.length;
+    const names = cards.map(c => c.cultivar).join(', ');
+    const sacks = cards.reduce((sum, c) => sum + (c.sacks || 0), 0);
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopenAll
+        ? `↩️ Bay ${bayAll} reopened — ${n} cultivar${n === 1 ? '' : 's'}: ${names}.`
+        : `✅ Bay ${bayAll} down — ${n} cultivar${n === 1 ? '' : 's'} finished: ${names} (${sacks} sack${sacks === 1 ? '' : 's'}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    if (reopenAll) return backTo(ui.t('bayAllReopened', { bay: bayAll, n }));
+    return backTo(ui.t(n === 1 ? 'bayAllDownOne' : 'bayAllDown', { bay: bayAll, n }));
+  }
+
   const bay = parseBay(body.bay, ui);
   const cultivar = String(body.cultivar || '').trim().substring(0, 60);
   const cut = parseInt(body.cut, 10) || 1;
@@ -2129,14 +2227,42 @@ async function handleBayFinish(ui, db, env, ctx, body) {
     throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
   }
   const reopen = String(body.reopen ?? '') === '1';
+  const card = await finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen });
+  const sacks = card ? card.sacks : 0;
+  if (reopen && card && !fromBayTags) {
+    return new Response(null, { status: 303, headers: { Location:
+      `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  }
+  return backTo(ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+}
+
+/**
+ * The work behind one bay card's "is down" (or reopen): record it in
+ * harvest_bay_done, close (or reopen) the lots it held, tell Telegram.
+ * Returns the card as it was found, or undefined.
+ *
+ * `takedown`: a getBayTakedown result already read for this request (whole
+ * bay). It is reused instead of re-read per card, its doneByKey kept in step
+ * with the row written here so lotAllBaysDown sees this card down.
+ * `quiet`: no per-card Telegram message; the caller sends one for the bay.
+ */
+async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen, quiet = false, takedown = null }) {
   const isTest = isTestMode(env) ? 1 : 0;
   await execute(db, reopen
     ? `DELETE FROM harvest_bay_done WHERE bay = ? AND cultivar = ? AND cut_number = ? AND fill_start = ? AND is_test = ?`
     : `INSERT OR IGNORE INTO harvest_bay_done (bay, cultivar, cut_number, fill_start, is_test) VALUES (?, ?, ?, ?, ?)`,
     [bay, cultivar, cut, fillStart, isTest]);
 
-  const lots = await getRecentLots(db, isTest);
-  const info = await getBayTakedown(db, isTest, lots);
+  let info = takedown;
+  if (info) {
+    const key = bayKey(bay, cultivar, cut, fillStart);
+    if (reopen) info.doneByKey.delete(key);
+    else if (!info.doneByKey.has(key)) {
+      info.doneByKey.set(key, { bay, cultivar, cut_number: cut, fill_start: fillStart, done_at: sqliteUtc(new Date()) });
+    }
+  } else {
+    info = await getBayTakedown(db, isTest, await getRecentLots(db, isTest));
+  }
   const card = info.cards.find(c => c.bay === bay && c.cultivar === cultivar
     && Number(c.cut) === cut && c.fillStart === fillStart);
   for (const z of (card ? card.zones : [])) {
@@ -2152,19 +2278,94 @@ async function handleBayFinish(ui, db, env, ctx, body) {
   }
 
   const sacks = card ? card.sacks : 0;
-  ctx.waitUntil(sendTelegramMessage(env, {
-    chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: reopen
-      ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
-      : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
-  }).catch(e => console.error('[harvest][telegram]', e)));
-
-  if (reopen && card) {
-    return new Response(null, { status: 303, headers: {
-      Location: `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  if (!quiet) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopen
+        ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
+        : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
   }
-  return handleSackPrintForm(ui, db, env,
-    ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+  return card;
+}
+
+/**
+ * POST ?action=lot_add — "+ Add a cultivar" on the bay screen.
+ *
+ * A cultivar that is hanging but was never scanned. Always McLoughlin (Koa,
+ * 2026-10-12): Egg Farm and Gary's material is entered at the zone sign and
+ * the barn door. So the zone is looked up from the planting layout, not asked,
+ * except for the two cultivars planted in two McLoughlin zones — that refusal
+ * carries `details.zones` so the screen can offer them.
+ *
+ * Writes the same row the SOP had Claude insert by hand (sop-harvest-tracking
+ * §5, "a lot that was never scanned"): a CLOSED enter row carrying its bay.
+ * Closed because an open crew-less lot would pick up today's trailer loads.
+ * Dated at the bay's current fill start, so "7d drying" on its card is the
+ * bay's truth; a bay with no fill is dated 8 AM Pacific today (handAddedAt).
+ * No bins: bins live on loads.
+ */
+async function handleLotAdd(ui, db, env, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('addBayBad'));
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const cut = Math.max(1, Math.min(3, parseInt(body.cut, 10) || 1));
+  const zones = mcloughlinZonesFor(cultivar);
+  if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotMcloughlin', { c: cultivar }));
+  const canonical = mcloughlinCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
+
+  // The bay's fill as the screen sees it: barn loads AND hand-added enter rows
+  // (a McLoughlin bay nobody scans has only those). Reading loads alone dated
+  // every add in such a bay "now", so two adds days apart became two fills and
+  // the first cultivar fell off the screen with its lot still open.
+  const lots = await getRecentLots(db, isTest);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const fills = info.fills.get(bay) || [];
+  const current = fills[fills.length - 1];
+  // Already hanging here (any zone: Egg Farm Sour Lifter counts): a second lot
+  // would split its tags. Only cards the screen shows, so its row is there.
+  if (current) {
+    const fillStart = sqliteUtc(new Date(current.startMs));
+    const dup = [...info.active, ...info.finished].find(c => c.bay === bay && c.fillStart === fillStart
+      && Number(c.cut) === cut && String(c.cultivar).toLowerCase() === canonical.toLowerCase());
+    if (dup) throw createError('VALIDATION_ERROR', ui.t('addAlready', { c: canonical, bay }), { session_id: dup.primary.id });
+  }
+
+  let zone = String(body.zone || '').trim().toUpperCase();
+  if (!zone && zones.length === 1) zone = zones[0];
+  if (!zone) throw createError('VALIDATION_ERROR', ui.t('addPickZone', { c: canonical }), { zones });
+  if (!zones.includes(zone)) throw createError('VALIDATION_ERROR', ui.t('addZoneWrong', { c: canonical, z: zone }));
+  // PRINT TAG would refuse the same way; say it now, naming the cultivar.
+  try { await cultivarCode(db, canonical); }
+  catch { throw createError('VALIDATION_ERROR', ui.t('addNoCode', { c: canonical })); }
+
+  const occurredAt = current ? sqliteUtc(new Date(current.startMs)) : handAddedAt(new Date());
+  const season = getSeason();
+  const { lastRowId: id } = await execute(db, `
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, bay, occurred_at, closed_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+  `, [zone, canonical, season, cut, bay, occurredAt, occurredAt, isTest]);
+  const variant = isTest ? null : await checkSupersackVariant(env, db, { season, cultivar: canonical, zone, cut });
+  return successResponse({
+    success: true, session_id: id, zone, cultivar: canonical, cut, bay, occurred_at: occurredAt,
+    variant_ok: variant ? variant.ok : null,
+    variant_error: variant && variant.ok === false ? variant.error : null,
+  });
+}
+
+/**
+ * When a hand-added lot with no bay fill to join is dated: 8 AM Pacific
+ * (15:00 UTC) of today's Pacific day, the SOP's convention for hand-inserted
+ * lots. A tag's harvest date is the UTC date of its lot, so dating it "now"
+ * printed tomorrow's date on an evening add. Never later than now: before
+ * 8 AM a future date would leave this morning's tags outside the bay's fill.
+ */
+function handAddedAt(now) {
+  const eight = `${pacificDay(now)} 15:00:00`;
+  const nowText = sqliteUtc(now);
+  return nowText < eight ? nowText : eight;
 }
 
 /**
@@ -2588,12 +2789,14 @@ async function getLotTagStats(db, sessionId, isTest) {
  */
 async function getLotTags(db, sessionId, isTest) {
   const rows = await query(db, `
-    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs FROM harvest_sacks
+    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs, bay FROM harvest_sacks
     WHERE zone_session_id = ? AND is_test = ?
     ORDER BY printed_at DESC, serial DESC
   `, [sessionId, isTest]);
   return rows.map(r => ({
     id: r.sack_id,
+    // The bay screen picks a row's last tag by bay (a lot can hang in two).
+    bay: r.bay ?? null,
     at: r.printed_at ? parseSqliteUtc(r.printed_at).toISOString() : null,
     voided: !!r.voided_at,
     opened: !!r.opened_at,
@@ -6956,6 +7159,447 @@ ${finishedHtml}
 </script>`;
 }
 
+/**
+ * The tags-by-bay screen (handleBayTags). Every bay is a native <details>
+ * drawer, active bays by number, finished ones last. Each cultivar row carries
+ * on data-* what PRINT will post (the lot for sack_alloc, cultivar, cut, bay);
+ * the drawer under it holds the small stuff — note, short bag, reprint/void, a
+ * batch, and the per-cultivar Finished. The inline script at the end makes
+ * PRINT, the storage chip and "+ Add a cultivar" work, printing through the
+ * same HARVEST_PRINT_CLIENT as the session screen.
+ */
+function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '', todayIds = new Set(), warn = null } = {}) {
+  const L = `lang=${ui.lang}`;
+  const flashHtml = (flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '')
+    + (warn ? `<div class="notice">⚠️ ${escapeHtml(warn)}</div>` : '');
+  // Two keys chosen here, as tagForLot/tagsForLot are: "1 sack", never "1 sacks".
+  const nText = (n, one, many) => (n === 1 ? ui.t(one) : ui.t(many, { n }));
+  // Each bay's chip starts where THAT bay's newest tag today went (never
+  // another bay's, never yesterday's). It carries the VALUE sack_alloc takes
+  // (parseStorage: '' | 'Supermarket' | a bay number); '' sends no storage.
+  const storageOf = (bay) => (storages.get(Number(bay)) ? String(storages.get(Number(bay))) : '');
+  // Every finish here comes back here (handleBayFinish reads `back`).
+  const back = '<input type="hidden" name="back" value="bay_tags">';
+  const finishForm = (c, reopen) => `
+      <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+        <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
+        <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}${back}
+        <button class="btn alt" type="submit">${reopen ? ui.t('reopenLot')
+          : escapeHtml(ui.t('finishCvBay', { c: c.cultivar, bay: c.bay }))}</button>
+      </form>`;
+
+  const row = (g, c) => {
+    const done = g.finished || !!c.doneAt;
+    const last = c.lastTag ? c.lastTag.sack_id : '';
+    const allTags = `${API}?action=sack_session&session_id=${c.primary.id}&cultivar=${encodeURIComponent(c.cultivar)}&bay=${c.bay}&${L}`;
+    return `
+  <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}"${last && todayIds.has(last) ? ' data-lasttoday="1"' : ''}>
+    <div class="cvtop">
+    <button class="cvname" type="button" aria-expanded="false">
+      <b>${escapeHtml(c.cultivar)}</b>
+      <span class="lotmeta">${ui.t('cut', { n: c.cut })} · <span class="sackn" data-n="${c.sacks}">${nText(c.sacks, 'sackOne', 'sacksN')}</span></span>
+      ${zoneMix(c)}${c.noLoads ? `
+      <span class="hint noloads">${ui.t('noLoads')}</span>` : ''}
+    </button>
+    <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}><span class="printword">${ui.t('printWord')}</span><span class="printcv">${escapeHtml(c.cultivar)}</span></button>
+    </div>
+    <div class="cvdrawer" hidden>
+      <details class="nextnote"><summary>${ui.t('noteNext')}</summary><textarea class="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea></details>
+      <details class="nextnote"><summary>${ui.t('fillNext')}</summary><div class="fillrow"><input class="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1" placeholder="${fullSackLbs(c.primary.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div></details>
+      <div class="lastActions"><a class="mini reprint" href="#">${ui.t('reprint')}</a> <a class="mini danger voidrow" href="#">${ui.t('void')}</a> <a class="mini" href="${allTags}">${ui.t('allTags')}</a></div>
+      <details class="batch"><summary>${ui.t('printSeveral')}</summary><p class="note">${ui.t('printSeveralHelp')}</p><div class="batchrow"><input class="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5"><button class="btn batchbtn" type="button"${done ? ' disabled' : ''}>${ui.t('printBatch')}</button></div></details>
+      ${finishForm(c, !!c.doneAt)}
+    </div>
+  </div>`;
+  };
+
+  const drawer = (g) => {
+    const fill = g.rows[0]?.fillStart || '';
+    const meta = g.finished ? ui.t('bayFinishedShort')
+      : `${nText(g.rows.length, 'cultivarOne', 'cultivarsN')} · <span class="sackstoday" data-n="${g.sacksToday}">${nText(g.sacksToday, 'sackTodayOne', 'sacksToday')}</span>`;
+    const lastTag = g.lastTag
+      ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}" data-cultivar="${escapeHtml(g.lastTag.cultivar)}"${todayIds.has(g.lastTag.sack_id) ? ' data-today="1"' : ''}>${ui.t('void')}</a>`
+      : ui.t('noTagsYet');
+    const foot = g.finished ? `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1"><input type="hidden" name="reopen" value="1">${back}
+    <button class="btn alt" type="submit">${ui.t('reopenWholeBay', { bay: g.bay })}</button>
+  </form>` : `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot" data-confirm="${escapeHtml(ui.t('wholeBayConfirm', { bay: g.bay }))}">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">${back}
+    <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
+  </form>`;
+    return `
+<details class="baydrawer${g.finished ? ' finished' : ''}" data-bay="${g.bay}" data-fill="${escapeHtml(fill)}">
+  <summary>
+    <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
+    <span class="lotmeta">${meta}</span>
+    <span class="storagechip" role="button" tabindex="0" data-bay="${g.bay}" data-value="${escapeHtml(storageOf(g.bay))}">${escapeHtml(storageOf(g.bay) ? storageLabel(ui, storageOf(g.bay)) : ui.t('storageNotSet'))}</span>
+  </summary>
+  <div class="lasttag" data-bay="${g.bay}">${lastTag}</div>
+  ${g.rows.map(c => row(g, c)).join('')}
+  <button class="btn alt addcv" type="button" data-bay="${g.bay}">${ui.t('addCultivar')}</button>
+  ${foot}
+</details>`;
+  };
+
+  const mcl = mcloughlinCultivars();
+  // As data in a script tag: a "</" in a name must not close the tag, so "<"
+  // goes out as the six characters <, which JS reads back as "<".
+  const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
+  // Strings injected as data, as on the session screen: no UI text in the JS.
+  const T = {
+    printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
+    voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
+    printedOk: ui.t('printedOk', { id: '{id}' }),
+    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), tagVoided: ui.t('tagVoided'),
+    lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
+    sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
+    sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
+    storageNotSet: ui.t('storageNotSet'),
+    ...agentPrintStrings(ui),
+  };
+  return `<nav class="topnav">
+  <a class="btn alt" href="${API}?action=hub&${L}">${ui.t('homeTools')}</a>
+  <a class="btn alt" href="${API}?action=sack_print&${L}">${ui.t('oldPicker')}</a>
+</nav>
+${chromeHandoff(ui, `${API}?action=bay_tags&${L}`)}
+<h1>${ui.t('bayTagsTitle')}</h1>
+<p class="note">${ui.t('bayTagsIntro')}</p>
+<div id="lastMsg" class="flash" hidden></div>
+${flashHtml}
+${groups.map(drawer).join('')}
+<p class="note">${ui.t('zoneLotsNote')}</p>
+<dialog id="storageSheet">
+  <h2>${ui.t('storageField')}</h2>
+  <select id="storageSel" aria-label="${escapeHtml(ui.t('storageField'))}">${storageOptions(ui, null)}</select>
+  <div class="batchrow"><button class="btn alt" id="storageCancel" type="button">${ui.t('cancel')}</button></div>
+</dialog>
+<dialog id="addSheet">
+  <h2>${ui.t('addSheetTitle')}</h2>
+  <label for="addCv">${ui.t('addCvLabel')}</label>
+  <input id="addCv" list="mcl" autocomplete="off">
+  <datalist id="mcl">${mcl.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+  <div id="addZones" class="zonemix"></div>
+  <p id="addErr" class="hcstat bad" hidden></p>
+  <div class="batchrow">
+    <button class="btn" id="addSave" type="button">${ui.t('addSave')}</button>
+    <button class="btn alt" id="addCancel" type="button">${ui.t('cancel')}</button>
+  </div>
+</dialog>
+<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>
+<script>${HARVEST_PRINT_CLIENT}</script>
+<script>
+(function () {
+  var T = ${json(T)};
+  var API = '${API}';
+  var LANG = '${ui.lang}';
+  var TODAY = ${json(today)};
+  var msg = document.getElementById('lastMsg');
+  // Agent mode writes its own progress into the same line.
+  var printOpts = { status: msg, statusClass: 'flash', T: T };
+
+  function fmt(s, k, v) { return String(s).split('{' + k + '}').join(v); }
+  function say(text, bad) {
+    msg.hidden = false;
+    msg.className = 'flash' + (bad ? ' bad' : '');
+    msg.textContent = text;
+  }
+  function each(sel, root, fn) { Array.prototype.forEach.call((root || document).querySelectorAll(sel), fn); }
+  // Counts live in data-n so nothing parses translated text.
+  function bump(el, d, one, many) {
+    if (!el) return;
+    var n = Math.max(0, (parseInt(el.getAttribute('data-n'), 10) || 0) + d);
+    el.setAttribute('data-n', n);
+    el.textContent = n === 1 ? one : fmt(many, 'n', n);
+  }
+
+  // ── Storage, per bay, remembered for today on this phone ──
+  var sheet = document.getElementById('storageSheet');
+  var sel = document.getElementById('storageSel');
+  function storeKey(bay) { return 'bayTags.storage.' + bay + '.' + TODAY; }
+  function readStore(bay) { try { return window.localStorage.getItem(storeKey(bay)); } catch (e) { return null; } }
+  function writeStore(bay, v) { try { window.localStorage.setItem(storeKey(bay), v); } catch (e) { /* private mode: chip still set */ } }
+  function optionFor(v) {
+    for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === v) return sel.options[i];
+    return null;
+  }
+  function setChip(chip, v) {
+    var o = v ? optionFor(v) : null;
+    chip.setAttribute('data-value', o ? v : '');
+    chip.textContent = o ? o.text : T.storageNotSet;
+  }
+  each('.storagechip', null, function (chip) {
+    var v = readStore(chip.getAttribute('data-bay'));
+    if (v !== null && (v === '' || optionFor(v))) setChip(chip, v);
+  });
+  function chipFor(bay) { return document.querySelector('.storagechip[data-bay="' + Number(bay) + '"]'); }
+  function storageOf(bay) { var c = chipFor(bay); return (c && c.getAttribute('data-value')) || null; }
+  function openModal(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  function closeModal(d) { if (d.close) d.close(); else d.removeAttribute('open'); }
+  function openStorage(chip) {
+    sheet.setAttribute('data-bay', chip.getAttribute('data-bay'));
+    sel.value = chip.getAttribute('data-value') || '';
+    openModal(sheet);
+  }
+  sel.addEventListener('change', function () {
+    var bay = sheet.getAttribute('data-bay');
+    var chip = chipFor(bay);
+    if (chip) setChip(chip, sel.value);
+    writeStore(bay, sel.value);
+    closeModal(sheet);
+  });
+  document.getElementById('storageCancel').addEventListener('click', function () { closeModal(sheet); });
+
+  // ── Last tag line on the bay header, built from nodes (ids and names are data) ──
+  function setLastTag(drawer, id, cultivar, today) {
+    var box = drawer.querySelector('.lasttag');
+    box.textContent = '';
+    if (!id) { box.textContent = T.noTagsYet; return; }
+    box.appendChild(document.createTextNode(T.lastTagBay + ' '));
+    var b = document.createElement('b'); b.textContent = id; box.appendChild(b);
+    box.appendChild(document.createTextNode(' · ' + cultivar + ' '));
+    var a = document.createElement('a');
+    a.className = 'mini danger voidlast'; a.href = '#'; a.textContent = T.void;
+    a.setAttribute('data-id', id); a.setAttribute('data-cultivar', cultivar);
+    if (today) a.setAttribute('data-today', '1');
+    box.appendChild(a);
+  }
+
+  // ── PRINT and batch ──
+  function print(row, qty, btn) {
+    // Double-tap guard, per ROW: PRINT and the batch button share it, so a
+    // PRINT then a quick batch on the same cultivar cannot both allocate.
+    if (btn.disabled || row.getAttribute('data-busy') === '1') return;
+    row.setAttribute('data-busy', '1');
+    var bay = Number(row.getAttribute('data-bay'));
+    var cultivar = row.getAttribute('data-cultivar');
+    var noteEl = row.querySelector('.noteText');
+    var fillEl = row.querySelector('.fillLbs');
+    // Only a single tag carries the note and the short weight: a batch is several bags.
+    var note = qty === 1 ? noteEl.value.trim() : '';
+    var fill = qty === 1 ? fillEl.value.trim() : '';
+    var label = btn.innerHTML;   // PRINT keeps its two lines (word + cultivar) after
+    btn.disabled = true;
+    btn.textContent = T.printing;
+    RO.allocTags(API, {
+      session_id: Number(row.getAttribute('data-session')), cultivar: cultivar, qty: qty,
+      bay: bay, storage: storageOf(bay), note: note, fill_lbs: fill,
+    })
+      .then(function (d) {
+        var ids = d.ids || [];
+        var last = ids[ids.length - 1] || d.last_sack_id;
+        var drawer = row.closest('.baydrawer');
+        bump(row.querySelector('.sackn'), ids.length, T.sackOne, T.sacksN);
+        bump(drawer.querySelector('.sackstoday'), ids.length, T.sackTodayOne, T.sacksToday);
+        row.setAttribute('data-last', last);
+        row.setAttribute('data-lasttoday', '1');
+        setLastTag(drawer, last, cultivar, true);
+        if (qty === 1) {
+          noteEl.value = ''; fillEl.value = '';
+          each('details.nextnote', row, function (dt) { dt.open = false; });
+        }
+        if (d.print_via !== 'agent') {
+          say(ids.length > 1
+            ? fmt(fmt(fmt(T.printedOkN, 'n', ids.length), 'first', ids[0]), 'last', ids[ids.length - 1])
+            : fmt(T.printedOk, 'id', ids[0] || last));
+        }
+        RO.printIds(API, ids, d.print_via, printOpts);
+        setTimeout(function () { btn.disabled = false; btn.innerHTML = label; row.removeAttribute('data-busy'); }, 1500);
+      })
+      .catch(function (e) {
+        say(fmt(T.printFailed, 'e', e.message), true);
+        btn.disabled = false;
+        btn.innerHTML = label;
+        row.removeAttribute('data-busy');
+      });
+  }
+
+  // ── Void and reprint ──
+  function rowFor(drawer, id, cultivar) {
+    var hit = null, byName = null;
+    each('.cvrow', drawer, function (r) {
+      if (!hit && id && r.getAttribute('data-last') === id) hit = r;
+      if (!byName && r.getAttribute('data-cultivar') === cultivar) byName = r;
+    });
+    return hit || byName;
+  }
+  function pacificDayOf(iso) {
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); } catch (e) { return ''; }
+  }
+  // The row's newest live tag after a void, from sack_void's d.tags (the
+  // lot's tags, newest first): same bay, printed in this fill. Not
+  // d.last_sack_id: that is the lot's newest in ANY bay, and a lot hanging in
+  // two bays would point this row's Void and Reprint at the other bay's bag.
+  function newestInRow(row, tags) {
+    var bay = Number(row.getAttribute('data-bay'));
+    var fill = Date.parse(String(row.getAttribute('data-fill') || '').replace(' ', 'T') + 'Z');
+    for (var i = 0; i < (tags || []).length; i++) {
+      var t = tags[i];
+      if (t.voided || Number(t.bay) !== bay) continue;
+      if (!isNaN(fill) && !(Date.parse(t.at) > fill)) continue;
+      return t;
+    }
+    return null;
+  }
+  function voidId(drawer, id, cultivar, today) {
+    if (!id || !confirm(fmt(T.voidConfirm, 'id', id))) return;
+    RO.voidTag(API, id)
+      .then(function (d) {
+        var row = rowFor(drawer, id, cultivar);
+        var next = row ? newestInRow(row, d && d.tags) : null;
+        var nextToday = !!(next && pacificDayOf(next.at) === TODAY);
+        if (row) {
+          bump(row.querySelector('.sackn'), -1, T.sackOne, T.sacksN);
+          if (row.getAttribute('data-last') === id) {
+            row.setAttribute('data-last', next ? next.id : '');
+            if (nextToday) row.setAttribute('data-lasttoday', '1'); else row.removeAttribute('data-lasttoday');
+          }
+        }
+        if (today) bump(drawer.querySelector('.sackstoday'), -1, T.sackTodayOne, T.sacksToday);
+        // Only when the header was showing this tag: another cultivar's last
+        // tag stays. It falls back to this row's new last, "no tags yet" only
+        // when the row has none left.
+        var head = drawer.querySelector('.voidlast');
+        if (head && head.getAttribute('data-id') === id) {
+          setLastTag(drawer, next ? next.id : null, row ? row.getAttribute('data-cultivar') : '', nextToday);
+        }
+        say('# ' + id + ' · ' + T.tagVoided);
+      })
+      .catch(function (e) { say(fmt(T.voidFailed, 'e', e.message), true); });
+  }
+
+  // ── Add a McLoughlin cultivar ──
+  var add = document.getElementById('addSheet');
+  var addCv = document.getElementById('addCv');
+  var addZones = document.getElementById('addZones');
+  var addErr = document.getElementById('addErr');
+  var addSave = document.getElementById('addSave');
+  var addBay = null, addZone = '';
+  function renderZones(zones) {
+    addZones.textContent = '';
+    addZone = '';
+    (zones || []).forEach(function (z) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'zchip zpick'; b.textContent = z;
+      b.addEventListener('click', function () {
+        addZone = z;
+        each('.zpick', addZones, function (x) { x.classList.toggle('sel', x === b); });
+      });
+      addZones.appendChild(b);
+    });
+  }
+  function canonical(v) {
+    v = String(v || '').trim().toLowerCase();
+    for (var i = 0; i < (window.MCL || []).length; i++) if (window.MCL[i].toLowerCase() === v) return window.MCL[i];
+    return null;
+  }
+  function cvChanged() {
+    var name = canonical(addCv.value);
+    var zones = name && window.MCLZ ? window.MCLZ[name] : null;
+    if (zones && zones.length === 2) { if (addZones.children.length !== 2) renderZones(zones); }
+    else renderZones([]);
+  }
+  addCv.addEventListener('input', cvChanged);
+  addCv.addEventListener('change', cvChanged);
+  document.getElementById('addCancel').addEventListener('click', function () { closeModal(add); });
+  addSave.addEventListener('click', function () {
+    if (addSave.disabled) return;
+    var body = { bay: addBay, cultivar: addCv.value.trim() };
+    if (addZone) body.zone = addZone;
+    addSave.disabled = true;
+    addErr.hidden = true;
+    fetch(API + '?action=lot_add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d || {} }; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (res.status === 200 && d.success) {
+          location.href = API + '?action=bay_tags&lang=' + LANG
+            + (d.variant_error ? '&flash=' + encodeURIComponent(d.variant_error) : '');
+          return;
+        }
+        if (d.details && d.details.zones) renderZones(d.details.zones);
+        addErr.textContent = d.error || String(res.status);
+        addErr.hidden = false;
+        addSave.disabled = false;
+      })
+      .catch(function (e) {
+        addErr.textContent = e.message;
+        addErr.hidden = false;
+        addSave.disabled = false;
+      });
+  });
+
+  // ── One delegated listener for every row and bay ──
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var chip = t.closest('.storagechip');
+    if (chip) { e.preventDefault(); openStorage(chip); return; }   // not the drawer toggle
+    var drawer = t.closest('.baydrawer');
+    var row = t.closest('.cvrow');
+    var a;
+    if ((a = t.closest('.printbtn')) && row) { print(row, 1, a); return; }
+    if ((a = t.closest('.batchbtn')) && row) {
+      var n = parseInt(row.querySelector('.batchQty').value, 10);
+      if (n >= 2) print(row, n, a);
+      return;
+    }
+    if ((a = t.closest('.voidlast')) && drawer) {
+      e.preventDefault();
+      voidId(drawer, a.getAttribute('data-id'), a.getAttribute('data-cultivar'), a.getAttribute('data-today') === '1');
+      return;
+    }
+    if (t.closest('.voidrow') && row) {
+      e.preventDefault();
+      voidId(drawer, row.getAttribute('data-last'), row.getAttribute('data-cultivar'), row.getAttribute('data-lasttoday') === '1');
+      return;
+    }
+    if (t.closest('.reprint') && row) {
+      e.preventDefault();
+      var id = row.getAttribute('data-last');
+      if (!id) { say(T.noTagsYet, true); return; }
+      RO.reprintTag(API, id, printOpts)
+        .then(function (d) { if (d.print_via !== 'agent') say(fmt(T.printedOk, 'id', id)); })
+        .catch(function (err) { say(fmt(T.printFailed, 'e', err.message), true); });
+      return;
+    }
+    if ((a = t.closest('.cvname')) && row) {
+      var mine = row.querySelector('.cvdrawer');
+      var opening = mine.hidden;
+      // One open drawer per bay: opening this one closes the other.
+      each('.cvrow', drawer, function (r) {
+        r.querySelector('.cvdrawer').hidden = true;
+        r.querySelector('.cvname').setAttribute('aria-expanded', 'false');
+      });
+      mine.hidden = !opening;
+      a.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      return;
+    }
+    if ((a = t.closest('.addcv'))) {
+      addBay = Number(a.getAttribute('data-bay'));
+      addCv.value = '';
+      renderZones([]);
+      addErr.hidden = true;
+      addSave.disabled = false;
+      openModal(add);
+    }
+  });
+  // The chip is a button to the keyboard too; Enter/Space must not toggle the drawer.
+  document.addEventListener('keydown', function (e) {
+    var chip = e.target.closest && e.target.closest('.storagechip');
+    if (chip && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openStorage(chip); }
+  });
+  // Whole bay down asks first; the per-cultivar Finished does not (one tap, reopenable).
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.matches && f.matches('form[data-confirm]') && !confirm(f.getAttribute('data-confirm'))) e.preventDefault();
+  });
+})();
+</script>`;
+}
+
 // ─── PIPELINE ───────────────────────────────────────────
 // A read-only "what's coming" board for the people downstream of the barn.
 // Koa, 2026-10-01: "so Nathan and Inaiah can see what cultivars are in the
@@ -7151,6 +7795,23 @@ ${section('#b8841c', L('Already in supersacks', 'Ya en supersacos'), L('Bagged t
 }
 
 /**
+ * What agent-mode printing says while the barn PC prints (HARVEST_PRINT_CLIENT
+ * reads these from opts.T). Shared by the session and tags-by-bay screens.
+ */
+function agentPrintStrings(ui) {
+  return {
+    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
+    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
+    printAgentFailed: ui.lang === 'es'
+      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
+      : '⚠ Tag {id} did not print: {e} — use Reprint',
+    printAgentSlow: ui.lang === 'es'
+      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
+      : '⚠ No answer from the printer. Check the barn PC.',
+  };
+}
+
+/**
  * The screen the worker actually lives on during a takedown. Quantity is
  * deliberately NOT asked up front — you don't know how many sacks a rack
  * yields until it's empty, and pre-printing leaves orphan serials that can end
@@ -7279,6 +7940,7 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
+<script>${HARVEST_PRINT_CLIENT}</script>
 <script>
 (function () {
   var Q = '${q}';
@@ -7296,14 +7958,7 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     printTagFill: ui.t('printTagFill', { n: '{n}' }), fillSavedOn: ui.t('fillSavedOn', { id: '{id}', n: '{n}' }),
     reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
     tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
-    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
-    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
-    printAgentFailed: ui.lang === 'es'
-      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
-      : '⚠ Tag {id} did not print: {e} — use Reprint',
-    printAgentSlow: ui.lang === 'es'
-      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
-      : '⚠ No answer from the printer. Check the barn PC.',
+    ...agentPrintStrings(ui),
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -7411,89 +8066,11 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     }
   }
 
-  // Who prints: the server decides, per allocation, and says so in the alloc
-  // response. NOT a page-level flag — this page can have been open for an hour,
-  // and a stale decision would print the tag twice (iframe here AND the agent).
-  // WebKit scopes window.print() to the TOP-LEVEL document, not the iframe that
-  // called it — so on an iPhone the hidden-iframe trick prints the takedown
-  // screen instead of the tag (Koa, 2026-09-21, in Chrome on iOS; Chrome there
-  // is WebKit underneath, so this is not Safari-only). Desktop Chrome scopes it
-  // to the frame, which is why the barn PC has always worked.
-  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
-  var topLevelPrint = iframePrintUnreliable(
-    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
-
-  function print(ids, via) {
-    if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
-    var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
-    if (window.navigator.standalone === true) {
-      // Running as an iOS home-screen app (Koa, 2026-09-25). There are no tabs
-      // in there: window.open either fails or lands in a view with no way
-      // back. Go to the label page in place; it lays the tag out for the app's
-      // print path and offers history.back() to return here for the next bag.
-      window.location.href = url + '&back=1';
-      return;
-    }
-    if (topLevelPrint) {
-      // A separate tab, so window.print() runs at top level where WebKit will
-      // honour it. Opened from the button's own click handler, so it counts as
-      // user-initiated and is not treated as a popup. The takedown screen stays
-      // loaded underneath with its lot, bay and count intact.
-      //
-      // NAMED, not '_blank': every tag reuses this one tab instead of opening a
-      // fresh one per sack. popup=1 tells the label page to close itself when
-      // printing is done, so the crew lands back here rather than closing a tab
-      // per bag all day (Koa, 2026-09-21).
-      var w = window.open(url + '&popup=1', 'rf_tag_print');
-      // Blocked anyway (a locked-down browser): navigate rather than silently
-      // printing nothing. The label page carries a link back to the lot.
-      if (!w) window.location.href = url;
-      return;
-    }
-    frame.src = url;
-  }
-
-  // In agent mode the crew no longer watches a tag appear as confirmation, so
-  // the screen has to supply it. Queued is NOT printed: the serial is already
-  // spent and the Shopify count already moved, so showing a tick on the
-  // strength of an enqueue would hide exactly the failure the ack exists for.
-  function watchPrint(ids) {
-    var tries = 0;
-    agentMsg.hidden = false;
-    agentMsg.className = 'hcstat';
-    agentMsg.textContent = T.printingOnAgent;
-    (function poll() {
-      tries += 1;
-      fetch('${API}?action=print_check', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          var st = (d && d.status) || {};
-          var states = ids.map(function (id) { return (st[id] || {}).status; });
-          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
-          if (failed.length) {
-            agentMsg.className = 'hcstat bad';
-            agentMsg.textContent = T.printAgentFailed
-              .replace('{id}', failed[0])
-              .replace('{e}', (st[failed[0]] || {}).error || '');
-            return;
-          }
-          if (states.every(function (x) { return x === 'done'; })) {
-            agentMsg.className = 'hcstat ok';
-            agentMsg.textContent = T.printedOnAgent;
-            return;
-          }
-          // ~30s. Long enough for a rack of tags, short enough that a stopped
-          // agent is noticed while the crew is still at the printer.
-          if (tries < 40) return setTimeout(poll, 750);
-          agentMsg.className = 'hcstat bad';
-          agentMsg.textContent = T.printAgentSlow;
-        })
-        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
-    })();
-  }
+  // Who prints (agent or this browser, and how) lives in the shared print
+  // client, HARVEST_PRINT_CLIENT, so this screen and bay_tags cannot drift.
+  var API = '${API}';
+  var printOpts = { frame: frame, status: agentMsg, statusClass: 'hcstat', T: T };
+  function print(ids, via) { RO.printIds(API, ids, via, printOpts); }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
@@ -7502,14 +8079,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     var note = qty === 1 ? pendingNote() : '';
     var fill = qty === 1 ? pendingFill() : '';
     setBusy(true);
-    fetch('${API}?action=sack_alloc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
-    })
-      .then(function (r) { return r.json(); })
+    RO.allocTags(API, { session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Print failed');
         print(d.ids, d.print_via); refresh(d);
         var saved = [];
         if (d.note_on) {
@@ -7539,20 +8110,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
 
   function reprintTag(id) {
     if (!id) return;
-    // A jam is the most time-critical recovery there is, so it must work on
-    // every handset. ALWAYS ask the server which way to print — this page may
-    // have been loaded without allocating anything, so there is no local answer
-    // that can be trusted, and guessing 'browser' is the path WebKit breaks.
-    fetch('${API}?action=print_reprint', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Reprint failed');
-        if (d.print_via === 'agent') watchPrint([id]);
-        else print([id], 'browser');
-      })
+    // The shared client asks the server which way to print (see its comment).
+    RO.reprintTag(API, id, printOpts)
       .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
   }
 
@@ -7560,14 +8119,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     if (!id || busy) return;
     if (!confirm(T.confirmVoid.replace('{id}', id))) return;
     setBusy(true, T.voiding);
-    fetch('${API}?action=sack_void', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id })
-    })
-      .then(function (r) { return r.json(); })
+    RO.voidTag(API, id)
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Void failed');
         refresh(d); setBusy(false);
       })
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
@@ -8433,6 +8986,7 @@ ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y 
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
+    card(`${API}?action=bay_tags&${q}`, L('Tags by bay', 'Etiquetas por bahía'), L('One screen. Open the bay, press PRINT beside the cultivar.', 'Una pantalla. Abre la bahía y pulsa IMPRIMIR junto a la variedad.')),
     card(`${API}?action=bajada&${q}`, L('Hourly takedown report', 'Bajada por hora'), L('On the hour: people by role and sticks taken down. Sacks come from the tags.', 'Cada hora: personas por puesto y palos bajados. Las bolsas salen de las etiquetas.')),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),

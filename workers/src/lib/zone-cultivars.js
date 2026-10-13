@@ -9,7 +9,13 @@
  * GENERATED from the authoritative sign data in the wiki repo:
  *   outputs/presentations/build-2026-zone-signs.py (ZONE_META + STRAIN_LAYOUTS)
  * Re-generate rather than hand-editing if the planting plan changes.
+ *
+ * Exception: the McLoughlin entries (MZ1–MZ4) come from the wiki page
+ * seasons/2026/mcloughlin-layout (walked and verified on site 2026-07-10) and
+ * are maintained by hand until that generator covers McLoughlin.
  */
+
+import { MCLOUGHLIN_ZONES } from './zones.js';
 
 export const ZONE_CULTIVARS = {
   'Z1': ["Sour Lifter"],
@@ -72,6 +78,11 @@ export const ZONE_CULTIVARS = {
     "Animal Muffins",
     "Strawberry Doughnuts",
   ],
+  'MZ1': ["Critical Berries", "Legendary OG", "Angel Cake", "Peyton's Strawberries", "Platinum Delicata"],
+  'MZ2': ["Angel Cake", "Lavender Snowcone", "GMO Gas", "Daiquiri Factory", "Goat Butter",
+          "Lavender BC", "Platinum India", "King Kush", "Smelly Jelly", "Tropicana Cherry"],
+  'MZ3': ["Sour Diesel", "Strawberry Doughnuts", "Runtz", "Animal Muffins", "Forbidden", "Runtz Bravo"],
+  'MZ4': ["Kush Mintz", "Cream Cake", "King Kush", "GMO Belly", "Sour Lifter", "Sour Suver Haze"],
 };
 
 
@@ -167,4 +178,27 @@ export function isMultiCultivar(zone) {
  */
 export function isHarvestTracked(zone) {
   return cultivarsFor(zone).length > 0;
+}
+
+export { MCLOUGHLIN_ZONES };
+
+const norm = (s) => String(s || '').trim().toLowerCase();
+
+/**
+ * Which McLoughlin zone(s) a cultivar was planted in, in zone order. A hand-added
+ * lot at takedown is always McLoughlin (Koa, 2026-10-12): everything grown at the
+ * Egg Farm or Gary's is entered through the zone sign and the barn door. So a
+ * cultivar grown at both (Animal Muffins: MZ3, Z10, R1) resolves to its
+ * McLoughlin zone only. Two names come back with two zones: Angel Cake and King Kush.
+ */
+export function mcloughlinZonesFor(cultivar) {
+  const want = norm(cultivar);
+  return MCLOUGHLIN_ZONES.filter(z => (ZONE_CULTIVARS[z] || []).some(c => norm(c) === want));
+}
+
+/** Every cultivar planted at McLoughlin, once, sorted — the add sheet's list. */
+export function mcloughlinCultivars() {
+  const set = new Set();
+  for (const z of MCLOUGHLIN_ZONES) for (const c of ZONE_CULTIVARS[z] || []) set.add(c);
+  return [...set].sort((a, b) => a.localeCompare(b, 'en'));
 }

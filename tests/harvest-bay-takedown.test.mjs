@@ -8,88 +8,17 @@
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { freshDb, seedLot, seedLoad, seedTag, sqliteAvailable } from './helpers/harvest-bay-seed.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-let DatabaseSync = null;
-try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
 
 const { handleHarvestD1 } = await import(
   join(REPO, 'workers/src/handlers/harvest-d1.js').replace(/\\/g, '/').replace(/^/, 'file:///')
 );
 
-const SEASON = new Date().getUTCFullYear();
-
-const MIGRATIONS = [
-  '0009-harvest-scan-log.sql', '0010-harvest-sacks.sql', '0011-harvest-sacks-void.sql',
-  '0012-harvest-scan-log-cultivar.sql', '0013-harvest-crew-roster.sql',
-  '0014-harvest-sack-notes.sql', '0015-harvest-sacks-per-cultivar-serial.sql',
-  '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
-  '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
-  '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
-  '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0043-harvest-bay-done.sql',
-];
-
-function freshDb() {
-  const sqlite = new DatabaseSync(':memory:');
-  for (const f of MIGRATIONS) {
-    const stripped = readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
-      .split(/\r?\n/).map(l => l.replace(/--.*$/, '')).join('\n');
-    for (const stmt of stripped.split(';')) { const t = stmt.trim(); if (t) sqlite.exec(t); }
-  }
-  sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
-  sqlite.exec("INSERT INTO cultivars (id, name, sku_prefix) VALUES (1, 'Sour Lifter', 'SLIFT')");
-  sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER)');
-
-  const DB = {
-    async batch(stmts) { return Promise.all(stmts.map(st => st.run())); },
-    prepare(sql) {
-      return {
-        bind(...args) {
-          return {
-            all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
-            first: async () => sqlite.prepare(sql).get(...args) ?? null,
-            run: async () => {
-              const r = sqlite.prepare(sql).run(...args);
-              return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } };
-            },
-          };
-        },
-      };
-    },
-  };
-  return { sqlite, env: { DB, HARVEST_TEST_MODE: 'true' }, ctx: { waitUntil() {} } };
-}
-
-/** A zone session, dry and ready. Two with the same zone, cultivar and cut are one lot. */
-
-
 import { bayFills, percentShares } from '../workers/src/lib/bay-fills.js';
-
-function seedLot(sqlite, { zone, cultivar = 'Sour Lifter', daysAgo = 10, cut = 1 }) {
-  sqlite.prepare(`
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, occurred_at, closed_at, is_test)
-    VALUES ('enter', ?, ?, ?, ?, datetime('now', ?), datetime('now', ?), 1)
-  `).run(zone, cultivar, SEASON, cut, `-${daysAgo} days`, `-${daysAgo - 1} days`);
-  return Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
-}
-/** A barn load into `bay`, `minutesAgo` back (default about 9 days). */
-function seedLoad(sqlite, lot, bay, { minutesAgo = 9 * 1440, bins = 24 } = {}) {
-  sqlite.prepare(`
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, is_test, occurred_at)
-    VALUES ('barn_load', 'Z4', ?, ?, ?, ?, 1, datetime('now', ?))
-  `).run(SEASON, bins, lot, bay, `-${minutesAgo} minutes`);
-}
-function seedTag(sqlite, lot, bay, serial, { minutesAgo = 60 } = {}) {
-  sqlite.prepare(`
-    INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, zone_session_id, bay, is_test, cultivar_code, printed_at)
-    VALUES (?, ?, ?, 'Z4', 'Sour Lifter', 1, ?, ?, 1, 'SLIFT', datetime('now', ?))
-  `).run(`26-SLIFT-${serial}`, SEASON, serial, lot, bay, `-${minutesAgo} minutes`);
-}
 const fillStart = (sqlite, bay) =>
   sqlite.prepare(`SELECT MIN(occurred_at) AS t FROM harvest_scan_log WHERE event_type = 'barn_load' AND bay = ?`).get(bay).t;
 const done = (sqlite, lot) =>
@@ -132,7 +61,7 @@ test('percentShares always adds to 100', () => {
   assert.deepEqual(p, [62, 34, 4]);
 });
 
-test('one card per bay, zones by bin share, sacks on the biggest zone', { skip: !DatabaseSync }, async () => {
+test('one card per bay, zones by bin share, sacks on the biggest zone', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const z5 = seedLot(sqlite, { zone: 'Z5' });
   const z6 = seedLot(sqlite, { zone: 'Z6' });
@@ -146,7 +75,7 @@ test('one card per bay, zones by bin share, sacks on the biggest zone', { skip: 
   assert.match(cards[0].html, /96 bins/);
 });
 
-test('Z1 and Z2 were harvested together, so they show as one zone, Z1+Z2', { skip: !DatabaseSync }, async () => {
+test('Z1 and Z2 were harvested together, so they show as one zone, Z1+Z2', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const z2 = seedLot(sqlite, { zone: 'Z2' });
   const z1 = seedLot(sqlite, { zone: 'Z1' });
@@ -159,7 +88,7 @@ test('Z1 and Z2 were harvested together, so they show as one zone, Z1+Z2', { ski
   assert.equal(card.value, z2, 'sacks still hang off a real lot, the biggest');
 });
 
-test('a zone in two bays stays open until both bays are down; reopen brings it back', { skip: !DatabaseSync }, async () => {
+test('a zone in two bays stays open until both bays are down; reopen brings it back', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const z2 = seedLot(sqlite, { zone: 'Z2' });
   const z1 = seedLot(sqlite, { zone: 'Z1' });
@@ -191,7 +120,7 @@ test('a zone in two bays stays open until both bays are down; reopen brings it b
   assert.deepEqual(cards.map(c => c.bay), [10]);
 });
 
-test('a bay refilled after a takedown shows only what hangs there now', { skip: !DatabaseSync }, async () => {
+test('a bay refilled after a takedown shows only what hangs there now', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const old = seedLot(sqlite, { zone: 'Z3', daysAgo: 20 });
   const fresh = seedLot(sqlite, { zone: 'Z14', daysAgo: 8 });
@@ -206,7 +135,7 @@ test('a bay refilled after a takedown shows only what hangs there now', { skip: 
   assert.deepEqual(chips(bay4.html), ['Z14 100%']);
 });
 
-test('the takedown screen for a bay names the bay and its mix, and finishes the bay', { skip: !DatabaseSync }, async () => {
+test('the takedown screen for a bay names the bay and its mix, and finishes the bay', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const z2 = seedLot(sqlite, { zone: 'Z2' });
   const z11 = seedLot(sqlite, { zone: 'Z11' });
@@ -225,7 +154,7 @@ test('the takedown screen for a bay names the bay and its mix, and finishes the 
   assert.match(resumed, /<span class="baybig">Bay 9<\/span>/);
 });
 
-test('a lot with no loads but a bay on its own row joins that bay (McLoughlin, tables)', { skip: !DatabaseSync }, async () => {
+test('a lot with no loads but a bay on its own row joins that bay (McLoughlin, tables)', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const id = seedLot(sqlite, { zone: 'MZ1', cultivar: 'Critical Berries', daysAgo: 1 });
   sqlite.prepare('UPDATE harvest_scan_log SET bay = 1 WHERE id = ?').run(id);
@@ -237,7 +166,7 @@ test('a lot with no loads but a bay on its own row joins that bay (McLoughlin, t
   assert.ok(!/ 0 bins/.test(c.html), 'no bin count for a lot that was never scanned in');
 });
 
-test('a lot with no bay on any load keeps its zone card', { skip: !DatabaseSync }, async () => {
+test('a lot with no bay on any load keeps its zone card', { skip: !sqliteAvailable }, async () => {
   const { sqlite, env, ctx } = freshDb();
   const id = seedLot(sqlite, { zone: 'Z7' });
   const html = await picker(env, ctx);
