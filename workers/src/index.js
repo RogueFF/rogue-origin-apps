@@ -48,7 +48,7 @@ import { formatError } from './lib/errors.js';
 const SHORT_SCREENS = new Map([
   // /tags, not /t: /t/T1-/t/T6 are the trailer decals, and a tag printer one
   // character away from a trailer route reads as the same screen.
-  ['/tags', 'sack_print'],   // Imprimir Etiquetas — the takedown screen
+  ['/tags', 'bay_tags'],     // Etiquetas por bahía — the takedown screen (was sack_print until 2026-10-12)
   ['/hora', 'crew'],         // Reporte de cuadrilla por hora
   ['/hub', 'hub'],           // Herramientas / all tools
   ['/salida', 'salida'],     // Salida de bolsas — scan sacks out to an order

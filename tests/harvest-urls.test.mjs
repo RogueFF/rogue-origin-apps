@@ -186,6 +186,6 @@ test('the tools home links every harvest page, and never links a scan that write
   const es = await handleHarvestD1(new Request('https://x/api/harvest?action=hub&lang=es'), env, ctx).then(r => r.text());
   assert.match(es, /Herramientas de cosecha/);
   assert.match(es, /Imprimir etiquetas/);
-  assert.match(es, /Etiquetas por bahía/);
+  assert.match(es, /Selector anterior/, "the old picker stays reachable from the hub");
   assert.ok(es.includes('href="/api/harvest?action=bay_tags&lang=es"'));
 });
