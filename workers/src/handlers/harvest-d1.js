@@ -2124,6 +2124,23 @@ function zoneMix(c) {
  * on a lot, it touches no sack, no storage and no Shopify count.
  */
 async function handleBayFinish(ui, db, env, ctx, body) {
+  // "Whole bay down": every cultivar card in the bay's current fill, in one
+  // tap, so a 17-cultivar retail bay is not 17 taps (Koa, 2026-10-12). Each
+  // card takes the same single-card path as its own "Bay N is down".
+  if (String(body.all ?? '') === '1') {
+    const bayAll = parseBay(body.bay, ui);
+    if (!bayAll) throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+    const isTest = isTestMode(env) ? 1 : 0;
+    const lots = await getRecentLots(db, isTest);
+    await attachDryingBays(db, isTest, lots);
+    const info = await getBayTakedown(db, isTest, lots);
+    const cards = info.active.filter(c => c.bay === bayAll);
+    for (const c of cards) {
+      await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1, fillStart: c.fillStart, reopen: false });
+    }
+    return handleSackPrintForm(ui, db, env, ui.t('bayAllDown', { bay: bayAll, n: cards.length }));
+  }
+
   const bay = parseBay(body.bay, ui);
   const cultivar = String(body.cultivar || '').trim().substring(0, 60);
   const cut = parseInt(body.cut, 10) || 1;
@@ -2132,6 +2149,22 @@ async function handleBayFinish(ui, db, env, ctx, body) {
     throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
   }
   const reopen = String(body.reopen ?? '') === '1';
+  const card = await finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen });
+  const sacks = card ? card.sacks : 0;
+  if (reopen && card) {
+    return new Response(null, { status: 303, headers: {
+      Location: `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  }
+  return handleSackPrintForm(ui, db, env,
+    ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+}
+
+/**
+ * The work behind one bay card's "is down" (or reopen): record it in
+ * harvest_bay_done, close (or reopen) the lots it held, tell Telegram.
+ * Returns the card as it was found, or undefined.
+ */
+async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen }) {
   const isTest = isTestMode(env) ? 1 : 0;
   await execute(db, reopen
     ? `DELETE FROM harvest_bay_done WHERE bay = ? AND cultivar = ? AND cut_number = ? AND fill_start = ? AND is_test = ?`
@@ -2161,13 +2194,7 @@ async function handleBayFinish(ui, db, env, ctx, body) {
       ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
       : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
   }).catch(e => console.error('[harvest][telegram]', e)));
-
-  if (reopen && card) {
-    return new Response(null, { status: 303, headers: {
-      Location: `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
-  }
-  return handleSackPrintForm(ui, db, env,
-    ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+  return card;
 }
 
 /**
