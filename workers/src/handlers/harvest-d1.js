@@ -51,7 +51,7 @@ import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { trailerIconPng, TRAILER_ICON_SIZES } from '../lib/trailer-icons.js';
-import { HARVEST_UI_STYLE } from './harvest-ui.js';
+import { HARVEST_UI_STYLE, HARVEST_PRINT_CLIENT } from './harvest-ui.js';
 import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
 import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
@@ -74,7 +74,7 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
+import { APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
 import { salidaPageBody } from './harvest-salida-page.js';
 import { SACK_OUT_ACTIONS, handleSackOutAction, sackOutToday } from './harvest-sack-out.js';
@@ -7480,6 +7480,7 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
+<script>${HARVEST_PRINT_CLIENT}</script>
 <script>
 (function () {
   var Q = '${q}';
@@ -7612,89 +7613,11 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     }
   }
 
-  // Who prints: the server decides, per allocation, and says so in the alloc
-  // response. NOT a page-level flag — this page can have been open for an hour,
-  // and a stale decision would print the tag twice (iframe here AND the agent).
-  // WebKit scopes window.print() to the TOP-LEVEL document, not the iframe that
-  // called it — so on an iPhone the hidden-iframe trick prints the takedown
-  // screen instead of the tag (Koa, 2026-09-21, in Chrome on iOS; Chrome there
-  // is WebKit underneath, so this is not Safari-only). Desktop Chrome scopes it
-  // to the frame, which is why the barn PC has always worked.
-  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
-  var topLevelPrint = iframePrintUnreliable(
-    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
-
-  function print(ids, via) {
-    if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
-    var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
-    if (window.navigator.standalone === true) {
-      // Running as an iOS home-screen app (Koa, 2026-09-25). There are no tabs
-      // in there: window.open either fails or lands in a view with no way
-      // back. Go to the label page in place; it lays the tag out for the app's
-      // print path and offers history.back() to return here for the next bag.
-      window.location.href = url + '&back=1';
-      return;
-    }
-    if (topLevelPrint) {
-      // A separate tab, so window.print() runs at top level where WebKit will
-      // honour it. Opened from the button's own click handler, so it counts as
-      // user-initiated and is not treated as a popup. The takedown screen stays
-      // loaded underneath with its lot, bay and count intact.
-      //
-      // NAMED, not '_blank': every tag reuses this one tab instead of opening a
-      // fresh one per sack. popup=1 tells the label page to close itself when
-      // printing is done, so the crew lands back here rather than closing a tab
-      // per bag all day (Koa, 2026-09-21).
-      var w = window.open(url + '&popup=1', 'rf_tag_print');
-      // Blocked anyway (a locked-down browser): navigate rather than silently
-      // printing nothing. The label page carries a link back to the lot.
-      if (!w) window.location.href = url;
-      return;
-    }
-    frame.src = url;
-  }
-
-  // In agent mode the crew no longer watches a tag appear as confirmation, so
-  // the screen has to supply it. Queued is NOT printed: the serial is already
-  // spent and the Shopify count already moved, so showing a tick on the
-  // strength of an enqueue would hide exactly the failure the ack exists for.
-  function watchPrint(ids) {
-    var tries = 0;
-    agentMsg.hidden = false;
-    agentMsg.className = 'hcstat';
-    agentMsg.textContent = T.printingOnAgent;
-    (function poll() {
-      tries += 1;
-      fetch('${API}?action=print_check', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          var st = (d && d.status) || {};
-          var states = ids.map(function (id) { return (st[id] || {}).status; });
-          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
-          if (failed.length) {
-            agentMsg.className = 'hcstat bad';
-            agentMsg.textContent = T.printAgentFailed
-              .replace('{id}', failed[0])
-              .replace('{e}', (st[failed[0]] || {}).error || '');
-            return;
-          }
-          if (states.every(function (x) { return x === 'done'; })) {
-            agentMsg.className = 'hcstat ok';
-            agentMsg.textContent = T.printedOnAgent;
-            return;
-          }
-          // ~30s. Long enough for a rack of tags, short enough that a stopped
-          // agent is noticed while the crew is still at the printer.
-          if (tries < 40) return setTimeout(poll, 750);
-          agentMsg.className = 'hcstat bad';
-          agentMsg.textContent = T.printAgentSlow;
-        })
-        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
-    })();
-  }
+  // Who prints (agent or this browser, and how) lives in the shared print
+  // client, HARVEST_PRINT_CLIENT, so this screen and bay_tags cannot drift.
+  var API = '${API}';
+  var printOpts = { frame: frame, status: agentMsg, statusClass: 'hcstat', T: T };
+  function print(ids, via) { RO.printIds(API, ids, via, printOpts); }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
@@ -7703,14 +7626,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     var note = qty === 1 ? pendingNote() : '';
     var fill = qty === 1 ? pendingFill() : '';
     setBusy(true);
-    fetch('${API}?action=sack_alloc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
-    })
-      .then(function (r) { return r.json(); })
+    RO.allocTags(API, { session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Print failed');
         print(d.ids, d.print_via); refresh(d);
         var saved = [];
         if (d.note_on) {
@@ -7740,20 +7657,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
 
   function reprintTag(id) {
     if (!id) return;
-    // A jam is the most time-critical recovery there is, so it must work on
-    // every handset. ALWAYS ask the server which way to print — this page may
-    // have been loaded without allocating anything, so there is no local answer
-    // that can be trusted, and guessing 'browser' is the path WebKit breaks.
-    fetch('${API}?action=print_reprint', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Reprint failed');
-        if (d.print_via === 'agent') watchPrint([id]);
-        else print([id], 'browser');
-      })
+    // The shared client asks the server which way to print (see its comment).
+    RO.reprintTag(API, id, printOpts)
       .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
   }
 
@@ -7761,14 +7666,8 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     if (!id || busy) return;
     if (!confirm(T.confirmVoid.replace('{id}', id))) return;
     setBusy(true, T.voiding);
-    fetch('${API}?action=sack_void', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id })
-    })
-      .then(function (r) { return r.json(); })
+    RO.voidTag(API, id)
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Void failed');
         refresh(d); setBusy(false);
       })
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
