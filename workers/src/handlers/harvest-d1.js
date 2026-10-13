@@ -740,21 +740,6 @@ async function getLastStorage(db, isTest) {
 }
 
 /**
- * The bay the last trailer was hung into, and when.
- *
- * NOT `getLastBay()`. That one reads the last bay a sack came OUT of, which is
- * the takedown question; this is the fill question, and mid-season the two are
- * routinely different bays — one crew is hanging bay 9 while the other is
- * pulling bay 3.
- *
- * BARN-WIDE, for trailers and the door alike (Koa, 2026-09-29: "once a bay is
- * changed, all trailers update to the newest bay"). The first day live the
- * barn moved from bay 10 to 9 mid-morning and each trailer kept logging its
- * OWN last bay, 10, until someone fixed that trailer's receipt — nobody does,
- * the floor moves too fast. Now the newest load's bay is everyone's default:
- * one load logged (or one receipt fixed) into bay 9 moves every trailer.
- */
-/**
  * Per bay, where that bay's newest live tag printed TODAY (Pacific) was stored.
  *
  * The bay screen's chips (Koa, 2026-10-12). The barn-wide getLastStorage made
@@ -775,6 +760,21 @@ async function getBayStoragesToday(db, isTest) {
   return byBay;
 }
 
+/**
+ * The bay the last trailer was hung into, and when.
+ *
+ * NOT `getLastBay()`. That one reads the last bay a sack came OUT of, which is
+ * the takedown question; this is the fill question, and mid-season the two are
+ * routinely different bays — one crew is hanging bay 9 while the other is
+ * pulling bay 3.
+ *
+ * BARN-WIDE, for trailers and the door alike (Koa, 2026-09-29: "once a bay is
+ * changed, all trailers update to the newest bay"). The first day live the
+ * barn moved from bay 10 to 9 mid-morning and each trailer kept logging its
+ * OWN last bay, 10, until someone fixed that trailer's receipt — nobody does,
+ * the floor moves too fast. Now the newest load's bay is everyone's default:
+ * one load logged (or one receipt fixed) into bay 9 moves every trailer.
+ */
 async function getLastFilledBay(db, isTest) {
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
@@ -2256,7 +2256,8 @@ async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reop
  * §5, "a lot that was never scanned"): a CLOSED enter row carrying its bay.
  * Closed because an open crew-less lot would pick up today's trailer loads.
  * Dated at the bay's current fill start, so "7d drying" on its card is the
- * bay's truth; a bay with no fill is dated now. No bins: bins live on loads.
+ * bay's truth; a bay with no fill is dated 8 AM Pacific today (handAddedAt).
+ * No bins: bins live on loads.
  */
 async function handleLotAdd(ui, db, env, body) {
   const isTest = isTestMode(env) ? 1 : 0;
@@ -2267,6 +2268,25 @@ async function handleLotAdd(ui, db, env, body) {
   const zones = mcloughlinZonesFor(cultivar);
   if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotMcloughlin', { c: cultivar }));
   const canonical = mcloughlinCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
+
+  // The bay's fill as the screen sees it: barn loads AND hand-added enter rows
+  // (a McLoughlin bay nobody scans has only those). Reading loads alone dated
+  // every add in such a bay "now", so two adds days apart became two fills and
+  // the first cultivar fell off the screen with its lot still open.
+  const lots = await getRecentLots(db, isTest);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const fills = info.fills.get(bay) || [];
+  const current = fills[fills.length - 1];
+  // Already hanging here (any zone: Egg Farm Sour Lifter counts): a second lot
+  // would split its tags. Only cards the screen shows, so its row is there.
+  if (current) {
+    const fillStart = sqliteUtc(new Date(current.startMs));
+    const dup = [...info.active, ...info.finished].find(c => c.bay === bay && c.fillStart === fillStart
+      && Number(c.cut) === cut && String(c.cultivar).toLowerCase() === canonical.toLowerCase());
+    if (dup) throw createError('VALIDATION_ERROR', ui.t('addAlready', { c: canonical, bay }), { session_id: dup.primary.id });
+  }
+
   let zone = String(body.zone || '').trim().toUpperCase();
   if (!zone && zones.length === 1) zone = zones[0];
   if (!zone) throw createError('VALIDATION_ERROR', ui.t('addPickZone', { c: canonical }), { zones });
@@ -2275,14 +2295,7 @@ async function handleLotAdd(ui, db, env, body) {
   try { await cultivarCode(db, canonical); }
   catch { throw createError('VALIDATION_ERROR', ui.t('addNoCode', { c: canonical })); }
 
-  const loads = await query(db, `
-    SELECT bay, occurred_at FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND is_test = ? AND bay = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
-  `, [isTest, bay, LOT_PICKER_DAYS]);
-  const fills = bayFills(loads).get(bay) || [];
-  const current = fills[fills.length - 1];
-  const occurredAt = sqliteUtc(current ? new Date(current.startMs) : new Date());
+  const occurredAt = current ? sqliteUtc(new Date(current.startMs)) : handAddedAt(new Date());
   const season = getSeason();
   const { lastRowId: id } = await execute(db, `
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, bay, occurred_at, closed_at, is_test)
@@ -2294,6 +2307,19 @@ async function handleLotAdd(ui, db, env, body) {
     variant_ok: variant ? variant.ok : null,
     variant_error: variant && variant.ok === false ? variant.error : null,
   });
+}
+
+/**
+ * When a hand-added lot with no bay fill to join is dated: 8 AM Pacific
+ * (15:00 UTC) of today's Pacific day, the SOP's convention for hand-inserted
+ * lots. A tag's harvest date is the UTC date of its lot, so dating it "now"
+ * printed tomorrow's date on an evening add. Never later than now: before
+ * 8 AM a future date would leave this morning's tags outside the bay's fill.
+ */
+function handAddedAt(now) {
+  const eight = `${pacificDay(now)} 15:00:00`;
+  const nowText = sqliteUtc(now);
+  return nowText < eight ? nowText : eight;
 }
 
 /**
