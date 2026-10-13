@@ -209,3 +209,21 @@ test('sack_void answers each tag with its bay, so the bay screen can pick the ro
   const html = await (await page(env, ctx)).text();
   assert.match(html, /function newestInRow\(/, 'the void picks the row’s new last from d.tags by bay and fill');
 });
+
+test('bay_tags: ?open=N renders that bay open, ?warn= shows as a notice beside an ok flash', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const a = seedLot(sqlite, { zone: 'Z10', cultivar: 'Puff Pastries' });
+  const b = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, a, 3, { minutesAgo: 8 * 1440, bins: 72 });
+  seedLoad(sqlite, b, 4, { minutesAgo: 6 * 1440, bins: 480 });
+  const html = await (await handleHarvestD1(new Request(
+    `${API}?action=bay_tags&lang=en&open=4&ok=1&flash=${encodeURIComponent('Cream Cake added to bay 4')}&warn=${encodeURIComponent('no variant')}`), env, ctx)).text();
+  assert.match(html, /<details class="baydrawer[^"]*" data-bay="4" data-fill="[^"]*" open>/, 'bay 4 open');
+  assert.match(html, /<details class="baydrawer[^"]*" data-bay="3" data-fill="[^"]*">/, 'bay 3 still closed');
+  assert.match(html, /class="flash">✅ Cream Cake added to bay 4/);
+  assert.match(html, /class="notice">⚠️ no variant/);
+  // The add sheet's success redirect carries all three, so a clean add is never silent.
+  assert.match(html, /ok=1&open=/, 'client redirect carries ok and open');
+  assert.match(html, /addedOk/);
+});
