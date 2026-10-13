@@ -1,3 +1,5 @@
+import { IFRAME_PRINT_UNRELIABLE_SRC } from '../lib/print-client.js';
+
 /** Shared working-screen theme. Print sheets and sack labels keep their geometry. */
 export const HARVEST_UI_STYLE = `
 [hidden]{display:none!important}
@@ -166,4 +168,148 @@ export const OFFICE_UI_STYLE = `
 .split>*{min-width:0}svg{max-width:100%}.rack.vacant,.bay.empty{opacity:1;background:var(--bg)}.rack.vacant .bn{color:var(--muted)}.k-tag{background:#f4e7c8;color:#76561d}.testpill{background:#f4e7c8;color:#76561d;border-color:#c6a964}details>summary{cursor:pointer;font-weight:700;padding:18px 0}details>summary:focus-visible{outline:3px solid #997223}
 body{font-family:Karla,system-ui,sans-serif}.wrap{padding-top:24px}h1{font-size:36px;letter-spacing:-.04em}.card{border-radius:15px}.tile{border-radius:12px}.tile .k{font-size:12px}.card>.lede{font-size:15px}.card>.caveat{font-size:14px}.axis{font-size:12px}.barlbl,.barval{font-size:12px}button{min-height:48px;background:#304e3c;color:#fff}button.ghost{color:#304e3c}.tile.alarm{background:#f7e6dc;border-color:#d9af98}.demobar{background:#f5e8c5;border-color:#d7bf7d;color:#71511b}#gate{background:white;padding:28px;border-radius:16px}.office-home{display:inline-flex;padding:12px 18px;color:#304e3c;text-decoration:none;border:1px solid #c5d0ba;border-radius:24px;margin-bottom:20px;font-weight:600}
 @media(max-width:600px){.racks,.bays{grid-template-columns:repeat(2,minmax(0,1fr))}.racks.market{grid-template-columns:1fr}.rack .n{flex-wrap:wrap}.rack li{flex-wrap:wrap}.rack .st{font-size:12px}.rack li,.bay .l{font-size:13px}.card{overflow-x:auto}h1{font-size:28px}.wrap{padding:20px 16px}.card{padding:20px 16px}.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.row{flex-wrap:wrap}}
+`;
+
+/**
+ * The print flow both tag screens share (sack_session and bay_tags), injected
+ * as <script>${HARVEST_PRINT_CLIENT}</script> by each body that prints, so
+ * there is one copy of the iframe / named-tab / agent decision instead of two
+ * that drift. Plain ES5 for whatever handset the crew carries; defines window.RO.
+ *
+ *   RO.allocTags(api, body)          POST sack_alloc → the response, or throws its error
+ *   RO.printIds(api, ids, via, opts) via 'agent' → poll print_check into opts.status;
+ *                                    otherwise load sack_label (iframe on a desktop,
+ *                                    a named tab on a handset, in place in the iOS app)
+ *   RO.reprintTag(api, id, opts)     POST print_reprint, then printIds the way the server says
+ *   RO.voidTag(api, id)              POST sack_void → the response, or throws its error
+ *
+ * opts: { frame (an iframe, or a function returning one; created offscreen when
+ * absent), status (the element agent mode writes into), statusClass (its base
+ * class, default 'hcstat'; ' ok' / ' bad' are added), T (printingOnAgent,
+ * printedOnAgent, printAgentFailed {id} {e}, printAgentSlow) }.
+ *
+ * Authored with string concatenation only: this is a template literal, so a
+ * dollar-brace or a backslash in here would be eaten before the browser sees it.
+ */
+export const HARVEST_PRINT_CLIENT = `
+(function () {
+  var RO = window.RO = window.RO || {};
+  // Who prints is the server's call, per allocation (print_via), never a
+  // page-level flag: a page open for an hour would print the tag twice.
+  // WebKit scopes window.print() to the TOP-LEVEL document, and Android never
+  // prints a 0x0 offscreen iframe, so any handset gets a top-level tab and only
+  // a desktop (the barn PC) keeps the hidden iframe. See lib/print-client.js.
+  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
+  var topLevelPrint = iframePrintUnreliable(
+    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+  var ownFrame = null;
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (r) { return r.json(); });
+  }
+  function ok(fallback) {
+    return function (d) {
+      if (!d || !d.success) throw new Error((d && d.error) || fallback);
+      return d;
+    };
+  }
+  function frameFor(opts) {
+    if (typeof opts.frame === 'function') return opts.frame();
+    if (opts.frame) return opts.frame;
+    if (!ownFrame) {
+      ownFrame = document.createElement('iframe');
+      ownFrame.title = 'print';
+      ownFrame.setAttribute('style', 'position:absolute;width:0;height:0;border:0;left:-9999px');
+      document.body.appendChild(ownFrame);
+    }
+    return ownFrame;
+  }
+
+  RO.allocTags = function (api, body) {
+    return postJson(api + '?action=sack_alloc', body).then(ok('Print failed'));
+  };
+
+  RO.printIds = function (api, ids, via, opts) {
+    opts = opts || {};
+    if (via === 'agent') { watchPrint(api, ids, opts); return; }  // the barn PC prints it
+    var url = api + '?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
+    if (window.navigator.standalone === true) {
+      // An iOS home-screen app (Koa, 2026-09-25) has no tabs: window.open fails
+      // or strands the crew. Go to the label page in place; it offers
+      // history.back() to return for the next bag.
+      window.location.href = url + '&back=1';
+      return;
+    }
+    if (topLevelPrint) {
+      // A separate tab so window.print() runs at top level. NAMED, not _blank:
+      // every tag reuses the one tab, and popup=1 has the label page close
+      // itself when printing is done (Koa, 2026-09-21).
+      var w = window.open(url + '&popup=1', 'rf_tag_print');
+      // Blocked anyway: navigate rather than silently printing nothing.
+      if (!w) window.location.href = url;
+      return;
+    }
+    frameFor(opts).src = url;
+  };
+
+  // In agent mode the crew no longer watches a tag appear, so the screen has to
+  // say whether one did. Queued is NOT printed: the serial is already spent, so
+  // a tick on the strength of an enqueue would hide the failure the ack is for.
+  function watchPrint(api, ids, opts) {
+    var T = opts.T || {};
+    var el = opts.status;
+    var base = opts.statusClass || 'hcstat';
+    function say(cls, text) {
+      if (!el) return;
+      el.hidden = false;
+      el.className = base + (cls ? ' ' + cls : '');
+      el.textContent = text;
+    }
+    var tries = 0;
+    say('', T.printingOnAgent || '');
+    (function poll() {
+      tries += 1;
+      postJson(api + '?action=print_check', { ids: ids })
+        .then(function (d) {
+          var st = (d && d.status) || {};
+          var states = ids.map(function (id) { return (st[id] || {}).status; });
+          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
+          if (failed.length) {
+            say('bad', String(T.printAgentFailed || '')
+              .replace('{id}', failed[0])
+              .replace('{e}', (st[failed[0]] || {}).error || ''));
+            return;
+          }
+          if (states.every(function (x) { return x === 'done'; })) {
+            say('ok', T.printedOnAgent || '');
+            return;
+          }
+          // ~30s: long enough for a rack of tags, short enough that a stopped
+          // agent is noticed while the crew is still at the printer.
+          if (tries < 40) return setTimeout(poll, 750);
+          say('bad', T.printAgentSlow || '');
+        })
+        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
+    })();
+  }
+
+  // A jam is the most time-critical recovery there is. ALWAYS ask the server
+  // which way to print: the page may not have allocated anything, and guessing
+  // 'browser' is the path WebKit breaks.
+  RO.reprintTag = function (api, id, opts) {
+    return postJson(api + '?action=print_reprint', { sack_id: id })
+      .then(ok('Reprint failed'))
+      .then(function (d) {
+        RO.printIds(api, [id], d.print_via === 'agent' ? 'agent' : 'browser', opts);
+        return d;
+      });
+  };
+
+  RO.voidTag = function (api, id) {
+    return postJson(api + '?action=sack_void', { sack_id: id }).then(ok('Void failed'));
+  };
+})();
 `;
