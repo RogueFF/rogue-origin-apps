@@ -133,6 +133,27 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .crewcard-n{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:14px;color:#40543f;font-size:16px}
 .harvest-screen .crewcard-n strong{font-size:22px;color:#263f32}
 .harvest-screen .crewcard a.mini{display:inline-flex;align-items:center;min-height:48px;padding:10px 16px;border-radius:9px;background:#fff;border:1px solid #c0cfb5;color:#304e3c;font-weight:700;text-decoration:none}
+/* Tags by bay (bay_tags): bays as drawers, a PRINT per cultivar. Scoped to its own classes. */
+.harvest-screen .baydrawer{background:#fff;border:1px solid #d9dfd1;border-radius:14px;margin:12px 0;padding:0 14px}
+.harvest-screen .baydrawer>summary{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-height:64px;padding:10px 0;list-style:none;cursor:pointer}
+.harvest-screen .baydrawer>summary::-webkit-details-marker{display:none}
+.harvest-screen .baydrawer>summary .baybig{font-size:30px;margin:0;padding:2px 12px;border-radius:9px}
+.harvest-screen .baydrawer>summary .lotmeta{flex:1 1 auto;font-size:15px}
+.harvest-screen .baydrawer[open]>summary{border-bottom:1px solid #e3e8dc;margin-bottom:10px}
+.harvest-screen .baydrawer.finished{background:#f3f5ef;opacity:.75}
+.harvest-screen .storagechip{margin-left:auto;padding:6px 12px;border-radius:20px;background:#edf1e4;border:1px solid #c0cfb5;color:#304e3c;font-size:14px;font-weight:700;white-space:nowrap}
+.harvest-screen .lasttag{font-size:15px;color:#40543f;margin:4px 0 10px;overflow-wrap:anywhere}
+.harvest-screen .cvrow{display:flex;flex-direction:column;gap:8px;padding:12px;margin:10px 0;border:1px solid #d9dfd1;border-radius:12px;background:#fbfcf8}
+.harvest-screen .cvname{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 0;color:#263f32;font:inherit;cursor:pointer;min-height:44px}
+.harvest-screen .cvname>b{display:block;font-size:20px}
+.harvest-screen .cvname .zonemix{margin-top:4px}
+.harvest-screen .printbtn{width:100%;min-height:72px;font-size:22px;background:#edc76b;color:#263f32;border-color:#d9b259;overflow-wrap:anywhere}
+.harvest-screen .printbtn:hover{background:#e3bb57}
+.harvest-screen .cvdrawer{display:flex;flex-direction:column;gap:8px;padding-top:6px}
+.harvest-screen .cvdrawer .batchrow{display:flex;gap:8px}.harvest-screen .cvdrawer .batchrow input{max-width:110px}
+.harvest-screen .noloads{display:block;font-size:13px;color:#7a6a3c;font-style:italic}
+.harvest-screen .addcv{width:100%;margin:6px 0}
+.harvest-screen .baydrawer .finishlot{margin:6px 0 14px}.harvest-screen .baydrawer .finishlot button{width:100%}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
 @media(min-width:900px){.harvest-screen:has(#intakeForm),.harvest-screen:has(.crew-stepper),.harvest-screen:has(.grid),.harvest-screen:has(#printBtn){max-width:800px}}
 @media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:13px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 12px;font-size:14px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}
