@@ -168,6 +168,11 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen dialog::backdrop{background:rgba(38,63,50,.45)}
 .harvest-screen dialog h2{margin-top:0}
 .harvest-screen dialog .batchrow{display:flex;gap:8px;margin-top:14px}.harvest-screen dialog .batchrow button{flex:1}
+.harvest-screen .cvlist{max-height:40vh;overflow-y:auto;margin:8px 0 4px;border:1px solid #d9dfd1;border-radius:10px}
+.harvest-screen .cvlist .cvpick{display:block;width:100%;text-align:left;min-height:52px;padding:12px 14px;font-size:17px;font-weight:600;background:#fff;color:#263f32;border:0;border-bottom:1px solid #edf1e5;cursor:pointer}
+.harvest-screen .cvlist .cvpick:last-child{border-bottom:0}
+.harvest-screen .cvlist .cvpick.sel{background:#304e3c;color:#fff}
+.harvest-screen .cvlist .hint{padding:12px 14px}
 .harvest-screen #addZones .zpick{min-height:48px;padding:10px 18px;margin:10px 8px 0 0;font-size:18px;font-weight:700;border-radius:10px;cursor:pointer}
 .harvest-screen #addZones .zpick.sel{background:#304e3c;color:#fff;border-color:#304e3c}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
