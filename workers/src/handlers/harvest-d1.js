@@ -363,9 +363,14 @@ export async function handleHarvestD1(request, env, ctx) {
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
-        case 'bay_tags':
-          // ?flash= carries lot_add's variant warning across the reload.
-          return await handleBayTags(ui, db, env, null, params.flash ? String(params.flash).substring(0, 300) : null);
+        case 'bay_tags': {
+          // ?flash= carries lot_add's variant warning (⚠️) or, with ok=1, a
+          // finish's result (✅) across the redirect.
+          const flash = params.flash ? String(params.flash).substring(0, 300) : null;
+          return String(params.ok || '') === '1'
+            ? await handleBayTags(ui, db, env, flash, null)
+            : await handleBayTags(ui, db, env, null, flash);
+        }
         case 'pipeline':
           return await handlePipeline(ui, db, env);
         case 'sack_session_start':
@@ -2167,24 +2172,51 @@ function zoneMix(c) {
  * on a lot, it touches no sack, no storage and no Shopify count.
  */
 async function handleBayFinish(ui, db, env, ctx, body) {
-  // Pressed on the tags-by-bay screen: land back there, not on the old picker.
+  // Pressed on the tags-by-bay screen: land back there with a 303, so a
+  // refresh re-GETs the screen instead of re-POSTing the finish. ok=1 shows
+  // the flash as a ✅; without it, as a ⚠️ notice.
   const fromBayTags = String(body.back || '') === 'bay_tags';
-  const backTo = (flash) => fromBayTags ? handleBayTags(ui, db, env, flash) : handleSackPrintForm(ui, db, env, flash);
-  // "Whole bay down": every cultivar card in the bay's current fill, in one
-  // tap, so a 17-cultivar retail bay is not 17 taps (Koa, 2026-10-12). Each
-  // card takes the same single-card path as its own "Bay N is down".
+  const backTo = (flash, ok = true) => (fromBayTags
+    ? new Response(null, { status: 303, headers: { Location:
+      `${API}?action=bay_tags&lang=${ui.lang}${ok ? '&ok=1' : ''}&flash=${encodeURIComponent(flash)}` } })
+    : handleSackPrintForm(ui, db, env, flash));
+  // "Whole bay down" (or reopen it): every cultivar card in the bay's current
+  // fill, in one tap, so a 17-cultivar retail bay is not 17 taps (Koa,
+  // 2026-10-12). Each card takes the single-card path, quietly and on one
+  // takedown read; Telegram gets one message for the bay.
   if (String(body.all ?? '') === '1') {
     const bayAll = parseBay(body.bay, ui);
     if (!bayAll) throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+    const reopenAll = String(body.reopen ?? '') === '1';
     const isTest = isTestMode(env) ? 1 : 0;
     const lots = await getRecentLots(db, isTest);
     await attachDryingBays(db, isTest, lots);
     const info = await getBayTakedown(db, isTest, lots);
-    const cards = info.active.filter(c => c.bay === bayAll);
-    for (const c of cards) {
-      await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1, fillStart: c.fillStart, reopen: false });
+    let cards;
+    if (reopenAll) {
+      const fills = info.fills.get(bayAll) || [];
+      const current = fills[fills.length - 1];
+      const fillStart = current ? sqliteUtc(new Date(current.startMs)) : null;
+      cards = info.finished.filter(c => c.bay === bayAll && c.fillStart === fillStart);
+    } else {
+      cards = info.active.filter(c => c.bay === bayAll);
     }
-    return backTo(ui.t(cards.length === 1 ? 'bayAllDownOne' : 'bayAllDown', { bay: bayAll, n: cards.length }));
+    if (!cards.length) return backTo(ui.t('bayNothingToFinish', { bay: bayAll }), false);
+    for (const c of cards) {
+      await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1,
+        fillStart: c.fillStart, reopen: reopenAll, quiet: true, takedown: info });
+    }
+    const n = cards.length;
+    const names = cards.map(c => c.cultivar).join(', ');
+    const sacks = cards.reduce((sum, c) => sum + (c.sacks || 0), 0);
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopenAll
+        ? `↩️ Bay ${bayAll} reopened — ${n} cultivar${n === 1 ? '' : 's'}: ${names}.`
+        : `✅ Bay ${bayAll} down — ${n} cultivar${n === 1 ? '' : 's'} finished: ${names} (${sacks} sack${sacks === 1 ? '' : 's'}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    if (reopenAll) return backTo(ui.t('bayAllReopened', { bay: bayAll, n }));
+    return backTo(ui.t(n === 1 ? 'bayAllDownOne' : 'bayAllDown', { bay: bayAll, n }));
   }
 
   const bay = parseBay(body.bay, ui);
@@ -2197,10 +2229,9 @@ async function handleBayFinish(ui, db, env, ctx, body) {
   const reopen = String(body.reopen ?? '') === '1';
   const card = await finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen });
   const sacks = card ? card.sacks : 0;
-  if (reopen && card) {
-    return new Response(null, { status: 303, headers: { Location: fromBayTags
-      ? `${API}?action=bay_tags&lang=${ui.lang}`
-      : `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  if (reopen && card && !fromBayTags) {
+    return new Response(null, { status: 303, headers: { Location:
+      `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
   }
   return backTo(ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
 }
@@ -2209,16 +2240,29 @@ async function handleBayFinish(ui, db, env, ctx, body) {
  * The work behind one bay card's "is down" (or reopen): record it in
  * harvest_bay_done, close (or reopen) the lots it held, tell Telegram.
  * Returns the card as it was found, or undefined.
+ *
+ * `takedown`: a getBayTakedown result already read for this request (whole
+ * bay). It is reused instead of re-read per card, its doneByKey kept in step
+ * with the row written here so lotAllBaysDown sees this card down.
+ * `quiet`: no per-card Telegram message; the caller sends one for the bay.
  */
-async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen }) {
+async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen, quiet = false, takedown = null }) {
   const isTest = isTestMode(env) ? 1 : 0;
   await execute(db, reopen
     ? `DELETE FROM harvest_bay_done WHERE bay = ? AND cultivar = ? AND cut_number = ? AND fill_start = ? AND is_test = ?`
     : `INSERT OR IGNORE INTO harvest_bay_done (bay, cultivar, cut_number, fill_start, is_test) VALUES (?, ?, ?, ?, ?)`,
     [bay, cultivar, cut, fillStart, isTest]);
 
-  const lots = await getRecentLots(db, isTest);
-  const info = await getBayTakedown(db, isTest, lots);
+  let info = takedown;
+  if (info) {
+    const key = bayKey(bay, cultivar, cut, fillStart);
+    if (reopen) info.doneByKey.delete(key);
+    else if (!info.doneByKey.has(key)) {
+      info.doneByKey.set(key, { bay, cultivar, cut_number: cut, fill_start: fillStart, done_at: sqliteUtc(new Date()) });
+    }
+  } else {
+    info = await getBayTakedown(db, isTest, await getRecentLots(db, isTest));
+  }
   const card = info.cards.find(c => c.bay === bay && c.cultivar === cultivar
     && Number(c.cut) === cut && c.fillStart === fillStart);
   for (const z of (card ? card.zones : [])) {
@@ -2234,12 +2278,14 @@ async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reop
   }
 
   const sacks = card ? card.sacks : 0;
-  ctx.waitUntil(sendTelegramMessage(env, {
-    chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: reopen
-      ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
-      : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
-  }).catch(e => console.error('[harvest][telegram]', e)));
+  if (!quiet) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopen
+        ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
+        : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
   return card;
 }
 
@@ -2743,12 +2789,14 @@ async function getLotTagStats(db, sessionId, isTest) {
  */
 async function getLotTags(db, sessionId, isTest) {
   const rows = await query(db, `
-    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs FROM harvest_sacks
+    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs, bay FROM harvest_sacks
     WHERE zone_session_id = ? AND is_test = ?
     ORDER BY printed_at DESC, serial DESC
   `, [sessionId, isTest]);
   return rows.map(r => ({
     id: r.sack_id,
+    // The bay screen picks a row's last tag by bay (a lot can hang in two).
+    bay: r.bay ?? null,
     at: r.printed_at ? parseSqliteUtc(r.printed_at).toISOString() : null,
     voided: !!r.voided_at,
     opened: !!r.opened_at,
@@ -7160,7 +7208,7 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
       <details class="nextnote"><summary>${ui.t('fillNext')}</summary><div class="fillrow"><input class="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1" placeholder="${fullSackLbs(c.primary.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div></details>
       <div class="lastActions"><a class="mini reprint" href="#">${ui.t('reprint')}</a> <a class="mini danger voidrow" href="#">${ui.t('void')}</a> <a class="mini" href="${allTags}">${ui.t('allTags')}</a></div>
       <details class="batch"><summary>${ui.t('printSeveral')}</summary><p class="note">${ui.t('printSeveralHelp')}</p><div class="batchrow"><input class="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5"><button class="btn batchbtn" type="button"${done ? ' disabled' : ''}>${ui.t('printBatch')}</button></div></details>
-      ${c.doneAt ? (g.finished ? '' : finishForm(c, true)) : finishForm(c, false)}
+      ${finishForm(c, !!c.doneAt)}
     </div>
   </div>`;
   };
@@ -7172,7 +7220,11 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
     const lastTag = g.lastTag
       ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}" data-cultivar="${escapeHtml(g.lastTag.cultivar)}"${todayIds.has(g.lastTag.sack_id) ? ' data-today="1"' : ''}>${ui.t('void')}</a>`
       : ui.t('noTagsYet');
-    const foot = g.finished ? finishForm(g.rows[0], true) : `
+    const foot = g.finished ? `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1"><input type="hidden" name="reopen" value="1">${back}
+    <button class="btn alt" type="submit">${ui.t('reopenWholeBay', { bay: g.bay })}</button>
+  </form>` : `
   <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot" data-confirm="${escapeHtml(ui.t('wholeBayConfirm', { bay: g.bay }))}">
     <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">${back}
     <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
@@ -7316,7 +7368,10 @@ ${groups.map(drawer).join('')}
 
   // ── PRINT and batch ──
   function print(row, qty, btn) {
-    if (btn.disabled) return;   // double-tap guard: two serials, one sack
+    // Double-tap guard, per ROW: PRINT and the batch button share it, so a
+    // PRINT then a quick batch on the same cultivar cannot both allocate.
+    if (btn.disabled || row.getAttribute('data-busy') === '1') return;
+    row.setAttribute('data-busy', '1');
     var bay = Number(row.getAttribute('data-bay'));
     var cultivar = row.getAttribute('data-cultivar');
     var noteEl = row.querySelector('.noteText');
@@ -7350,12 +7405,13 @@ ${groups.map(drawer).join('')}
             : fmt(T.printedOk, 'id', ids[0] || last));
         }
         RO.printIds(API, ids, d.print_via, printOpts);
-        setTimeout(function () { btn.disabled = false; btn.innerHTML = label; }, 1500);
+        setTimeout(function () { btn.disabled = false; btn.innerHTML = label; row.removeAttribute('data-busy'); }, 1500);
       })
       .catch(function (e) {
         say(fmt(T.printFailed, 'e', e.message), true);
         btn.disabled = false;
         btn.innerHTML = label;
+        row.removeAttribute('data-busy');
       });
   }
 
@@ -7368,22 +7424,46 @@ ${groups.map(drawer).join('')}
     });
     return hit || byName;
   }
+  function pacificDayOf(iso) {
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); } catch (e) { return ''; }
+  }
+  // The row's newest live tag after a void, from sack_void's d.tags (the
+  // lot's tags, newest first): same bay, printed in this fill. Not
+  // d.last_sack_id: that is the lot's newest in ANY bay, and a lot hanging in
+  // two bays would point this row's Void and Reprint at the other bay's bag.
+  function newestInRow(row, tags) {
+    var bay = Number(row.getAttribute('data-bay'));
+    var fill = Date.parse(String(row.getAttribute('data-fill') || '').replace(' ', 'T') + 'Z');
+    for (var i = 0; i < (tags || []).length; i++) {
+      var t = tags[i];
+      if (t.voided || Number(t.bay) !== bay) continue;
+      if (!isNaN(fill) && !(Date.parse(t.at) > fill)) continue;
+      return t;
+    }
+    return null;
+  }
   function voidId(drawer, id, cultivar, today) {
     if (!id || !confirm(fmt(T.voidConfirm, 'id', id))) return;
     RO.voidTag(API, id)
-      .then(function () {
+      .then(function (d) {
         var row = rowFor(drawer, id, cultivar);
+        var next = row ? newestInRow(row, d && d.tags) : null;
+        var nextToday = !!(next && pacificDayOf(next.at) === TODAY);
         if (row) {
           bump(row.querySelector('.sackn'), -1, T.sackOne, T.sacksN);
           if (row.getAttribute('data-last') === id) {
-            row.setAttribute('data-last', '');
-            row.removeAttribute('data-lasttoday');
+            row.setAttribute('data-last', next ? next.id : '');
+            if (nextToday) row.setAttribute('data-lasttoday', '1'); else row.removeAttribute('data-lasttoday');
           }
         }
         if (today) bump(drawer.querySelector('.sackstoday'), -1, T.sackTodayOne, T.sacksToday);
-        // Only when the header was showing this tag: another cultivar's last tag stays.
+        // Only when the header was showing this tag: another cultivar's last
+        // tag stays. It falls back to this row's new last, "no tags yet" only
+        // when the row has none left.
         var head = drawer.querySelector('.voidlast');
-        if (head && head.getAttribute('data-id') === id) setLastTag(drawer, null);
+        if (head && head.getAttribute('data-id') === id) {
+          setLastTag(drawer, next ? next.id : null, row ? row.getAttribute('data-cultivar') : '', nextToday);
+        }
         say('# ' + id + ' · ' + T.tagVoided);
       })
       .catch(function (e) { say(fmt(T.voidFailed, 'e', e.message), true); });

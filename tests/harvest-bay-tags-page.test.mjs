@@ -71,12 +71,17 @@ test('bay_tags: a hand-added lot shows "no loads scanned"; a finished bay sorts 
   assert.deepEqual(drawerBays(html), ['1', '3'], 'active bay 1 before finished bay 3');
   assert.match(html, /no loads scanned/);
   assert.match(html, /name="reopen" value="1"/);
+  assert.match(html, /name="all" value="1"><input type="hidden" name="reopen" value="1">/, 'whole-bay reopen form');
+  assert.match(html, />Reopen whole bay 3</);
   // A finished bay offers no PRINT.
   const bay3 = html.slice(html.indexOf('<details class="baydrawer finished" data-bay="3"'));
   const end = bay3.indexOf('<dialog');
   const drawer = bay3.slice(0, end > -1 ? end : undefined);
   assert.match(drawer, /class="bigbtn printbtn" type="button" disabled/);
-  assert.doesNotMatch(drawer, /name="all" value="1"/, 'no Whole bay down on a finished bay');
+  assert.doesNotMatch(drawer, /Whole bay 3 down/, 'no Whole bay down on a finished bay');
+  // Each finished row keeps its own Reopen inside the drawer.
+  const row = drawer.slice(drawer.indexOf('class="cvdrawer"'), drawer.indexOf('class="btn alt addcv"'));
+  assert.match(row, /name="cultivar" value="Puff Pastries">[\s\S]*?name="reopen" value="1">/);
 });
 
 test('bay_tags shows the Spanish strings with lang=es', async (t) => {
@@ -98,18 +103,29 @@ test('bay_tags: Whole bay down with back=bay_tags returns to the bay screen', as
   const forms = html.match(/<form method="POST" action="[^"]*bay_finish[\s\S]*?<\/form>/g) || [];
   assert.ok(forms.length >= 3, 'per-cultivar and whole-bay forms');
   assert.ok(forms.every(f => f.includes('name="back" value="bay_tags"')), 'every finish form comes back here');
+  // A finish redirects (303) so a refresh cannot re-POST it; the flash rides along.
+  const follow = async (res) => {
+    assert.equal(res.status, 303);
+    const loc = res.headers.get('Location');
+    assert.match(loc, /action=bay_tags&lang=en/);
+    return { loc, html: await (await handleHarvestD1(new Request(new URL(loc, 'https://x')), env, ctx)).text() };
+  };
   const res = await postForm(env, ctx, 'bay_finish', { bay: '3', all: '1', back: 'bay_tags' });
-  assert.equal(res.status, 200);
-  const after = await res.text();
+  const { loc, html: after } = await follow(res);
+  assert.match(loc, /flash=Bay%203%20down/);
   assert.match(after, /<h1>Tags by bay<\/h1>/);
-  assert.match(after, /Bay 3 down — 2 cultivars finished/);
+  assert.match(after, /<div class="flash">✅ Bay 3 down — 2 cultivars finished\.<\/div>/);
   // One cultivar's Finished also comes back here.
   const c = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
   seedLoad(sqlite, c, 4, { minutesAgo: 5 * 1440, bins: 48 });
   const fill = (await (await page(env, ctx)).text()).match(/data-bay="4" data-fill="([^"]+)"/)[1];
   const one = await postForm(env, ctx, 'bay_finish', { bay: '4', cultivar: 'Sour Lifter', cut: '1', fill_start: fill, back: 'bay_tags' });
-  assert.equal(one.status, 200);
-  assert.match(await one.text(), /<h1>Tags by bay<\/h1>/);
+  const oneAfter = (await follow(one)).html;
+  assert.match(oneAfter, /<h1>Tags by bay<\/h1>/);
+  assert.match(oneAfter, /✅ Bay 4 \(Sour Lifter\) marked finished/);
+  // Nothing open: a warning, not a ✅.
+  const none = await follow(await postForm(env, ctx, 'bay_finish', { bay: '9', all: '1', back: 'bay_tags' }));
+  assert.match(none.html, /<div class="notice">⚠️ Bay 9: nothing open to finish\.<\/div>/);
   // Reopen from here redirects back here, not to the session screen.
   const re = await postForm(env, ctx, 'bay_finish', { bay: '4', cultivar: 'Sour Lifter', cut: '1', fill_start: fill, reopen: '1', back: 'bay_tags' });
   assert.equal(re.status, 303);
@@ -175,4 +191,19 @@ test('bay_tags: a batch has its own plural message in both languages', async (t)
   assert.ok(en.includes('"printedOkN":"✓ {n} tags printed ({first}–{last})"'));
   const es = await (await page(env, ctx, 'es')).text();
   assert.ok(es.includes('"printedOkN":"✓ {n} etiquetas impresas ({first}–{last})"'));
+});
+
+test('sack_void answers each tag with its bay, so the bay screen can pick the row’s new last tag', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const a = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, a, 5, { minutesAgo: 5 * 1440, bins: 24 });
+  seedLoad(sqlite, a, 6, { minutesAgo: 5 * 1440, bins: 24 });
+  await post(env, ctx, 'sack_alloc', { session_id: a, cultivar: 'Sour Lifter', qty: 1, bay: 5 });
+  const b = await (await post(env, ctx, 'sack_alloc', { session_id: a, cultivar: 'Sour Lifter', qty: 1, bay: 6 })).json();
+  const v = await (await post(env, ctx, 'sack_void', { sack_id: b.ids[0] })).json();
+  assert.ok(v.tags.length >= 2);
+  assert.deepEqual(v.tags.map(x => x.bay).sort(), [5, 6]);
+  const html = await (await page(env, ctx)).text();
+  assert.match(html, /function newestInRow\(/, 'the void picks the row’s new last from d.tags by bay and fill');
 });
