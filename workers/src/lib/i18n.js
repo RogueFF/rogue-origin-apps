@@ -254,6 +254,11 @@ const S = {
     lotFinishedNotice: 'Este lote se marcó terminado el {date}. Reábrelo para imprimir más etiquetas.',
     noOpenLots: 'Todos los lotes de los últimos {n} días están terminados. Escanea una zona, o reabre un lote abajo.',
     variantMissing: 'Las etiquetas se imprimen, pero el conteo de Super Sacks en Shopify <strong>no va a cambiar</strong>. Avísale a Koa: {e}',
+    addBayBad: 'Escoge la bahía primero.',
+    addNotMcloughlin: '{c} no está sembrado en McLoughlin. Lo demás ya entra por el letrero de zona y la puerta del granero.',
+    addPickZone: '{c} está en dos zonas de McLoughlin — escoge una.',
+    addZoneWrong: '{c} no está sembrado en {z}.',
+    addNoCode: '{c} no tiene código de etiqueta todavía (tabla cultivars). Pídeselo a Koa antes de imprimir.',
 
     // — sack detail —
     sack: 'Bolsa',
@@ -604,6 +609,11 @@ const S = {
     lotFinishedNotice: 'This lot was marked finished on {date}. Reopen it to print more tags.',
     noOpenLots: 'Every lot from the last {n} days is marked finished. Scan a zone QR, or reopen a lot below.',
     variantMissing: 'Tags will print, but the Shopify Super Sack count <strong>will not move</strong>. Tell Koa: {e}',
+    addBayBad: 'Pick the bay first.',
+    addNotMcloughlin: '{c} is not planted at McLoughlin. Everything else is entered at the zone sign and the barn door.',
+    addPickZone: '{c} is in two McLoughlin zones — pick one.',
+    addZoneWrong: '{c} is not planted in {z}.',
+    addNoCode: '{c} has no tag code yet (cultivars table). Ask Koa before printing.',
 
     sack: 'Sack',
     zoneCut: 'Zone <strong>{zone}</strong> · Cut {n}',
