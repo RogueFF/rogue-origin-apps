@@ -246,6 +246,9 @@ const S = {
     bayFinishedNotice: 'La bahía {bay} se marcó terminada el {date}. Reábrela para imprimir más etiquetas.',
     bayAllDown: 'Bahía {bay} abajo — {n} variedades terminadas.',
     bayAllDownOne: 'Bahía {bay} abajo — 1 variedad terminada.',
+    bayNothingToFinish: 'Bahía {bay}: no hay nada abierto que terminar.',
+    bayAllReopened: 'Bahía {bay} reabierta — {n} variedades.',
+    reopenWholeBay: 'Reabrir toda la bahía {bay}',
     // Tags by bay (bay_tags).
     bayTagsTitle: 'Etiquetas por bahía',
     bayTagsIntro: 'Abre la bahía que está bajando. Cada variedad que cuelga ahí tiene su propio IMPRIMIR.',
@@ -619,6 +622,9 @@ const S = {
     bayFinishedNotice: 'Bay {bay} was marked finished on {date}. Reopen it to print more tags.',
     bayAllDown: 'Bay {bay} down — {n} cultivars finished.',
     bayAllDownOne: 'Bay {bay} down — 1 cultivar finished.',
+    bayNothingToFinish: 'Bay {bay}: nothing open to finish.',
+    bayAllReopened: 'Bay {bay} reopened — {n} cultivars.',
+    reopenWholeBay: 'Reopen whole bay {bay}',
     // Tags by bay (bay_tags).
     bayTagsTitle: 'Tags by bay',
     bayTagsIntro: 'Open the bay that is coming down. Every cultivar hanging in it has its own PRINT.',

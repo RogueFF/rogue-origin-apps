@@ -52,7 +52,7 @@ test('bay_finish all=1 leaves other bays and already-finished cards alone', asyn
   await post(env, ctx, { bay: '3', all: '1' });
   const again = await post(env, ctx, { bay: '3', all: '1' });   // second press is a no-op, not an error
   assert.equal(again.status, 200);
-  assert.match(again.html, /Bay 3 down — 0 cultivars finished/);
+  assert.match(again.html, /Bay 3: nothing open to finish\./);
   assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_bay_done`).get().n, 1);
   assert.equal(sqlite.prepare(`SELECT takedown_done_at FROM harvest_scan_log WHERE id = ?`).get(c).takedown_done_at, null);
 });
@@ -64,4 +64,73 @@ test('bay_finish all=1 without a bay is a validation error', async (t) => {
   assert.equal(res.status, 400);
   assert.match(res.html, /Pick which lot is coming down/);
   assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_bay_done`).get().n, 0);
+});
+
+// Telegram is only attempted with a token and a chat id; count what reaches it.
+function telegramSpy(t, env) {
+  env.TELEGRAM_BOT_TOKEN = 'test-token';
+  env.TELEGRAM_TEST_CHAT_ID = 'test-chat';
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('api.telegram.org')) sent.push(JSON.parse(init.body).text);
+    return new Response('{"ok":true}', { status: 200 });
+  };
+  t.after(() => { globalThis.fetch = realFetch; });
+  const pending = [];
+  const ctx = { waitUntil(p) { pending.push(p); } };
+  return { sent, ctx, settle: () => Promise.all(pending) };
+}
+
+test('bay_finish all=1 sends ONE Telegram message for the whole bay', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env } = freshDb();
+  const { sent, ctx, settle } = telegramSpy(t, env);
+  const a = seedLot(sqlite, { zone: 'Z10', cultivar: 'Puff Pastries' });
+  const b = seedLot(sqlite, { zone: 'R1', cultivar: 'Sauciere' });
+  seedLoad(sqlite, a, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  seedLoad(sqlite, b, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  await post(env, ctx, { bay: '3', all: '1' });
+  await settle();
+  assert.equal(sent.length, 1, 'one message, not one per cultivar');
+  assert.match(sent[0], /Bay 3 down — 2 cultivars finished: .*Puff Pastries.*Sauciere/);
+});
+
+test('bay_finish all=1 with nothing open finishes nothing and says so, no Telegram', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env } = freshDb();
+  const { sent, ctx, settle } = telegramSpy(t, env);
+  const res = await post(env, ctx, { bay: '6', all: '1' });
+  await settle();
+  assert.equal(res.status, 200);
+  assert.match(res.html, /Bay 6: nothing open to finish\./);
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_bay_done`).get().n, 0);
+  assert.equal(sent.length, 0);
+});
+
+test('bay_finish all=1 reopen=1 reopens every finished cultivar in the bay', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env } = freshDb();
+  const { sent, ctx, settle } = telegramSpy(t, env);
+  const a = seedLot(sqlite, { zone: 'Z10', cultivar: 'Puff Pastries' });
+  const b = seedLot(sqlite, { zone: 'R1', cultivar: 'Sauciere' });
+  const c = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, a, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  seedLoad(sqlite, b, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  seedLoad(sqlite, c, 4, { minutesAgo: 5 * 1440, bins: 48 });
+  await post(env, ctx, { bay: '3', all: '1' });
+  await post(env, ctx, { bay: '4', all: '1' });
+  const res = await post(env, ctx, { bay: '3', all: '1', reopen: '1' });
+  await settle();
+  assert.equal(res.status, 200);
+  assert.match(res.html, /Bay 3 reopened — 2 cultivars\./);
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_bay_done WHERE bay = 3`).get().n, 0);
+  const lots = sqlite.prepare(`SELECT takedown_done_at FROM harvest_scan_log WHERE id IN (?, ?)`).all(a, b);
+  assert.ok(lots.every(l => l.takedown_done_at === null), 'both lots open again');
+  // Bay 4 stays down.
+  assert.equal(sqlite.prepare(`SELECT COUNT(*) AS n FROM harvest_bay_done WHERE bay = 4`).get().n, 1);
+  assert.ok(sqlite.prepare(`SELECT takedown_done_at FROM harvest_scan_log WHERE id = ?`).get(c).takedown_done_at);
+  // One message per whole-bay press: down 3, down 4, reopen 3.
+  assert.equal(sent.length, 3);
+  assert.match(sent[2], /Bay 3 reopened — 2 cultivars/);
 });
