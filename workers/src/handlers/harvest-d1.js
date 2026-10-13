@@ -7252,7 +7252,7 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
     printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
     voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
     printedOk: ui.t('printedOk', { id: '{id}' }),
-    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), tagVoided: ui.t('tagVoided'),
+    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), addNoMatch: ui.t('addNoMatch'), tagVoided: ui.t('tagVoided'),
     lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
     sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
     sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
@@ -7278,8 +7278,11 @@ ${groups.map(drawer).join('')}
 <dialog id="addSheet">
   <h2>${ui.t('addSheetTitle')}</h2>
   <label for="addCv">${ui.t('addCvLabel')}</label>
-  <input id="addCv" list="mcl" autocomplete="off">
-  <datalist id="mcl">${mcl.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+  <input id="addCv" type="search" autocomplete="off" autocapitalize="none" enterkeyhint="done">
+  <!-- The matches are buttons on the page, not a native datalist: phones show a
+       datalist's suggestions late, oddly or not at all (iOS Safari), and the
+       crew member typing "crit" has to SEE Critical Berries to tap it. -->
+  <div id="addList" class="cvlist" role="listbox"></div>
   <div id="addZones" class="zonemix"></div>
   <p id="addErr" class="hcstat bad" hidden></p>
   <div class="batchrow">
@@ -7494,11 +7497,32 @@ ${groups.map(drawer).join('')}
     for (var i = 0; i < (window.MCL || []).length; i++) if (window.MCL[i].toLowerCase() === v) return window.MCL[i];
     return null;
   }
+  var addList = document.getElementById('addList');
+  // Matches as tappable rows. Empty box = the whole McLoughlin list, so the
+  // sheet works without typing at all; a few letters narrow it.
+  function renderList() {
+    var q = String(addCv.value || '').trim().toLowerCase();
+    var picked = canonical(addCv.value);
+    addList.textContent = '';
+    (window.MCL || []).forEach(function (c) {
+      if (q && c.toLowerCase().indexOf(q) < 0) return;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'cvpick' + (c === picked ? ' sel' : ''); b.textContent = c;
+      b.setAttribute('role', 'option');
+      b.addEventListener('click', function () { addCv.value = c; cvChanged(); addCv.blur(); });
+      addList.appendChild(b);
+    });
+    if (!addList.children.length) {
+      var none = document.createElement('div'); none.className = 'hint'; none.textContent = T.addNoMatch;
+      addList.appendChild(none);
+    }
+  }
   function cvChanged() {
     var name = canonical(addCv.value);
     var zones = name && window.MCLZ ? window.MCLZ[name] : null;
     if (zones && zones.length === 2) { if (addZones.children.length !== 2) renderZones(zones); }
     else renderZones([]);
+    renderList();
   }
   addCv.addEventListener('input', cvChanged);
   addCv.addEventListener('change', cvChanged);
@@ -7581,6 +7605,7 @@ ${groups.map(drawer).join('')}
       addBay = Number(a.getAttribute('data-bay'));
       addCv.value = '';
       renderZones([]);
+      renderList();
       addErr.hidden = true;
       addSave.disabled = false;
       openModal(add);
