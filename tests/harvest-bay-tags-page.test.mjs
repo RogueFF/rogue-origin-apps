@@ -52,6 +52,8 @@ test('bay_tags renders one drawer per bay with a PRINT button per cultivar', asy
   assert.equal((html.match(/class="btn alt addcv"/g) || []).length, 2);
   assert.equal((html.match(/name="all" value="1"/g) || []).length, 2);
   assert.match(html, /"Critical Berries"/, 'McLoughlin list rides the page for the add sheet');
+  assert.match(html, /id="addList"/, 'matches are tappable rows on the page');
+  assert.doesNotMatch(html, /<datalist/, 'no native datalist: phones show it late or not at all');
   assert.match(html, /"Angel Cake":\["MZ1","MZ2"\]/);
   // Per-cultivar Finished form carries what bay_finish needs.
   assert.match(html, /name="fill_start" value="\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"/);
