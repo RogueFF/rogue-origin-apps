@@ -2,12 +2,17 @@
  * Canonical zone identifiers shared across handlers that log per-zone
  * events (irrigation, harvest, ...). Single-sourced here so every handler
  * validates against the same set — see wiki/farm/fields.md.
- * Z1–Z21 + retail R1 + greenhouses GH1/GH2.
+ * Z1–Z21 + retail R1 + greenhouses GH1/GH2 at the Egg Farm, plus McLoughlin
+ * MZ1–MZ4.
  */
+
+/** McLoughlin (14010 Hwy 62) is numbered on its own: MZ1–MZ4. Kept to 3 chars, the tag's date line clips. */
+export const MCLOUGHLIN_ZONES = ['MZ1', 'MZ2', 'MZ3', 'MZ4'];
 
 export const VALID_ZONES = new Set([
   ...Array.from({ length: 21 }, (_, i) => `Z${i + 1}`),
   'R1', 'GH1', 'GH2',
+  ...MCLOUGHLIN_ZONES,
 ]);
 
 /**
