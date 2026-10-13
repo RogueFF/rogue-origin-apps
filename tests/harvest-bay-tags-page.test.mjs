@@ -41,9 +41,13 @@ test('bay_tags renders one drawer per bay with a PRINT button per cultivar', asy
   assert.equal(res.status, 200);
   const html = await res.text();
   assert.deepEqual(drawerBays(html), ['3', '4']);
-  assert.ok(html.indexOf('PRINT · Rainbow Cake') > -1, 'a PRINT per cultivar');
-  assert.ok(html.indexOf('PRINT · Rainbow Cake') < html.indexOf('PRINT · Puff Pastries'), 'rows by bins');
-  assert.ok(html.includes('PRINT · Sour Lifter'));
+  // PRINT sits beside the name and still carries the strain on a second line.
+  const btn = (cv) => html.indexOf(`<span class="printword">PRINT</span><span class="printcv">${cv}</span>`);
+  assert.ok(btn('Rainbow Cake') > -1, 'a PRINT per cultivar, the cultivar inside .printcv');
+  assert.ok(btn('Rainbow Cake') < btn('Puff Pastries'), 'rows by bins');
+  assert.ok(btn('Sour Lifter') > -1);
+  assert.match(html, /<div class="cvtop">\s*<button class="cvname"[\s\S]*?<\/button>\s*<button class="bigbtn printbtn"/,
+    'name and PRINT share one row; the drawer is a block below it');
   assert.match(html, new RegExp(`data-session="${b}" data-cultivar="Rainbow Cake" data-cut="1" data-bay="3"`));
   assert.equal((html.match(/class="btn alt addcv"/g) || []).length, 2);
   assert.equal((html.match(/name="all" value="1"/g) || []).length, 2);
@@ -139,4 +143,36 @@ test('bay_tags shows ?flash= escaped and capped', async (t) => {
   assert.ok(shown, 'the flash is shown as a warning');
   assert.match(shown[1], /^&lt;b&gt;No variant&lt;\/b&gt;x+$/);
   assert.equal(shown[1].replace(/&lt;|&gt;/g, '.').length, 300, 'capped at 300 characters');
+});
+
+test('bay_tags: storage defaults per bay from that bay’s newest tag today', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Puff Pastries', 'PUFF')`);
+  const a = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  const b = seedLot(sqlite, { zone: 'Z10', cultivar: 'Puff Pastries' });
+  seedLoad(sqlite, a, 3, { minutesAgo: 8 * 1440, bins: 72 });
+  seedLoad(sqlite, b, 4, { minutesAgo: 8 * 1440, bins: 72 });
+  const alloc = await post(env, ctx, 'sack_alloc', { session_id: a, cultivar: 'Sour Lifter', qty: 1, bay: 3, storage: 'Supermarket' });
+  assert.equal(alloc.status, 200);
+  const chip = (html, bay) => html.match(new RegExp(`<span class="storagechip"[^>]*data-bay="${bay}" data-value="([^"]*)">([^<]*)</span>`));
+  const html = await (await page(env, ctx)).text();
+  assert.deepEqual(chip(html, 3).slice(1), ['Supermarket', 'Supermarket'], 'bay 3 keeps its own storage');
+  assert.deepEqual(chip(html, 4).slice(1), ['', 'No storage set'], 'bay 4 is not set, not bay 3 place');
+  const es = await (await page(env, ctx, 'es')).text();
+  assert.equal(chip(es, 4)[2], 'Sin lugar para guardar');
+  // A null storage (chip not set) is accepted by sack_alloc.
+  const none = await post(env, ctx, 'sack_alloc', { session_id: b, cultivar: 'Puff Pastries', qty: 1, bay: 4, storage: null });
+  assert.equal(none.status, 200);
+  // No global default left on the page.
+  assert.doesNotMatch(html, /storageHintLast|lastStorage/);
+});
+
+test('bay_tags: a batch has its own plural message in both languages', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { env, ctx } = freshDb();
+  const en = await (await page(env, ctx)).text();
+  assert.ok(en.includes('"printedOkN":"✓ {n} tags printed ({first}–{last})"'));
+  const es = await (await page(env, ctx, 'es')).text();
+  assert.ok(es.includes('"printedOkN":"✓ {n} etiquetas impresas ({first}–{last})"'));
 });

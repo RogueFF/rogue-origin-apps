@@ -754,6 +754,27 @@ async function getLastStorage(db, isTest) {
  * the floor moves too fast. Now the newest load's bay is everyone's default:
  * one load logged (or one receipt fixed) into bay 9 moves every trailer.
  */
+/**
+ * Per bay, where that bay's newest live tag printed TODAY (Pacific) was stored.
+ *
+ * The bay screen's chips (Koa, 2026-10-12). The barn-wide getLastStorage made
+ * every chip read the same place: Bay 3's tag went to Bay 7, so Bay 4's chip
+ * said Bay 7 too and its next PRINT stored there without anyone choosing it.
+ * A bay with no tag today is absent (not set); a newest tag stored nowhere maps
+ * to null, which is also not set.
+ */
+async function getBayStoragesToday(db, isTest) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
+  const rows = await query(db, `
+    SELECT bay, storage FROM harvest_sacks
+    WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL AND printed_at >= ? AND printed_at < ?
+    ORDER BY printed_at DESC, id DESC
+  `, [isTest, dayStart, dayEnd]);
+  const byBay = new Map();
+  for (const r of rows) if (!byBay.has(Number(r.bay))) byBay.set(Number(r.bay), r.storage || null);
+  return byBay;
+}
+
 async function getLastFilledBay(db, isTest) {
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
@@ -2034,7 +2055,7 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
  */
 async function handleBayTags(ui, db, env, flash = null, warn = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const [lots, lastStorage] = await Promise.all([getRecentLots(db, isTest), getLastStorage(db, isTest)]);
+  const [lots, storages] = await Promise.all([getRecentLots(db, isTest), getBayStoragesToday(db, isTest)]);
   await attachDryingBays(db, isTest, lots);
   const info = await getBayTakedown(db, isTest, lots);
   const today = pacificDay(new Date());
@@ -2042,7 +2063,7 @@ async function handleBayTags(ui, db, env, flash = null, warn = null) {
   const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
   // Which last tags were printed today, so voiding one can take it off "sacks today".
   const todayIds = new Set(tags.filter(t => t.printed_day === today).map(t => t.sack_id));
-  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, lastStorage, flash, { today, todayIds, warn }));
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, storages, flash, { today, todayIds, warn }));
 }
 
 const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
@@ -7073,17 +7094,16 @@ ${finishedHtml}
  * PRINT, the storage chip and "+ Add a cultivar" work, printing through the
  * same HARVEST_PRINT_CLIENT as the session screen.
  */
-function bayTagsBody(ui, groups, lastStorage = null, flash = null, { today = '', todayIds = new Set(), warn = null } = {}) {
+function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '', todayIds = new Set(), warn = null } = {}) {
   const L = `lang=${ui.lang}`;
   const flashHtml = (flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '')
     + (warn ? `<div class="notice">⚠️ ${escapeHtml(warn)}</div>` : '');
   // Two keys chosen here, as tagForLot/tagsForLot are: "1 sack", never "1 sacks".
   const nText = (n, one, many) => (n === 1 ? ui.t(one) : ui.t(many, { n }));
-  // Only a same-day storage is assumed, as on the picker: yesterday's rack
-  // says nothing about where today's sacks go. The chip carries the VALUE
-  // sack_alloc takes (parseStorage: '' | 'Supermarket' | a bay number).
-  const storageValue = lastStorage?.today && lastStorage.storage ? String(lastStorage.storage) : '';
-  const storageText = storageValue ? storageLabel(ui, storageValue) : ui.t('storageNotSet');
+  // Each bay's chip starts where THAT bay's newest tag today went (never
+  // another bay's, never yesterday's). It carries the VALUE sack_alloc takes
+  // (parseStorage: '' | 'Supermarket' | a bay number); '' sends no storage.
+  const storageOf = (bay) => (storages.get(Number(bay)) ? String(storages.get(Number(bay))) : '');
   // Every finish here comes back here (handleBayFinish reads `back`).
   const back = '<input type="hidden" name="back" value="bay_tags">';
   const finishForm = (c, reopen) => `
@@ -7100,13 +7120,15 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null, { today = '',
     const allTags = `${API}?action=sack_session&session_id=${c.primary.id}&cultivar=${encodeURIComponent(c.cultivar)}&bay=${c.bay}&${L}`;
     return `
   <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}"${last && todayIds.has(last) ? ' data-lasttoday="1"' : ''}>
+    <div class="cvtop">
     <button class="cvname" type="button" aria-expanded="false">
       <b>${escapeHtml(c.cultivar)}</b>
       <span class="lotmeta">${ui.t('cut', { n: c.cut })} · <span class="sackn" data-n="${c.sacks}">${nText(c.sacks, 'sackOne', 'sacksN')}</span></span>
       ${zoneMix(c)}${c.noLoads ? `
       <span class="hint noloads">${ui.t('noLoads')}</span>` : ''}
     </button>
-    <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}>${escapeHtml(ui.t('printCv', { c: c.cultivar }))}</button>
+    <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}><span class="printword">${ui.t('printWord')}</span><span class="printcv">${escapeHtml(c.cultivar)}</span></button>
+    </div>
     <div class="cvdrawer" hidden>
       <details class="nextnote"><summary>${ui.t('noteNext')}</summary><textarea class="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea></details>
       <details class="nextnote"><summary>${ui.t('fillNext')}</summary><div class="fillrow"><input class="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1" placeholder="${fullSackLbs(c.primary.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div></details>
@@ -7134,7 +7156,7 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null, { today = '',
   <summary>
     <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
     <span class="lotmeta">${meta}</span>
-    <span class="storagechip" role="button" tabindex="0" data-bay="${g.bay}" data-value="${escapeHtml(storageValue)}">${escapeHtml(storageText)}</span>
+    <span class="storagechip" role="button" tabindex="0" data-bay="${g.bay}" data-value="${escapeHtml(storageOf(g.bay))}">${escapeHtml(storageOf(g.bay) ? storageLabel(ui, storageOf(g.bay)) : ui.t('storageNotSet'))}</span>
   </summary>
   <div class="lasttag" data-bay="${g.bay}">${lastTag}</div>
   ${g.rows.map(c => row(g, c)).join('')}
@@ -7151,7 +7173,8 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null, { today = '',
   const T = {
     printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
     voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
-    printedOk: ui.t('printedOk', { id: '{id}' }), tagVoided: ui.t('tagVoided'),
+    printedOk: ui.t('printedOk', { id: '{id}' }),
+    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), tagVoided: ui.t('tagVoided'),
     lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
     sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
     sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
@@ -7275,7 +7298,7 @@ ${groups.map(drawer).join('')}
     // Only a single tag carries the note and the short weight: a batch is several bags.
     var note = qty === 1 ? noteEl.value.trim() : '';
     var fill = qty === 1 ? fillEl.value.trim() : '';
-    var label = btn.textContent;
+    var label = btn.innerHTML;   // PRINT keeps its two lines (word + cultivar) after
     btn.disabled = true;
     btn.textContent = T.printing;
     RO.allocTags(API, {
@@ -7295,14 +7318,18 @@ ${groups.map(drawer).join('')}
           noteEl.value = ''; fillEl.value = '';
           each('details.nextnote', row, function (dt) { dt.open = false; });
         }
-        if (d.print_via !== 'agent') say(fmt(T.printedOk, 'id', ids.join(', ')));
+        if (d.print_via !== 'agent') {
+          say(ids.length > 1
+            ? fmt(fmt(fmt(T.printedOkN, 'n', ids.length), 'first', ids[0]), 'last', ids[ids.length - 1])
+            : fmt(T.printedOk, 'id', ids[0] || last));
+        }
         RO.printIds(API, ids, d.print_via, printOpts);
-        setTimeout(function () { btn.disabled = false; btn.textContent = label; }, 1500);
+        setTimeout(function () { btn.disabled = false; btn.innerHTML = label; }, 1500);
       })
       .catch(function (e) {
         say(fmt(T.printFailed, 'e', e.message), true);
         btn.disabled = false;
-        btn.textContent = label;
+        btn.innerHTML = label;
       });
   }
 
@@ -8853,6 +8880,7 @@ ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y 
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
     card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
+    card(`${API}?action=bay_tags&${q}`, L('Tags by bay', 'Etiquetas por bahía'), L('One screen. Open the bay, press PRINT beside the cultivar.', 'Una pantalla. Abre la bahía y pulsa IMPRIMIR junto a la variedad.')),
     card(`${API}?action=bajada&${q}`, L('Hourly takedown report', 'Bajada por hora'), L('On the hour: people by role and sticks taken down. Sacks come from the tags.', 'Cada hora: personas por puesto y palos bajados. Las bolsas salen de las etiquetas.')),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
