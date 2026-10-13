@@ -8963,7 +8963,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 </a>
 <div class="hub-workbench">
  <section class="hub-start"><h2>${L('Keep the harvest moving.', 'Que la cosecha siga.')}</h2><p>${L('Bring a load in. Get the next bag tagged.', 'Recibe una carga. Etiqueta la siguiente bolsa.')}</p>
- <div class="hub-actions"><a href="${API}?action=sack_print&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>
+ <div class="hub-actions"><a href="${API}?action=bay_tags&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>
  <section class="hub-lookup"><label for="hub-query">${L('Find a sack', 'Buscar bolsa')}</label><p id="hub-query-help">${L('Enter the code or number printed on the tag.', 'Ingresa el código o número impreso en la etiqueta.')}</p>
  <form class="hub-search" method="GET" action="${API}">
   <input type="hidden" name="action" value="find"><input type="hidden" name="lang" value="${ui.lang}">
@@ -8985,8 +8985,8 @@ ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y 
     card(`${API}?action=crew&${q}`, L('Hourly crew report', 'Reporte por hora'), L('On the hour: who is working and how many sticks went up.', 'Cada hora: quién está trabajando y cuántos palos se colgaron.')),
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
-    card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
-    card(`${API}?action=bay_tags&${q}`, L('Tags by bay', 'Etiquetas por bahía'), L('One screen. Open the bay, press PRINT beside the cultivar.', 'Una pantalla. Abre la bahía y pulsa IMPRIMIR junto a la variedad.')),
+    card(`${API}?action=bay_tags&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('One screen. Open the bay, press PRINT beside the cultivar. Notes, weight and Finished are in the row.', 'Una pantalla. Abre la bahía y pulsa IMPRIMIR junto a la variedad. Notas, peso y Terminado van en la fila.'), '', true),
+    card(`${API}?action=sack_print&${q}`, L('Old lot picker', 'Selector anterior'), L('The lot-by-lot screen. Sour Lifter zone-lots without a bay card are here.', 'La pantalla lote por lote. Los lotes de Sour Lifter sin tarjeta de bahía están aquí.'), '', false),
     card(`${API}?action=bajada&${q}`, L('Hourly takedown report', 'Bajada por hora'), L('On the hour: people by role and sticks taken down. Sacks come from the tags.', 'Cada hora: personas por puesto y palos bajados. Las bolsas salen de las etiquetas.')),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),

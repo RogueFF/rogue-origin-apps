@@ -307,6 +307,6 @@ export function takedownHourlyBody(ui, data, flash = null) {
 
 <h2>${L('Today', 'Hoy')}</h2>
 ${log}
-<div class="footer"><a href="${API}?action=sack_print&lang=${ui.lang}">${L('Print sack tags', 'Imprimir etiquetas')}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${L('All tools', 'Herramientas')}</a></div>
+<div class="footer"><a href="${API}?action=bay_tags&lang=${ui.lang}">${L('Print sack tags', 'Imprimir etiquetas')}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${L('All tools', 'Herramientas')}</a></div>
 <script>document.querySelectorAll('.crew-stepper button').forEach(function(b){b.addEventListener('click',function(){var i=document.getElementById(b.dataset.field);var max=Number(i.max||50);i.value=Math.max(0,Math.min(max,Number(i.value||0)+Number(b.dataset.step)));});});</script>`;
 }

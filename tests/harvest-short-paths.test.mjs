@@ -95,7 +95,7 @@ test('/tags is the takedown printer', async () => {
   const html = await res.text();
 
   assert.equal(res.status, 200);
-  assert.match(html, /Imprimir Etiquetas/, 'the page itself, not a redirect and not JSON');
+  assert.match(html, /Etiquetas por bahía/, 'the bay screen itself (switched 2026-10-12), not a redirect and not JSON');
   assert.doesNotMatch(html, /Rogue Origin API - Cloudflare Workers/,
     'the endpoint list is what a lost query string looks like');
 });
@@ -123,7 +123,7 @@ test('a short path still takes ?lang', async () => {
   const html = await (await get(env, ctx, '/tags?lang=en')).text();
 
   assert.match(html, /<html lang="en"/, 'the language switch must survive the rewrite to ?action=');
-  assert.match(html, /Print Sack Tags/i, 'and the page renders in it');
+  assert.match(html, /Tags by bay/i, 'and the page renders in it');
 });
 
 test('the long URLs keep working — nothing printed or bookmarked breaks', async () => {
