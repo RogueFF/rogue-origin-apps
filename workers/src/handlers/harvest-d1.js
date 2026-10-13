@@ -66,7 +66,7 @@ import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { decideHeal, settleStatement, latestMarkerAt, HEAL_QUIET_MS, LAST_CALL_KEY } from '../lib/inventory-heal.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
-import { bayFills, bayCards, percentShares } from '../lib/bay-fills.js';
+import { bayFills, bayCards, bayScreenGroups, percentShares } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
@@ -282,7 +282,7 @@ const HTML_ACTIONS = new Set(['salida',
   'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
   'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline',
+  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline', 'bay_tags',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -363,6 +363,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
+        case 'bay_tags':
+          return await handleBayTags(ui, db, env);
         case 'pipeline':
           return await handlePipeline(ui, db, env);
         case 'sack_session_start':
@@ -2023,6 +2025,23 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
   return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash, bays));
 }
 
+/**
+ * GET ?action=bay_tags — tags by bay (Koa, 2026-10-12). One screen: every bay
+ * a drawer, every cultivar hanging in it a row with its own PRINT, so a
+ * 17-cultivar retail bay is not 17 round trips through the picker. Same bay
+ * cards as the picker; bayScreenGroups folds them by bay.
+ */
+async function handleBayTags(ui, db, env, flash = null) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [lots, lastStorage] = await Promise.all([getRecentLots(db, isTest), getLastStorage(db, isTest)]);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const today = pacificDay(new Date());
+  const tags = info.tags.map(t => ({ ...t, printed_day: pacificDay(parseSqliteUtc(t.printed_at)) }));
+  const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, lastStorage, flash));
+}
+
 const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
 
 /**
@@ -2057,7 +2076,7 @@ async function getBayTakedown(db, isTest, lots) {
                         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id)
     `, [isTest, LOT_PICKER_DAYS, isTest, LOT_PICKER_DAYS]),
     query(db, `
-      SELECT bay, printed_at, cultivar, cut_number FROM harvest_sacks
+      SELECT sack_id, bay, printed_at, cultivar, cut_number FROM harvest_sacks
       WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL
         AND julianday('now') - julianday(printed_at) <= ?
     `, [isTest, LOT_PICKER_DAYS]),
@@ -2083,7 +2102,7 @@ async function getBayTakedown(db, isTest, lots) {
     .sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt)));
   const covered = new Set();
   for (const c of [...active, ...finished]) for (const z of c.zones) covered.add(z.lot.id);
-  return { cards, active, finished, covered, fills, doneByKey };
+  return { cards, active, finished, covered, fills, doneByKey, tags };
 }
 
 /** True once every bay fill holding this lot's loads is down (finished, or refilled since). */
@@ -7037,6 +7056,105 @@ ${finishedHtml}
   });
 })();
 </script>`;
+}
+
+/**
+ * The tags-by-bay screen (handleBayTags). Server render only: every bay is a
+ * native <details> drawer, active bays by number, finished ones last. Each
+ * cultivar row carries on data-* what PRINT will post (the lot for sack_alloc,
+ * cultivar, cut, bay); the drawer under it holds the small stuff — note, short
+ * bag, reprint/void, a batch, and the per-cultivar Finished. The script that
+ * makes PRINT, the storage chip and "+ Add a cultivar" work comes separately.
+ */
+function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
+  const L = `lang=${ui.lang}`;
+  const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
+  // Only a same-day storage is assumed, as on the picker: yesterday's rack
+  // says nothing about where today's sacks go.
+  const storageText = lastStorage?.today ? storageLabel(ui, lastStorage.storage) : ui.t('storageNotSet');
+  const finishForm = (c, reopen) => `
+      <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+        <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
+        <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
+        <button class="btn alt" type="submit">${reopen ? ui.t('reopenLot')
+          : escapeHtml(ui.t('finishCvBay', { c: c.cultivar, bay: c.bay }))}</button>
+      </form>`;
+
+  const row = (g, c) => {
+    const done = g.finished || !!c.doneAt;
+    const last = c.lastTag ? c.lastTag.sack_id : '';
+    const allTags = `${API}?action=sack_session&session_id=${c.primary.id}&cultivar=${encodeURIComponent(c.cultivar)}&bay=${c.bay}&${L}`;
+    return `
+  <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}">
+    <button class="cvname" type="button">
+      <b>${escapeHtml(c.cultivar)}</b>
+      <span class="lotmeta">${ui.t('cut', { n: c.cut })} · ${ui.t('sacksN', { n: c.sacks })}</span>
+      ${zoneMix(c)}${c.noLoads ? `
+      <span class="hint noloads">${ui.t('noLoads')}</span>` : ''}
+      <span class="notice variantwarn" hidden></span>
+    </button>
+    <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}>${escapeHtml(ui.t('printCv', { c: c.cultivar }))}</button>
+    <div class="cvdrawer" hidden>
+      <details class="nextnote"><summary>${ui.t('noteNext')}</summary><textarea class="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea></details>
+      <details class="nextnote"><summary>${ui.t('fillNext')}</summary><div class="fillrow"><input class="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1" placeholder="${fullSackLbs(c.primary.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div></details>
+      <div class="lastActions"><a class="mini reprint" href="#">${ui.t('reprint')}</a> <a class="mini danger voidrow" href="#">${ui.t('void')}</a> <a class="mini" href="${allTags}">${ui.t('allTags')}</a></div>
+      <details class="batch"><summary>${ui.t('printSeveral')}</summary><p class="note">${ui.t('printSeveralHelp')}</p><div class="batchrow"><input class="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5"><button class="btn batchbtn" type="button"${done ? ' disabled' : ''}>${ui.t('printBatch')}</button></div></details>
+      ${c.doneAt ? (g.finished ? '' : finishForm(c, true)) : finishForm(c, false)}
+    </div>
+  </div>`;
+  };
+
+  const drawer = (g) => {
+    const fill = g.rows[0]?.fillStart || '';
+    const meta = g.finished ? ui.t('bayFinishedShort')
+      : `${ui.t('cultivarsN', { n: g.rows.length })} · ${ui.t('sacksToday', { n: g.sacksToday })}`;
+    const lastTag = g.lastTag
+      ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}">${ui.t('void')}</a>`
+      : ui.t('noTagsYet');
+    const foot = g.finished ? finishForm(g.rows[0], true) : `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot" data-confirm="${escapeHtml(ui.t('wholeBayConfirm', { bay: g.bay }))}">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">
+    <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
+  </form>`;
+    return `
+<details class="baydrawer${g.finished ? ' finished' : ''}" data-bay="${g.bay}" data-fill="${escapeHtml(fill)}">
+  <summary>
+    <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
+    <span class="lotmeta">${meta}</span>
+    <span class="storagechip" data-bay="${g.bay}">${escapeHtml(storageText)}</span>
+  </summary>
+  <div class="lasttag" data-bay="${g.bay}">${lastTag}</div>
+  ${g.rows.map(c => row(g, c)).join('')}
+  <button class="btn alt addcv" type="button" data-bay="${g.bay}">${ui.t('addCultivar')}</button>
+  ${foot}
+</details>`;
+  };
+
+  const mcl = mcloughlinCultivars();
+  // As data in a script tag: a "</" in a name must not close the tag.
+  const json = (v) => JSON.stringify(v).replace(/</g, '\u003c');
+  return `<nav class="topnav">
+  <a class="btn alt" href="${API}?action=hub&${L}">${ui.t('homeTools')}</a>
+  <a class="btn alt" href="${API}?action=sack_print&${L}">${ui.t('oldPicker')}</a>
+</nav>
+<h1>${ui.t('bayTagsTitle')}</h1>
+<p class="note">${ui.t('bayTagsIntro')}</p>
+<div id="lastMsg" class="flash" hidden></div>
+${flashHtml}
+${groups.map(drawer).join('')}
+<p class="note">${ui.t('zoneLotsNote')}</p>
+<dialog id="addSheet">
+  <h2>${ui.t('addSheetTitle')}</h2>
+  <label for="addCv">${ui.t('addCvLabel')}</label>
+  <input id="addCv" list="mcl" autocomplete="off">
+  <datalist id="mcl">${mcl.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+  <div id="addZones" class="zonemix"></div>
+  <div class="batchrow">
+    <button class="btn" id="addSave" type="button">${ui.t('addSave')}</button>
+    <button class="btn alt" id="addCancel" type="button">${ui.t('cancel')}</button>
+  </div>
+</dialog>
+<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>`;
 }
 
 // ─── PIPELINE ───────────────────────────────────────────
