@@ -355,12 +355,12 @@ test('the board links to the takedown screen, absolutely', async () => {
   const { env, ctx } = freshDb();
   const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
 
-  const hrefs = [...html.matchAll(/href="([^"]*action=sack_print[^"]*)"/g)].map(m => m[1]);
+  const hrefs = [...html.matchAll(/href="([^"]*action=bay_tags[^"]*)"/g)].map(m => m[1]);
   assert.ok(hrefs.length >= 1, 'the board needs a way to reach the takedown screen');
   for (const href of hrefs) {
     const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
     assert.equal(resolved.pathname, '/api/harvest');
-    assert.equal(resolved.searchParams.get('action'), 'sack_print');
+    assert.equal(resolved.searchParams.get('action'), 'bay_tags');
   }
 });
 
