@@ -156,6 +156,15 @@ body:has(.harvest-screen)>.testband{margin:0}
 .harvest-screen .noloads{display:block;font-size:13px;color:#7a6a3c;font-style:italic}
 .harvest-screen .addcv{width:100%;margin:6px 0}
 .harvest-screen .baydrawer .finishlot{margin:6px 0 14px}.harvest-screen .baydrawer .finishlot button{width:100%}
+.harvest-screen #lastMsg{position:sticky;top:0;z-index:5;box-shadow:0 2px 8px rgba(38,63,50,.15)}
+.harvest-screen .flash.bad{background:#f4e0d8;color:#954431;border-color:#d7b2a4}
+.harvest-screen .storagechip{cursor:pointer;min-height:36px;display:inline-flex;align-items:center}
+.harvest-screen dialog{border:1px solid #d9dfd1;border-radius:14px;padding:20px;width:min(92vw,420px);color:#263f32;background:#fff}
+.harvest-screen dialog::backdrop{background:rgba(38,63,50,.45)}
+.harvest-screen dialog h2{margin-top:0}
+.harvest-screen dialog .batchrow{display:flex;gap:8px;margin-top:14px}.harvest-screen dialog .batchrow button{flex:1}
+.harvest-screen #addZones .zpick{min-height:48px;padding:10px 18px;margin:10px 8px 0 0;font-size:18px;font-weight:700;border-radius:10px;cursor:pointer}
+.harvest-screen #addZones .zpick.sel{background:#304e3c;color:#fff;border-color:#304e3c}
 .harvest-screen :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid #9c7423;outline-offset:3px}
 @media(min-width:900px){.harvest-screen:has(#intakeForm),.harvest-screen:has(.crew-stepper),.harvest-screen:has(.grid),.harvest-screen:has(#printBtn){max-width:800px}}
 @media(max-width:600px){.harvest-screen{padding:0 16px 30px}.harvest-header{gap:8px}.harvest-header img{width:42px;height:42px}.harvest-header strong{font-size:13px}.harvest-header small{display:none}.harvest-header nav{gap:4px}.harvest-header a{padding:11px 12px;font-size:14px}.harvest-screen form:not(.finishrow):not(.finishlot){padding:18px}.harvest-screen .lothead{font-size:17px}.harvest-screen .lastActions{flex-wrap:wrap}}

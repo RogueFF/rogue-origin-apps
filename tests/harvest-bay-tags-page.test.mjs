@@ -82,3 +82,61 @@ test('bay_tags shows the Spanish strings with lang=es', async (t) => {
   assert.equal(res.status, 200);
   assert.match(await res.text(), /Etiquetas por bahía/);
 });
+
+test('bay_tags: Whole bay down with back=bay_tags returns to the bay screen', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const a = seedLot(sqlite, { zone: 'Z10', cultivar: 'Puff Pastries' });
+  const b = seedLot(sqlite, { zone: 'R1', cultivar: 'Sauciere' });
+  seedLoad(sqlite, a, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  seedLoad(sqlite, b, 3, { minutesAgo: 5 * 1440, bins: 24 });
+  const html = await (await page(env, ctx)).text();
+  const forms = html.match(/<form method="POST" action="[^"]*bay_finish[\s\S]*?<\/form>/g) || [];
+  assert.ok(forms.length >= 3, 'per-cultivar and whole-bay forms');
+  assert.ok(forms.every(f => f.includes('name="back" value="bay_tags"')), 'every finish form comes back here');
+  const res = await postForm(env, ctx, 'bay_finish', { bay: '3', all: '1', back: 'bay_tags' });
+  assert.equal(res.status, 200);
+  const after = await res.text();
+  assert.match(after, /<h1>Tags by bay<\/h1>/);
+  assert.match(after, /Bay 3 down — 2 cultivars finished/);
+  // One cultivar's Finished also comes back here.
+  const c = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, c, 4, { minutesAgo: 5 * 1440, bins: 48 });
+  const fill = (await (await page(env, ctx)).text()).match(/data-bay="4" data-fill="([^"]+)"/)[1];
+  const one = await postForm(env, ctx, 'bay_finish', { bay: '4', cultivar: 'Sour Lifter', cut: '1', fill_start: fill, back: 'bay_tags' });
+  assert.equal(one.status, 200);
+  assert.match(await one.text(), /<h1>Tags by bay<\/h1>/);
+  // Reopen from here redirects back here, not to the session screen.
+  const re = await postForm(env, ctx, 'bay_finish', { bay: '4', cultivar: 'Sour Lifter', cut: '1', fill_start: fill, reopen: '1', back: 'bay_tags' });
+  assert.equal(re.status, 303);
+  assert.match(re.headers.get('Location'), /action=bay_tags&lang=en/);
+});
+
+test('bay_tags: one cultivar and one sack read singular', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const a = seedLot(sqlite, { zone: 'Z14', cultivar: 'Sour Lifter' });
+  seedLoad(sqlite, a, 5, { minutesAgo: 5 * 1440, bins: 24 });
+  const alloc = await post(env, ctx, 'sack_alloc', { session_id: a, cultivar: 'Sour Lifter', qty: 1, bay: 5 });
+  assert.equal(alloc.status, 200);
+  const html = await (await page(env, ctx)).text();
+  assert.match(html, /\b1 cultivar\b/);
+  assert.doesNotMatch(html, /\b1 cultivars\b/);
+  assert.match(html, /\b1 sack today\b/);
+  assert.match(html, /\b1 sack\b/);
+  assert.doesNotMatch(html, /\b1 sacks\b/);
+  const es = await (await page(env, ctx, 'es')).text();
+  assert.match(es, /\b1 variedad\b/);
+  assert.match(es, /\b1 bolsa hoy\b/);
+});
+
+test('bay_tags shows ?flash= escaped and capped', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { env, ctx } = freshDb();
+  const res = await handleHarvestD1(new Request(`${API}?action=bay_tags&lang=en&flash=${encodeURIComponent('<b>No variant</b>' + 'x'.repeat(400))}`), env, ctx);
+  const html = await res.text();
+  const shown = html.match(/<div class="notice">⚠️ ([^<]*)<\/div>/);
+  assert.ok(shown, 'the flash is shown as a warning');
+  assert.match(shown[1], /^&lt;b&gt;No variant&lt;\/b&gt;x+$/);
+  assert.equal(shown[1].replace(/&lt;|&gt;/g, '.').length, 300, 'capped at 300 characters');
+});

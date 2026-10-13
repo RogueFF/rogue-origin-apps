@@ -364,7 +364,8 @@ export async function handleHarvestD1(request, env, ctx) {
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
         case 'bay_tags':
-          return await handleBayTags(ui, db, env);
+          // ?flash= carries lot_add's variant warning across the reload.
+          return await handleBayTags(ui, db, env, null, params.flash ? String(params.flash).substring(0, 300) : null);
         case 'pipeline':
           return await handlePipeline(ui, db, env);
         case 'sack_session_start':
@@ -2031,7 +2032,7 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
  * 17-cultivar retail bay is not 17 round trips through the picker. Same bay
  * cards as the picker; bayScreenGroups folds them by bay.
  */
-async function handleBayTags(ui, db, env, flash = null) {
+async function handleBayTags(ui, db, env, flash = null, warn = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, lastStorage] = await Promise.all([getRecentLots(db, isTest), getLastStorage(db, isTest)]);
   await attachDryingBays(db, isTest, lots);
@@ -2039,7 +2040,9 @@ async function handleBayTags(ui, db, env, flash = null) {
   const today = pacificDay(new Date());
   const tags = info.tags.map(t => ({ ...t, printed_day: pacificDay(parseSqliteUtc(t.printed_at)) }));
   const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
-  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, lastStorage, flash));
+  // Which last tags were printed today, so voiding one can take it off "sacks today".
+  const todayIds = new Set(tags.filter(t => t.printed_day === today).map(t => t.sack_id));
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, lastStorage, flash, { today, todayIds, warn }));
 }
 
 const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
@@ -2143,6 +2146,9 @@ function zoneMix(c) {
  * on a lot, it touches no sack, no storage and no Shopify count.
  */
 async function handleBayFinish(ui, db, env, ctx, body) {
+  // Pressed on the tags-by-bay screen: land back there, not on the old picker.
+  const fromBayTags = String(body.back || '') === 'bay_tags';
+  const backTo = (flash) => fromBayTags ? handleBayTags(ui, db, env, flash) : handleSackPrintForm(ui, db, env, flash);
   // "Whole bay down": every cultivar card in the bay's current fill, in one
   // tap, so a 17-cultivar retail bay is not 17 taps (Koa, 2026-10-12). Each
   // card takes the same single-card path as its own "Bay N is down".
@@ -2157,7 +2163,7 @@ async function handleBayFinish(ui, db, env, ctx, body) {
     for (const c of cards) {
       await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1, fillStart: c.fillStart, reopen: false });
     }
-    return handleSackPrintForm(ui, db, env, ui.t('bayAllDown', { bay: bayAll, n: cards.length }));
+    return backTo(ui.t(cards.length === 1 ? 'bayAllDownOne' : 'bayAllDown', { bay: bayAll, n: cards.length }));
   }
 
   const bay = parseBay(body.bay, ui);
@@ -2171,11 +2177,11 @@ async function handleBayFinish(ui, db, env, ctx, body) {
   const card = await finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen });
   const sacks = card ? card.sacks : 0;
   if (reopen && card) {
-    return new Response(null, { status: 303, headers: {
-      Location: `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+    return new Response(null, { status: 303, headers: { Location: fromBayTags
+      ? `${API}?action=bay_tags&lang=${ui.lang}`
+      : `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
   }
-  return handleSackPrintForm(ui, db, env,
-    ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+  return backTo(ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
 }
 
 /**
@@ -7059,23 +7065,31 @@ ${finishedHtml}
 }
 
 /**
- * The tags-by-bay screen (handleBayTags). Server render only: every bay is a
- * native <details> drawer, active bays by number, finished ones last. Each
- * cultivar row carries on data-* what PRINT will post (the lot for sack_alloc,
- * cultivar, cut, bay); the drawer under it holds the small stuff — note, short
- * bag, reprint/void, a batch, and the per-cultivar Finished. The script that
- * makes PRINT, the storage chip and "+ Add a cultivar" work comes separately.
+ * The tags-by-bay screen (handleBayTags). Every bay is a native <details>
+ * drawer, active bays by number, finished ones last. Each cultivar row carries
+ * on data-* what PRINT will post (the lot for sack_alloc, cultivar, cut, bay);
+ * the drawer under it holds the small stuff — note, short bag, reprint/void, a
+ * batch, and the per-cultivar Finished. The inline script at the end makes
+ * PRINT, the storage chip and "+ Add a cultivar" work, printing through the
+ * same HARVEST_PRINT_CLIENT as the session screen.
  */
-function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
+function bayTagsBody(ui, groups, lastStorage = null, flash = null, { today = '', todayIds = new Set(), warn = null } = {}) {
   const L = `lang=${ui.lang}`;
-  const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
+  const flashHtml = (flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '')
+    + (warn ? `<div class="notice">⚠️ ${escapeHtml(warn)}</div>` : '');
+  // Two keys chosen here, as tagForLot/tagsForLot are: "1 sack", never "1 sacks".
+  const nText = (n, one, many) => (n === 1 ? ui.t(one) : ui.t(many, { n }));
   // Only a same-day storage is assumed, as on the picker: yesterday's rack
-  // says nothing about where today's sacks go.
-  const storageText = lastStorage?.today ? storageLabel(ui, lastStorage.storage) : ui.t('storageNotSet');
+  // says nothing about where today's sacks go. The chip carries the VALUE
+  // sack_alloc takes (parseStorage: '' | 'Supermarket' | a bay number).
+  const storageValue = lastStorage?.today && lastStorage.storage ? String(lastStorage.storage) : '';
+  const storageText = storageValue ? storageLabel(ui, storageValue) : ui.t('storageNotSet');
+  // Every finish here comes back here (handleBayFinish reads `back`).
+  const back = '<input type="hidden" name="back" value="bay_tags">';
   const finishForm = (c, reopen) => `
       <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
         <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
-        <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
+        <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}${back}
         <button class="btn alt" type="submit">${reopen ? ui.t('reopenLot')
           : escapeHtml(ui.t('finishCvBay', { c: c.cultivar, bay: c.bay }))}</button>
       </form>`;
@@ -7085,13 +7099,12 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
     const last = c.lastTag ? c.lastTag.sack_id : '';
     const allTags = `${API}?action=sack_session&session_id=${c.primary.id}&cultivar=${encodeURIComponent(c.cultivar)}&bay=${c.bay}&${L}`;
     return `
-  <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}">
-    <button class="cvname" type="button">
+  <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}"${last && todayIds.has(last) ? ' data-lasttoday="1"' : ''}>
+    <button class="cvname" type="button" aria-expanded="false">
       <b>${escapeHtml(c.cultivar)}</b>
-      <span class="lotmeta">${ui.t('cut', { n: c.cut })} · ${ui.t('sacksN', { n: c.sacks })}</span>
+      <span class="lotmeta">${ui.t('cut', { n: c.cut })} · <span class="sackn" data-n="${c.sacks}">${nText(c.sacks, 'sackOne', 'sacksN')}</span></span>
       ${zoneMix(c)}${c.noLoads ? `
       <span class="hint noloads">${ui.t('noLoads')}</span>` : ''}
-      <span class="notice variantwarn" hidden></span>
     </button>
     <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}>${escapeHtml(ui.t('printCv', { c: c.cultivar }))}</button>
     <div class="cvdrawer" hidden>
@@ -7107,13 +7120,13 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
   const drawer = (g) => {
     const fill = g.rows[0]?.fillStart || '';
     const meta = g.finished ? ui.t('bayFinishedShort')
-      : `${ui.t('cultivarsN', { n: g.rows.length })} · ${ui.t('sacksToday', { n: g.sacksToday })}`;
+      : `${nText(g.rows.length, 'cultivarOne', 'cultivarsN')} · <span class="sackstoday" data-n="${g.sacksToday}">${nText(g.sacksToday, 'sackTodayOne', 'sacksToday')}</span>`;
     const lastTag = g.lastTag
-      ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}">${ui.t('void')}</a>`
+      ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}" data-cultivar="${escapeHtml(g.lastTag.cultivar)}"${todayIds.has(g.lastTag.sack_id) ? ' data-today="1"' : ''}>${ui.t('void')}</a>`
       : ui.t('noTagsYet');
     const foot = g.finished ? finishForm(g.rows[0], true) : `
   <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot" data-confirm="${escapeHtml(ui.t('wholeBayConfirm', { bay: g.bay }))}">
-    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">${back}
     <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
   </form>`;
     return `
@@ -7121,7 +7134,7 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
   <summary>
     <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
     <span class="lotmeta">${meta}</span>
-    <span class="storagechip" data-bay="${g.bay}">${escapeHtml(storageText)}</span>
+    <span class="storagechip" role="button" tabindex="0" data-bay="${g.bay}" data-value="${escapeHtml(storageValue)}">${escapeHtml(storageText)}</span>
   </summary>
   <div class="lasttag" data-bay="${g.bay}">${lastTag}</div>
   ${g.rows.map(c => row(g, c)).join('')}
@@ -7131,30 +7144,327 @@ function bayTagsBody(ui, groups, lastStorage = null, flash = null) {
   };
 
   const mcl = mcloughlinCultivars();
-  // As data in a script tag: a "</" in a name must not close the tag.
-  const json = (v) => JSON.stringify(v).replace(/</g, '\u003c');
+  // As data in a script tag: a "</" in a name must not close the tag, so "<"
+  // goes out as the six characters <, which JS reads back as "<".
+  const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
+  // Strings injected as data, as on the session screen: no UI text in the JS.
+  const T = {
+    printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
+    voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
+    printedOk: ui.t('printedOk', { id: '{id}' }), tagVoided: ui.t('tagVoided'),
+    lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
+    sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
+    sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
+    storageNotSet: ui.t('storageNotSet'),
+    ...agentPrintStrings(ui),
+  };
   return `<nav class="topnav">
   <a class="btn alt" href="${API}?action=hub&${L}">${ui.t('homeTools')}</a>
   <a class="btn alt" href="${API}?action=sack_print&${L}">${ui.t('oldPicker')}</a>
 </nav>
+${chromeHandoff(ui, `${API}?action=bay_tags&${L}`)}
 <h1>${ui.t('bayTagsTitle')}</h1>
 <p class="note">${ui.t('bayTagsIntro')}</p>
 <div id="lastMsg" class="flash" hidden></div>
 ${flashHtml}
 ${groups.map(drawer).join('')}
 <p class="note">${ui.t('zoneLotsNote')}</p>
+<dialog id="storageSheet">
+  <h2>${ui.t('storageField')}</h2>
+  <select id="storageSel" aria-label="${escapeHtml(ui.t('storageField'))}">${storageOptions(ui, null)}</select>
+  <div class="batchrow"><button class="btn alt" id="storageCancel" type="button">${ui.t('cancel')}</button></div>
+</dialog>
 <dialog id="addSheet">
   <h2>${ui.t('addSheetTitle')}</h2>
   <label for="addCv">${ui.t('addCvLabel')}</label>
   <input id="addCv" list="mcl" autocomplete="off">
   <datalist id="mcl">${mcl.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
   <div id="addZones" class="zonemix"></div>
+  <p id="addErr" class="hcstat bad" hidden></p>
   <div class="batchrow">
     <button class="btn" id="addSave" type="button">${ui.t('addSave')}</button>
     <button class="btn alt" id="addCancel" type="button">${ui.t('cancel')}</button>
   </div>
 </dialog>
-<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>`;
+<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>
+<script>${HARVEST_PRINT_CLIENT}</script>
+<script>
+(function () {
+  var T = ${json(T)};
+  var API = '${API}';
+  var LANG = '${ui.lang}';
+  var TODAY = ${json(today)};
+  var msg = document.getElementById('lastMsg');
+  // Agent mode writes its own progress into the same line.
+  var printOpts = { status: msg, statusClass: 'flash', T: T };
+
+  function fmt(s, k, v) { return String(s).split('{' + k + '}').join(v); }
+  function say(text, bad) {
+    msg.hidden = false;
+    msg.className = 'flash' + (bad ? ' bad' : '');
+    msg.textContent = text;
+  }
+  function each(sel, root, fn) { Array.prototype.forEach.call((root || document).querySelectorAll(sel), fn); }
+  // Counts live in data-n so nothing parses translated text.
+  function bump(el, d, one, many) {
+    if (!el) return;
+    var n = Math.max(0, (parseInt(el.getAttribute('data-n'), 10) || 0) + d);
+    el.setAttribute('data-n', n);
+    el.textContent = n === 1 ? one : fmt(many, 'n', n);
+  }
+
+  // ── Storage, per bay, remembered for today on this phone ──
+  var sheet = document.getElementById('storageSheet');
+  var sel = document.getElementById('storageSel');
+  function storeKey(bay) { return 'bayTags.storage.' + bay + '.' + TODAY; }
+  function readStore(bay) { try { return window.localStorage.getItem(storeKey(bay)); } catch (e) { return null; } }
+  function writeStore(bay, v) { try { window.localStorage.setItem(storeKey(bay), v); } catch (e) { /* private mode: chip still set */ } }
+  function optionFor(v) {
+    for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === v) return sel.options[i];
+    return null;
+  }
+  function setChip(chip, v) {
+    var o = v ? optionFor(v) : null;
+    chip.setAttribute('data-value', o ? v : '');
+    chip.textContent = o ? o.text : T.storageNotSet;
+  }
+  each('.storagechip', null, function (chip) {
+    var v = readStore(chip.getAttribute('data-bay'));
+    if (v !== null && (v === '' || optionFor(v))) setChip(chip, v);
+  });
+  function chipFor(bay) { return document.querySelector('.storagechip[data-bay="' + Number(bay) + '"]'); }
+  function storageOf(bay) { var c = chipFor(bay); return (c && c.getAttribute('data-value')) || null; }
+  function openModal(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  function closeModal(d) { if (d.close) d.close(); else d.removeAttribute('open'); }
+  function openStorage(chip) {
+    sheet.setAttribute('data-bay', chip.getAttribute('data-bay'));
+    sel.value = chip.getAttribute('data-value') || '';
+    openModal(sheet);
+  }
+  sel.addEventListener('change', function () {
+    var bay = sheet.getAttribute('data-bay');
+    var chip = chipFor(bay);
+    if (chip) setChip(chip, sel.value);
+    writeStore(bay, sel.value);
+    closeModal(sheet);
+  });
+  document.getElementById('storageCancel').addEventListener('click', function () { closeModal(sheet); });
+
+  // ── Last tag line on the bay header, built from nodes (ids and names are data) ──
+  function setLastTag(drawer, id, cultivar, today) {
+    var box = drawer.querySelector('.lasttag');
+    box.textContent = '';
+    if (!id) { box.textContent = T.noTagsYet; return; }
+    box.appendChild(document.createTextNode(T.lastTagBay + ' '));
+    var b = document.createElement('b'); b.textContent = id; box.appendChild(b);
+    box.appendChild(document.createTextNode(' · ' + cultivar + ' '));
+    var a = document.createElement('a');
+    a.className = 'mini danger voidlast'; a.href = '#'; a.textContent = T.void;
+    a.setAttribute('data-id', id); a.setAttribute('data-cultivar', cultivar);
+    if (today) a.setAttribute('data-today', '1');
+    box.appendChild(a);
+  }
+
+  // ── PRINT and batch ──
+  function print(row, qty, btn) {
+    if (btn.disabled) return;   // double-tap guard: two serials, one sack
+    var bay = Number(row.getAttribute('data-bay'));
+    var cultivar = row.getAttribute('data-cultivar');
+    var noteEl = row.querySelector('.noteText');
+    var fillEl = row.querySelector('.fillLbs');
+    // Only a single tag carries the note and the short weight: a batch is several bags.
+    var note = qty === 1 ? noteEl.value.trim() : '';
+    var fill = qty === 1 ? fillEl.value.trim() : '';
+    var label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = T.printing;
+    RO.allocTags(API, {
+      session_id: Number(row.getAttribute('data-session')), cultivar: cultivar, qty: qty,
+      bay: bay, storage: storageOf(bay), note: note, fill_lbs: fill,
+    })
+      .then(function (d) {
+        var ids = d.ids || [];
+        var last = ids[ids.length - 1] || d.last_sack_id;
+        var drawer = row.closest('.baydrawer');
+        bump(row.querySelector('.sackn'), ids.length, T.sackOne, T.sacksN);
+        bump(drawer.querySelector('.sackstoday'), ids.length, T.sackTodayOne, T.sacksToday);
+        row.setAttribute('data-last', last);
+        row.setAttribute('data-lasttoday', '1');
+        setLastTag(drawer, last, cultivar, true);
+        if (qty === 1) {
+          noteEl.value = ''; fillEl.value = '';
+          each('details.nextnote', row, function (dt) { dt.open = false; });
+        }
+        if (d.print_via !== 'agent') say(fmt(T.printedOk, 'id', ids.join(', ')));
+        RO.printIds(API, ids, d.print_via, printOpts);
+        setTimeout(function () { btn.disabled = false; btn.textContent = label; }, 1500);
+      })
+      .catch(function (e) {
+        say(fmt(T.printFailed, 'e', e.message), true);
+        btn.disabled = false;
+        btn.textContent = label;
+      });
+  }
+
+  // ── Void and reprint ──
+  function rowFor(drawer, id, cultivar) {
+    var hit = null, byName = null;
+    each('.cvrow', drawer, function (r) {
+      if (!hit && id && r.getAttribute('data-last') === id) hit = r;
+      if (!byName && r.getAttribute('data-cultivar') === cultivar) byName = r;
+    });
+    return hit || byName;
+  }
+  function voidId(drawer, id, cultivar, today) {
+    if (!id || !confirm(fmt(T.voidConfirm, 'id', id))) return;
+    RO.voidTag(API, id)
+      .then(function () {
+        var row = rowFor(drawer, id, cultivar);
+        if (row) {
+          bump(row.querySelector('.sackn'), -1, T.sackOne, T.sacksN);
+          if (row.getAttribute('data-last') === id) {
+            row.setAttribute('data-last', '');
+            row.removeAttribute('data-lasttoday');
+          }
+        }
+        if (today) bump(drawer.querySelector('.sackstoday'), -1, T.sackTodayOne, T.sacksToday);
+        // Only when the header was showing this tag: another cultivar's last tag stays.
+        var head = drawer.querySelector('.voidlast');
+        if (head && head.getAttribute('data-id') === id) setLastTag(drawer, null);
+        say('# ' + id + ' · ' + T.tagVoided);
+      })
+      .catch(function (e) { say(fmt(T.voidFailed, 'e', e.message), true); });
+  }
+
+  // ── Add a McLoughlin cultivar ──
+  var add = document.getElementById('addSheet');
+  var addCv = document.getElementById('addCv');
+  var addZones = document.getElementById('addZones');
+  var addErr = document.getElementById('addErr');
+  var addSave = document.getElementById('addSave');
+  var addBay = null, addZone = '';
+  function renderZones(zones) {
+    addZones.textContent = '';
+    addZone = '';
+    (zones || []).forEach(function (z) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'zchip zpick'; b.textContent = z;
+      b.addEventListener('click', function () {
+        addZone = z;
+        each('.zpick', addZones, function (x) { x.classList.toggle('sel', x === b); });
+      });
+      addZones.appendChild(b);
+    });
+  }
+  function canonical(v) {
+    v = String(v || '').trim().toLowerCase();
+    for (var i = 0; i < (window.MCL || []).length; i++) if (window.MCL[i].toLowerCase() === v) return window.MCL[i];
+    return null;
+  }
+  function cvChanged() {
+    var name = canonical(addCv.value);
+    var zones = name && window.MCLZ ? window.MCLZ[name] : null;
+    if (zones && zones.length === 2) { if (addZones.children.length !== 2) renderZones(zones); }
+    else renderZones([]);
+  }
+  addCv.addEventListener('input', cvChanged);
+  addCv.addEventListener('change', cvChanged);
+  document.getElementById('addCancel').addEventListener('click', function () { closeModal(add); });
+  addSave.addEventListener('click', function () {
+    if (addSave.disabled) return;
+    var body = { bay: addBay, cultivar: addCv.value.trim() };
+    if (addZone) body.zone = addZone;
+    addSave.disabled = true;
+    addErr.hidden = true;
+    fetch(API + '?action=lot_add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d || {} }; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (res.status === 200 && d.success) {
+          location.href = API + '?action=bay_tags&lang=' + LANG
+            + (d.variant_error ? '&flash=' + encodeURIComponent(d.variant_error) : '');
+          return;
+        }
+        if (d.details && d.details.zones) renderZones(d.details.zones);
+        addErr.textContent = d.error || String(res.status);
+        addErr.hidden = false;
+        addSave.disabled = false;
+      })
+      .catch(function (e) {
+        addErr.textContent = e.message;
+        addErr.hidden = false;
+        addSave.disabled = false;
+      });
+  });
+
+  // ── One delegated listener for every row and bay ──
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var chip = t.closest('.storagechip');
+    if (chip) { e.preventDefault(); openStorage(chip); return; }   // not the drawer toggle
+    var drawer = t.closest('.baydrawer');
+    var row = t.closest('.cvrow');
+    var a;
+    if ((a = t.closest('.printbtn')) && row) { print(row, 1, a); return; }
+    if ((a = t.closest('.batchbtn')) && row) {
+      var n = parseInt(row.querySelector('.batchQty').value, 10);
+      if (n >= 2) print(row, n, a);
+      return;
+    }
+    if ((a = t.closest('.voidlast')) && drawer) {
+      e.preventDefault();
+      voidId(drawer, a.getAttribute('data-id'), a.getAttribute('data-cultivar'), a.getAttribute('data-today') === '1');
+      return;
+    }
+    if (t.closest('.voidrow') && row) {
+      e.preventDefault();
+      voidId(drawer, row.getAttribute('data-last'), row.getAttribute('data-cultivar'), row.getAttribute('data-lasttoday') === '1');
+      return;
+    }
+    if (t.closest('.reprint') && row) {
+      e.preventDefault();
+      var id = row.getAttribute('data-last');
+      if (!id) { say(T.noTagsYet, true); return; }
+      RO.reprintTag(API, id, printOpts)
+        .then(function (d) { if (d.print_via !== 'agent') say(fmt(T.printedOk, 'id', id)); })
+        .catch(function (err) { say(fmt(T.printFailed, 'e', err.message), true); });
+      return;
+    }
+    if ((a = t.closest('.cvname')) && row) {
+      var mine = row.querySelector('.cvdrawer');
+      var opening = mine.hidden;
+      // One open drawer per bay: opening this one closes the other.
+      each('.cvrow', drawer, function (r) {
+        r.querySelector('.cvdrawer').hidden = true;
+        r.querySelector('.cvname').setAttribute('aria-expanded', 'false');
+      });
+      mine.hidden = !opening;
+      a.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      return;
+    }
+    if ((a = t.closest('.addcv'))) {
+      addBay = Number(a.getAttribute('data-bay'));
+      addCv.value = '';
+      renderZones([]);
+      addErr.hidden = true;
+      addSave.disabled = false;
+      openModal(add);
+    }
+  });
+  // The chip is a button to the keyboard too; Enter/Space must not toggle the drawer.
+  document.addEventListener('keydown', function (e) {
+    var chip = e.target.closest && e.target.closest('.storagechip');
+    if (chip && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openStorage(chip); }
+  });
+  // Whole bay down asks first; the per-cultivar Finished does not (one tap, reopenable).
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.matches && f.matches('form[data-confirm]') && !confirm(f.getAttribute('data-confirm'))) e.preventDefault();
+  });
+})();
+</script>`;
 }
 
 // ─── PIPELINE ───────────────────────────────────────────
@@ -7352,6 +7662,23 @@ ${section('#b8841c', L('Already in supersacks', 'Ya en supersacos'), L('Bagged t
 }
 
 /**
+ * What agent-mode printing says while the barn PC prints (HARVEST_PRINT_CLIENT
+ * reads these from opts.T). Shared by the session and tags-by-bay screens.
+ */
+function agentPrintStrings(ui) {
+  return {
+    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
+    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
+    printAgentFailed: ui.lang === 'es'
+      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
+      : '⚠ Tag {id} did not print: {e} — use Reprint',
+    printAgentSlow: ui.lang === 'es'
+      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
+      : '⚠ No answer from the printer. Check the barn PC.',
+  };
+}
+
+/**
  * The screen the worker actually lives on during a takedown. Quantity is
  * deliberately NOT asked up front — you don't know how many sacks a rack
  * yields until it's empty, and pre-printing leaves orphan serials that can end
@@ -7498,14 +7825,7 @@ ${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_fin
     printTagFill: ui.t('printTagFill', { n: '{n}' }), fillSavedOn: ui.t('fillSavedOn', { id: '{id}', n: '{n}' }),
     reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
     tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
-    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
-    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
-    printAgentFailed: ui.lang === 'es'
-      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
-      : '⚠ Tag {id} did not print: {e} — use Reprint',
-    printAgentSlow: ui.lang === 'es'
-      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
-      : '⚠ No answer from the printer. Check the barn PC.',
+    ...agentPrintStrings(ui),
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
