@@ -294,6 +294,33 @@ test('10. sack_out_today groups two sacks to A and one to stock', async () => {
   assert.equal(gs.sacks_needed, null);
 });
 
+test('10b. the Today count is order-wide: sacks out on every day, of the sacks the whole line takes', async () => {
+  // 2026-10-13: Swiss read "22 of 65" after 102 lb of tops had been credited.
+  // 65 was what was STILL needed, so the right-hand number shrank as the day
+  // was trimmed and read as the total to everyone. The total is the line's
+  // ordered tops at the sack rate; the left-hand number is every sack ever
+  // taken out for that order, not just today's.
+  order('A', { rank: 'a0000', lines: [{ qty: 200, credited: 50 }] });
+  const yesterday = sack();
+  sqlite.prepare(`UPDATE harvest_sacks SET opened_at = datetime('now', '-1 day'), out_order_id = 'A', out_order_source = 'queue', out_by = 'scan' WHERE sack_id = ?`).run(yesterday);
+  const s1 = sack(), s2 = sack();
+  await scan(s1); await scan(s2);
+  const q = await computeQueue(env.DB);
+  const r = await call('GET', 'sack_out_today');
+  const ga = r.groups.find(g => g.order?.id === 'A');
+  assert.equal(ga.sacks_today, 2, "yesterday's sack is not in today's rows");
+  assert.equal(ga.sacks.length, 2);
+  assert.equal(ga.sacks_out, 3, 'but it counts toward the order');
+  assert.equal(ga.sacks_total, 4, '200 lb ordered / 50 lb per sack, regardless of what is credited');
+  assert.equal(ga.sacks_needed, pass(q, 'A').sacksNeeded, 'still-needed stays as it was');
+  assert.ok(ga.sacks_needed < ga.sacks_total);
+
+  const s3 = sack('Nonesuch Kush', 'NONE');
+  await scan(s3);
+  const gs = (await call('GET', 'sack_out_today')).groups.find(g => g.order == null);
+  assert.equal(gs.sacks_out, null); assert.equal(gs.sacks_total, null);
+});
+
 test('11. cost of one proposing scan', async () => {
   order('A', { rank: 'a0000', lines: [{ qty: 200 }] });
   order('B', { rank: 'a0001', lines: [{ qty: 100 }] });

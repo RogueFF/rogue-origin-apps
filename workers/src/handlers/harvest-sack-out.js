@@ -221,17 +221,33 @@ export async function sackOutToday(db, env, params, deps) {
   for (const r of rows) {
     const k = `${r.season}|${r.cultivar}|${r.out_order_id || ''}`;
     if (!groups.has(k)) {
-      let need = null;
+      let need = null, total = null, out = null;
       const block = (queue?.blocks || []).find(b => b.orderId === r.out_order_id);
       if (block) {
         const ids = await cultivarIdsFor(db, r.cultivar);
         const pass = (block.passes || []).find(p => ids.map(String).includes(String(p.cultivarId)));
         need = pass?.sacksNeeded ?? null;
+        // THE COUNT THE WATER SPIDER READS IS ORDER-WIDE. On 2026-10-13 Swiss
+        // showed "22 of 65": 65 was what was still to pull after the day's
+        // tops were credited, so it shrank through the day and everyone read
+        // it as the total. `sacks_total` is the whole line at the sack rate,
+        // and `sacks_out` is every sack ever taken out for the order, so the
+        // pair holds steady and "of" means what the SOP says it means.
+        const tops = Number(pass?.topsLbs), rate = Number(pass?.sackRatePerSack);
+        if (tops > 0 && rate > 0) total = Math.round((tops / rate) * 10) / 10;
+      }
+      if (r.out_order_id) {
+        const n = await queryOne(db, `
+          SELECT COUNT(*) AS n FROM harvest_sacks
+          WHERE is_test = ? AND voided_at IS NULL AND opened_at IS NOT NULL
+            AND out_order_id = ? AND season = ? AND cultivar = ?
+        `, [isTest, r.out_order_id, r.season, r.cultivar]);
+        out = n ? Number(n.n) : null;
       }
       const o = await orderInfo(db, r.out_order_id);
       if (o) delete o.source;
       groups.set(k, { season: r.season, cultivar: r.cultivar, cultivar_code: codeOf(r),
-        order: o, sacks_today: 0, sacks_needed: need, sacks: [] });
+        order: o, sacks_today: 0, sacks_needed: need, sacks_out: out, sacks_total: total, sacks: [] });
     }
     const g = groups.get(k);
     g.sacks_today++;
