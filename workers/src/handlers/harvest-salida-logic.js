@@ -131,9 +131,12 @@ export function groupToday(today, pending, s) {
   const groups = (today && Array.isArray(today.groups)) ? today.groups : [];
   for (const g of groups) {
     const dest = g.order ? (g.order.nickname || g.order.shopify_order_name || '') : s.stock;
-    const n = g.sacks_today || 0;
-    const need = g.sacks_needed != null ? Math.ceil(Number(g.sacks_needed) - 1e-9) : null;
-    const count = countText(n, g.sacks_needed, s);
+    // Order-wide when the server says so ("22 of 86": every sack out for the
+    // order, of what the whole line takes); today's figures from an older server.
+    const n = g.sacks_out != null ? Number(g.sacks_out) : (g.sacks_today || 0);
+    const m = g.sacks_total != null ? g.sacks_total : g.sacks_needed;
+    const need = m != null ? Math.ceil(Number(m) - 1e-9) : null;
+    const count = countText(n, m, s);
     out.push({ title: (g.cultivar || '') + ' · ' + dest, dest, cultivar: g.cultivar || '', n, need, count, pending: false,
       rows: (g.sacks || []).map((x) => ({ sack_id: x.sack_id, serial: x.serial, zone: x.zone || '',
         cut: x.cut_number != null ? s.cut + ' ' + x.cut_number : '', time: pacificTime(x.opened_at), opened_at: x.opened_at, can_undo: x.can_undo === true })) });
