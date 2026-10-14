@@ -221,6 +221,18 @@ test('groupToday: can_undo passes through only when true; progress numbers round
   assert.equal(g[0].need, 15); assert.equal(g[0].dest, 'Miami'); assert.equal(g[0].count, '3 de 15 bolsas');
 });
 
+test('groupToday: the count is order-wide when the server sends it, today-only when it does not', () => {
+  // "22 de 86": every sack out for Swiss so far, of what the whole line takes.
+  // sacks_needed (what is still to pull) must not be the right-hand number.
+  const g = groupToday({ groups: [{ cultivar: 'SL', order: { nickname: 'Swiss' }, sacks_today: 5, sacks_needed: 65,
+    sacks_out: 22, sacks_total: 85.9, sacks: [] }] }, [], S);
+  assert.equal(g[0].count, '22 de 86 bolsas');
+  assert.equal(g[0].n, 22); assert.equal(g[0].need, 86);
+  // An older server without the fields falls back to today's numbers.
+  const old = groupToday({ groups: [{ cultivar: 'SL', order: { nickname: 'Swiss' }, sacks_today: 5, sacks_needed: 65, sacks: [] }] }, [], S);
+  assert.equal(old[0].count, '5 de 65 bolsas');
+});
+
 test('undoNeedsConfirm: one tap inside 60 s, confirm on older rows', () => {
   const now = Date.parse('2026-10-06T16:43:00Z');
   assert.equal(undoNeedsConfirm('2026-10-06 16:42:30', now), false);
