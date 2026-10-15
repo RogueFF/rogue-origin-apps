@@ -1014,6 +1014,26 @@ async function getOrderHistory(request, env) {
 }
 
 /**
+ * After usage is written: any touched Grove lane now at 'order' with no open
+ * request → raise it (dedup is raiseReorderRequest's). Never throws — the
+ * webhook must not fail (and be retried by Flow) over a notification.
+ */
+async function checkLedgerTriggers(cardIds, env, ctx) {
+  for (const id of cardIds) {
+    try {
+      const rows = await laneRows(env, id);
+      if (!rows[0]) continue;
+      const lane = await computeLane(env, rows[0]);
+      if (lane.status !== 'order' || lane.openRequest) continue;
+      const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [id]);
+      if (card) await raiseReorderRequest(card, env, null, lane);   // null ctx → the send is awaited inside this job
+    } catch (e) {
+      console.error('[grove][ledger-trigger]', id, e);
+    }
+  }
+}
+
+/**
  * POST ?action=orderUsage&secret=<WEBHOOK_SECRET>  — Shopify Flow "Order created".
  * Writes one kanban_usage row per (line item × recipe). Idempotent on
  * (source, ref, card_id, variant_id), so Flow retries are harmless.
@@ -1037,7 +1057,12 @@ async function orderUsage(body, request, env, ctx) {
     'INSERT OR IGNORE INTO kanban_usage (card_id, qty, source, ref, variant_id, at) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(r.card_id, r.qty, r.source, r.ref, r.variant_id, r.at)));
   const touched = [...new Set(rows.filter(r => r.card_id > 0).map(r => r.card_id))];
-  // Task 10 adds: ledger trigger check for `touched`
+  // The backstop: a lane the ledger has taken to its reorder point raises the
+  // Damon request on its own, even if nobody pulls the red card.
+  if (touched.length) {
+    const job = checkLedgerTriggers(touched, env, ctx);
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job); else await job;
+  }
   return successResponse({ success: true, written: rows.length, unmapped: rows.filter(r => !r.card_id).length, touched });
 }
 
