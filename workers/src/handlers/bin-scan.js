@@ -32,17 +32,22 @@ const v = document.getElementById('v');
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const pair = (es, en, cls = 'msg') => [el('p', cls, es), el('p', 'en', en)];
 function show(bg, nodes) { document.body.style.background = bg; v.replaceChildren(...nodes); }
-function fail(msg) {
-  show('#7f1d1d', [el('h1', null, '✗'), el('p', 'big', msg), ...pair('Avisa a Koa', 'Tell Koa')]);
+/** Spanish first by status; the server's (English) message only for the unexpected. */
+function fail(status, msg) {
+  const [es, en] = status === 404 ? ['Tarjeta no reconocida', 'Card not recognised']
+    : status === 400 ? ['Tarjeta reemplazada o anulada', 'Card replaced or void']
+    : ['Error', msg || ''];
+  show('#7f1d1d', [el('h1', null, '✗'), el('p', 'big', es), el('p', 'en', en), ...pair('Avisa a Koa', 'Tell Koa')]);
 }
 function ok(d) {
-  const lane = d.lane || {}, created = d.request && d.request.outcome === 'created';
+  const lane = d.lane || {}, rq = d.request || {};
   const bins = el('div', 'bins'), n = Math.max(0, Math.min(Number(lane.bins) || 0, 80));
   for (let i = 0; i < n; i++) bins.append(el('i', i < (Number(lane.redTapeAtBins) || 0) ? 'r' : ''));
   show(COLOURS[lane.colour] || '#8b1a1a', [
     el('h1', null, 'PEDIR'), el('p', 'big', lane.item || ''),
-    ...(created ? pair('Solicitud enviada a Damon ✓', 'Request sent to Damon')
-                : pair('Ya está pedido · correo reenviado', 'Already requested · email re-sent')),
+    ...(rq.outcome === 'created' ? pair('Solicitud enviada a Damon ✓', 'Request sent to Damon')
+      : rq.retried ? pair('Ya está pedido · correo reenviado', 'Already requested · email re-sent')
+      : pair('Ya está pedido · Damon ya tiene el correo', 'Already requested · Damon already has the email')),
     bins,
     el('p', 'msg', '~' + (lane.bins ?? '?') + ' contenedores' + (lane.orderBy ? ' · pedir antes del ' + lane.orderBy : '')),
     el('p', 'en', '~' + (lane.bins ?? '?') + ' bins' + (lane.orderBy ? ' · order by ' + lane.orderBy : '')),
@@ -51,14 +56,14 @@ function ok(d) {
 }
 fetch(BASE + '/api/kanban?action=scanCard', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TOKEN }),
-}).then(r => r.json().catch(() => ({})).then(d => (r.ok && d.success ? ok(d) : fail(d.error || 'Error ' + r.status))))
-  .catch(() => fail('Sin conexión / No connection'));
+}).then(r => r.json().catch(() => ({})).then(d => (r.ok && d.success ? ok(d) : fail(r.status, d.error || 'HTTP ' + r.status))))
+  .catch(() => fail(0, 'Sin conexión / No connection'));
 </script></body></html>`;
 }
 
 export async function handleBinScan(request, env) {
   const token = new URL(request.url).pathname.replace(/^\/k\//, '').trim();
-  const base = env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
+  const base = (env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev').replace(/\/+$/, '');
   return new Response(scanPageHtml(token, base), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   });

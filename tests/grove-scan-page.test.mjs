@@ -34,3 +34,17 @@ test('GET /k/<token> never touches the database', async () => {
   const html = await res.text();
   assert.ok(html.includes('"abcdefgh23"'));
 });
+
+test('errors are Spanish first by status; the three rescan messages exist', () => {
+  const html = scanPageHtml('abcdefgh23', BASE);
+  for (const s of ['Tarjeta no reconocida', 'Card not recognised', 'Tarjeta reemplazada o anulada', 'Card replaced or void',
+    'Solicitud enviada a Damon ✓', 'Ya está pedido · correo reenviado', 'Ya está pedido · Damon ya tiene el correo',
+    'Already requested · Damon already has the email', 'retried']) assert.ok(html.includes(s), s);
+});
+
+test('a trailing slash on PUBLIC_API_BASE is stripped', async () => {
+  const res = await handleBinScan(new Request(`${BASE}/k/abcdefgh23`), { PUBLIC_API_BASE: BASE + '/' });
+  const html = await res.text();
+  assert.ok(html.includes(`"${BASE}"`));
+  assert.ok(!html.includes(`"${BASE}/"`));
+});
