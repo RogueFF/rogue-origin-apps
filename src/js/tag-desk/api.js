@@ -30,7 +30,17 @@ export async function setCartNote(cardId, note, currentQty) {
   return setCartQty(cardId, currentQty);
 }
 
+// ---------- Grove bin lanes ----------
+export const getBinStatus = () => apiGet(EP, 'getBinStatus').then(ok);
+export const receiveBins = body => apiPost(EP, 'receiveBins', body).then(ok);
+export const recountBins = (cardId, sealedBins, by = 'desk') => apiPost(EP, 'recount', { cardId, sealedBins, by }).then(ok);
+export const setBinConfig = body => apiPost(EP, 'setBinConfig', body).then(ok);
+export const makeLaneKit = cardId => apiPost(EP, 'makeLaneKit', { cardId }).then(ok);
+export const getRecipes = () => apiGet(EP, 'getRecipes').then(ok);
+export const setRecipe = body => apiPost(EP, 'setRecipe', body).then(ok);
+
 export async function loadAll() {
-  const [cards, cart, orders, requests] = await Promise.all([getCards(), getCart(), getOrders(), getRequests()]);
-  return { cards, cart, orders, requests };
+  // bins: a worker without the bins migration still loads the Desk.
+  const [cards, cart, orders, requests, bins] = await Promise.all([getCards(), getCart(), getOrders(), getRequests(), getBinStatus().catch(() => ({ lanes: [], unmapped: [] }))]);
+  return { cards, cart, orders, requests, bins };
 }

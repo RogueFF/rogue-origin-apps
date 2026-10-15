@@ -39,6 +39,7 @@ export const T = {
   loading: ['Loading the live cards, cart and orders…', 'Cargando tarjetas, carrito y pedidos…'], loadFail: ['Could not reach the farm server. Check Wi-Fi and reload.', 'No se pudo llegar al servidor de la granja. Revisa el Wi-Fi y recarga.'], saving: ['Saving…', 'Guardando…'], saveFail: ['Not saved — the server did not answer', 'No se guardó — el servidor no respondió'],
   deskMemory: ['Receipts, push-offs and print state live in this browser until the next build gives them a table.', 'Recibos, aplazamientos y estado de impresión viven en este navegador hasta que la próxima versión les dé una tabla.'],
   deleteForever: ['Delete permanently', 'Borrar para siempre'], hideCard: ['Hide from this desk', 'Ocultar en este escritorio'],
+  recount: ['Recount', 'Recontar'], laneKit: ['Lane kit', 'Kit del carril'], settings: ['Settings', 'Ajustes'], redTape: ['Red tape at bin', 'Cinta roja en el bin'], noRecipe: ['Shopify items with no bag recipe', 'Productos de Shopify sin bolsa asignada'], lastCount: ['last count', 'último conteo'], requestedDamon: ['Requested from Damon', 'Solicitado a Damon'],
 };
 
 let langGetter = () => 'en';
