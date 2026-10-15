@@ -286,6 +286,7 @@ const laneById = id => (M.bins?.lanes || []).find(l => l.cardId === id);
 const laneSize = (l, fl) => { const c = byId(l.cardId); const v = c ? variantL(c, fl) : { lead: null, rest: l.item }; return { size: v.lead || l.item, rest: v.lead ? v.rest : '' }; };
 /** After a bin write: the lane list again, or at least the lane the write answered with. */
 async function refreshBins(lane) { try { M.bins = await api.getBinStatus(); } catch (e) { console.error(e); if (lane && M.bins?.lanes) M.bins.lanes = M.bins.lanes.map(x => x.cardId === lane.cardId ? lane : x); } }
+const numAttr = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))) ? '' : String(Number(v));
 const intOf = (sel, min = 0) => { const raw = String($(sel)?.value ?? '').trim(); const n = Number(raw); return raw !== '' && Number.isInteger(n) && n >= min ? n : null; };
 function binDialog(title, body, saveTxt, onSave, onOpen) { $('#rvTitle').textContent = title; $('#rvBody').innerHTML = body; const sv = $('#rvSave'); sv.textContent = saveTxt; sv.disabled = false;
   sv.onclick = async () => { sv.disabled = true; try { const msg = await onSave(); if (msg === false) return; $('#recv').close(); render(); if (msg) toast(msg); } catch (e) { console.error(e); toast(`${t('saveFail')} · ${esc(e.message || '')}`); } finally { sv.disabled = false; } };
@@ -293,8 +294,8 @@ function binDialog(title, body, saveTxt, onSave, onOpen) { $('#rvTitle').textCon
 const needNum = () => { toast(ES() ? 'Escribe un número entero' : 'Enter a whole number'); return false; };
 
 function openReceive(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const cfg = ln.config || {}; const { size } = laneSize(ln);
-  const body = `<div class="f2"><div class="f"><label>${es ? 'Bins aún sellados en el estante' : 'Bins still sealed on the rack'}</label><input id="rvLeft" type="number" min="0" inputmode="numeric" placeholder="${ln.bins}" style="font-size:22px;height:52px"></div><div class="f"><label>${es ? 'Cajas que llegaron' : 'Boxes arrived'}</label><input id="rvBoxes" type="number" min="0" inputmode="numeric" style="font-size:22px;height:52px"></div></div>
-    <div class="f2"><div class="f"><label>${es ? 'Bolsas por caja' : 'Bags per box'}</label><input id="rvPerBox" type="number" min="1" value="${cfg.bagsPerBox ?? ''}"></div><div class="f"><label>${es ? 'Bolsas por bin' : 'Bags per bin'}</label><input id="rvPerBin" type="number" min="1" value="${cfg.bagsPerBin ?? ''}"></div></div>
+  const body = `<div class="f2"><div class="f"><label>${es ? 'Bins aún sellados en el estante' : 'Bins still sealed on the rack'}</label><input id="rvLeft" type="number" min="0" inputmode="numeric" placeholder="${numAttr(ln.bins)}" style="font-size:22px;height:52px"></div><div class="f"><label>${es ? 'Cajas que llegaron' : 'Boxes arrived'}</label><input id="rvBoxes" type="number" min="0" inputmode="numeric" style="font-size:22px;height:52px"></div></div>
+    <div class="f2"><div class="f"><label>${es ? 'Bolsas por caja' : 'Bags per box'}</label><input id="rvPerBox" type="number" min="1" value="${numAttr(cfg.bagsPerBox)}"></div><div class="f"><label>${es ? 'Bolsas por bin' : 'Bags per bin'}</label><input id="rvPerBin" type="number" min="1" value="${numAttr(cfg.bagsPerBin)}"></div></div>
     <div class="f"><label>${es ? 'Lote / referencia Grove' : 'Lot / Grove reference'}</label><input id="rvLot" value="GRV-${id}-${M.today.slice(5).replace('-', '')}"></div><div class="live" id="rvLive"></div>`;
   const live = () => { const left = intOf('#rvLeft') ?? 0, boxes = intOf('#rvBoxes') ?? 0, perBox = intOf('#rvPerBox', 1) || cfg.bagsPerBox || 1, perBin = intOf('#rvPerBin', 1) || cfg.bagsPerBin || 1;
     const bins = left + Math.ceil((boxes * perBox) / perBin), tape = Math.ceil((ln.reorderPoint || 0) / perBin);
@@ -304,14 +305,14 @@ function openReceive(id) { const es = ES(); const ln = laneById(id); if (!ln) re
     const b = { cardId: id, leftoverBins, boxes, lot: $('#rvLot').value.trim() || undefined, by: 'desk' };
     const perBox = intOf('#rvPerBox', 1), perBin = intOf('#rvPerBin', 1); if (perBox && perBox !== cfg.bagsPerBox) b.bagsPerBox = perBox; if (perBin && perBin !== cfg.bagsPerBin) b.bagsPerBin = perBin;
     const r = await api.receiveBins(b); await refreshBins(r.lane); const nl = laneById(id) || r.lane;
-    let msg = es ? `Cinta roja en el bin ${nl.redTapeAtBins} · mueve la tarjeta roja` : `Red tape at bin ${nl.redTapeAtBins} · move the red card`;
+    let msg = es ? `Cinta roja en el bin ${nl.redTapeAtBins | 0} · mueve la tarjeta roja · imprime la etiqueta de cinta` : `Red tape at bin ${nl.redTapeAtBins | 0} · move the red card · print the tape label`;
     if (r.needsRecount) { const est = Math.floor((r.estimateBefore || 0) / (cfg.bagsPerBin || 1)); msg += es ? ` · ¿Recontar? El estimado decía ~${est} bins` : ` · Recount? The estimate said ~${est} bins`; }
     return msg;
   }, () => { ['#rvLeft', '#rvBoxes', '#rvPerBox', '#rvPerBin'].forEach(s2 => { $(s2).oninput = live; }); live(); });
 }
 
 function openRecount(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const { size } = laneSize(ln);
-  binDialog(`${t('recount')} · ${size}`, `<div class="f"><label>${es ? 'Cuenta los bins sellados en el estante (sin contar EN USO)' : 'Count the sealed bins on the rack (not the EN USO bin)'}</label><input id="rcSealed" type="number" min="0" inputmode="numeric" placeholder="${ln.bins}" style="font-size:28px;height:60px"></div><p class="muted" style="margin:0">${es ? `El estimado dice ~${ln.bins} bins. Tu conteo lo reemplaza.` : `The estimate says ~${ln.bins} bins. Your count replaces it.`}</p>`,
+  binDialog(`${t('recount')} · ${size}`, `<div class="f"><label>${es ? 'Cuenta los bins sellados en el estante (sin contar EN USO)' : 'Count the sealed bins on the rack (not the EN USO bin)'}</label><input id="rcSealed" type="number" min="0" inputmode="numeric" placeholder="${numAttr(ln.bins)}" style="font-size:28px;height:60px"></div><p class="muted" style="margin:0">${es ? `El estimado dice ~${ln.bins | 0} bins. Tu conteo lo reemplaza.` : `The estimate says ~${ln.bins | 0} bins. Your count replaces it.`}</p>`,
     es ? 'Guardar conteo' : 'Save count', async () => { const n = intOf('#rcSealed'); if (n == null) return needNum(); const r = await api.recountBins(id, n); await refreshBins(r.lane); return es ? `Conteo guardado · ${n} bins` : `Count saved · ${n} bins`; });
 }
 
@@ -319,16 +320,17 @@ const LANE_COLOURS = ['orange', 'teal', 'violet', 'olive', 'slate'];
 const COLOUR_ES = { orange: 'naranja', teal: 'verde azulado', violet: 'violeta', olive: 'oliva', slate: 'gris' };
 function openBinSettings(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const c = ln.config || {}; const { size } = laneSize(ln);
   const F = [['bagsPerBox', es ? 'Bolsas por caja' : 'Bags per box'], ['bagsPerBin', es ? 'Bolsas por bin' : 'Bags per bin'], ['leadDays', es ? 'Plazo (días)' : 'Lead time (days)'], ['safetyDays', es ? 'Reserva (días)' : 'Safety (days)'], ['moq', es ? 'Pedido mínimo (bolsas)' : 'Minimum order (bags)'], ['seedPerMonth', es ? 'Uso estimado por mes' : 'Estimated use per month']];
-  const body = `<div class="f2">${F.map(([k, l]) => `<div class="f"><label>${l}</label><input id="cfg-${k}" type="number" min="0" value="${c[k] ?? ''}"></div>`).join('')}</div>
+  const body = `<div class="f2">${F.map(([k, l]) => `<div class="f"><label>${l}</label><input id="cfg-${k}" type="number" min="0" value="${numAttr(c[k])}"></div>`).join('')}</div>
     <div class="f"><label>${es ? 'Color del carril' : 'Lane colour'}</label><select id="cfg-colour">${LANE_COLOURS.map(k => `<option value="${k}" ${ln.colour === k ? 'selected' : ''}>${es ? COLOUR_ES[k] : k}</option>`).join('')}</select></div>`;
   binDialog(`${t('settings')} · ${size}`, body, t('save'), async () => {
-    const b = { cardId: id }; for (const [k] of F) { const v = intOf(`#cfg-${k}`); if (v == null) return needNum(); if (v !== c[k]) b[k] = v; }
+    const b = { cardId: id }; for (const [k] of F) { const blank = String($(`#cfg-${k}`).value).trim() === ''; if (blank && c[k] == null) continue; const v = intOf(`#cfg-${k}`); if (v == null) return needNum(); if (v !== c[k]) b[k] = v; }
     const col = $('#cfg-colour').value; if (col !== ln.colour) b.colour = col;
     const r = await api.setBinConfig(b); await refreshBins(r.lane); return es ? 'Ajustes guardados' : 'Settings saved';
   });
 }
 
 function openMapRecipe(variantId) { const es = ES(); const u = (M.bins?.unmapped || []).find(x => String(x.variant_id) === String(variantId)); const gc = vendorCards('Grove');
+  if (!gc.length) { toast(es ? 'No hay tarjetas Grove para asignar' : 'No Grove cards to map to'); return; }
   const body = `<p class="muted" style="margin:0">${es ? `Variante de Shopify <code>${esc(variantId)}</code>${u ? ` · ${u.qty} vendidos` : ''}. ¿Qué bolsa usa cada venta?` : `Shopify variant <code>${esc(variantId)}</code>${u ? ` · ${u.qty} sold` : ''}. Which bag does each sale use?`}</p>
     <div class="f"><label>${es ? 'Bolsa Grove' : 'Grove bag'}</label><select id="mpCard">${gc.map(c => `<option value="${c.id}">${esc(shortName(c))}</option>`).join('')}</select></div>
     <div class="f"><label>${es ? 'Bolsas por venta' : 'Bags per sale'}</label><input id="mpQty" type="number" min="1" value="1"></div>`;
@@ -450,7 +452,7 @@ function laneTile(ln) { const es = ES(); const { size, rest } = laneSize(ln);
     <div class="sqs" role="img" aria-label="${bins} bins · ${t('redTape')} ${tape}">${sq}</div>
     <div class="lt-meta">${meta}${ln.recount ? ` <span class="lt-badge">${es ? 'recontar' : 'recount'}</span>` : ''}</div>
     ${req}
-    <div class="lt-acts"><button class="tb-btn ${urgent || rq ? 'btn-primary' : ''}" data-rv="${ln.cardId}">${t('receiveBins')}</button><button class="tb-btn" data-rc="${ln.cardId}">${t('recount')}</button><button class="tb-btn" data-kit="${ln.cardId}">${t('laneKit')}</button><button class="tb-btn ghost" data-cfg="${ln.cardId}">${t('settings')}</button></div>
+    <div class="lt-acts"><button class="tb-btn ${urgent || rq ? 'btn-primary' : ''}" data-rv="${ln.cardId}">${t('receiveBins')}</button><button class="tb-btn" data-rc="${ln.cardId}">${t('recount')}</button><button class="tb-btn" data-kit="${ln.cardId}">${t('laneKit')}</button><button class="tb-btn ghost" data-cfg="${ln.cardId}">${t('settings')}</button><button class="tb-btn btn-sm ghost lt-tape" data-tape="${ln.cardId}">${t('tapeLabel')}</button></div>
   </section>`; }
 
 function renderGrove() { const es = ES(); const el = $('#view-grove'); const B = M.bins || { lanes: [], unmapped: [] }; const lanes = B.lanes || [], unmapped = B.unmapped || [];
@@ -464,37 +466,53 @@ function renderGrove() { const es = ES(); const el = $('#view-grove'); const B =
   $$('[data-rv]', el).forEach(b => b.onclick = () => openReceive(+b.dataset.rv));
   $$('[data-rc]', el).forEach(b => b.onclick = () => openRecount(+b.dataset.rc));
   $$('[data-kit]', el).forEach(b => b.onclick = () => printLaneKit(+b.dataset.kit));
+  $$('[data-tape]', el).forEach(b => b.onclick = () => printTapeLabel(+b.dataset.tape));
   $$('[data-cfg]', el).forEach(b => b.onclick = () => openBinSettings(+b.dataset.cfg));
   $$('[data-map]', el).forEach(b => b.onclick = () => openMapRecipe(b.dataset.map));
   wire(el); }
 
-/** Lane kit: header card · red ORDER card · red-tape label, one print window. Printed once per lane, laminated. */
-async function printLaneKit(id) { const es = ES(); const ln = laneById(id); if (!ln) return;
-  const w = window.open('', '_blank'); // opened inside the click so the browser allows it; filled once the token is back
-  if (!w) { toast(es ? 'El navegador bloqueó la ventana — permite ventanas emergentes' : 'The browser blocked the window — allow pop-ups'); return; }
-  try { w.document.open(); w.document.write(`<!doctype html><meta charset="utf-8"><title>Lane kit</title><p style="font:16px system-ui;padding:24px">${es ? 'Preparando el kit…' : 'Preparing the kit…'}</p>`); w.document.close(); } catch { /* a closed window */ }
-  let r; try { r = await api.makeLaneKit(id); } catch (e) { console.error(e); try { w.close(); } catch { /* */ } toast(`${t('saveFail')} · ${esc(e.message || '')}`); return; }
-  const nl = r.lane || ln; const { size, rest } = laneSize(nl, 'es'); const col = LANE_HEX[nl.colour] || '#8b1a1a'; const colEs = (COLOUR_ES[nl.colour] || '').toUpperCase(); const tape = nl.redTapeAtBins;
-  const css = `@page{size:8.5in 11in;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Outfit,system-ui,sans-serif;color:#1d1f1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+const KIT_CSS = col => `@page{size:8.5in 11in;margin:0}*{box-sizing:border-box}body{margin:0;font-family:system-ui,'Segoe UI',Arial,sans-serif;color:#1d1f1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .pg{width:8.5in;height:11in;padding:.6in .7in;display:flex;flex-direction:column;gap:.3in;page-break-after:always;break-after:page;position:relative;overflow:hidden}.pg:last-child{page-break-after:auto;break-after:auto}
     .band{height:.55in;border-radius:10px;background:${col}}
     .size{font-size:150px;font-weight:800;line-height:.95;letter-spacing:-.02em}.rest{font-size:34px;color:#444}.col{font-size:30px;font-weight:700;color:${col};letter-spacing:.08em}
-    .photo{flex:1;min-height:2.6in;border:4px dashed #b9b4a8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#8a857a}
+    .photo{flex:1;min-height:2.6in;border:4px dashed #b9b4a8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#8a857a;overflow:hidden}.photo.has{border:0}.photo img{max-width:100%;max-height:100%;object-fit:contain}
     .rules{font-size:26px;line-height:1.3}.rules p{margin:0 0 .16in}.rules .en{display:block;font-size:19px;color:#555}
     .red{background:#b5493a;color:#fff}.red .band{height:.7in;background:${col};border:4px solid #fff}
     .pedir{font-size:110px;font-weight:800;line-height:1}.qr{background:#fff;padding:.25in;border-radius:16px;width:4.6in;height:4.6in;align-self:center}.qr svg{width:100%;height:100%;display:block}
     .scan{font-size:46px;font-weight:800;text-align:center}.scan .en{display:block;font-size:26px;font-weight:500}.keep{font-size:24px;text-align:center}.keep .en{display:block;font-size:18px;opacity:.85}.url{font:14px monospace;text-align:center;opacity:.8;word-break:break-all}
     .tapelbl{height:auto;justify-content:flex-start}.lbl{width:7in;border:6px solid #dc2626;border-left:.5in solid ${col};border-radius:12px;padding:.3in .4in;font-size:48px;font-weight:800;line-height:1.1}.lbl .en{display:block;font-size:26px;font-weight:500;color:#444}.cut{font-size:14px;color:#888}`;
-  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Lane kit · ${esc(size)}</title><style>${css}</style></head><body>
-    <section class="pg"><div class="band"></div><div class="size">${esc(size)}</div><div class="rest">${esc(rest)}${colEs ? ` · <span class="col">${esc(colEs)}</span>` : ''}</div><div class="photo">foto de la bolsa · bag photo</div>
-      <div class="rules"><p>1. Solo un bin abierto por carril. Abre el siguiente cuando EN USO esté vacío.<span class="en">Only one open bin per lane. Open the next one when EN USO is empty.</span></p><p>2. Si descubres la tarjeta roja, escanéala.<span class="en">If you uncover the red card, scan it.</span></p></div></section>
-    <section class="pg red"><div class="band"></div><div class="pedir">PEDIR · ${esc(size)}</div><div class="qr">${qrSvg(r.redCard.url)}</div><div class="scan">ESCANEA ESTA TARJETA<span class="en">scan this card</span></div><div class="keep">Déjala aquí hasta la próxima entrega<span class="en">Leave it here until the next delivery</span></div><div class="url">${esc(r.redCard.url)}</div></section>
-    <section class="pg tapelbl"><div class="lbl">Cinta roja en el bin ${tape}<span class="en">Red tape at bin ${tape} · ${esc(size)}</span></div><div class="cut">✂ ${es ? 'recorta y pega en la pared del carril, a la altura de la cinta' : 'cut out and stick on the lane wall at the tape'}</div></section>
-  </body></html>`;
-  w.document.open(); w.document.write(html); w.document.close();
-  await refreshBins(nl); render();
-  setTimeout(() => { try { w.focus(); w.print(); } catch { /* closed */ } }, 300);
-  toast(es ? `Kit listo · cinta roja en el bin ${tape}` : `Kit ready · red tape at bin ${tape}`); }
+const kitDoc = (title, col, pages) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${KIT_CSS(col)}</style></head><body>${pages.join('')}</body></html>`;
+const tapePage = (size, tape, col, es) => `<section class="pg tapelbl"><div class="lbl">Cinta roja en el bin ${tape}<span class="en">Red tape at bin ${tape} · ${esc(size)}</span></div><div class="cut">✂ ${es ? 'recorta y pega en la pared del carril, a la altura de la cinta' : 'cut out and stick on the lane wall at the tape'}</div></section>`;
+function openPrintWin(es) { const w = window.open('', '_blank'); if (!w) toast(es ? 'El navegador bloqueó la ventana — permite ventanas emergentes' : 'The browser blocked the window — allow pop-ups'); return w; }
+function writeDoc(w, html) { try { w.document.open(); w.document.write(html); w.document.close(); return true; } catch (e) { console.warn('print window', e); return false; } }
+const printSoon = w => setTimeout(() => { try { w.focus(); w.print(); } catch { /* closed */ } }, 300);
+const laneCol = l => LANE_HEX[l.colour] || '#8b1a1a';
+
+/** Just the red-tape label (page 3), from the lane as it stands. No API call: the red card on the rack keeps working. */
+function printTapeLabel(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const { size } = laneSize(ln, 'es'); const tape = Math.max(0, ln.redTapeAtBins | 0);
+  const w = openPrintWin(es); if (!w) return;
+  if (writeDoc(w, kitDoc(`Tape label · ${size}`, laneCol(ln), [tapePage(size, tape, laneCol(ln), es)]))) printSoon(w); }
+
+/** Full lane kit: header card · red ORDER card · red-tape label. Mints a new red card, so the old one stops working. */
+async function printLaneKit(id) { const es = ES(); const ln = laneById(id); if (!ln) return;
+  if (!confirm(es ? 'Esto reemplaza la tarjeta roja del estante — la anterior deja de funcionar. ¿Imprimir el kit completo?' : 'This replaces the red card on the rack — the old one stops working. Print a full kit?')) return;
+  const w = openPrintWin(es); if (!w) return; // opened inside the click so the browser allows it; filled once the token is back
+  writeDoc(w, `<!doctype html><meta charset="utf-8"><title>Lane kit</title><p style="font:16px system-ui;padding:24px">${es ? 'Preparando el kit…' : 'Preparing the kit…'}</p>`);
+  let r; try { r = await api.makeLaneKit(id); } catch (e) { console.error(e); try { w.close(); } catch { /* */ } toast(`${t('saveFail')} · ${esc(e.message || '')}`); return; }
+  const nl = r.lane || ln; let ok = false;
+  try {
+    const { size, rest } = laneSize(nl, 'es'); const col = laneCol(nl); const colEs = (COLOUR_ES[nl.colour] || '').toUpperCase(); const tape = Math.max(0, nl.redTapeAtBins | 0);
+    const c = byId(id); const photo = c?.picture ? `<div class="photo has"><img src="${esc(c.picture)}" alt="" referrerpolicy="no-referrer"></div>` : '<div class="photo">foto de la bolsa · bag photo</div>';
+    ok = writeDoc(w, kitDoc(`Lane kit · ${size}`, col, [
+      `<section class="pg"><div class="band"></div><div class="size">${esc(size)}</div><div class="rest">${esc(rest)}${colEs ? ` · <span class="col">${esc(colEs)}</span>` : ''}</div>${photo}
+        <div class="rules"><p>1. Solo un bin abierto por carril. Abre el siguiente cuando EN USO esté vacío.<span class="en">Only one open bin per lane. Open the next one when EN USO is empty.</span></p><p>2. Si descubres la tarjeta roja, escanéala.<span class="en">If you uncover the red card, scan it.</span></p></div></section>`,
+      `<section class="pg red"><div class="band"></div><div class="pedir">PEDIR · ${esc(size)}</div><div class="qr">${qrSvg(r.redCard.url)}</div><div class="scan">ESCANEA ESTA TARJETA<span class="en">scan this card</span></div><div class="keep">Déjala aquí hasta la próxima entrega<span class="en">Leave it here until the next delivery</span></div><div class="url">${esc(r.redCard.url)}</div></section>`,
+      tapePage(size, tape, col, es)]));
+    if (ok) { printSoon(w); toast(es ? `Kit listo · cinta roja en el bin ${tape} · la tarjeta roja anterior ya no funciona` : `Kit ready · red tape at bin ${tape} · the old red card no longer works`); }
+    else toast(es ? 'La ventana de impresión se cerró — el kit nuevo ya está activo, vuelve a imprimir' : 'The print window closed — the new kit is already live, print it again');
+  } catch (e) { console.error(e); toast(`${t('saveFail')} · ${esc(e.message || '')}`); }
+  finally { await refreshBins(nl); render(); } // the server already retired the old card
+}
 
 // ---------- TAG ----------
 const TAG_STATES = [['queued', ['Queued', 'En la lista']], ['already', ['Already on the list', 'Ya está en la lista']], ['held', ['Waiting for the check day', 'Esperando la revisión']], ['on-order', ['On order', 'Ya está pedido']], ['requested', ['Requested from Damon', 'Solicitado a Damon']], ['out', ['Red card · OUT', 'Tarjeta roja · SE ACABÓ']], ['bad', ['Not saved', 'No se guardó']], ['unknown', ['Card not recognised', 'Tarjeta no reconocida']], ['removed', ['Removed from the list', 'Quitado de la lista']]];

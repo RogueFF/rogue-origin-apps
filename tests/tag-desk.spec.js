@@ -283,7 +283,7 @@ test('grove: Receive posts leftover + boxes and the toast names the new red-tape
   const call = api.calls.find(c => c.action === 'receiveBins');
   expect(call.body).toMatchObject({ cardId: 21, leftoverBins: 39, boxes: 25 });
   const toast = await page.$eval('.toast', e => e.innerText);
-  expect(toast).toMatch(/Red tape at bin 42 · move the red card/); expect(toast).toMatch(/Recount\?/);
+  expect(toast).toMatch(/Red tape at bin 42 · move the red card · print the tape label/); expect(toast).toMatch(/Recount\?/);
   expect(await page.$eval('.lane-tile[data-lane="21"] h3', e => e.innerText)).toMatch(/^OK until/);
 });
 
@@ -292,22 +292,52 @@ test('grove: Recount posts one number; Map assigns a recipe', async ({ page }) =
   await page.goto(PAGE); await page.waitForSelector('.vt');
   await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
   await page.click('.lane-tile[data-lane="99"] [data-rc]'); await page.waitForSelector('#recv[open]');
-  await page.fill('#rcSealed', '9'); await page.click('#rvSave'); await page.waitForTimeout(300);
+  await page.fill('#rcSealed', '9'); await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Count saved")');
   expect(api.calls.find(c => c.action === 'recount').body).toMatchObject({ cardId: 99, sealedBins: 9 });
   await page.click('[data-map="4455667788"]'); await page.waitForSelector('#recv[open]');
-  await page.selectOption('#mpCard', '54'); await page.click('#rvSave'); await page.waitForTimeout(300);
+  await page.selectOption('#mpCard', '54'); await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Mapped")');
   expect(api.calls.find(c => c.action === 'setRecipe').body).toMatchObject({ variant_id: '4455667788', card_id: 54, qty: 1 });
   expect(await page.$('[data-map="4455667788"]')).toBeNull();
 });
 
-test('grove: Lane kit opens a print window with PEDIR and the /k/ URL', async ({ page }) => {
-  await mockApi(page);
-  await page.goto(PAGE); await page.waitForSelector('.vt');
-  await page.evaluate(() => { window.open = () => { const w = { document: { html: '', open() {}, write(s) { this.html += s; }, close() {} }, focus() {}, print() {} }; window.__kit = w; return w; }; });
+const stubPrintWindow = page => page.evaluate(() => { window.__kits = []; window.open = () => { const w = { document: { html: '', open() { this.html = ''; }, write(s) { this.html += s; }, close() {} }, focus() {}, print() {}, close() {} }; window.__kits.push(w); return w; }; });
+
+test('grove: Lane kit asks first, then opens a print window with PEDIR, the /k/ URL and the bag photo slot', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt'); await stubPrintWindow(page);
   await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
-  await page.click('.lane-tile[data-lane="21"] [data-kit]'); await page.waitForFunction(() => window.__kit && window.__kit.document.html.length > 0);
-  const html = await page.evaluate(() => window.__kit.document.html);
+  let asked = ''; page.once('dialog', d => { asked = d.message(); d.dismiss(); });
+  await page.click('.lane-tile[data-lane="21"] [data-kit]'); await page.waitForTimeout(200);
+  expect(asked).toMatch(/replaces the red card on the rack — the old one stops working/);
+  expect(api.calls.some(c => c.action === 'makeLaneKit')).toBe(false); expect(await page.evaluate(() => window.__kits.length)).toBe(0);
+  page.once('dialog', d => d.accept());
+  await page.click('.lane-tile[data-lane="21"] [data-kit]'); await page.waitForFunction(() => window.__kits[0] && /PEDIR/.test(window.__kits[0].document.html));
+  const html = await page.evaluate(() => window.__kits[0].document.html);
   expect(html).toMatch(/PEDIR · 1 oz/); expect(html).toMatch(/\/k\/tok21/); expect(html).toMatch(/Cinta roja en el bin 42/); expect(html).toMatch(/Solo un bin abierto por carril/);
+  expect(html).not.toMatch(/Outfit/);
+  expect(api.calls.filter(c => c.action === 'makeLaneKit').length).toBe(1);
+});
+
+test('grove: Tape label prints page 3 only, with no API call', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt'); await stubPrintWindow(page);
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  const before = api.calls.length;
+  await page.click('.lane-tile[data-lane="21"] [data-tape]'); await page.waitForFunction(() => window.__kits[0] && window.__kits[0].document.html.length > 0);
+  const html = await page.evaluate(() => window.__kits[0].document.html);
+  expect(html).toMatch(/Red tape at bin 42/); expect(html).toMatch(/Cinta roja en el bin 42/); expect(html).not.toMatch(/PEDIR/);
+  expect(api.calls.length).toBe(before);
+});
+
+test('grove: Settings sends only the keys that changed', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  await page.click('.lane-tile[data-lane="21"] [data-cfg]'); await page.waitForSelector('#recv[open]');
+  expect(await page.$eval('#cfg-leadDays', e => e.value)).toBe('75');
+  await page.fill('#cfg-leadDays', '80'); await page.selectOption('#cfg-colour', 'teal');
+  await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Settings saved")');
+  expect(api.calls.find(c => c.action === 'setBinConfig').body).toEqual({ cardId: 21, leadDays: 80, colour: 'teal' });
 });
 
 test('grove: a worker without bin tracking shows a plain note, not an empty board', async ({ page }) => {
