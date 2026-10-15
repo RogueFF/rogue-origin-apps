@@ -1266,7 +1266,7 @@ export const BOARD_PAGE = `<!doctype html>
            today, where a relative query string happens to resolve — and that is
            the exact assumption that silently lost every cutter count and
            trailer logged from a scanned QR code on 2026-09-04. -->
-      <a class="act" id="printtags" href="/api/harvest?action=sack_print">Print tags</a>
+      <a class="act" id="printtags" href="/api/harvest?action=bay_tags">Print tags</a>
       <a class="act" id="cycletimes" href="/api/harvest?action=harvest_dash">Cycle times</a>
       <button class="act" id="export" type="button">Export</button>
       <span class="save" id="save">&nbsp;</span>

@@ -38,7 +38,7 @@ import { formatDatePT } from '../lib/production-utils.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { deriveEvents } from '../lib/wholesale-notify.js';
 import { buildQueueBrief } from '../lib/queue-brief.js';
-import { buildRates, effectiveRate, sacksFor } from '../lib/sack-rates.js';
+import { buildRates, effectiveRate, sacksFor, preferSeason } from '../lib/sack-rates.js';
 
 const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify', 'setLineCredit']);
 
@@ -662,7 +662,7 @@ function nowPT() {
  * Shared by getQueue and the cron that advances statuses, so the board and the
  * automation can never disagree about how far along an order is.
  */
-async function computeQueue(db, crewOverride) {
+export async function computeQueue(db, crewOverride) {
   const queued = await query(db, `
     SELECT i.id AS lineId, i.order_id AS orderId, i.cultivar_id AS cultivarId,
            i.form, i.qty_lbs AS qtyLbs, i.credited_lbs AS creditedLbs, i.sort_order AS sortOrder,
@@ -760,20 +760,24 @@ async function computeQueue(db, crewOverride) {
   // RAW SACKS PER CULTIVAR, measured. Joined through cultivar_aliases because
   // supersack_entries.strain holds the production-sheet spelling verbatim while
   // the board speaks cultivar ids — the same seam the hourly-entry dropdown
-  // uses. Aliases are SUMMED, not picked between: a cultivar spelled two ways
-  // across seasons has its history in both rows.
+  // uses. Rows come per SEASON — the year on the front of the strain title,
+  // or the alias's crop_year when the title has none — and preferSeason keeps
+  // this year's crop on its own once it has enough history (2026-10-14: the
+  // 2025 Sour Lifter rate was dragging the 2026 estimate down).
   const sackHistory = await query(db, `
     SELECT a.cultivar_id AS key,
+           COALESCE(CASE WHEN s.strain GLOB '[0-9][0-9][0-9][0-9] - *'
+                         THEN CAST(substr(s.strain, 1, 4) AS INTEGER) END, a.crop_year) AS season,
            SUM(s.sacks_opened) AS sacks,
            SUM(s.tops_lbs)     AS tops
     FROM supersack_entries s
     JOIN cultivar_aliases a ON a.alias = s.strain
     WHERE s.tops_lbs > 0 AND s.sacks_opened > 0
       AND s.tops_lbs <= s.raw_lbs * 0.5
-    GROUP BY a.cultivar_id
+    GROUP BY a.cultivar_id, season
     HAVING SUM(s.sacks_opened) > 0
   `);
-  const sackRates = buildRates(sackHistory);
+  const sackRates = buildRates(preferSeason(sackHistory, Number(nowPT().date.slice(0, 4)), 10));
 
   const scheduled = scheduleQueue({
     blocks: orderBlocks(queued),

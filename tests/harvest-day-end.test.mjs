@@ -12,8 +12,9 @@
  * indistinguishable from broken.
  *
  * One scan fixes it, and this suite holds the two things that make the scan
- * safe to hand a crew lead: it closes THEIR crew's zone and nobody else's, and
- * scanning it when nothing is open is a person being careful, not a fault.
+ * safe to hand a crew lead: it closes the open lot — ALL of it, since one crew
+ * (2026-09-28) means there is only ever one — and scanning it when nothing is
+ * open is a person being careful, not a fault.
  *
  * Run with `node --test`.
  */
@@ -42,7 +43,7 @@ const MIGRATIONS = [
   '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
-  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -95,7 +96,7 @@ before(function () {
   if (!DatabaseSync) this.skip('node:sqlite unavailable (needs Node >= 22.5)');
 });
 
-test('it closes the scanning crew open zone', async () => {
+test('it closes the open zone', async () => {
   const { sqlite, env, ctx } = freshDb();
   const id = openSession(sqlite, { zone: 'Z4', crew: 'A' });
 
@@ -105,38 +106,38 @@ test('it closes the scanning crew open zone', async () => {
   assert.match(html, /After 5\.0 hours/, 'and say how long, so a wrong scan is visible');
 });
 
-test('it closes only that crew, never the other one', async () => {
-  // THE REASON THIS IS SCOPED. Two crews cut at once. A card that closed
-  // whatever was open would end crew B's day the moment crew A finished, and
-  // B's next trailer would arrive with no session to attach to — which drops
-  // those bins off the lot entirely.
+test('with several crews open it asks which one, and closes nothing until told', async () => {
+  // THREE CREWS (2026-10-03). One lead finishing early must not close the
+  // other crews' zones. The phone's old crew tag is still ignored.
   const { sqlite, env, ctx } = freshDb();
   const a = openSession(sqlite, { zone: 'Z4', crew: 'A' });
-  const b = openSession(sqlite, { zone: 'Z7', crew: 'B' });
-
-  await scanFin(env, ctx, 'A');
-  assert.ok(closedAt(sqlite, a));
-  assert.equal(closedAt(sqlite, b), null, 'crew B is still cutting');
-});
-
-test('it says when someone else is still open', async () => {
-  // The person holding this card is the one who can walk over and tell them.
-  const { sqlite, env, ctx } = freshDb();
-  openSession(sqlite, { zone: 'Z4', crew: 'A' });
-  openSession(sqlite, { zone: 'Z7', crew: 'B' });
+  const b = openSession(sqlite, { zone: 'Z9', crew: 'B' });
 
   const html = await (await scanFin(env, ctx, 'A')).text();
-  assert.match(html, /Z7[\s\S]*still open/);
+  assert.match(html, /Which crew is finishing\?/);
+  assert.match(html, /href="\/fin\?crew=A&lang=en"/);
+  assert.match(html, /href="\/fin\?crew=B&lang=en"/);
+  assert.match(html, /href="\/fin\?crew=all&lang=en"/);
+  assert.ok(!closedAt(sqlite, a) && !closedAt(sqlite, b), 'a question writes nothing');
+
+  await handleDayEndScan(new Request('https://x/fin?crew=A&lang=en'), env, ctx);
+  assert.ok(closedAt(sqlite, a));
+  assert.ok(!closedAt(sqlite, b), "crew B's zone stays open");
+
+  const all = await (await handleDayEndScan(new Request('https://x/fin?crew=all&lang=en'), env, ctx)).text();
+  assert.ok(closedAt(sqlite, b));
+  assert.match(all, /Closed Z9/);
 });
 
-test('an untagged phone closes the untagged zone, not a tagged crew', async () => {
+test('"all crews" closes every open lot, an untagged one from the one-crew days too', async () => {
   const { sqlite, env, ctx } = freshDb();
-  const tagged = openSession(sqlite, { zone: 'Z4', crew: 'A' });
+  const a = openSession(sqlite, { zone: 'Z4', crew: 'A' });
   const untagged = openSession(sqlite, { zone: 'Z9', crew: null });
 
-  await scanFin(env, ctx, null);
+  const html = await (await handleDayEndScan(new Request('https://x/fin?crew=all&lang=en'), env, ctx)).text();
+  assert.ok(closedAt(sqlite, a));
   assert.ok(closedAt(sqlite, untagged));
-  assert.equal(closedAt(sqlite, tagged), null);
+  assert.match(html, /Closed 2 zones/);
 });
 
 test('scanning twice is fine and says so plainly', async () => {

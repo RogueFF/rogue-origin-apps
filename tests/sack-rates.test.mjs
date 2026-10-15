@@ -15,7 +15,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRates, effectiveRate, sacksFor } from '../workers/src/lib/sack-rates.js';
+import { buildRates, effectiveRate, sacksFor, preferSeason } from '../workers/src/lib/sack-rates.js';
 
 const near = (a, b, tol = 0.001) =>
   assert.ok(Math.abs(a - b) < tol, `expected ${a} to be within ${tol} of ${b}`);
@@ -101,4 +101,37 @@ test('THE GUARD: no rate means no projection, not an infinite one', () => {
   // otherwise divide by zero and report Infinity sacks on the board.
   assert.equal(sacksFor(20, 0), null);
   assert.equal(sacksFor(20, null), null);
+});
+
+// --- this year's crop, by itself ---------------------------------------------
+//
+// 2026-10-14: Sour Lifter's 2025 history (35 sacks at 4.89 lb) was being summed
+// with the first two 2026 days (46 sacks at 5.39 lb). Koa: "use this week's
+// rate, it's new 2026 product". A season's rate stands on its own once it has
+// enough sacks to mean something; before that, every year counts.
+
+const seasonRows = (...rows) => rows.map(([key, season, sacks, tops]) => ({ key, season, sacks, tops }));
+
+test('preferSeason: the current season replaces older history once it has enough sacks', () => {
+  const rows = seasonRows(['sl', 2025, 35, 171.3], ['sl', 2026, 46, 248]);
+  const out = preferSeason(rows, 2026, 10);
+  assert.deepEqual(out, [{ key: 'sl', sacks: 46, tops: 248 }]);
+  near(buildRates(out).rateMap.get('sl'), 248 / 46);
+});
+
+test('preferSeason: too few current-season sacks -> every season is summed, as before', () => {
+  const rows = seasonRows(['sl', 2025, 35, 171.3], ['sl', 2026, 5, 27]);
+  assert.deepEqual(preferSeason(rows, 2026, 10), [{ key: 'sl', sacks: 40, tops: 198.3 }]);
+});
+
+test('preferSeason: decided per cultivar; no current-season rows at all -> all history', () => {
+  const rows = seasonRows(['sl', 2025, 35, 171.3], ['sl', 2026, 46, 248], ['lift', 2024, 12, 60], ['lift', 2025, 20, 90]);
+  assert.deepEqual(preferSeason(rows, 2026, 10), [{ key: 'sl', sacks: 46, tops: 248 }, { key: 'lift', sacks: 32, tops: 150 }]);
+});
+
+test('preferSeason: a NULL season is old history, and two current-season spellings add up', () => {
+  const rows = seasonRows(['sl', null, 9, 40], ['sl', 2026, 6, 30], ['sl', 2026, 6, 33]);
+  assert.deepEqual(preferSeason(rows, 2026, 10), [{ key: 'sl', sacks: 12, tops: 63 }]);
+  assert.deepEqual(preferSeason(rows, 2026, 20), [{ key: 'sl', sacks: 21, tops: 103 }]);
+  assert.deepEqual(preferSeason([], 2026, 10), []);
 });

@@ -596,7 +596,7 @@ ${OFFICE_UI_STYLE}
     var withRate = d.crew.filter(function (x) { return x.bins_per_cutter_hour != null; });
     var rows = withRate.map(function (x) {
       return { label: (x.crew ? 'Crew ' + x.crew : 'Untagged phone'), v: x.bins_per_cutter_hour,
-        text: x.bins_per_cutter_hour + ' bins/h', fill: x.crew === 'A' ? 'var(--leaf)' : x.crew === 'B' ? 'var(--sky)' : 'var(--muted)' };
+        text: x.bins_per_cutter_hour + ' bins/h', fill: x.crew === 'A' ? 'var(--leaf)' : x.crew === 'B' ? 'var(--sky)' : x.crew === 'C' ? 'var(--clay)' : 'var(--muted)' };
     });
 
     // Its own bar, never folded into the one above. A session that ran overnight

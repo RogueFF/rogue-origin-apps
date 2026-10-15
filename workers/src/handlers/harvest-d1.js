@@ -1,5 +1,6 @@
 import { practicePage } from './harvest-practice.js';
 import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew-hourly.js';
+import { loadTakedownHourly, submitTakedownHourly, takedownHourlyBody } from './harvest-takedown-hourly.js';
 /**
  * Harvest Zone-Entry & Barn-Intake API Handler — D1
  *
@@ -15,6 +16,7 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  * - GET  ?action=barn_intake                             - Barn-intake form (HTML)
  * - POST ?action=barn_log            (body: zone, bins)  - Barn-intake submit (HTML)
  * - GET  ?action=crew                                     - Crew roster form (HTML)
+ * - GET  ?action=bajada                                   - Hourly takedown report (HTML); POST bajada_set saves an hour
  * - POST ?action=crew_set   (drivers,cutter_water_spiders,
  *                            hangers,hanging_water_spiders) - Update roster (HTML)
  * - GET  ?action=test                                    - Health check (JSON)
@@ -31,6 +33,7 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  *
  * Supersack tags (see docs/plans/2026-08-06-supersack-tag-design.md):
  * - GET  ?action=sack_print                              - Lot picker, starts a takedown session (HTML)
+ * - GET  ?action=pipeline                                - What's coming: cultivars drying (bay-dated) + in supersacks (HTML, read-only)
  * - POST ?action=sack_session_start (session_id,cultivar) - Enter the session screen (HTML)
  * - GET  ?action=sack_session&session_id=&cultivar=      - The session screen itself (HTML)
  * - POST ?action=sack_alloc      (session_id,cultivar,qty) - Allocate serial(s) (JSON, called by fetch)
@@ -47,18 +50,23 @@ import { loadCrewHourly, submitCrewHourly, crewHourlyBody } from './harvest-crew
  */
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
-import { HARVEST_UI_STYLE } from './harvest-ui.js';
+import { trailerIconPng, TRAILER_ICON_SIZES } from '../lib/trailer-icons.js';
+import { HARVEST_UI_STYLE, HARVEST_PRINT_CLIENT } from './harvest-ui.js';
 import { SACK_DETAIL_STYLE } from './sack-detail-style.js';
 import { SACK_BRAND_LOGO } from './sack-brand-logo.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar, isHarvestTracked,
-  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal } from '../lib/zone-cultivars.js';
+  cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal,
+  mcloughlinZonesFor, mcloughlinCultivars } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
+import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
+import { decideHeal, settleStatement, latestMarkerAt, HEAL_QUIET_MS, LAST_CALL_KEY } from '../lib/inventory-heal.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
+import { bayFills, bayCards, bayScreenGroups, percentShares } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
@@ -66,10 +74,12 @@ import { requireAuth } from '../lib/auth.js';
 import { buildMetrics } from '../lib/harvest-metrics.js';
 import { dashPage } from './harvest-dash-page.js';
 import { withinBarnGrace } from '../lib/barn-attribution.js';
-import { IFRAME_PRINT_UNRELIABLE_SRC, APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
+import { APP_PRINT_FIT_SRC, SAFARI_PRINT_SRC, COMPACT_TEXT_SRC } from '../lib/print-client.js';
 import { qrDataUri } from '../lib/qr.js';
+import { salidaPageBody } from './harvest-salida-page.js';
+import { SACK_OUT_ACTIONS, handleSackOutAction, sackOutToday } from './harvest-sack-out.js';
 import {
-  IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL,
+  IN_FLIGHT, inFlight, classifyDebt, summariseDebts, DEBT_SQL, isLiveInFlight, isStaleInFlight, ADD_LANDED_AFTER_OUT_SQL,
 } from '../lib/inventory-debt.js';
 import {
   enqueueStatements, pullJobs, ackJob, recordHeartbeat, agentOnline,
@@ -78,8 +88,10 @@ import {
 } from '../lib/print-queue.js';
 
 const DEBOUNCE_MS = 5 * 60 * 1000;       // re-scanning the same active zone within this window is a no-op
-const CUT_RESUME_GRACE_HOURS = 8;        // re-entering a zone within this many hours of its last close = same cut
-const HEADCOUNT_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12, plus a 13+ link
+const NEW_CUT_PROMPT_DAYS = 7;           // a zone untouched this long: the scan ASKS whether it is a new cut (never decides)
+// Cutter counts offered on the zone screen. 6-20: the 2026 crew is 16-18 most
+// days and 8 when one team is in (Koa, 2026-09-30); 1-5 never happens.
+const HEADCOUNT_OPTIONS = Array.from({ length: 15 }, (_, i) => i + 6);
 
 const MAX_PRINT_QTY = 40;                // sanity cap on one print run
 const LOT_PICKER_DAYS = 45;
@@ -139,8 +151,10 @@ const CONSTANTS = {
     unblocks: 'cutter person-hours on a lot the crew slept on',
     how: 'the crew stops at the end of the day and picks up in the same zone next morning, so the session spans the night; the hours it was actually worked need the day window',
   },
-  supersackLbs: { value: 37, label: '1 supersack = 37 lbs', unblocks: null, how: 'confirmed 2026-08-03' },
-  binsPerTrailer: { value: 22, label: '1 trailer = 22 bins', unblocks: null, how: 'recalibrate once 2026 trailers run' },
+  // Per crop year, from lib/sack-weight.js — this entry is the dashboard's label
+  // for the current crop, not a number anything multiplies by.
+  supersackLbs: { value: fullSackLbs(2026), label: `1 supersack = ${fullSackLbs(2026)} lb (2026 crop on; ${fullSackLbs(2025)} lb through 2025). A bag weighed off-standard carries its own weight.`, unblocks: null, how: 'Koa 2026-09-28 (37 lb confirmed 2026-08-03 for the 2025 crop)' },
+  binsPerTrailer: { value: 24, label: '1 trailer = 24 bins', unblocks: null, how: 'standard for all of 2026 harvest (Koa, 2026-09-28)' },
   plantsPerBin: { value: 1, label: '1 bin = 1 plant', unblocks: null, how: 'recalibrate once real' },
 };
 const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
@@ -159,45 +173,60 @@ const PUBLIC_BASE = 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
 const API = '/api/harvest';
 
 /**
- * The cutting crews, and how a phone says which one it is.
+ * THREE CREWS (Koa, 2026-10-03). Crew A (Nico), Crew B (Jose) and Crew C
+ * (Diego) each cut their own zone, so each crew has its own open lot and a
+ * zone scan closes only THAT crew's previous lot.
  *
- * 2026 runs two crews that can be in the same zone at once. The discriminator
- * has to travel with the crew, and the zone signs cannot carry it — they are
- * printed and laminated for the season — so it rides on the crew lead's phone:
- * scan a Crew A / Crew B card once (PUBLIC_BASE/c/A) and the cookie is set for
- * the season.
+ * The crew is ASKED on every zone scan — three big buttons — and never
+ * remembered on the phone. A remembered tag is what lost loads in September
+ * (the 2026-09-28 one-crew build replaced it): a second, untagged phone kept
+ * scanning signs, and every trailer cut under its sessions saved with no lot.
+ * An unpicked crew writes nothing.
  *
- * A phone with no tag is legitimate (a spare handset, a cleared cookie) and
- * degrades to single-crew behaviour rather than to a wrong crew. It is shown in
- * the header of every crew screen, so an untagged phone is visibly untagged
- * instead of quietly wrong.
+ * Trailers follow their crew. On a crew's first zone scan of the day the lead
+ * names its trailers and how many cutters, drivers and water spiders it has
+ * (harvest_crew_day, migration 0042); after that a driver's scan of /t/3 goes
+ * to the open lot of whichever crew has T3 today.
+ *
+ * Old sessions keep whatever crew they were written with. Pre-September 'A'
+ * and 'B' meant the retired phone tags, not Nico's and Jose's crews.
  */
-const CREWS = ['A', 'B'];
-
-function pickCrew(request) {
-  const url = new URL(request.url);
-  const q = (url.searchParams.get('crew') || '').toUpperCase();
-  if (CREWS.includes(q)) return q;
-  const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_crew=([A-Z])/);
-  return m && CREWS.includes(m[1]) ? m[1] : null;
-}
-
-function crewCookie(crew) {
-  return `rf_crew=${crew}; Path=/; Max-Age=31536000; SameSite=Lax`;
-}
+const CREWS = [
+  { id: 'A', lead: 'Nico' },
+  { id: 'B', lead: 'Jose' },
+  { id: 'C', lead: 'Diego' },
+];
+const crewById = (raw) => CREWS.find(c => c.id === String(raw ?? '').trim().toUpperCase()) || null;
+/** "Cuadrilla A · Nico" on screen. */
+const crewLabel = (ui, id) => {
+  const c = crewById(id);
+  return c ? ui.t('crewName', { c: c.id, lead: c.lead }) : String(id ?? '?');
+};
+/** "Crew A (Nico)" in Telegram, which is read in English. */
+const crewTg = (id) => { const c = crewById(id); return c ? `Crew ${c.id} (${c.lead})` : 'no crew'; };
 
 /**
- * Barn intake stations. Two of them in 2026 — PUBLIC_BASE/b/1 and /b/2, one QR
- * each — and each is worked by the same cutting crew all shift. The station is
- * therefore what tells the barn whose trailer just pulled in: the crew tag
- * lives on a phone out in the field and never reaches here.
- *
- * The pairing is an arrangement, not something the system can verify, so it
- * only ever DEFAULTS the zone and scopes the grace. The dropdown still offers
- * every tracked zone, because the person at the door can see which trailer
- * arrived and we cannot. If the crews swap stations this is the one line.
+ * The people a crew starts the day with, asked ONCE on its first zone scan as
+ * tap buttons (Koa, 2026-10-03: cutters usually 4-10, water spiders and drivers
+ * usually 1-3). The buttons run a little past the usual range each way; the
+ * min/max are the server's guard. Changes through the day come in on the
+ * hourly report, not here, so the crew card only edits trailers.
  */
-const STATION_CREW = { 1: 'A', 2: 'B' };
+const CREW_DAY_FIELDS = [
+  { key: 'cutters', label: 'crewCutters', min: 1, max: 20, buttons: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+  { key: 'water_spiders', label: 'crewWS', min: 0, max: 10, buttons: [0, 1, 2, 3, 4] },
+  { key: 'drivers', label: 'crewDrivers', min: 0, max: 10, buttons: [1, 2, 3, 4, 5] },
+];
+
+const CREW_COOKIE_CLEAR = 'rf_crew=; Path=/; Max-Age=0; SameSite=Lax';
+
+/**
+ * Barn intake doors, PUBLIC_BASE/b/1 and /b/2. A fallback since trailers carry
+ * their own QR (a torn decal, a dead phone): the door number is shown on the
+ * screen so two identical tablets are not two chances to log at the wrong one,
+ * and nothing else hangs off it.
+ */
+const STATIONS = [1, 2];
 
 function pickStation(request, body = {}) {
   const url = new URL(request.url);
@@ -205,18 +234,55 @@ function pickStation(request, body = {}) {
   const raw = fromPath ?? body.station ?? url.searchParams.get('station')
     ?? ((request.headers.get('cookie') || '').match(/(?:^|;\s*)rf_barn=(\d+)/) || [])[1];
   const n = parseInt(raw, 10);
-  return Object.prototype.hasOwnProperty.call(STATION_CREW, n) ? n : null;
+  return STATIONS.includes(n) ? n : null;
+}
+
+/**
+ * Trailers, PUBLIC_BASE/t/1 .. /t/6. Each carries its own QR decal, and the
+ * DRIVER scans it on drop-off — the trailer, not a door or a crew, is the fact
+ * that arrives at the barn. Stored as the bare number; shown as "T3".
+ */
+const TRAILERS = [1, 2, 3, 4, 5, 6, 7, 8];
+const trailerName = (n) => `T${n}`;
+
+/*
+ * NO COOLDOWN, NO DOUBLE-SCAN FLAG (Koa, 2026-09-29). A 5-minute block on
+ * rescanning a decal refused real trailers and sent the crew back to the barn
+ * tablet on the first morning; the amber "double scan?" warning that replaced
+ * it was dropped the same day — Koa checks the data for doubles instead. Every
+ * scan logs, and every receipt is the green one.
+ */
+
+/** A receipt this new is the scan landing: show the full-screen confirmation. */
+const LOGGED_FLASH_FRESH_MS = 30 * 1000;
+
+/**
+ * The home-screen app, brought back to the front after this long in the
+ * background, logs a load by itself (Koa, 2026-10-08: tapping the icon IS the
+ * scan). iOS resumes an open web app instead of reloading its start page, so
+ * without this the second tap of the day would only show the old receipt.
+ * No cooldown (Koa, 2026-10-08: "take the 2 minute cooldown off"). 15 s is only
+ * what tells a frozen app waking up from the page's own 5-second tick.
+ */
+const RESUME_LOG_MS = 15 * 1000;
+
+function parseTrailer(raw) {
+  // The whole value, not a prefix of it: parseInt would read /t/1abc as T1, so
+  // a mangled QR would still log — to a trailer nobody chose.
+  const m = String(raw ?? '').trim().match(/^t?([1-9]\d?)$/i);
+  const n = m ? Number(m[1]) : NaN;
+  return TRAILERS.includes(n) ? n : null;
 }
 
 function stationCookie(station) {
   return `rf_barn=${station}; Path=/; Max-Age=31536000; SameSite=Lax`;
 }
 
-const HTML_ACTIONS = new Set([
-  'enter', 'headcount', 'cultivar_fix', 'barn_intake', 'barn_log',
+const HTML_ACTIONS = new Set(['salida', 
+  'enter', 'headcount', 'crew_day', 'cultivar_fix', 'barn_intake', 'barn_log', 'trailer_log', 'trailer_done', 'trailer_fix', 'trailer_again', 'cut_change',
   'sack_print', 'sack_session_start', 'sack_session', 'lot_resume', 'sack_label', 'sack_weigh',
-  'crew', 'crew_set', 'sack_note', 'sack_note_edit', 'sack_store', 'find', 'sack_open', 'print_codes', 'harvest_dash',
-  'lot_finish', 'hub', 'reconcile_page',
+  'crew', 'crew_set', 'bajada', 'bajada_set', 'sack_note', 'sack_note_edit', 'sack_store', 'sack_fill', 'find', 'sack_open', 'print_codes', 'harvest_dash',
+  'lot_finish', 'bay_finish', 'hub', 'reconcile_page', 'pipeline', 'bay_tags',
 ]);
 
 /** GET /c/A — the crew card. Its own entry point, like the zone and barn scans. */
@@ -244,6 +310,10 @@ export async function handleHarvestD1(request, env, ctx) {
 
   // The lot stage board is its own module (D1-backed, password-gated) so this
   // file doesn't grow another 400 lines. See harvest-board-d1.js.
+  if (SACK_OUT_ACTIONS.has(action)) {
+    return await handleSackOutAction(action, { request, env, ctx, db, ui, body, params }, SACK_OUT_DEPS);
+  }
+
   if (BOARD_ACTIONS.has(action)) {
     return await handleHarvestBoard(request, env, ctx, { action, params, body });
   }
@@ -257,17 +327,34 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleEnter(ui, db, env, ctx, params);
         case 'headcount':
           return await handleHeadcount(ui, db, env, ctx, params);
+        case 'crew_day':
+          return await handleCrewDay(ui, db, env, ctx, request.method === 'POST' ? body : params, request.method);
+        case 'cut_change':
+          return await handleCutChange(ui, db, env, ctx, body, request.method);
         case 'cultivar_fix':
           return await handleCultivarFix(ui, db, env, ctx, params);
         case 'barn_intake':
           return await handleBarnIntakeForm(ui, db, env, ctx, pickStation(request, body));
         case 'barn_log':
           return await handleBarnLog(ui, db, env, ctx, body, pickStation(request, body));
+        case 'trailer_log':
+          return await handleTrailerLog(ui, db, env, ctx, body);
+        case 'trailer_done':
+          return await handleTrailerDone(ui, db, env, params);
+        case 'trailer_fix':
+          return await handleTrailerFix(ui, db, env, ctx, body);
+        case 'trailer_again':
+          return await handleTrailerAgain(ui, db, env, ctx, body, request.method);
         case 'harvest_dash':
           // The shell only. It ships zero harvest data and fetches everything
           // after the operator types the password, the same way the lot board
           // does — so the public HTML never carries the season's numbers.
           return dashPage();
+        case 'salida': {
+          const today = await sackOutToday(db, env, {}, SACK_OUT_DEPS);
+          return renderPage(ui, ui.lang === 'es' ? 'Salida de bolsas' : 'Sack scan-out',
+            salidaPageBody(ui, { api: '/api/harvest', lang: ui.lang, is_test: isTestMode(env), today }));
+        }
         case 'reconcile_page':
           return renderPage(ui, ui.lang === 'es' ? 'Inventario' : 'Inventory comparison', reconcileBody(ui));
         case 'hub':
@@ -276,6 +363,19 @@ export async function handleHarvestD1(request, env, ctx) {
           return renderPage(ui, ui.t('printCodes'), codeSheetBody(ui, params.packet), 200);
         case 'sack_print':
           return await handleSackPrintForm(ui, db, env);
+        case 'bay_tags': {
+          // ?flash= carries lot_add's variant warning (⚠️) or, with ok=1, a
+          // finish's result (✅) across the redirect.
+          // ?open=N comes back open after an add, so the new row is in view.
+          const flash = params.flash ? String(params.flash).substring(0, 300) : null;
+          const warn = params.warn ? String(params.warn).substring(0, 300) : null;
+          const openBay = parseInt(params.open, 10) || null;
+          return String(params.ok || '') === '1'
+            ? await handleBayTags(ui, db, env, flash, warn, openBay)
+            : await handleBayTags(ui, db, env, null, flash || warn, openBay);
+        }
+        case 'pipeline':
+          return await handlePipeline(ui, db, env);
         case 'sack_session_start':
           return await handleSackSession(ui, db, env, body);
         case 'sack_session':
@@ -284,6 +384,8 @@ export async function handleHarvestD1(request, env, ctx) {
           return await handleLotResume(ui, db, env, params);
         case 'lot_finish':
           return await handleLotFinish(ui, db, env, ctx, body);
+        case 'bay_finish':
+          return await handleBayFinish(ui, db, env, ctx, body);
         case 'sack_label':
           return await handleSackLabel(ui, db, env, params);
         case 'sack_weigh':
@@ -302,10 +404,24 @@ export async function handleHarvestD1(request, env, ctx) {
             : `Saved ${saved.row.hour_start} · ${saved.row.barn === 'upper' ? 'Upper' : 'Bottom'}`;
           return renderPage(ui, ui.t('crew'), crewHourlyBody(ui, data, flash));
         }
+        case 'bajada': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const data = await loadTakedownHourly(db, env, params, isTest);
+          return renderPage(ui, ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown', takedownHourlyBody(ui, data));
+        }
+        case 'bajada_set': {
+          const isTest = isTestMode(env) ? 1 : 0;
+          const saved = await submitTakedownHourly(db, env, body, isTest);
+          const data = await loadTakedownHourly(db, env, { hour: saved.row.hour_start }, isTest);
+          const flash = `${ui.lang === 'es' ? 'Guardado' : 'Saved'} ${saved.row.hour_start}`;
+          return renderPage(ui, ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown', takedownHourlyBody(ui, data, flash));
+        }
         case 'sack_note':
           return await handleSackNote(ui, db, env, ctx, body);
         case 'sack_note_edit':
           return await handleSackNoteEdit(ui, db, env, ctx, body);
+        case 'sack_fill':
+          return await handleSackFill(ui, db, env, ctx, body);
         case 'sack_store':
           return await handleSackStore(ui, db, env, ctx, body);
         case 'sack_open':
@@ -339,7 +455,7 @@ export async function handleHarvestD1(request, env, ctx) {
     case 'allocate':
       return await handleAllocate(db, env, params);
     case 'day_end':
-      return await handleDayEnd(ui, db, env, ctx);
+      return await handleDayEnd(ui, db, env, ctx, params.crew);
 
     case 'sack_alloc':
       return await handleSackAlloc(db, env, ctx, body);
@@ -361,6 +477,8 @@ export async function handleHarvestD1(request, env, ctx) {
       return await handleInventorySweep(request, db, env, ctx, body, params);
     case 'sack_void':
       return await handleSackVoid(db, env, ctx, body);
+    case 'lot_add':
+      return await handleLotAdd(ui, db, env, body);
     default:
       throw createError('NOT_FOUND', ui.t('unknownAction', { a: action }));
   }
@@ -394,6 +512,7 @@ export async function handleZoneScan(request, env, ctx) {
     const picked = url.searchParams.get('cultivar');
     if (url.searchParams.get('test_cut')) params.test_cut = url.searchParams.get('test_cut');
     if (picked) params.cultivar = picked;
+    if (url.searchParams.get('crew')) params.crew = url.searchParams.get('crew');
 
     // One set of rules, in handleEnter: a trial / split zone with no pick gets
     // the picker back (one sign per zone beats a separate QR per cultivar — no
@@ -420,7 +539,7 @@ export async function handleDayEndScan(request, env, ctx) {
   env = await withSettings(env);
   const ui = makeUi(request, env);
   try {
-    return await handleDayEnd(ui, env.DB, env, ctx);
+    return await handleDayEnd(ui, env.DB, env, ctx, new URL(request.url).searchParams.get('crew'));
   } catch (e) {
     const { message, status } = formatError(e);
     return errorPage(ui, message, status);
@@ -499,6 +618,14 @@ let testFlagCache = { at: 0, value: null };
 const TEST_FLAG_TTL_MS = 5000;
 
 async function withSettings(env) {
+  // A PREVIEW build — uploaded with `wrangler versions upload --var
+  // HARVEST_FORCE_TEST:true`, reached on its own preview URL while the live
+  // worker keeps serving the floor — is pinned to test mode whatever the
+  // farm's switch says, and posts nothing to Telegram. The shared switch lives
+  // in the same database the live worker reads, so trying a new build on real
+  // phones must neither obey it (and write real rows) nor move it (see
+  // handleTestMode), nor post into the floor's chat. Koa, 2026-09-28.
+  if (isPreviewBuild(env)) return { ...env, HARVEST_TEST_MODE: 'true', TELEGRAM_TEST_CHAT_ID: '' };
   if (!env?.DB) return env;
   const now = Date.now();
   if (now - testFlagCache.at > TEST_FLAG_TTL_MS) {
@@ -509,6 +636,10 @@ async function withSettings(env) {
   }
   if (testFlagCache.value === null) return env;
   return { ...env, HARVEST_TEST_MODE: testFlagCache.value === 'true' ? 'true' : 'false' };
+}
+
+function isPreviewBuild(env) {
+  return env?.HARVEST_FORCE_TEST === 'true';
 }
 
 /** Flip it, and let the next request on every isolate see the change. */
@@ -617,6 +748,27 @@ async function getLastStorage(db, isTest) {
 }
 
 /**
+ * Per bay, where that bay's newest live tag printed TODAY (Pacific) was stored.
+ *
+ * The bay screen's chips (Koa, 2026-10-12). The barn-wide getLastStorage made
+ * every chip read the same place: Bay 3's tag went to Bay 7, so Bay 4's chip
+ * said Bay 7 too and its next PRINT stored there without anyone choosing it.
+ * A bay with no tag today is absent (not set); a newest tag stored nowhere maps
+ * to null, which is also not set.
+ */
+async function getBayStoragesToday(db, isTest) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
+  const rows = await query(db, `
+    SELECT bay, storage FROM harvest_sacks
+    WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL AND printed_at >= ? AND printed_at < ?
+    ORDER BY printed_at DESC, id DESC
+  `, [isTest, dayStart, dayEnd]);
+  const byBay = new Map();
+  for (const r of rows) if (!byBay.has(Number(r.bay))) byBay.set(Number(r.bay), r.storage || null);
+  return byBay;
+}
+
+/**
  * The bay the last trailer was hung into, and when.
  *
  * NOT `getLastBay()`. That one reads the last bay a sack came OUT of, which is
@@ -624,18 +776,14 @@ async function getLastStorage(db, isTest) {
  * routinely different bays — one crew is hanging bay 9 while the other is
  * pulling bay 3.
  *
- * Scoped to this door's crew first because two crews filling two barns would
- * otherwise hand each other the wrong default all day.
+ * BARN-WIDE, for trailers and the door alike (Koa, 2026-09-29: "once a bay is
+ * changed, all trailers update to the newest bay"). The first day live the
+ * barn moved from bay 10 to 9 mid-morning and each trailer kept logging its
+ * OWN last bay, 10, until someone fixed that trailer's receipt — nobody does,
+ * the floor moves too fast. Now the newest load's bay is everyone's default:
+ * one load logged (or one receipt fixed) into bay 9 moves every trailer.
  */
-async function getLastFilledBay(db, isTest, crew = null) {
-  const pick = (c) => queryOne(db, `
-    SELECT bay, occurred_at FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
-      AND crew IS ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest, c]);
-  const mine = crew ? await pick(crew) : null;
-  if (mine) return mine;
+async function getLastFilledBay(db, isTest) {
   return await queryOne(db, `
     SELECT bay, occurred_at FROM harvest_scan_log
     WHERE event_type = 'barn_load' AND bay IS NOT NULL AND is_test = ?
@@ -759,9 +907,17 @@ async function handleEnter(ui, db, env, ctx, params) {
 
   const isTest = isTestMode(env) ? 1 : 0;
   const season = getSeason();
-  const crew = ui.crew;
-  const active = await getActiveSession(db, isTest, crew);
   const now = new Date();
+
+  // Which crew, before anything else, and never guessed: an unpicked crew gets
+  // the three buttons back and writes nothing. See CREWS.
+  const crewRaw = String(params.crew ?? '').trim();
+  const crew = crewById(crewRaw);
+  if (crewRaw && !crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: crewRaw }));
+  if (!crew) {
+    return renderPage(ui, zone, crewPickerBody(ui, zone, params));
+  }
+  const active = await getActiveSession(db, isTest, crew.id);
 
   // Cultivar comes from the picker (multi-cultivar zones) or auto-fills from
   // the planting record. A lot is zone x cultivar x cut throughout.
@@ -779,9 +935,20 @@ async function handleEnter(ui, db, env, ctx, params) {
     throw createError('VALIDATION_ERROR', ui.t('notPlantedHere', { cv: picked, zone }));
   }
   if (!picked && isMultiCultivar(zone)) {
-    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options));
+    return renderPage(ui, zone, cultivarPickerBody(ui, zone, options, crew.id));
   }
   const cultivar = picked || options[0] || null;
+
+  // The crew's first zone of the day asks for its trailers and people first.
+  // Writes nothing: the form's POST saves them and then opens the lot here.
+  const crewDay = await getCrewDay(db, isTest, crew.id);
+  if (!crewDay) {
+    const [last, today] = await Promise.all([
+      getLastCrewDay(db, isTest, crew.id), getCrewDays(db, isTest)]);
+    return renderPage(ui, crewLabel(ui, crew.id), crewDayFormBody(ui, {
+      crew: crew.id, zone, cultivar, testCut: params.test_cut, prefill: last, today,
+    }));
+  }
 
   // Idempotency guard: a phone refresh/back-button/link-preview re-hitting
   // the same zone's URL moments later shouldn't open a second session. Keyed on
@@ -789,80 +956,237 @@ async function handleEnter(ui, db, env, ctx, params) {
   // lot rather than being swallowed as a duplicate scan.
   if (active && active.zone === zone && active.cultivar === cultivar &&
       (now - parseSqliteUtc(active.occurred_at)) < DEBOUNCE_MS) {
-    return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active));
+    return renderPage(ui, ui.t('alreadyEntered', { zone }), alreadyEnteredBody(ui, active, crewDay));
   }
 
-  if (active) {
-    await execute(db, `UPDATE harvest_scan_log SET closed_at = datetime('now') WHERE id = ?`, [active.id]);
-  }
+  // THIS crew's open lots only — the other two crews are still cutting theirs.
+  // Lots from the one-crew days (no crew) close too, so the first scans after
+  // the three-crew build leave no orphan open.
+  await closeOpenSessions(db, isTest, crew.id);
 
   const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
+  // How long since this lot was last worked — only to decide whether the "new
+  // cut?" question opens unfolded. Read before the INSERT, after the close.
+  const lastHere = await getLastClosedSession(db, zone, cultivar, season, isTest);
+  const daysIdle = lastHere
+    ? (Date.now() - parseSqliteUtc(lastHere.closed_at).getTime()) / 86400000 : null;
 
+  // The crew's cutters ride on the lot from the day's form, so person-hours
+  // and the hourly cross-check read them without another tap.
+  const cutters = crewDay.cutters ?? null;
   const result = await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, is_test)
-    VALUES ('enter', ?, ?, ?, ?, ?, ?)
-  `, [zone, cultivar, season, cutNumber, crew, isTest]);
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, headcount, headcount_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)
+  `, [zone, cultivar, season, cutNumber, crew.id, cutters, cutters, isTest]);
   const sessionId = result.lastRowId;
 
   const prevNote = active
     ? `Previous lot *${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}* auto-closed.`
-    : 'No prior zone was open.';
+    : 'No prior zone was open for this crew.';
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌿 Entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}`
-      + `${crew ? ` (Crew ${crew})` : ''}\n${prevNote}`,
+    text: `🌿 ${crewTg(crew.id)} entered *${zone}*${cultivar ? ` — ${cultivar}` : ''} — Cut ${cutNumber}\n${prevNote}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
   return renderPage(ui, ui.t('entered', { zone }), enterBody(ui, {
-    zone, cultivar, cutNumber, sessionId,
+    zone, cultivar, cutNumber, sessionId, crew: crew.id, crewDay,
     prevZone: active ? `${active.zone}${active.cultivar ? ` ${active.cultivar}` : ''}` : null,
+    daysIdle,
   }));
 }
 
 /**
- * This crew's open session. `IS` rather than `=` so an untagged phone (crew
- * NULL) matches only other untagged sessions — the whole point of the scoping
- * is that one crew's scan can never close another's, and a missing tag must
- * degrade to single-crew behaviour instead of hijacking crew A's zone.
+ * The open lot — of one crew, or (no crew) the newest anywhere. Each crew has
+ * at most one; the newest wins if old data holds two.
  */
 async function getActiveSession(db, isTest, crew = null) {
   return queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND closed_at IS NULL AND crew IS ? AND is_test = ?
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ? ${crew ? 'AND crew = ?' : ''}
     ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [crew, isTest]);
+  `, crew ? [isTest, crew] : [isTest]);
 }
 
-/** Any crew's open session in a zone — what the barn needs, where the trailer
- *  is the only fact and nobody knows which crew cut it. */
-async function getOpenSessionForZone(db, isTest, zone, crew = undefined) {
-  const scoped = crew !== undefined;
-  return queryOne(db, `
-    SELECT * FROM harvest_scan_log
-    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL
-      ${scoped ? 'AND crew IS ?' : ''} AND is_test = ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, scoped ? [zone, crew, isTest] : [zone, isTest]);
-}
-
-/** The newest open session belonging to ANY crew — what the barn falls back to. */
-async function getAnyOpenSession(db, isTest) {
-  return queryOne(db, `
-    SELECT * FROM harvest_scan_log
+/**
+ * Close open lots. With a crew: that crew's, plus any from the one-crew days
+ * (no crew), which belong to nobody now and would otherwise stay open forever.
+ * Without: every open lot. Returns how many it closed.
+ */
+async function closeOpenSessions(db, isTest, crew = null) {
+  const r = await execute(db, `
+    UPDATE harvest_scan_log SET closed_at = datetime('now')
     WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
-    ORDER BY occurred_at DESC, id DESC LIMIT 1
-  `, [isTest]);
+      ${crew ? 'AND (crew = ? OR crew IS NULL)' : ''}
+  `, crew ? [isTest, crew] : [isTest]);
+  return r.changes || 0;
 }
 
-// The most recently closed session — for a given zone, or anywhere, and
-// optionally for one crew. Deliberately cultivar-agnostic: at the barn nobody
-// knows which cultivar of a trial zone a load came off, and the closed session
-// already carries it.
-async function getLastClosedAnyCultivar(db, isTest, zone = null, crew = undefined) {
+// ─── CREW DAY (trailers + people, once per crew per day) ─
+
+/** Today's row for one crew, or null. Pacific day. */
+async function getCrewDay(db, isTest, crew, day = pacificDay(new Date())) {
+  return queryOne(db, `
+    SELECT * FROM harvest_crew_day WHERE harvest_date = ? AND crew = ? AND is_test = ?
+  `, [day, crew, isTest]);
+}
+
+/** Every crew's row for a day. */
+async function getCrewDays(db, isTest, day = pacificDay(new Date())) {
+  return query(db, `
+    SELECT * FROM harvest_crew_day WHERE harvest_date = ? AND is_test = ? ORDER BY crew
+  `, [day, isTest]);
+}
+
+/** The crew's most recent earlier day — only to prefill the form. */
+async function getLastCrewDay(db, isTest, crew) {
+  return queryOne(db, `
+    SELECT * FROM harvest_crew_day WHERE crew = ? AND is_test = ? AND harvest_date < ?
+    ORDER BY harvest_date DESC LIMIT 1
+  `, [crew, isTest, pacificDay(new Date())]);
+}
+
+/** Today's crew row for a lot's crew, or null (a lot with no crew has none). */
+async function crewDayFor(db, session) {
+  if (!crewById(session.crew)) return null;
+  return getCrewDay(db, Number(session.is_test) ? 1 : 0, session.crew);
+}
+
+/** '3,4' -> [3, 4]; anything that is not a trailer is dropped. */
+function trailerList(s) {
+  return String(s ?? '').split(',').map(x => parseTrailer(x)).filter(Boolean);
+}
+
+/** Which crew has this trailer today, or null. */
+async function crewForTrailer(db, isTest, trailer) {
+  const rows = await getCrewDays(db, isTest);
+  const hit = rows.find(r => trailerList(r.trailers).includes(trailer));
+  return hit ? hit.crew : null;
+}
+
+/** One whole number in a field's range, or a thrown range error. */
+function parseCount(raw, f, ui) {
+  const s = String(raw ?? '').trim();
+  const n = parseInt(s, 10);
+  if (!Number.isInteger(n) || String(n) !== s || n < f.min || n > f.max) {
+    throw createError('VALIDATION_ERROR', ui.t('crewDayRange', { role: ui.t(f.label), min: f.min, max: f.max }));
+  }
+  return n;
+}
+
+/**
+ * GET: the crew-day form in edit mode (from the zone screen's "change" link).
+ * POST: save the crew's trailers and people for today. A trailer assigned here
+ * comes OFF any other crew that had it today — a trailer runs for one crew.
+ *
+ * Two ways in. From the first zone scan (zone, no session_id): save, then open
+ * the lot exactly as the scan would have. From the zone screen (session_id):
+ * save, move that open lot's cutter count with it, and show the zone screen.
+ */
+async function handleCrewDay(ui, db, env, ctx, input, method) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const crew = crewById(input.crew);
+  if (!crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: input.crew ?? '' }));
+  const sessionId = parseInt(input.session_id, 10);
+  const editing = Number.isInteger(sessionId) && sessionId > 0;
+  const session = editing ? await queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE id = ? AND event_type = 'enter' AND crew = ? AND closed_at IS NULL AND is_test = ?
+  `, [sessionId, crew.id, isTest]) : null;
+  if (editing && !session) throw createError('VALIDATION_ERROR', ui.t('crewDayLotGone'));
+
+  if (method !== 'POST') {
+    if (!editing) throw createError('VALIDATION_ERROR', ui.t('crewDayPost'));
+    const [mine, today] = await Promise.all([getCrewDay(db, isTest, crew.id), getCrewDays(db, isTest)]);
+    return renderPage(ui, crewLabel(ui, crew.id), crewDayFormBody(ui, {
+      crew: crew.id, zone: session.zone, cultivar: session.cultivar, sessionId, prefill: mine, today, editing: true,
+    }));
+  }
+
+  const day = pacificDay(new Date());
+  const others = (await getCrewDays(db, isTest, day)).filter(r => r.crew !== crew.id);
+  const mine = await getCrewDay(db, isTest, crew.id, day);
+
+  // Trailers: the ones ticked, or — none ticked — the crew's last assignment
+  // (Koa, 2026-10-03). Today's row when editing; otherwise its last day, less
+  // any trailer another crew has already claimed today: not ticking must never
+  // take a trailer off someone else.
+  let trailers = TRAILERS.filter(n => truthy(input[`t${n}`]));
+  if (!trailers.length) {
+    const claimed = new Set(others.flatMap(r => trailerList(r.trailers)));
+    const last = mine || await getLastCrewDay(db, isTest, crew.id);
+    trailers = last ? trailerList(last.trailers).filter(n => !claimed.has(n)) : [];
+  }
+  if (!trailers.length) throw createError('VALIDATION_ERROR', ui.t('crewDayPickTrailer'));
+
+  // The people are set once, on the first scan; an edit from the crew card
+  // changes trailers only and keeps them.
+  const counts = {};
+  for (const f of CREW_DAY_FIELDS) {
+    counts[f.key] = editing && mine ? mine[f.key] : parseCount(input[f.key], f, ui);
+  }
+
+  const list = trailers.join(',');
+  // Take these trailers off every other crew first, then write this crew's row.
+  const moved = [];
+  const stmts = [];
+  for (const r of others) {
+    const had = trailerList(r.trailers);
+    const keep = had.filter(n => !trailers.includes(n));
+    if (keep.length !== had.length) {
+      had.filter(n => trailers.includes(n)).forEach(n => moved.push(`${trailerName(n)} from ${crewTg(r.crew)}`));
+      stmts.push(db.prepare(`UPDATE harvest_crew_day SET trailers = ?, updated_at = datetime('now') WHERE id = ?`)
+        .bind(keep.join(','), r.id));
+    }
+  }
+  stmts.push(db.prepare(`
+    INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (harvest_date, crew, is_test) DO UPDATE SET
+      trailers = excluded.trailers, cutters = excluded.cutters, drivers = excluded.drivers,
+      water_spiders = excluded.water_spiders, updated_at = datetime('now')
+  `).bind(day, crew.id, list, counts.cutters, counts.drivers, counts.water_spiders, isTest));
+  if (session) {
+    stmts.push(db.prepare(`UPDATE harvest_scan_log SET headcount = ?, headcount_at = datetime('now') WHERE id = ?`)
+      .bind(counts.cutters, session.id));
+  }
+  await db.batch(stmts);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `👥 ${crewTg(crew.id)} today: ${trailers.map(trailerName).join(', ')} · ${counts.cutters} cutters`
+      + ` · ${counts.drivers} drivers · ${counts.water_spiders} water spiders`
+      + `${moved.length ? `\nMoved: ${moved.join('; ')}` : ''}`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  if (session) {
+    const crewDay = await getCrewDay(db, isTest, crew.id);
+    return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+      zone: session.zone, cultivar: session.cultivar, cutNumber: session.cut_number, sessionId: session.id,
+      crew: crew.id, crewDay, prevZone: null, flash: ui.t('crewDaySaved'),
+    }));
+  }
+  return handleEnter(ui, db, env, ctx, {
+    zone: input.zone, cultivar: input.cultivar, crew: crew.id, test_cut: input.test_cut,
+  });
+}
+
+/** The open lot in one zone — what the fallback door needs once it knows the zone. */
+async function getOpenSessionForZone(db, isTest, zone) {
+  return queryOne(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC LIMIT 1
+  `, [zone, isTest]);
+}
+
+// The most recently closed session — for a given zone, or anywhere.
+// Deliberately cultivar-agnostic: at the barn nobody knows which cultivar of a
+// trial zone a load came off, and the closed session already carries it.
+async function getLastClosedAnyCultivar(db, isTest, zone = null, crew = null) {
   const parts = ["event_type = 'enter'", 'closed_at IS NOT NULL'];
   const args = [];
   if (zone) { parts.push('zone = ?'); args.push(zone); }
-  if (crew !== undefined) { parts.push('crew IS ?'); args.push(crew); }
+  if (crew) { parts.push('crew = ?'); args.push(crew); }
   parts.push('is_test = ?'); args.push(isTest);
   return queryOne(db, `
     SELECT * FROM harvest_scan_log WHERE ${parts.join(' AND ')}
@@ -885,10 +1209,16 @@ async function getLastClosedSession(db, zone, cultivar, season, isTest) {
   `, [zone, cultivar, season, isTest]);
 }
 
-// Same-day grace window: a lot re-entered within CUT_RESUME_GRACE_HOURS of its
-// last close is a resumption of the same cut, not a new one — fixes the gap
-// where a crew finishes part of a zone, works elsewhere, then returns
-// same-shift (see 2025 log: "Finished Z8, partial Z7, partial Z5").
+// A ZONE CONTINUES ITS CUT. Re-entering a zone is the same cut, however long
+// it has been — a zone takes days to cut, the crew closes it every night, and
+// they leave for other zones and come back. A new cut starts only when a
+// person says so (handleCutChange, from the zone screen).
+//
+// This replaced an 8-hour rule that started a new cut whenever a zone was
+// re-entered more than 8 h after its last close. That was every morning: Z1,
+// Z2 and Z11 each came up "cut 2" on their second day in 2026 (Koa,
+// 2026-09-30: "this is still zone 11 cut 1"), and the number is printed on
+// supersack tags.
 //
 // Keyed on (zone, cultivar): in a trial zone, Z10 "Lemon" cut 1 is independent
 // of Z10 "Rocket Sauce" cut 1.
@@ -910,10 +1240,77 @@ async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam
   if (concurrent) return concurrent.cut_number;
 
   const last = await getLastClosedSession(db, zone, cultivar, season, isTest);
-  if (!last) return 1;
+  return last ? last.cut_number : 1;
+}
 
-  const hoursSinceClose = (Date.now() - parseSqliteUtc(last.closed_at).getTime()) / (1000 * 60 * 60);
-  return hoursSinceClose <= CUT_RESUME_GRACE_HOURS ? last.cut_number : last.cut_number + 1;
+/**
+ * POST from the zone screen: this open lot is the NEXT cut (or, to undo a
+ * mis-tap, the previous one). The only way a cut number moves.
+ *
+ * Refused once tags are printed off the lot, for the reason the cultivar fix
+ * is: the tags carry the number. Loads already logged to the session move with
+ * it — they were cut in this session, so they are the same cut it is.
+ */
+async function handleCutChange(ui, db, env, ctx, body, method) {
+  if (method !== 'POST') throw createError('VALIDATION_ERROR', ui.t('cutChangePost'));
+  const sessionId = parseInt(body.session_id, 10);
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    throw createError('VALIDATION_ERROR', 'Missing or invalid session_id.');
+  }
+  const session = await queryOne(db, `SELECT * FROM harvest_scan_log WHERE id = ? AND event_type = 'enter'`, [sessionId]);
+  if (!session) throw createError('NOT_FOUND', ui.t('noSessionFound', { id: sessionId }));
+  refuseRealInTest(ui, env, session);
+  if (session.closed_at) throw createError('VALIDATION_ERROR', ui.t('cutLotClosed'));
+
+  const dir = body.dir === 'prev' ? 'prev' : 'next';
+  const to = Number(session.cut_number) + (dir === 'prev' ? -1 : 1);
+  if (to < 1 || to > 9) throw createError('VALIDATION_ERROR', ui.t('cutRange'));
+
+  // EVERY OPEN CREW IN THIS ZONE MOVES TOGETHER. On 2026-10-07 crew B's lead
+  // advanced Z16 to cut 2 while crew A was still cutting the same plants on
+  // cut 1, and both leads did it again in Z17 (cuts 2 and 3) — one rack of
+  // plants under three lot numbers. The cut is a fact about the zone, not
+  // about whichever phone pressed the button.
+  const open = await query(db, `
+    SELECT id, crew, cut_number FROM harvest_scan_log
+    WHERE event_type = 'enter' AND zone = ? AND cultivar IS ? AND season = ?
+      AND closed_at IS NULL AND is_test = ?
+  `, [session.zone, session.cultivar, session.season, session.is_test]);
+  const ids = open.map(o => o.id);
+  if (!ids.includes(sessionId)) ids.push(sessionId);
+  const ph = ids.map(() => '?').join(',');
+
+  const tags = await queryOne(db, `
+    SELECT COUNT(*) AS n FROM harvest_sacks WHERE zone_session_id IN (${ph}) AND voided_at IS NULL
+  `, ids);
+  if (tags && tags.n > 0) throw createError('VALIDATION_ERROR', ui.t('cutHasTags', { n: tags.n }));
+
+  // ASK ONCE. The same three mis-taps showed the button reads as "I am back in
+  // this zone" rather than "the whole zone was cut and we are starting over".
+  // The first press shows what will happen — including the other crew it will
+  // move — and the second press does it. Nothing changes on the first.
+  if (body.confirm !== '1') {
+    const others = open.filter(o => o.id !== sessionId && o.crew).map(o => o.crew);
+    return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+      zone: session.zone, cultivar: session.cultivar, cutNumber: session.cut_number, sessionId, prevZone: null,
+      flash: ui.t('cutConfirmAsk', { zone: session.zone, n: to }), headcount: session.headcount,
+      crew: session.crew, crewDay: await crewDayFor(db, session),
+      cutConfirm: { dir, to, others },
+    }));
+  }
+
+  await execute(db, `UPDATE harvest_scan_log SET cut_number = ? WHERE id IN (${ph}) AND closed_at IS NULL`, [to, ...ids]);
+  const moved = ids.length;
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `✂️ *${session.zone}*${session.cultivar ? ` ${session.cultivar}` : ''} — now Cut ${to} (was ${session.cut_number}), set on the zone screen by crew ${session.crew || '?'}${moved > 1 ? `; ${moved} open crews moved together` : ''}.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return renderPage(ui, ui.t('entered', { zone: session.zone }), enterBody(ui, {
+    zone: session.zone, cultivar: session.cultivar, cutNumber: to, sessionId, prevZone: null,
+    flash: ui.t('cutNow', { n: to }), headcount: session.headcount,
+    crew: session.crew, crewDay: await crewDayFor(db, session),
+  }));
 }
 
 // ─── HEADCOUNT (cutters, one-tap follow-up) ────────────
@@ -1005,26 +1402,21 @@ async function handleCultivarFix(ui, db, env, ctx, params) {
     zone, cultivar, cutNumber, sessionId, prevZone: null,
     flash: ui.t('cultivarFixed', { cv: cultivar }),
     headcount: session.headcount,
+    crew: session.crew, crewDay: await crewDayFor(db, session),
   }));
 }
 
-// ─── CREW CARD ──────────────────────────────────────────
-// Scanned once per phone, off a laminated card on the crew lead's clipboard.
-// Nothing is written to the database here — the tag lives on the handset and
-// stamps every session that phone opens from then on.
+// ─── CREW CARD (retired) ────────────────────────────────
+// The Crew A / Crew B cards are retired (one crew, Koa 2026-09-28), but they
+// are laminated and still on clipboards. Scanning one CLEARS the old tag off
+// the phone and says so, rather than erroring at someone holding a card.
 
-async function handleCrewTag(ui, request) {
-  const raw = (new URL(request.url).pathname.split('/')[2] || '').toUpperCase();
-  if (!CREWS.includes(raw)) {
-    throw createError('VALIDATION_ERROR', ui.t('crewTagBad'));
-  }
-  // renderPage already sets the language cookie; append rather than replace so
-  // a crew lead who switched to English does not lose it by scanning the card.
-  const res = renderPage(ui, ui.t('crewTagSet', { crew: raw }), `
-<h1>${ui.t('crewTagSet', { crew: raw })}</h1>
-<p class="sub">${ui.t('crewTagSetSub')}</p>
-<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a></div>`);
-  res.headers.append('Set-Cookie', crewCookie(raw));
+async function handleCrewTag(ui) {
+  const res = renderPage(ui, ui.t('crewRetired'), `
+<h1>${ui.t('crewRetired')}</h1>
+<p class="sub">${ui.t('crewRetiredSub')}</p>
+<div class="footer"><a href="${API}?action=hub&lang=${ui.lang}">${ui.t('allTools')}</a></div>`);
+  res.headers.append('Set-Cookie', CREW_COOKIE_CLEAR);
   return res;
 }
 
@@ -1043,64 +1435,83 @@ async function handleCrewTag(ui, request) {
 // this is the only new habit in the whole chain.
 
 /**
- * Close this crew's open session.
- *
- * Scoped by the cookie, so ONE laminated card serves both crews: crew A's lead
- * scans it and crew A's session closes. An untagged phone closes an untagged
- * session, the same NULL-safe scoping as everywhere else.
+ * Close open lots at the end of the day. With one lot open, the card closes it.
+ * With several (three crews), one lead finishing early must not close the
+ * other crews' zones, so it asks which crew — or all of them. `?crew=A` closes
+ * that crew's lot; `?crew=all` closes every one.
  */
-async function handleDayEnd(ui, db, env, ctx) {
+async function handleDayEnd(ui, db, env, ctx, crewParam = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = ui.crew ?? null;
-
-  const open = await getActiveSession(db, isTest, crew);
-  if (!open) {
+  const open = await query(db, `
+    SELECT * FROM harvest_scan_log
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+    ORDER BY occurred_at DESC, id DESC
+  `, [isTest]);
+  if (!open.length) {
     // Not an error. Scanning twice, or scanning after the crew already moved
     // on, is a person being careful — it must not look like a fault.
-    const other = await getAnyOpenSession(db, isTest);
-    return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null, other, crew));
+    return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null));
   }
 
+  const raw = String(crewParam ?? '').trim();
+  const all = raw.toLowerCase() === 'all';
+  const crew = all ? null : crewById(raw);
+  if (raw && !all && !crew) throw createError('VALIDATION_ERROR', ui.t('crewBad', { c: raw }));
+  if (!all && !crew && open.length > 1) {
+    return renderPage(ui, ui.t('dayEnd'), dayEndPickerBody(ui, open));
+  }
+
+  const closing = crew ? open.filter(s => s.crew === crew.id) : open;
+  if (!closing.length) return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, null));
   await execute(db, `
     UPDATE harvest_scan_log SET closed_at = datetime('now')
-    WHERE id = ? AND closed_at IS NULL
-  `, [open.id]);
+    WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
+      AND id IN (${closing.map(() => '?').join(',')})
+  `, [isTest, ...closing.map(s => s.id)]);
 
-  const hours = (Date.now() - parseSqliteUtc(open.occurred_at).getTime()) / 3600000;
-
-  // Anyone else still open — the other lead, or a phone with no crew tag. Said
-  // out loud because the person holding this card is the one who can go and
-  // tell them, and a session left open all night is what this exists to stop.
-  const other = await getAnyOpenSession(db, isTest);
-
+  const withHours = closing.map(s => ({
+    ...s, hours: (Date.now() - parseSqliteUtc(s.occurred_at).getTime()) / 3600000 }));
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🌙 Fin del día: *${open.zone}*${open.cultivar ? ` · ${open.cultivar}` : ''}`
-      + `${crew ? ` (Cuadrilla ${crew})` : ''} cerrada tras ${hours.toFixed(1)} h.`
-      + `${other ? ` ⚠️ ${other.zone} sigue abierta.` : ''}`,
+    text: '🌙 Fin del día: ' + withHours.map(s => `*${s.zone}*${s.cultivar ? ` · ${s.cultivar}` : ''}`
+      + `${s.crew ? ` (${crewTg(s.crew)})` : ''} cerrada tras ${s.hours.toFixed(1)} h`).join('; ') + '.',
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  return renderPage(ui, ui.t('dayEnd'), dayEndBody(ui, { ...open, hours }, other, crew));
+  return renderPage(ui, ui.t('dayEnd'), withHours.length === 1
+    ? dayEndBody(ui, withHours[0])
+    : dayEndManyBody(ui, withHours));
 }
 
-function dayEndBody(ui, closed, other, crew) {
-  const crewNote = crew
-    ? `<p class="sub">${ui.t('crewTag', { crew })}</p>`
-    : `<p class="sub">${ui.t('dayEndNoCrew')}</p>`;
+/** Several crews still open: one button per open lot's crew, and "all". */
+function dayEndPickerBody(ui, open) {
+  const crews = [...new Set(open.map(s => s.crew).filter(c => crewById(c)))].sort();
+  const btn = (c) => {
+    const lots = open.filter(s => s.crew === c).map(s => escapeHtml(s.zone)).join(', ');
+    return `<a class="btn crewbtn crew-${c}" href="/fin?crew=${c}&lang=${ui.lang}"><span class="crewletter">${c}</span>`
+      + `<span class="crewlead">${escapeHtml(crewById(c).lead)} · ${lots}</span></a>`;
+  };
+  return `
+<h1>${ui.t('dayEndWhich')}</h1>
+<div class="crewgrid">${crews.map(btn).join('')}
+<a class="btn alt cvbtn" href="/fin?crew=all&lang=${ui.lang}">${ui.t('dayEndAll')}</a></div>`;
+}
 
-  const otherNote = other && (!closed || other.id !== closed.id)
-    ? `<p class="note">${ui.t('dayEndOtherOpen', {
-        zone: escapeHtml(other.zone),
-        crew: other.crew ? ui.t('crewTag', { crew: other.crew }) : ui.t('dayEndUntagged'),
-      })}</p>`
-    : '';
+function dayEndManyBody(ui, closed) {
+  const rows = closed.map(s => `<div class="lotmeta"><strong>${escapeHtml(s.zone)}${
+    s.cultivar ? ` · ${escapeHtml(s.cultivar)}` : ''}</strong> · ${ui.t('cut', { n: s.cut_number })}${
+    s.crew ? ` · ${escapeHtml(crewLabel(ui, s.crew))}` : ''}</div>`).join('');
+  return `
+<h1>✅ ${ui.t('dayEndClosedN', { n: closed.length })}</h1>
+<div class="status">${rows}</div>
+<p class="note">${ui.t('dayEndTomorrow')}</p>
+<div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
+}
 
+function dayEndBody(ui, closed) {
   if (!closed) {
     return `
 <h1>${ui.t('dayEndNothing')}</h1>
-${crewNote}
 <p class="note">${ui.t('dayEndNothingSub')}</p>
-${otherNote}
 <div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a></div>`;
   }
 
@@ -1108,24 +1519,25 @@ ${otherNote}
 <h1>✅ ${ui.t('dayEndClosed', {
     lot: `${escapeHtml(closed.zone)}${closed.cultivar ? ` · ${escapeHtml(closed.cultivar)}` : ''}`,
   })}</h1>
-${crewNote}
 <div class="status">
   <div class="lotmeta"><strong>${ui.t('cut', { n: closed.cut_number })}</strong></div>
   <div class="lotmeta">${ui.t('dayEndAfter', { h: closed.hours.toFixed(1) })}</div>
 </div>
 <p class="note">${ui.t('dayEndTomorrow')}</p>
-${otherNote}
 <div class="footer"><a href="${API}?action=barn_intake">${ui.t('toBarnIntake')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
 }
 
 // ─── BARN INTAKE ────────────────────────────────────────
+// Two ways in, one set of rules, one write.
+//
+// The TRAILER decal (/t/<n>) is the normal path (Koa, 2026-09-28): the driver
+// scans it on drop-off, sees the lot the load is about to go to, taps a bay.
+// The DOOR page (/b/<n>) is the fallback for a torn decal or a dead phone,
+// where someone picks the zone by hand. Both end in recordLoad().
 
 async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = station ? STATION_CREW[station] : null;
-
-  // A labelled barn follows only its own crew. No other crew is a default.
-  const active = crew ? await getActiveSession(db, isTest, crew) : null;
+  const active = await getActiveSession(db, isTest);
 
   // The bay default is worth more care than it looks. A wrong bay is
   // unrecoverable — nothing afterwards distinguishes it from a right one —
@@ -1133,7 +1545,7 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
   // is still the same Pacific day, and NAMED once the day has turned, which is
   // exactly when the crew has moved on to the next bay and the default has
   // quietly stopped being true. Keep the stale bay warning visible.
-  const lastFill = await getLastFilledBay(db, isTest, crew);
+  const lastFill = await getLastFilledBay(db, isTest);
   const bayStale = !!(lastFill && lastFill.occurred_at &&
     pacificDay(parseSqliteUtc(lastFill.occurred_at)) !== pacificDay(new Date()));
 
@@ -1150,22 +1562,136 @@ async function handleBarnIntakeForm(ui, db, env, ctx, station = null) {
 }
 
 /**
- * The lot the door named, or null when it named none. Throws rather than
+ * The lot a form named, or null when it named none. Throws rather than
  * falling back: a load that quietly ignored the choice made at the door would
  * be worse than one that never offered the choice.
+ *
+ * With a zone, the lot must be in it: an id for another zone is a mis-tap or a
+ * stale page, not an override, and it would move a trailer of bins onto a lot
+ * it never touched. Old lots are refused for the same reason.
  */
-async function pickedLot(ui, db, isTest, raw, zone) {
+async function pickedLot(ui, db, isTest, raw, zone = null) {
   const value = raw === undefined || raw === null ? '' : String(raw).trim();
   if (!value) return null;
   const id = parseInt(value, 10);
   if (!Number.isInteger(id) || id <= 0) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
+  // Age is time since the lot was last ACTIVE: now if it is open, else its
+  // close. An open lot is always eligible (a weekend with no End of day scan
+  // must not lock every trailer out), and a two-day zone that closed a minute
+  // ago is recent, however long ago it opened.
   const lot = await queryOne(db, `
     SELECT * FROM harvest_scan_log
-    WHERE id = ? AND event_type = 'enter' AND is_test = ? AND zone = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
-  `, [id, isTest, zone, LOT_AT_DOOR_DAYS]);
+    WHERE id = ? AND event_type = 'enter' AND is_test = ? ${zone ? 'AND zone = ?' : ''}
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
+  `, zone ? [id, isTest, zone, LOT_AT_DOOR_DAYS] : [id, isTest, LOT_AT_DOOR_DAYS]);
   if (!lot) throw createError('VALIDATION_ERROR', ui.t('lotAtDoorBad'));
   return lot;
+}
+
+/**
+ * Which lot does a trailer arriving NOW belong to, when nobody has named a
+ * zone? The trailer screen's question.
+ *
+ * One crew means one open lot, so the answer is that lot — except inside the
+ * barn grace window after a close (a zone change, a cultivar switch in a trial
+ * zone, the end of the day). Then the trailer on the apron was loaded BEFORE
+ * the change and belongs to the lot that just closed. lib/barn-attribution.js
+ * has why that error is one-sided: a genuine load for the new lot cannot be
+ * cut, filled and driven in six minutes.
+ *
+ * A null lot means nothing is open and nothing just closed — the driver has to
+ * say which lot, because the alternative is bins that belong to no lot.
+ */
+async function proposeLot(db, isTest, trailer) {
+  // THREE CREWS: the trailer's crew today decides, and the grace window is that
+  // crew's — crew A changing zones must not pull crew B's trailer onto A's old
+  // lot. A trailer on no crew today is ASKED, never sent to the newest lot.
+  const crew = trailer ? await crewForTrailer(db, isTest, trailer) : null;
+  if (!crew) {
+    // A day nobody has set crews up yet is still a one-crew day (the build
+    // shipped mid-shift, 2026-10-03, with all three crews in one zone): the
+    // open lot, as before. Once any crew is set up, an unassigned trailer asks.
+    if ((await getCrewDays(db, isTest)).length) return { lot: null, viaGrace: false, crew: null };
+    const recentAny = await getLastClosedAnyCultivar(db, isTest);
+    if (inBarnGrace(recentAny)) return { lot: recentAny, viaGrace: true, crew: null };
+    return { lot: await getActiveSession(db, isTest), viaGrace: false, crew: null };
+  }
+  const recent = await getLastClosedAnyCultivar(db, isTest, null, crew);
+  if (inBarnGrace(recent)) return { lot: recent, viaGrace: true, crew };
+  return { lot: await getActiveSession(db, isTest, crew), viaGrace: false, crew };
+}
+
+/**
+ * The door's question: the zone is known (someone picked it), which lot?
+ *
+ * A cultivar switch INSIDE one zone is invisible to a plain open-session
+ * lookup: the zone is still open, so the load attaches to whatever is being
+ * cut NOW. In a trial zone that is the whole error. Z10 is 15 cultivars in one
+ * acre at ~130 plants each — roughly six trailers a lot — so a single
+ * misplaced trailer is a 15-20% error on a lot whose only purpose is being
+ * compared against its neighbours. Z8 and R1 are the same shape. So if a
+ * DIFFERENT cultivar closed in this zone inside the grace window, the trailer
+ * was loaded before the switch. Self-limiting: in a single-cultivar zone the
+ * previous session carries the same cultivar, so this never fires.
+ *
+ * Nothing open for this zone — the crew has moved on. If it closed within the
+ * grace window the load was cut there and is only now arriving.
+ */
+async function attributeForZone(db, isTest, zone) {
+  let session = await getOpenSessionForZone(db, isTest, zone);
+  let viaSwitch = null;
+  let viaGrace = false;
+  if (session) {
+    const prev = await getLastClosedAnyCultivar(db, isTest, zone);
+    const now = session.cultivar || null;
+    if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
+      viaSwitch = { from: prev.cultivar || null, to: now };
+      session = prev;
+    }
+  } else {
+    const recent = await getLastClosedAnyCultivar(db, isTest, zone);
+    if (inBarnGrace(recent)) { session = recent; viaGrace = true; }
+  }
+  return { session, viaGrace, viaSwitch };
+}
+
+/**
+ * Which load of its Pacific day, for its zone, a load is: "Carga #3 hoy".
+ * Counted up to the load itself, so a receipt re-opened later still says 3.
+ *
+ * Pacific, not UTC: "#3 today" used to reset at 5pm Pacific, mid-afternoon,
+ * while trailers were still arriving.
+ */
+async function loadNumberFor(db, isTest, zone, occurredAt, id) {
+  const [dayStart, dayEnd] = pacificDayRange(pacificDay(occurredAt));
+  const r = await queryOne(db, `
+    SELECT COUNT(*) as n FROM harvest_scan_log
+    WHERE event_type = 'barn_load' AND zone = ? AND id <= ?
+      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
+  `, [zone, id, dayStart, dayEnd, isTest]);
+  return (r?.n) || 1;
+}
+
+/**
+ * Write one barn load and announce it. Both entry points end here, so the
+ * ledger, the rack board and the Telegram feed cannot disagree about what a
+ * load is. Returns { id, loadNumber }.
+ */
+async function recordLoad(db, env, ctx, { zone, bins, session, bay, trailer = null, isTest, cutNote }) {
+  const res = await execute(db, `
+    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, bay, trailer, crew, is_test)
+    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [zone, getSeason(), bins, session ? session.id : null, bay, trailer, session?.crew ?? null, isTest]);
+
+  const loadNumber = await loadNumberFor(db, isTest, zone, new Date(), res.lastRowId);
+
+  ctx.waitUntil(sendTelegramMessage(env, {
+    chatId: env.TELEGRAM_TEST_CHAT_ID,
+    text: `🚚 ${trailer ? `${trailerName(trailer)} · ` : ''}${session?.crew ? `${crewTg(session.crew)} · ` : ''}Load: ${bins} bins → *${zone}* (${cutNote})`
+      + `${bay ? ` · bay ${bay}` : ''}. Load #${loadNumber} today for this zone.`,
+  }).catch(e => console.error('[harvest][telegram]', e)));
+
+  return { id: res.lastRowId, loadNumber };
 }
 
 async function handleBarnLog(ui, db, env, ctx, body, station = null) {
@@ -1189,104 +1715,329 @@ async function handleBarnLog(ui, db, env, ctx, body, station = null) {
   const bay = parseBay(body.bay, ui);
 
   const isTest = isTestMode(env) ? 1 : 0;
-  const crew = station ? STATION_CREW[station] : null;
 
   // A lot named at the door beats every rule below it. Nothing automatic knows
   // more than the person holding the trailer, who was told which zone started
   // (Koa, 2026-09-17) — and this is the case where the automatic answer is
   // "nothing", which loses the bins off every lot.
-  //
-  // Checked against the zone on the same form: an id for another zone is a
-  // mis-tap or a stale page, not an override, and it would move a trailer of
-  // bins onto a lot it never touched. Old lots are refused for the same reason.
   const picked = await pickedLot(ui, db, isTest, body.lot, zone);
+  const { session, viaGrace, viaSwitch } = picked
+    ? { session: picked, viaGrace: false, viaSwitch: null }
+    : await attributeForZone(db, isTest, zone);
 
-  // Labelled doors attribute only to their own crew, including a just-closed
-  // session for a manually selected previous zone. Unlabelled legacy submits
-  // retain their old attribution behavior.
-  let zoneSession = picked
-    || (crew ? await getOpenSessionForZone(db, isTest, zone, crew) : null);
-  if (!zoneSession && !crew) zoneSession = await getOpenSessionForZone(db, isTest, zone);
-
-  // A cultivar switch INSIDE one zone is invisible to the two steps above: the
-  // zone is still open, so the load attaches to whatever is being cut NOW, and
-  // `hasActiveSession` is true so the confirm screen stays silent about it.
-  //
-  // In a trial zone that is the whole error. Z10 is 15 cultivars in one acre at
-  // ~130 plants each — roughly six trailers a lot — so a single misplaced
-  // trailer is a 15-20% error on a lot whose only purpose is being compared
-  // against its neighbours. Z8 and R1 are the same shape.
-  //
-  // So before accepting an open session, ask whether the SAME crew closed a
-  // DIFFERENT cultivar in this zone inside the grace window. If they did, the
-  // trailer on the apron was loaded before the switch. Scoped to that crew
-  // because both crews can work one zone on different cultivars, and the other
-  // crew's just-closed lot says nothing about this door's load.
-  //
-  // Self-limiting: in a single-cultivar zone the previous session carries the
-  // same cultivar, so this never fires.
-  let viaSwitch = null;
-  if (zoneSession && !picked) {
-    const prev = await getLastClosedAnyCultivar(db, isTest, zone, zoneSession.crew ?? null);
-    const now = zoneSession.cultivar || null;
-    if (prev && inBarnGrace(prev) && (prev.cultivar || null) !== now) {
-      viaSwitch = { from: prev.cultivar || null, to: now };
-      zoneSession = prev;
-    }
-  }
-
-  // Nothing open for this zone — the crew has moved on. If it closed within the
-  // grace window the load was cut there and is only now arriving, so it belongs
-  // to that closed lot.
-  let viaGrace = false;
-  if (!zoneSession && !picked && crew) {
-    const mine = await getLastClosedAnyCultivar(db, isTest, zone, crew);
-    if (inBarnGrace(mine)) { zoneSession = mine; viaGrace = true; }
-  }
-  if (!zoneSession && !crew) {
-    const recent = await getLastClosedAnyCultivar(db, isTest, zone);
-    if (inBarnGrace(recent)) { zoneSession = recent; viaGrace = true; }
-  }
-
-  // The load landed on the OTHER crew's session. Legitimate when both crews are
-  // in one zone, and a mistake worth catching when they are not — either way
-  // the person at the door is the only one who can tell, so tell them.
-  const crossedCrew = !!(crew && zoneSession && zoneSession.crew && zoneSession.crew !== crew);
-
-  await execute(db, `
-    INSERT INTO harvest_scan_log (event_type, zone, season, bins, attributed_zone_session_id, crew, bay, is_test)
-    VALUES ('barn_load', ?, ?, ?, ?, ?, ?, ?)
-  `, [zone, getSeason(), bins, zoneSession ? zoneSession.id : null, crew, bay, isTest]);
-
-  // "Carga #3 hoy" used to reset at 5pm Pacific, mid-afternoon, while trailers
-  // were still arriving — the crew would have seen this one long before anyone
-  // read a dashboard.
-  const [dayStart, dayEnd] = pacificDayRange(pacificToday());
-  const todayCount = await queryOne(db, `
-    SELECT COUNT(*) as n FROM harvest_scan_log
-    WHERE event_type = 'barn_load' AND zone = ?
-      AND occurred_at >= ? AND occurred_at < ? AND is_test = ?
-  `, [zone, dayStart, dayEnd, isTest]);
-  const loadNumber = (todayCount?.n) || 1;
-
-  const cutNote = zoneSession
-    ? `cut ${zoneSession.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
+  const cutNote = session
+    ? `cut ${session.cut_number}${picked ? ', chosen at the door' : ''}${viaGrace ? ', just-closed lot' : ''}`
       + `${viaSwitch ? `, ${viaSwitch.from || '?'} (cultivar just changed)` : ''}`
-      + `${crossedCrew ? `, Crew ${zoneSession.crew}` : ''}`
     : 'no active session for this zone';
-  ctx.waitUntil(sendTelegramMessage(env, {
-    chatId: env.TELEGRAM_TEST_CHAT_ID,
-    text: `🚚 Load: ${bins} bins → *${zone}* (${cutNote}). Load #${loadNumber} today for this zone.`,
-  }).catch(e => console.error('[harvest][telegram]', e)));
+  const { loadNumber } = await recordLoad(db, env, ctx, { zone, bins, session, bay, isTest, cutNote });
 
   return renderPage(ui, ui.t('barnIntake'), barnLogConfirmBody(ui, {
     chosen: picked ? `${picked.zone} · ${picked.cultivar || '?'} · ${translate(ui.lang, 'cut', { n: picked.cut_number ?? '?' })}` : null,
     zone, bins, loadNumber, station, bay,
-    hasActiveSession: !!zoneSession,
-    grace: viaGrace ? { zone, cut: zoneSession.cut_number } : null,
+    hasActiveSession: !!session,
+    grace: viaGrace ? { zone, cut: session.cut_number } : null,
     switched: viaSwitch,
-    crossedCrew: crossedCrew ? zoneSession.crew : null,
   }));
+}
+
+// ─── TRAILER DECAL ──────────────────────────────────────
+// ONE SCAN (Koa, 2026-09-28: "just a one-scan on the qr without jumping
+// through any hoops"). Scanning the decal IS logging the load: open lot (or
+// the one that just closed), 24 bins, this trailer's bay from earlier today.
+// The receipt then offers the rare corrections — wrong bay, a partial, the
+// wrong lot, undo — for TRAILER_EDIT_MS. Fix-after instead of ask-before.
+//
+// It still asks, and writes nothing, in exactly two cases, because guessing
+// would put bins somewhere wrong that nobody can see afterwards:
+//   - no bay for this trailer yet today (its first run: one tap, then
+//     hands-free until the barn moves on);
+//   - no lot to put it on (nothing open and nothing just closed).
+
+/** How long after the scan the receipt still offers fixes and undo. */
+const TRAILER_EDIT_MS = 10 * 60 * 1000;
+
+/**
+ * A request that must never log a load: anything but a plain GET, a browser
+ * prefetch/prerender, or a link-preview bot (the URL is printed on a trailer
+ * and may well be texted around). These get the ask screen, which writes
+ * nothing until someone taps.
+ */
+function isNotAPerson(request) {
+  if (request.method !== 'GET') return true;
+  const h = request.headers;
+  const purpose = `${h.get('sec-purpose') || ''} ${h.get('purpose') || ''} ${h.get('x-purpose') || ''}`;
+  if (/prefetch|prerender|preview/i.test(purpose)) return true;
+  return /bot\b|crawler|spider|preview|facebookexternalhit|whatsapp|slack|discord|telegram/i
+    .test(h.get('user-agent') || '');
+}
+
+const receiptUrl = (id, ui) => `${API}?action=trailer_done&id=${id}&lang=${ui.lang}`;
+
+/** 303 to a GET page: the tab ends up on the receipt, never on the scan URL. */
+const seeOther = (location) => new Response(null, { status: 303, headers: { Location: location } });
+
+/** GET /t/<n> — the QR on a trailer, scanned by its driver at drop-off. */
+export async function handleTrailerScan(request, env, ctx) {
+  env = await withSettings(env);
+  const ui = makeUi(request, env);
+  try {
+    const url = new URL(request.url);
+    const raw = url.pathname.replace(/^\/t\//, '').trim();
+    // /t/3/icon-180.png and /t/3/manifest.webmanifest: what a phone fetches
+    // once the page is on its home screen. Static, never a load.
+    const asset = raw.match(/^([1-9]\d?)\/(manifest\.webmanifest|icon-(\d+)\.png)$/);
+    if (asset) {
+      const trailer = parseTrailer(asset[1]);
+      if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: asset[1] }));
+      return trailerAssetResponse(ui, trailer, asset[2], asset[3]);
+    }
+    const trailer = parseTrailer(raw);
+    if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: raw }));
+    // The home-screen icon opens /t/<n>?home: a page with one big button and
+    // nothing logged until it is tapped — so a pocket launch, an iOS reload on
+    // resume, or a curious tap on the icon can never make a phantom load.
+    if (url.searchParams.has('home')) {
+      return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`,
+        trailerHomeBody(ui, trailer, { autoOpen: url.searchParams.has('add') }),
+        200, { head: trailerHead(ui, trailer) });
+    }
+    if (isNotAPerson(request)) return await trailerFormPage(ui, env.DB, env, trailer);
+    // ?app is the home-screen icon's own start page (Koa, 2026-10-08: "when
+    // they tap the app, it scans it in"). It logs like a decal scan and says so.
+    return await logTrailerNow(ui, env.DB, env, ctx, trailer, url.searchParams.has('app') ? 'home icon' : 'one scan');
+  } catch (e) {
+    const { message, status } = formatError(e);
+    return errorPage(ui, message, status);
+  }
+}
+
+/**
+ * The web-app manifest and icons behind "Add to Home Screen". One manifest per
+ * trailer, so the icon says T3 and opens T3's launcher, never a generic page.
+ */
+function trailerAssetResponse(ui, trailer, file, size) {
+  if (file === 'manifest.webmanifest') {
+    const name = trailerName(trailer);
+    const manifest = {
+      name: `${name} · Rogue Origin`, short_name: name,
+      start_url: `/t/${trailer}?app&lang=${ui.lang}`, scope: '/',
+      display: 'standalone', background_color: '#14251a', theme_color: '#14251a',
+      icons: TRAILER_ICON_SIZES.filter(sz => sz !== 180).map(sz => ({
+        src: `/t/${trailer}/icon-${sz}.png`, sizes: `${sz}x${sz}`, type: 'image/png', purpose: 'any',
+      })),
+    };
+    return new Response(JSON.stringify(manifest), {
+      headers: { 'content-type': 'application/manifest+json', 'cache-control': 'public, max-age=300' },
+    });
+  }
+  const png = trailerIconPng(trailer, Number(size));
+  if (!png) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  return new Response(png, {
+    headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' },
+  });
+}
+
+/** <head> extras that make a trailer page installable with its own icon and name. */
+function trailerHead(ui, trailer) {
+  const name = trailerName(trailer);
+  return `<link rel="manifest" href="/t/${trailer}/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/t/${trailer}/icon-180.png">
+<meta name="apple-mobile-web-app-title" content="${name}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#14251a">`;
+}
+
+/**
+ * What one scan does, shared by the decal and the receipt's "Log another load"
+ * button (Koa, 2026-09-29: "if they don't want to scan the QR every time"), so
+ * the two can never disagree: the open or just-closed lot, 24 bins, the barn's
+ * bay today — or the ask screen when one of those has no honest answer.
+ */
+async function logTrailerNow(ui, db, env, ctx, trailer, how) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [proposal, lastFill] = await Promise.all([
+    proposeLot(db, isTest, trailer), getLastFilledBay(db, isTest)]);
+  const bayToday = lastFill && lastFill.occurred_at &&
+    pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date())
+    ? lastFill.bay : null;
+  if (!proposal.lot || !bayToday) return await trailerFormPage(ui, db, env, trailer);
+
+  const saved = await recordLoad(db, env, ctx, {
+    zone: proposal.lot.zone, bins: CONSTANTS.binsPerTrailer.value, session: proposal.lot,
+    bay: bayToday, trailer, isTest,
+    cutNote: `cut ${proposal.lot.cut_number}${proposal.viaGrace ? ', just-closed lot' : ''}, ${how}`,
+  });
+  return seeOther(receiptUrl(saved.id, ui));
+}
+
+/**
+ * POST from the receipt's "Log another load" button — the same as scanning the
+ * decal again. POST only: a button is a deliberate tap, and nothing that merely
+ * fetches a page (a prefetch, a restored tab) may log a trailer.
+ */
+async function handleTrailerAgain(ui, db, env, ctx, body, method) {
+  if (method !== 'POST') throw createError('VALIDATION_ERROR', ui.t('trailerAgainPost'));
+  const trailer = parseTrailer(body.trailer);
+  if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: body.trailer ?? '' }));
+  return logTrailerNow(ui, db, env, ctx, trailer, 'receipt button');
+}
+
+/**
+ * The ask screen, for the two cases one scan cannot settle. The lot is worked
+ * out HERE, shown to the driver, and posted as an explicit id — so what the
+ * driver saw is exactly what is saved.
+ */
+async function trailerFormPage(ui, db, env, trailer, keep = null) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [proposal, lastFill, recentLots] = await Promise.all([
+    proposeLot(db, isTest, trailer),
+    getLastFilledBay(db, isTest),
+    getRecentEnterSessions(db, isTest),
+  ]);
+  // Pre-selected only on the same Pacific day, for the reason the door gives:
+  // overnight the barn moves on to the next bay and the default stops being
+  // true. The number is still named, just not ticked.
+  const today = !!(lastFill && lastFill.occurred_at &&
+    pacificDay(parseSqliteUtc(lastFill.occurred_at)) === pacificDay(new Date()));
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(trailer)}`, trailerFormBody(ui, {
+    trailer, proposal, recentLots, keep,
+    lastBay: lastFill ? lastFill.bay : null, bayToday: today,
+  }), 200, { head: trailerHead(ui, trailer) });
+}
+
+/** Bins from a form field: 1..max, the whole value, or a thrown range error. */
+function parseBins(raw, max, errorKey, ui) {
+  const s = String(raw ?? '').trim();
+  const n = parseInt(s, 10);
+  if (!Number.isInteger(n) || n < 1 || n > max || String(n) !== s) {
+    throw createError('VALIDATION_ERROR', ui.t(errorKey, { max }));
+  }
+  return n;
+}
+
+/** POST from the ask screen: the tap that one scan could not do by itself. */
+async function handleTrailerLog(ui, db, env, ctx, body) {
+  const trailer = parseTrailer(body.trailer);
+  if (!trailer) throw createError('VALIDATION_ERROR', ui.t('trailerBad', { t: body.trailer ?? '' }));
+  const isTest = isTestMode(env) ? 1 : 0;
+
+  // Both required. The screen marks them required too; this is the guard for
+  // anything that reaches the endpoint without the screen.
+  const lot = await pickedLot(ui, db, isTest, body.lot);
+  if (!lot) throw createError('VALIDATION_ERROR', ui.t('trailerPickLot'));
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
+
+  // 24 is the standard (Koa, 2026-09-28). A partial is 1..23; anything else in
+  // the partial box is refused rather than stored as one.
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const partial = String(body.partial_bins ?? '').trim();
+  const bins = partial ? parseBins(partial, FULL - 1, 'partialRange', ui) : FULL;
+
+  const proposal = await proposeLot(db, isTest, trailer);
+  const asProposed = !!(proposal.lot && proposal.lot.id === lot.id);
+  const cutNote = `cut ${lot.cut_number}${asProposed ? (proposal.viaGrace ? ', just-closed lot' : '') : ', chosen by driver'}`;
+  const saved = await recordLoad(db, env, ctx, {
+    zone: lot.zone, bins, session: lot, bay, trailer, isTest, cutNote,
+  });
+
+  // Post/Redirect/Get: a reload or a back button re-shows the receipt instead
+  // of re-posting the load.
+  return seeOther(receiptUrl(saved.id, ui));
+}
+
+/** One trailer load with its lot, or null. Trailer loads only. */
+async function getTrailerLoad(db, isTest, rawId) {
+  const id = parseInt(rawId, 10);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return queryOne(db, `
+    SELECT l.*, s.cultivar AS lot_cultivar, s.cut_number AS lot_cut, s.crew AS lot_crew
+    FROM harvest_scan_log l
+    JOIN harvest_scan_log s ON s.id = l.attributed_zone_session_id
+    WHERE l.id = ? AND l.event_type = 'barn_load' AND l.trailer IS NOT NULL AND l.is_test = ?
+  `, [id, isTest]);
+}
+
+const editableUntil = (row) => parseSqliteUtc(row.occurred_at).getTime() + TRAILER_EDIT_MS;
+
+/** GET receipt for a trailer load — where every scan and every tap ends up. */
+async function handleTrailerDone(ui, db, env, params) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, params.id);
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const editable = Date.now() < editableUntil(row);
+  const [loadNumber, recentLots] = await Promise.all([
+    loadNumberFor(db, isTest, row.zone, parseSqliteUtc(row.occurred_at), row.id),
+    editable ? getRecentEnterSessions(db, isTest) : [],
+  ]);
+  // The full-screen "logged" flash plays only on the scan's own redirect, not
+  // when an old receipt is reopened from the tab list hours later.
+  const fresh = Date.now() - parseSqliteUtc(row.occurred_at).getTime() < LOGGED_FLASH_FRESH_MS;
+  return renderPage(ui, `${ui.t('trailer')} ${trailerName(row.trailer)}`, trailerReceiptBody(ui, {
+    row, loadNumber, editable, recentLots, fresh,
+  }), 200, { head: trailerHead(ui, row.trailer) });
+}
+
+/**
+ * POST from the receipt: fix a load (bay, bins, lot) or undo it, inside
+ * TRAILER_EDIT_MS of the scan. The window is enforced in the UPDATE/DELETE
+ * itself, so a receipt left open on a phone cannot rewrite an old load.
+ */
+async function handleTrailerFix(ui, db, env, ctx, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const row = await getTrailerLoad(db, isTest, body.id);
+  if (!row) throw createError('NOT_FOUND', ui.t('trailerNoReceipt'));
+  const windowSql = `occurred_at > datetime('now', '-${Math.round(TRAILER_EDIT_MS / 1000)} seconds')`;
+  const name = trailerName(row.trailer);
+
+  if (truthy(body.undo)) {
+    // A hard delete, on purpose: a load scanned by mistake minutes ago was
+    // never a load, and a void flag would have to be honoured by every ledger,
+    // rack-board and metrics query there is. The Telegram feed keeps the record.
+    const r = await execute(db, `
+      DELETE FROM harvest_scan_log
+      WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+    `, [row.id, isTest]);
+    if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `↩️ ${name} · load removed (was ${row.bins} bins → *${row.zone}*${row.bay ? ` · bay ${row.bay}` : ''}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    return renderPage(ui, `${ui.t('trailer')} ${name}`, `
+<h1>${ui.t('trailerUndone', { t: name })}</h1>
+<p class="sub">${ui.t('trailerUndoneSub')}</p>`);
+  }
+
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('trailerPickBay'));
+  const bins = parseBins(body.bins, CONSTANTS.binsPerTrailer.value, 'binsFixRange', ui);
+  // The load's own lot needs no re-validation — it was valid when the scan
+  // chose it, and an old-but-just-closed lot must not block a bay fix.
+  const lotRaw = String(body.lot ?? '').trim();
+  const lot = !lotRaw || Number(lotRaw) === row.attributed_zone_session_id
+    ? { id: row.attributed_zone_session_id, zone: row.zone, crew: row.lot_crew }
+    : await pickedLot(ui, db, isTest, lotRaw);
+
+  // The load's crew follows its lot, so a load moved to crew B's lot counts for B.
+  const r = await execute(db, `
+    UPDATE harvest_scan_log SET bay = ?, bins = ?, attributed_zone_session_id = ?, zone = ?, crew = ?
+    WHERE id = ? AND event_type = 'barn_load' AND trailer IS NOT NULL AND is_test = ? AND ${windowSql}
+  `, [bay, bins, lot.id, lot.zone, lot.crew ?? null, row.id, isTest]);
+  if (!r.changes) throw createError('VALIDATION_ERROR', ui.t('trailerFixLate'));
+
+  const changed = [
+    bay !== row.bay ? `bay ${row.bay ?? '?'}→${bay}` : '',
+    bins !== row.bins ? `${row.bins}→${bins} bins` : '',
+    lot.id !== row.attributed_zone_session_id ? `lot ${row.zone}→${lot.zone}` : '',
+  ].filter(Boolean).join(', ');
+  if (changed) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: `✏️ ${name} · load fixed: ${changed}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+  return seeOther(receiptUrl(row.id, ui));
 }
 
 // ─── SUPERSACK TAGS ─────────────────────────────────────
@@ -1299,7 +2050,375 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
   const isTest = isTestMode(env) ? 1 : 0;
   const [lots, lastBay, lastStorage] = await Promise.all([
     getRecentLots(db, isTest), getLastBay(db, isTest), getLastStorage(db, isTest)]);
-  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash));
+  await attachDryingBays(db, isTest, lots);
+  const bays = await getBayTakedown(db, isTest, lots);
+  return renderPage(ui, ui.t('printTags'), sackPrintFormBody(ui, lots, lastBay, lastStorage, flash, bays));
+}
+
+/**
+ * GET ?action=bay_tags — tags by bay (Koa, 2026-10-12). One screen: every bay
+ * a drawer, every cultivar hanging in it a row with its own PRINT, so a
+ * 17-cultivar retail bay is not 17 round trips through the picker. Same bay
+ * cards as the picker; bayScreenGroups folds them by bay.
+ */
+async function handleBayTags(ui, db, env, flash = null, warn = null, openBay = null) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [lots, storages] = await Promise.all([getRecentLots(db, isTest), getBayStoragesToday(db, isTest)]);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const today = pacificDay(new Date());
+  const tags = info.tags.map(t => ({ ...t, printed_day: pacificDay(parseSqliteUtc(t.printed_at)) }));
+  const groups = bayScreenGroups([...info.active, ...info.finished], tags, { today });
+  // Which last tags were printed today, so voiding one can take it off "sacks today".
+  const todayIds = new Set(tags.filter(t => t.printed_day === today).map(t => t.sack_id));
+  return renderPage(ui, ui.t('bayTagsTitle'), bayTagsBody(ui, groups, storages, flash, { today, todayIds, warn, openBay }));
+}
+
+const bayKey = (bay, cultivar, cut, fillStart) => `${Number(bay)}|${cultivar}|${Number(cut ?? 1)}|${fillStart}`;
+
+/**
+ * Takedown by BAY (Koa, 2026-10-05). Sour Lifter from two or three zones hangs
+ * in every bay and the sticks carry no zone, so the crew can see which bay is
+ * coming down but not which zone a stick grew in. The picker offers one card
+ * per bay, cultivar and cut, with each zone's share by bins (Koa chose bins
+ * over acres: they are what was physically hung in that bay).
+ *
+ * Sacks still hang off ONE lot, the zone with the most bins in the bay, so the
+ * rest of the system (serials, Shopify, the scan page) is unchanged. The bay on
+ * every sack is what carries the real lineage; zone yields are to be split from
+ * the bay's bin shares, never read off the lot the sack happens to hang on.
+ *
+ * Lots with no bay on any load keep their zone card.
+ */
+async function getBayTakedown(db, isTest, lots) {
+  const [loads, tags, done] = await Promise.all([
+    // A lot with no barn loads at all can carry its bay on its own enter row:
+    // material trucked in from McLoughlin, or hung on tables, is never scanned
+    // at the barn door (Koa, 2026-10-05). It joins the bay with zero bins.
+    query(db, `
+      SELECT attributed_zone_session_id AS session_id, bay, bins, occurred_at FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+      UNION ALL
+      SELECT e.id AS session_id, e.bay, 0 AS bins, e.occurred_at FROM harvest_scan_log e
+      WHERE e.event_type = 'enter' AND e.is_test = ? AND e.bay IS NOT NULL
+        AND julianday('now') - julianday(e.occurred_at) <= ?
+        AND NOT EXISTS (SELECT 1 FROM harvest_scan_log b
+                        WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id)
+    `, [isTest, LOT_PICKER_DAYS, isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT sack_id, bay, printed_at, cultivar, cut_number FROM harvest_sacks
+      WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL
+        AND julianday('now') - julianday(printed_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    // Before migration 0043 the table is absent: no bay has been finished yet.
+    query(db, `SELECT bay, cultivar, cut_number, fill_start, done_at FROM harvest_bay_done WHERE is_test = ?`, [isTest])
+      .catch(() => []),
+  ]);
+  const fills = bayFills(loads);
+  const lotOfSession = new Map();
+  for (const l of lots) for (const id of (l.session_ids || [l.id])) lotOfSession.set(id, l);
+  const doneByKey = new Map(done.map(d => [bayKey(d.bay, d.cultivar, d.cut_number, d.fill_start), d]));
+
+  const cards = bayCards(fills, lotOfSession, tags).map(c => {
+    const fillStart = sqliteUtc(new Date(c.fillStartMs));
+    const d = doneByKey.get(bayKey(c.bay, c.cultivar, c.cut, fillStart));
+    // Sacks hang off the biggest lot still open: a finished lot refuses tags.
+    const open = c.zones.filter(z => !z.lot.takedown_done_at);
+    return { ...c, fillStart, doneAt: d ? d.done_at : null,
+      primary: (open[0] || c.zones[0]).lot, allLotsFinished: open.length === 0 };
+  });
+  const active = cards.filter(c => !c.doneAt && !c.allLotsFinished);
+  const finished = cards.filter(c => c.doneAt)
+    .sort((a, b) => String(b.doneAt).localeCompare(String(a.doneAt)));
+  const covered = new Set();
+  for (const c of [...active, ...finished]) for (const z of c.zones) covered.add(z.lot.id);
+  return { cards, active, finished, covered, fills, doneByKey, tags };
+}
+
+/** True once every bay fill holding this lot's loads is down (finished, or refilled since). */
+function lotAllBaysDown(lot, info) {
+  const ids = new Set(lot.session_ids || [lot.id]);
+  for (const [bay, fills] of info.fills) {
+    for (const f of fills) {
+      if (f.closed || !f.loads.some(l => ids.has(l.session_id))) continue;
+      if (!info.doneByKey.has(bayKey(bay, lot.cultivar, lot.cut_number, sqliteUtc(new Date(f.startMs))))) return false;
+    }
+  }
+  return true;
+}
+
+/** "Sep 28" / "28 sept" — a Pacific calendar day without the year. */
+function shortDay(ui, ms) {
+  return new Date(ms).toLocaleDateString(ui.lang === 'es' ? 'es-MX' : 'en-US',
+    { timeZone: HARVEST_TZ, month: 'short', day: 'numeric' });
+}
+
+function hungDates(ui, c) {
+  const a = shortDay(ui, c.firstMs), b = shortDay(ui, c.lastMs);
+  return ui.t('hungDates', { d: a === b ? a : `${a}–${b}` });
+}
+
+/** The zone chips of a bay card: "Z1+Z2 66%" "Z11 34%" (zones harvested together merged). */
+function zoneMix(c) {
+  const shown = c.groups || c.zones;
+  const pct = percentShares(shown);
+  return `<span class="zonemix">${shown.map((z, i) =>
+    `<span class="zchip">${escapeHtml(z.zone)} <b>${pct[i]}%</b></span>`).join('')}</span>`;
+}
+
+/**
+ * POST ?action=bay_finish — "Bay 9 is down" (or reopen it). Records the bay
+ * fill as finished, then closes every lot it held whose bays are now ALL down,
+ * so a zone hung across bays 9 and 10 stays open until both are. Like Finished
+ * on a lot, it touches no sack, no storage and no Shopify count.
+ */
+async function handleBayFinish(ui, db, env, ctx, body) {
+  // Pressed on the tags-by-bay screen: land back there with a 303, so a
+  // refresh re-GETs the screen instead of re-POSTing the finish. ok=1 shows
+  // the flash as a ✅; without it, as a ⚠️ notice.
+  const fromBayTags = String(body.back || '') === 'bay_tags';
+  const backTo = (flash, ok = true) => (fromBayTags
+    ? new Response(null, { status: 303, headers: { Location:
+      `${API}?action=bay_tags&lang=${ui.lang}${ok ? '&ok=1' : ''}&flash=${encodeURIComponent(flash)}` } })
+    : handleSackPrintForm(ui, db, env, flash));
+  // "Whole bay down" (or reopen it): every cultivar card in the bay's current
+  // fill, in one tap, so a 17-cultivar retail bay is not 17 taps (Koa,
+  // 2026-10-12). Each card takes the single-card path, quietly and on one
+  // takedown read; Telegram gets one message for the bay.
+  if (String(body.all ?? '') === '1') {
+    const bayAll = parseBay(body.bay, ui);
+    if (!bayAll) throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+    const reopenAll = String(body.reopen ?? '') === '1';
+    const isTest = isTestMode(env) ? 1 : 0;
+    const lots = await getRecentLots(db, isTest);
+    await attachDryingBays(db, isTest, lots);
+    const info = await getBayTakedown(db, isTest, lots);
+    let cards;
+    if (reopenAll) {
+      const fills = info.fills.get(bayAll) || [];
+      const current = fills[fills.length - 1];
+      const fillStart = current ? sqliteUtc(new Date(current.startMs)) : null;
+      cards = info.finished.filter(c => c.bay === bayAll && c.fillStart === fillStart);
+    } else {
+      cards = info.active.filter(c => c.bay === bayAll);
+    }
+    if (!cards.length) return backTo(ui.t('bayNothingToFinish', { bay: bayAll }), false);
+    for (const c of cards) {
+      await finishBayCard(db, env, ctx, { bay: c.bay, cultivar: c.cultivar, cut: Number(c.cut) || 1,
+        fillStart: c.fillStart, reopen: reopenAll, quiet: true, takedown: info });
+    }
+    const n = cards.length;
+    const names = cards.map(c => c.cultivar).join(', ');
+    const sacks = cards.reduce((sum, c) => sum + (c.sacks || 0), 0);
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopenAll
+        ? `↩️ Bay ${bayAll} reopened — ${n} cultivar${n === 1 ? '' : 's'}: ${names}.`
+        : `✅ Bay ${bayAll} down — ${n} cultivar${n === 1 ? '' : 's'} finished: ${names} (${sacks} sack${sacks === 1 ? '' : 's'}).`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+    if (reopenAll) return backTo(ui.t('bayAllReopened', { bay: bayAll, n }));
+    return backTo(ui.t(n === 1 ? 'bayAllDownOne' : 'bayAllDown', { bay: bayAll, n }));
+  }
+
+  const bay = parseBay(body.bay, ui);
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const cut = parseInt(body.cut, 10) || 1;
+  const fillStart = String(body.fill_start || '').trim();
+  if (!bay || !cultivar || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(fillStart)) {
+    throw createError('VALIDATION_ERROR', ui.t('pickLotFirst'));
+  }
+  const reopen = String(body.reopen ?? '') === '1';
+  const card = await finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen });
+  const sacks = card ? card.sacks : 0;
+  if (reopen && card && !fromBayTags) {
+    return new Response(null, { status: 303, headers: { Location:
+      `${API}?action=lot_resume&session_id=${card.primary.id}&bay=${bay}&reopened=1&lang=${ui.lang}` } });
+  }
+  return backTo(ui.t(reopen ? 'bayReopened' : 'bayFinished', { bay, cv: cultivar, n: sacks }));
+}
+
+/**
+ * The work behind one bay card's "is down" (or reopen): record it in
+ * harvest_bay_done, close (or reopen) the lots it held, tell Telegram.
+ * Returns the card as it was found, or undefined.
+ *
+ * `takedown`: a getBayTakedown result already read for this request (whole
+ * bay). It is reused instead of re-read per card, its doneByKey kept in step
+ * with the row written here so lotAllBaysDown sees this card down.
+ * `quiet`: no per-card Telegram message; the caller sends one for the bay.
+ */
+async function finishBayCard(db, env, ctx, { bay, cultivar, cut, fillStart, reopen, quiet = false, takedown = null }) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  await execute(db, reopen
+    ? `DELETE FROM harvest_bay_done WHERE bay = ? AND cultivar = ? AND cut_number = ? AND fill_start = ? AND is_test = ?`
+    : `INSERT OR IGNORE INTO harvest_bay_done (bay, cultivar, cut_number, fill_start, is_test) VALUES (?, ?, ?, ?, ?)`,
+    [bay, cultivar, cut, fillStart, isTest]);
+
+  let info = takedown;
+  if (info) {
+    const key = bayKey(bay, cultivar, cut, fillStart);
+    if (reopen) info.doneByKey.delete(key);
+    else if (!info.doneByKey.has(key)) {
+      info.doneByKey.set(key, { bay, cultivar, cut_number: cut, fill_start: fillStart, done_at: sqliteUtc(new Date()) });
+    }
+  } else {
+    info = await getBayTakedown(db, isTest, await getRecentLots(db, isTest));
+  }
+  const card = info.cards.find(c => c.bay === bay && c.cultivar === cultivar
+    && Number(c.cut) === cut && c.fillStart === fillStart);
+  for (const z of (card ? card.zones : [])) {
+    const lot = await requireLot(db, z.lot.id);
+    const f = lotSessionsWhere(lot);
+    if (reopen) {
+      await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = NULL
+                         WHERE ${f.where} AND takedown_done_at IS NOT NULL`, f.params);
+    } else if (lotAllBaysDown(z.lot, info)) {
+      await execute(db, `UPDATE harvest_scan_log SET takedown_done_at = ?
+                         WHERE ${f.where} AND takedown_done_at IS NULL`, [sqliteUtc(new Date()), ...f.params]);
+    }
+  }
+
+  const sacks = card ? card.sacks : 0;
+  if (!quiet) {
+    ctx.waitUntil(sendTelegramMessage(env, {
+      chatId: env.TELEGRAM_TEST_CHAT_ID,
+      text: reopen
+        ? `↩️ Bay ${bay} reopened — *${cultivar}* cut ${cut}.`
+        : `✅ Bay ${bay} down — *${cultivar}* cut ${cut}: ${sacks} sack${sacks === 1 ? '' : 's'}${card ? ` (${card.zones.map(z => z.zone).join(', ')})` : ''}.`,
+    }).catch(e => console.error('[harvest][telegram]', e)));
+  }
+  return card;
+}
+
+/**
+ * POST ?action=lot_add — "+ Add a cultivar" on the bay screen.
+ *
+ * A cultivar that is hanging but was never scanned. Always McLoughlin (Koa,
+ * 2026-10-12): Egg Farm and Gary's material is entered at the zone sign and
+ * the barn door. So the zone is looked up from the planting layout, not asked,
+ * except for the two cultivars planted in two McLoughlin zones — that refusal
+ * carries `details.zones` so the screen can offer them.
+ *
+ * Writes the same row the SOP had Claude insert by hand (sop-harvest-tracking
+ * §5, "a lot that was never scanned"): a CLOSED enter row carrying its bay.
+ * Closed because an open crew-less lot would pick up today's trailer loads.
+ * Dated at the bay's current fill start, so "7d drying" on its card is the
+ * bay's truth; a bay with no fill is dated 8 AM Pacific today (handAddedAt).
+ * No bins: bins live on loads.
+ */
+async function handleLotAdd(ui, db, env, body) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const bay = parseBay(body.bay, ui);
+  if (!bay) throw createError('VALIDATION_ERROR', ui.t('addBayBad'));
+  const cultivar = String(body.cultivar || '').trim().substring(0, 60);
+  const cut = Math.max(1, Math.min(3, parseInt(body.cut, 10) || 1));
+  const zones = mcloughlinZonesFor(cultivar);
+  if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotMcloughlin', { c: cultivar }));
+  const canonical = mcloughlinCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
+
+  // The bay's fill as the screen sees it: barn loads AND hand-added enter rows
+  // (a McLoughlin bay nobody scans has only those). Reading loads alone dated
+  // every add in such a bay "now", so two adds days apart became two fills and
+  // the first cultivar fell off the screen with its lot still open.
+  const lots = await getRecentLots(db, isTest);
+  await attachDryingBays(db, isTest, lots);
+  const info = await getBayTakedown(db, isTest, lots);
+  const fills = info.fills.get(bay) || [];
+  const current = fills[fills.length - 1];
+  // Already hanging here (any zone: Egg Farm Sour Lifter counts): a second lot
+  // would split its tags. Only cards the screen shows, so its row is there.
+  if (current) {
+    const fillStart = sqliteUtc(new Date(current.startMs));
+    const dup = [...info.active, ...info.finished].find(c => c.bay === bay && c.fillStart === fillStart
+      && Number(c.cut) === cut && String(c.cultivar).toLowerCase() === canonical.toLowerCase());
+    if (dup) throw createError('VALIDATION_ERROR', ui.t('addAlready', { c: canonical, bay }), { session_id: dup.primary.id });
+  }
+
+  let zone = String(body.zone || '').trim().toUpperCase();
+  if (!zone && zones.length === 1) zone = zones[0];
+  if (!zone) throw createError('VALIDATION_ERROR', ui.t('addPickZone', { c: canonical }), { zones });
+  if (!zones.includes(zone)) throw createError('VALIDATION_ERROR', ui.t('addZoneWrong', { c: canonical, z: zone }));
+  // PRINT TAG would refuse the same way; say it now, naming the cultivar.
+  try { await cultivarCode(db, canonical); }
+  catch { throw createError('VALIDATION_ERROR', ui.t('addNoCode', { c: canonical })); }
+
+  const occurredAt = current ? sqliteUtc(new Date(current.startMs)) : handAddedAt(new Date());
+  const season = getSeason();
+  const { lastRowId: id } = await execute(db, `
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, bay, occurred_at, closed_at, is_test)
+    VALUES ('enter', ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+  `, [zone, canonical, season, cut, bay, occurredAt, occurredAt, isTest]);
+  const variant = isTest ? null : await checkSupersackVariant(env, db, { season, cultivar: canonical, zone, cut });
+  return successResponse({
+    success: true, session_id: id, zone, cultivar: canonical, cut, bay, occurred_at: occurredAt,
+    variant_ok: variant ? variant.ok : null,
+    variant_error: variant && variant.ok === false ? variant.error : null,
+  });
+}
+
+/**
+ * When a hand-added lot with no bay fill to join is dated: 8 AM Pacific
+ * (15:00 UTC) of today's Pacific day, the SOP's convention for hand-inserted
+ * lots. A tag's harvest date is the UTC date of its lot, so dating it "now"
+ * printed tomorrow's date on an evening add. Never later than now: before
+ * 8 AM a future date would leave this morning's tags outside the bay's fill.
+ */
+function handAddedAt(now) {
+  const eight = `${pacificDay(now)} 15:00:00`;
+  const nowText = sqliteUtc(now);
+  return nowText < eight ? nowText : eight;
+}
+
+/**
+ * The bay(s) each lot is drying in, as `lot.bays` — shown on its picker card
+ * (Koa, 2026-10-05: "can we also put what bay it's drying in?").
+ *
+ * From the lot's barn loads, which carry the bay they were hung in. A lot with
+ * none (cut before bays were captured, or entered by hand) falls back to the
+ * bay its tags came down from. Neither: no bay shown, never a guess.
+ * Whole-window reads filtered in JS, as in handlePipeline: an IN list over
+ * session ids would outgrow D1's 100-variable cap.
+ */
+async function attachDryingBays(db, isTest, lots) {
+  const [loads, tags] = await Promise.all([
+    query(db, `
+      SELECT DISTINCT attributed_zone_session_id AS session_id, bay FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT DISTINCT zone_session_id AS session_id, bay FROM harvest_sacks
+      WHERE is_test = ? AND bay IS NOT NULL AND zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(printed_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+  ]);
+  const bySession = (rows) => {
+    const m = new Map();
+    for (const r of rows) {
+      if (!m.has(r.session_id)) m.set(r.session_id, new Set());
+      m.get(r.session_id).add(Number(r.bay));
+    }
+    return m;
+  };
+  const loadBays = bySession(loads), tagBays = bySession(tags);
+  const collect = (m, ids) => [...new Set(ids.flatMap(id => [...(m.get(id) || [])]))];
+  for (const l of lots) {
+    const ids = l.session_ids || [l.id];
+    const found = collect(loadBays, ids);
+    l.bays = (found.length ? found : collect(tagBays, ids)).sort((a, b) => a - b);
+  }
+  return lots;
+}
+
+/** "Bay 7" / "Bays 7, 9" — empty when the lot's bay is unknown. */
+function bayPill(ui, lot) {
+  const bays = lot.bays || [];
+  if (!bays.length) return '';
+  const text = bays.length === 1 ? ui.t('bayN', { n: bays[0] }) : ui.t('baysN', { n: bays.join(', ') });
+  return `<span class="baypill">${escapeHtml(text)}</span>`;
 }
 
 /**
@@ -1320,9 +2439,9 @@ async function handleSackPrintForm(ui, db, env, flash = null) {
  * stretch of a crew being in that zone. They are NOT the same thing, and
  * treating them as the same was a real bug:
  *
- *   - One crew leaves Z8 for Z7 and comes back the same shift. Inside
- *     CUT_RESUME_GRACE_HOURS that is deliberately still cut 1, so the second
- *     entry is a second session of the SAME lot. (See the 2025 log:
+ *   - One crew leaves Z8 for Z7 and comes back, the same shift or the next
+ *     morning. That is deliberately still cut 1 (a zone continues its cut), so
+ *     the second entry is a second session of the SAME lot. (See the 2025 log:
  *     "Finished Z8, partial Z7, partial Z5".)
  *   - From 2026 two cutting crews can be in one zone at once — same plants,
  *     same cut, two sessions.
@@ -1484,8 +2603,18 @@ async function handleSackSession(ui, db, env, input, flash = null) {
 
   const tags = await getLotTags(db, sessionId, isTest);
 
-  return renderPage(ui, `${ui.t('printTags')} — ${lot.zone}`,
-    sackSessionBody(ui, { lot, cultivar, stats, tags, bay, storage, finishedAt, variantCheck, flash }));
+  // Taking down a whole bay: the screen names the bay and its zone mix, and
+  // closes out the bay rather than the lot.
+  let bayCard = null;
+  if (bay) {
+    const info = await getBayTakedown(db, isTest, await getRecentLots(db, isTest));
+    bayCard = info.cards.find(c => c.bay === bay && c.cultivar === lot.cultivar
+      && Number(c.cut) === Number(lot.cut_number ?? 1)
+      && c.zones.some(z => (z.lot.session_ids || [z.lot.id]).includes(sessionId))) || null;
+  }
+
+  return renderPage(ui, `${ui.t('printTags')} — ${bayCard ? ui.t('bayN', { n: bay }) : lot.zone}`,
+    sackSessionBody(ui, { lot, cultivar, stats, tags, bay, storage, finishedAt, variantCheck, flash, bayCard }));
 }
 
 /**
@@ -1521,6 +2650,9 @@ async function handleLotResume(ui, db, env, params) {
   }
   const lot = await requireLot(db, sessionId);
   const resume = await getLotResume(db, lot);
+  // A bay card's Resume names its bay: the lot's newest tag may have come out
+  // of another bay the same zone was hung in.
+  if (params.bay) resume.bay = parseBay(params.bay, ui);
   const flash = String(params.reopened || '') === '1' ? ui.t('lotReopened', { lot: lotLabel(ui, lot, resume.cultivar) }) : null;
   return handleSackSession(ui, db, env, { session_id: sessionId, ...resume }, flash);
 }
@@ -1660,15 +2792,18 @@ async function getLotTagStats(db, sessionId, isTest) {
  */
 async function getLotTags(db, sessionId, isTest) {
   const rows = await query(db, `
-    SELECT sack_id, printed_at, voided_at, opened_at FROM harvest_sacks
+    SELECT sack_id, printed_at, voided_at, opened_at, fill_lbs, bay FROM harvest_sacks
     WHERE zone_session_id = ? AND is_test = ?
     ORDER BY printed_at DESC, serial DESC
   `, [sessionId, isTest]);
   return rows.map(r => ({
     id: r.sack_id,
+    // The bay screen picks a row's last tag by bay (a lot can hang in two).
+    bay: r.bay ?? null,
     at: r.printed_at ? parseSqliteUtc(r.printed_at).toISOString() : null,
     voided: !!r.voided_at,
     opened: !!r.opened_at,
+    fill: r.fill_lbs ?? null,
   }));
 }
 
@@ -1697,6 +2832,14 @@ async function handleSackAlloc(db, env, ctx, body) {
   const note = String(body.note || '').trim().substring(0, 500);
   if (note && qty !== 1) {
     throw createError('VALIDATION_ERROR', 'A note goes on one tag — print it with PRINT TAG, not a batch.');
+  }
+  // The bag's own weight when it is not a full sack — the last of a lot, most
+  // often (Koa, 2026-09-28). Same one-bag rule as the note, for the same reason.
+  let fillLbs;
+  try { fillLbs = parseFillLbs(body.fill_lbs); }
+  catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+  if (fillLbs !== null && qty !== 1) {
+    throw createError('VALIDATION_ERROR', 'A bag weight goes on one tag — print it with PRINT TAG, not a batch.');
   }
 
   const lot = await requireLot(db, sessionId);
@@ -1748,10 +2891,10 @@ async function handleSackAlloc(db, env, ctx, body) {
     ids.push(sackId);
     statements.push({
       sql: `INSERT INTO harvest_sacks
-              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, storage, stored_at, is_test)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (sack_id, season, serial, cultivar_code, sku, zone, cultivar, cut_number, harvest_date, zone_session_id, bay, storage, stored_at, is_test, fill_lbs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [sackId, season, serial, code, supersackSku(code, season),
-               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest],
+               lot.zone, cultivar, lot.cut_number, harvestDate, lot.id, bay, storage, storedAt, isTest, fillLbs],
     });
   }
   if (note) {
@@ -1787,9 +2930,10 @@ async function handleSackAlloc(db, env, ctx, body) {
       });
       await execute(db, `
         UPDATE harvest_sacks
-        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?)
+        SET shopify_added_at = ?, shopify_add_error = ?, shopify_variant_id = COALESCE(shopify_variant_id, ?),
+            shopify_sync_error = ${ADD_LANDED_AFTER_OUT_SQL}
         WHERE sack_id IN (${ph})
-      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, ...ids]);
+      `, [r.ok ? new Date().toISOString() : null, r.error, r.variantId, r.ok ? 1 : 0, ...ids]);
       if (!r.ok) console.error(`[harvest][inventory] add ${ids.length}: ${r.error}`);
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
@@ -1806,7 +2950,8 @@ async function handleSackAlloc(db, env, ctx, body) {
   const printVia = await resolvePrintVia(db);
 
   return successResponse({ success: true, ids, printed: stats.printed, last_sack_id: stats.lastSackId,
-    tags: await getLotTags(db, sessionId, isTest), note_on: note ? ids[0] : null, print_via: printVia });
+    tags: await getLotTags(db, sessionId, isTest), note_on: note ? ids[0] : null,
+    fill_on: fillLbs !== null ? ids[0] : null, fill_lbs: fillLbs, print_via: printVia });
 }
 
 /* ---------------------------------------------------------------------------
@@ -1925,7 +3070,8 @@ async function handlePrintCheck(db, body) {
  */
 async function loadInventoryDebts(db, env) {
   const rows = await query(db, `
-    SELECT sack_id, voided_at, shopify_added_at, shopify_add_error
+    SELECT sack_id, voided_at, shopify_added_at, shopify_add_error,
+           opened_at, shopify_synced_at, shopify_sync_error
     FROM harvest_sacks
     WHERE is_test = ? AND (${DEBT_SQL})
     ORDER BY printed_at DESC
@@ -1956,7 +3102,8 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 
   const rows = await query(db, `
     SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
-           shopify_added_at, shopify_add_error, voided_at
+           shopify_added_at, shopify_add_error, voided_at,
+           opened_at, shopify_synced_at, shopify_sync_error
     FROM harvest_sacks
     WHERE is_test = ? AND (${DEBT_SQL})
     ORDER BY printed_at
@@ -1964,13 +3111,42 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 
   const out = [];
   for (const row of rows) {
-    const { owes: delta, state } = classifyDebt(row);
+    const { owes: delta, state, kind, error } = classifyDebt(row);
     const unknown = state === 'unknown';
     const item = {
-      sack_id: row.sack_id, owes: delta, state,
-      error: row.shopify_add_error, acted: false, ok: null,
+      sack_id: row.sack_id, owes: delta, state, kind,
+      error, acted: false, ok: null,
     };
-    if (apply && (!unknown || force)) {
+    // owes 0 is shown, never acted on — not even forced: there is no move
+    // that is right whichever way the unanswered call went.
+    if (apply && delta !== 0 && (!unknown || force)) {
+      // The list above was read once; each call below takes seconds, and the
+      // floor keeps scanning. Re-read THIS row now and act only if it still
+      // owes exactly what it owed (P2/P2b/P3/P4, 2026-10-06).
+      const col = (kind === 'out' || kind === 'undo') ? 'shopify_sync_error' : 'shopify_add_error';
+      const fresh = await queryOne(db, `
+        SELECT sack_id, shopify_added_at, shopify_add_error, voided_at,
+               opened_at, shopify_synced_at, shopify_sync_error
+        FROM harvest_sacks WHERE sack_id = ? AND (${DEBT_SQL})
+      `, [row.sack_id]);
+      const now = fresh && classifyDebt(fresh);
+      const same = now && now.kind === kind && now.owes === delta && now.state === state
+        && (fresh[col] ?? null) === (row[col] ?? null)
+        && !isLiveInFlight(fresh[col]); // even force never doubles a live call
+      // One pool operation per sack at a time: lay the marker BEFORE the call,
+      // guarded on the exact value read, so a second sweep or a floor action
+      // that got there first wins and this one stands down.
+      const isNull = (v) => (v ? 'IS NOT NULL' : 'IS NULL');
+      const shape = `opened_at ${isNull(fresh?.opened_at)} AND voided_at ${isNull(fresh?.voided_at)}`;
+      const marker = inFlight(`sweep ${kind}`);
+      const laid = same && await execute(db,
+        `UPDATE harvest_sacks SET ${col} = ? WHERE sack_id = ? AND ${col} IS ? AND ${shape}`,
+        [marker, row.sack_id, fresh[col] ?? null]);
+      if (!laid || !laid.changes) {
+        item.changed = true;
+        out.push(item);
+        continue;
+      }
       const r = await adjustSupersackCount(env, {
         db,
         season: row.season, cultivar: row.cultivar, zone: row.zone, cut: row.cut_number,
@@ -1980,17 +3156,31 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
       item.acted = true;
       item.ok = r.ok;
       item.error = r.ok ? null : r.error;
-      if (r.ok && delta < 0) {
-        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL WHERE sack_id = ?`, [row.sack_id]);
+      // Every write-back is guarded on OUR marker still being there: if the
+      // crew moved the sack meanwhile, they replaced it, and the row now says
+      // what a person must check rather than what this call assumed.
+      const mine = `sack_id = ? AND ${col} = ?`;
+      if (kind === 'undo') {
+        await execute(db, `UPDATE harvest_sacks SET shopify_sync_error = ? WHERE ${mine} AND ${shape}`,
+          [r.ok ? null : `undo add-back failed: sweep failed: ${r.error}`, row.sack_id, marker]);
+      } else if (kind === 'out') {
+        await execute(db, `UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ? WHERE ${mine} AND ${shape}`,
+          [r.ok ? new Date().toISOString() : null, r.ok ? null : `sweep failed: ${r.error}`, row.sack_id, marker]);
+      } else if (r.ok && delta < 0) {
+        await execute(db, `UPDATE harvest_sacks SET shopify_added_at = NULL, shopify_add_error = NULL, shopify_sync_error = NULL WHERE ${mine} AND ${shape}`,
+          [row.sack_id, marker]);
       } else if (r.ok) {
+        // An add may land on a sack scanned out while it was in flight (P4):
+        // the scan sent no -1, so the row becomes an out-debt (CASE), not lost.
         await execute(db, `
           UPDATE harvest_sacks
-          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?)
-          WHERE sack_id = ?
-        `, [new Date().toISOString(), r.variantId, row.sack_id]);
+          SET shopify_added_at = ?, shopify_add_error = NULL, shopify_variant_id = COALESCE(shopify_variant_id, ?),
+              shopify_sync_error = ${ADD_LANDED_AFTER_OUT_SQL}
+          WHERE ${mine} AND voided_at ${isNull(fresh.voided_at)}
+        `, [new Date().toISOString(), r.variantId, 1, row.sack_id, marker]);
       } else {
-        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
-          [`sweep failed: ${r.error}`, row.sack_id]);
+        await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE ${mine}`,
+          [`sweep failed: ${r.error}`, row.sack_id, marker]);
       }
     }
     out.push(item);
@@ -2020,6 +3210,11 @@ async function handleInventorySweep(request, db, env, ctx, body, params) {
 async function handleTestMode(request, db, env, body) {
   requireAuth(request, body, env, 'harvest-test-mode');
   if (request.method === 'POST' && body.on !== undefined) {
+    if (isPreviewBuild(env)) {
+      // The switch is shared with the live worker: flipping it from a preview
+      // would change what the floor is recording.
+      throw createError('VALIDATION_ERROR', 'This is a preview build: it is always in test mode, and cannot change the farm switch.');
+    }
     const on = body.on === true || body.on === 'true' || body.on === 1 || body.on === '1';
     await setTestMode(db, on, 'dashboard');
     return successResponse({ success: true, test_mode: on, source: 'setting' });
@@ -2054,7 +3249,33 @@ async function handleSackVoid(db, env, ctx, body) {
   // No finished-lot check here, unlike sack_alloc, on purpose: retiring a
   // mistaken tag after the lot is closed out is a correction, not more
   // takedown. It spends no serial, and the rollback below keeps Shopify honest.
-  await execute(db, `UPDATE harvest_sacks SET voided_at = datetime('now') WHERE sack_id = ? AND voided_at IS NULL`, [sackId]);
+  // Void after a scan-out undo whose +1 back has not landed (the out's -1 did):
+  // in flight -> wait; failed -> Shopify holds nothing for this tag, so the void
+  // sends nothing and cancels the undo's debt instead.
+  const undoErr = String(sack.shopify_sync_error || '');
+  if (sack.shopify_added_at && isLiveInFlight(undoErr)) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is still settling with Shopify — try again in a minute.`);
+  }
+  const undoFailed = !!sack.shopify_added_at && undoErr.startsWith('undo add-back failed');
+  // Count already in doubt (a stale add-back, or "undone; check Shopify"):
+  // Shopify holds 0 or 1 for this sack and the target is now 0. Void it, send
+  // nothing (a -1 on a 0 is as wrong as a missing one), and keep it listed as
+  // an unknown void debt so a person checks the variant.
+  const voidUnknown = !!sack.shopify_added_at && undoErr.startsWith(IN_FLIGHT);
+  const unknownText = `${undoErr.includes('check Shopify') ? undoErr : `${undoErr} — never answered`}`
+    + ' — voided; check Shopify holds 0 for this sack';
+  // Guarded on opened_at too: a scan-out that flipped the row after it was read
+  // has already taken this tag's one off Shopify; a second -1 would end 2 low.
+  const v = await execute(db, `
+    UPDATE harvest_sacks SET voided_at = datetime('now')
+      ${undoFailed ? ', shopify_added_at = NULL, shopify_sync_error = NULL' : ''}
+      ${voidUnknown ? ', shopify_sync_error = ?' : ''}
+    WHERE sack_id = ? AND voided_at IS NULL AND opened_at IS NULL
+      ${voidUnknown ? 'AND shopify_sync_error = ?' : ''}
+  `, voidUnknown ? [unknownText, sackId, undoErr] : [sackId]);
+  if (!v || !v.changes) {
+    throw createError('VALIDATION_ERROR', `Sack ${sackId} is already out or voided — it can't be voided.`);
+  }
 
   const isTest = isTestMode(env) ? 1 : 0;
   const stats = await getLotTagStats(db, sack.zone_session_id, isTest);
@@ -2067,7 +3288,7 @@ async function handleSackVoid(db, env, ctx, body) {
   // Take back the +1 that printing added. A voided tag is a retired number with
   // no sack behind it; leaving the increment would be phantom inventory. Only
   // undo it if the add actually landed.
-  if (!isTestMode(env) && sack.shopify_added_at) {
+  if (!isTestMode(env) && sack.shopify_added_at && !undoFailed && !voidUnknown) {
     ctx.waitUntil((async () => {
       await execute(db, `UPDATE harvest_sacks SET shopify_add_error = ? WHERE sack_id = ?`,
         [inFlight('void rollback'), sackId]);
@@ -2283,7 +3504,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
  *
  * The serials are high on purpose, so that day is late if it comes at all.
  *
- * The five parts sum to the 37 lb that went into the sack, because that is how
+ * The five parts sum to the 35 lb that went into the sack (a 2026-crop bag), because that is how
  * the real figures behave: waste is the remainder, not a reading. Lifter is
  * given a lower tops share than Sour Lifter, which is the direction the real
  * supersack data actually goes — a demo with the ranking backwards teaches the
@@ -2292,7 +3513,7 @@ async function handleSackWeigh(ui, db, env, ctx, body) {
 const DEMO_SACKS = {
   '26-SLIFT-142': {
     serial: 142, code: 'SLIFT', cultivar: 'Sour Lifter', zone: 'Z4', cut: 1, bay: 7, storage: 'Supermarket', lotSacks: 14,
-    parts: { tops: 21.4, smalls: 11.9, biomass: 2.1, trim: 1.2, waste: 0.4 },
+    parts: { tops: 20.2, smalls: 11.3, biomass: 2.0, trim: 1.1, waste: 0.4 },
     notes: [
       { note: 'Bottom of the rack was still damp — held back a day.', at: '16:05:00' },
       { note: 'Tape said Z4 cut 1, matches the lot picker.', at: '14:22:00' },
@@ -2300,7 +3521,7 @@ const DEMO_SACKS = {
   },
   '26-LIFT-87': {
     serial: 87, code: 'LIFT', cultivar: 'Lifter', zone: 'Z19', cut: 1, bay: 11, storage: '3', lotSacks: 9,
-    parts: { tops: 18.2, smalls: 14.6, biomass: 2.6, trim: 1.3, waste: 0.3 },
+    parts: { tops: 17.2, smalls: 13.8, biomass: 2.5, trim: 1.2, waste: 0.3 },
     notes: [
       { note: 'Top bay, dried fast — came down two days early.', at: '15:40:00' },
       { note: 'Z19 cut 1, whole plant.', at: '15:38:00' },
@@ -2378,7 +3599,7 @@ function demoSackView(opened, voided, id = DEMO_SACK_ID) {
       stored_at: d.storage ? bagged + ' 14:30:00' : null,
       printed_at: bagged + ' 14:20:00',
       opened_at: opened ? new Date(today.getTime() - 86400000).toISOString().slice(0, 19).replace('T', ' ') : null,
-      // The five parts sum to the 37 lb that went into the sack, because that
+      // The five parts sum to the 35 lb that went into the sack, because that
       // is how the real figures behave — waste is the remainder, not a reading.
       // A demo that did not add up would teach the wrong thing.
       tops_lbs: opened ? d.parts.tops : null,
@@ -2584,31 +3805,103 @@ async function handleSackOpen(ui, db, env, ctx, body) {
     return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, ui.t('alreadyOpen')));
   }
 
-  await execute(db, `UPDATE harvest_sacks SET opened_at = datetime('now') WHERE sack_id = ?`, [sackId]);
+  const took = await takeSackOut(db, env, ctx, sack, { by: 'page' });
+  if (took === 'already') {
+    const now = await getSackView(db, sackId);
+    return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, now || view, ui.t('alreadyOpen')));
+  }
+  if (took === 'busy') {
+    // An undo's +1 back is still unanswered: one inventory call per sack at a time.
+    const msg = ui.lang === 'es' ? 'Intenta de nuevo en un momento.' : 'Try again in a moment.';
+    return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, view, msg));
+  }
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('sackOpened')));
+}
+
+/**
+ * THE one way a sack leaves inventory — the ABRIR BOLSA button and the
+ * /salida scan both come through here, so the count can only move one way.
+ *
+ * The UPDATE is guarded on opened_at IS NULL: two scans racing for one bag
+ * both reach here, and only the one that actually flips the row may take the
+ * one off Shopify. Returns 'out' (this call flipped the row), 'already' (out
+ * or voided before) or 'busy' (an undo's +1 back is still unanswered).
+ *
+ * A re-scan after an undo is decided from shopify_sync_error, and the UPDATE
+ * is guarded on that exact value so a racing answer makes it miss:
+ *   'undo add-back failed…'   -1 landed, +1 back did not: Shopify holds nothing
+ *                             for this sack, so they cancel. Out, settled, no call.
+ *   '…undone; check Shopify'  nobody knows if the -1 landed: out again, no
+ *                             call, still flagged for a person.
+ *   'in flight since…'        the undo's +1 is still running: 'busy'.
+ *
+ * The pool -1 gets the same IN_FLIGHT marker the +1 at tagging has, written
+ * BEFORE the call (see lib/inventory-debt.js): a waitUntil that dies mid-call
+ * otherwise leaves a row that looks like a subtract that never ran.
+ */
+export async function takeSackOut(db, env, ctx, sack, { by, orderId = null, orderSource = null } = {}) {
+  const sackId = sack.sack_id;
+  const live = !isTestMode(env);
+  const cur = await queryOne(db,
+    `SELECT opened_at, voided_at, shopify_added_at, shopify_sync_error FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+  if (!cur || cur.opened_at || cur.voided_at) return 'already';
+  const prior = cur.shopify_sync_error ?? null;
+  const priorText = String(prior || '');
+  let subtract = false, syncedAt = null, marker = null;
+  // A LIVE marker is another pool call on this sack: busy, the page retries.
+  // A STALE one (or one already saying "check Shopify") will never be
+  // answered: go out, send nothing, leave a person the question.
+  if (priorText.includes('check Shopify') || isStaleInFlight(priorText)) {
+    marker = `${priorText} — out again; check Shopify`;
+  } else if (priorText.startsWith('undo add-back failed')) {
+    // The earlier -1 landed and the +1 back did not, so Shopify already holds
+    // nothing for this sack: the owed +1 and this -1 cancel. No pool call.
+    syncedAt = new Date().toISOString();
+  } else if (isLiveInFlight(priorText)) {
+    return 'busy';
+  } else {
+    // Only a sack whose +1 landed has a one to take off; anything else would
+    // push Shopify below what it was ever told.
+    subtract = live && !!cur.shopify_added_at;
+    marker = subtract ? inFlight('out') : null;
+  }
+  const r = await execute(db, `
+    UPDATE harvest_sacks
+    SET opened_at = datetime('now'), out_by = ?, out_order_id = ?, out_order_source = ?,
+        shopify_synced_at = ?, shopify_sync_error = ?
+    WHERE sack_id = ? AND opened_at IS NULL AND voided_at IS NULL AND shopify_sync_error IS ?
+  `, [by, orderId, orderSource, syncedAt, marker, sackId, prior]);
+  if (!r || !r.changes) {
+    const now = await queryOne(db, `SELECT opened_at, voided_at FROM harvest_sacks WHERE sack_id = ?`, [sackId]);
+    return (!now || now.opened_at || now.voided_at) ? 'already' : 'busy';
+  }
 
   ctx.waitUntil(sendTelegramMessage(env, {
     chatId: env.TELEGRAM_TEST_CHAT_ID,
     text: `📂 Abierta *${sackId}* — ${sack.cultivar || '?'} ${sack.zone} corte ${sack.cut_number}`,
   }).catch(e => console.error('[harvest][telegram]', e)));
 
-  if (!isTestMode(env)) {
+  if (subtract) {
     ctx.waitUntil((async () => {
       const r = await adjustSupersackCount(env, {
         db,
         season: sack.season, cultivar: sack.cultivar, zone: sack.zone, cut: sack.cut_number,
         // Where this sack's +1 landed, so the -1 takes it off the same count.
         variantId: sack.shopify_variant_id, delta: -1,
-        note: `[Harvest] ${sackId} opened (${sack.zone} cut ${sack.cut_number})`,
+        note: `[Harvest] ${sackId} out (${by}, ${sack.zone} cut ${sack.cut_number})`,
       });
+      // Guarded on the marker: an undo that ran meanwhile cleared it, and its
+      // own bookkeeping must not be overwritten by this late answer.
       await execute(db, `
-        UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ? WHERE sack_id = ?
-      `, [r.ok ? new Date().toISOString() : null, r.error, sackId]);
-      if (!r.ok) console.error(`[harvest][inventory] open ${sackId}: ${r.error}`);
+        UPDATE harvest_sacks SET shopify_synced_at = ?, shopify_sync_error = ?
+        WHERE sack_id = ? AND opened_at IS NOT NULL AND shopify_sync_error = ?
+      `, [r.ok ? new Date().toISOString() : null, r.ok ? null : (r.error || 'unknown error'), sackId, marker]);
+      if (!r.ok) console.error(`[harvest][inventory] out ${sackId}: ${r.error}`);
     })().catch(e => console.error('[harvest][inventory]', e)));
   }
-
-  const updated = await getSackView(db, sackId);
-  return renderPage(ui, `${ui.t('sack')} ${sackId}`, sackDetailBody(ui, updated, ui.t('sackOpened')));
+  return 'out';
 }
 
 /**
@@ -2630,7 +3923,7 @@ async function handleSackOpen(ui, db, env, ctx, body) {
  *
  * Never touches a bag whose weights were actually measured.
  */
-async function handleAllocate(db, env, params) {
+export async function handleAllocate(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   // Pacific, not UTC: the floor types its own civil day into
   // `supersack_entries.date`, and this has to name the same day they did.
@@ -2640,14 +3933,34 @@ async function handleAllocate(db, env, params) {
   // Grouped by season AND cultivar. The floor spends part of 2026 trimming
   // 2025 material, so "Lifter" alone is not a lot — 2025 Lifter and 2026
   // Lifter are different crops that happen to share a name.
-  const rows = await query(db, `
-    SELECT season, cultivar, COUNT(*) AS n FROM harvest_sacks
+  // One row per bag, grouped here rather than in SQL, because each bag's share
+  // now depends on its own weight (Koa, 2026-09-28): a bag weighed at 18 lb
+  // takes 18/35 of a full bag's share, not a full one.
+  // Also grouped by CUT and HARVEST TYPE (Greenhouse when the zone starts GH —
+  // the same rule as supersack-inventory's harvestTypeForZone): 1st and 2nd
+  // Cut of one cultivar opened the same day are different bags with different
+  // yields, and pooling them gave every bag the same average.
+  const bags = await query(db, `
+    SELECT sack_id, season, cultivar, cut_number, fill_lbs,
+           CASE WHEN zone LIKE 'GH%' THEN 'Greenhouse' ELSE 'Sungrown' END AS harvest_type
+    FROM harvest_sacks
     WHERE opened_at >= ? AND opened_at < ? AND is_test = ? AND voided_at IS NULL
       AND (weights_source IS NULL OR weights_source = 'allocated')
-    GROUP BY season, cultivar
+    ORDER BY season, cultivar, cut_number, sack_id
   `, [dayStart, dayEnd, isTest]);
+  const groups = new Map();
+  for (const b of bags) {
+    const cut = b.cut_number == null ? null : Number(b.cut_number);
+    const k = `${b.season}|${b.cultivar}|${cut ?? ''}|${b.harvest_type}`;
+    const g = groups.get(k)
+      || { season: b.season, cultivar: b.cultivar, cut, harvest_type: b.harvest_type, n: 0, lbs: 0, bags: [] };
+    const w = sackLbs(b);
+    g.n += 1; g.lbs += w; g.bags.push({ sack_id: b.sack_id, lbs: w, weighed: b.fill_lbs != null });
+    groups.set(k, g);
+  }
+  const bagGroups = [...groups.values()];
 
-  if (!rows.length) {
+  if (!bagGroups.length) {
     return successResponse({ success: true, date: day, allocated: [], note: 'No bags opened that day.' });
   }
 
@@ -2663,19 +3976,61 @@ async function handleAllocate(db, env, params) {
     throw createError('INTERNAL_ERROR', `Could not read floor output for ${day}: ${e.message}`);
   }
 
-  const per = (total, n) => Math.round((total / n) * 100) / 100;
+  const r2 = x => Math.round(x * 100) / 100;
+
+  // MATCHING. Each floor row takes the bag groups of its season and cultivar
+  // whose cut and harvest type equal the row's. A row whose title carries no
+  // cut (or no type) may take any cut (or type) — but ONLY when no other row of
+  // the cultivar could compete on that dimension that day (for cut: no other
+  // row of a compatible type; for type: none of a compatible cut). Beside a
+  // cut-specific row it matches only bags with no cut either, so it never
+  // steals that row's output. A cut-less Greenhouse row beside a cut-less
+  // Sungrown row (every 2025 title has a type and no cut) still takes its cut.
+  // A lone cut-less row facing two cuts cannot be attributed by cut: it is
+  // split across both by weight, and said so in `pooled_across_cuts`.
+  const floorRows = [...floor.values()];
+  const cultivarOf = x => `${x.season}|${x.cultivar}`;
+  const pools = [];
+  const claimed = new Set();
+  for (const f of floorRows) {
+    // "Only row" is judged among the rows that could compete on that dimension:
+    // a cut-less Greenhouse row is still alone on cut beside a Sungrown row.
+    const compat = (x, y) => x == null || y == null || x === y;
+    const rivals = pick => floorRows.filter(o => cultivarOf(o) === cultivarOf(f) && pick(o)).length === 1;
+    const aloneCut = rivals(o => compat(o.harvest_type, f.harvest_type));
+    const aloneType = rivals(o => compat(o.cut, f.cut));
+    const fits = (want, have, alone) => (want == null ? (alone || have == null) : want === have);
+    const gs = bagGroups.filter(g => cultivarOf(g) === cultivarOf(f)
+      && fits(f.cut, g.cut, aloneCut) && fits(f.harvest_type, g.harvest_type, aloneType) && !claimed.has(g));
+    if (!gs.length) continue;
+    gs.forEach(g => claimed.add(g));
+    pools.push({ f, groups: gs });
+  }
 
   const done = [];
   const countMismatches = [];
-  for (const r of rows) {
-    const f = floor.get(`${r.season}|${r.cultivar}`);
-    if (!f) {
-      done.push({
-        season: r.season, cultivar: r.cultivar, sacks: r.n,
-        skipped: `floor logged no ${r.season} ${r.cultivar} that day`,
+  const pooledAcrossCuts = [];
+  for (const g of bagGroups.filter(g => !claimed.has(g))) {
+    done.push({
+      season: g.season, cultivar: g.cultivar, cut_number: g.cut, harvest_type: g.harvest_type, sacks: g.n,
+      skipped: `floor logged no ${g.season} ${g.cultivar}${g.cut != null ? ` cut ${g.cut}` : ''} (${g.harvest_type}) that day`,
+    });
+  }
+  for (const { f, groups: gs } of pools) {
+    const cuts = [...new Set(gs.map(g => g.cut))].sort();
+    if (cuts.length > 1) {
+      pooledAcrossCuts.push({
+        season: f.season, cultivar: f.cultivar, cuts,
+        reason: `the floor logged one ${f.season} ${f.cultivar} row with no cut, and bags of ${cuts.length} cuts were opened; its output is split across all of them by bag weight, not by cut`,
       });
-      continue;
     }
+    const r = {
+      season: f.season, cultivar: f.cultivar,
+      cut: cuts.length === 1 ? cuts[0] : null,
+      harvest_type: new Set(gs.map(g => g.harvest_type)).size === 1 ? gs[0].harvest_type : null,
+      n: gs.reduce((s, g) => s + g.n, 0), lbs: gs.reduce((s, g) => s + g.lbs, 0),
+      bags: gs.flatMap(g => g.bags),
+    };
 
     // The floor counts the sacks it opened; this counts the sacks carrying tags.
     // They should be the same number. When they are not, someone missed an
@@ -2689,7 +4044,7 @@ async function handleAllocate(db, env, params) {
     // and skipping the check there would be a silent pass rather than a number.
     if (f.floorSacks !== r.n) {
       countMismatches.push({
-        season: r.season, cultivar: r.cultivar,
+        season: r.season, cultivar: r.cultivar, cut_number: r.cut, harvest_type: r.harvest_type,
         floor_sacks_opened: f.floorSacks, tagged_bags_opened: r.n,
         effect: f.floorSacks > r.n
           ? `each tagged bag credited ~${Math.round((f.floorSacks / r.n) * 100 - 100)}% high`
@@ -2697,33 +4052,71 @@ async function handleAllocate(db, env, params) {
       });
     }
 
-    const share = {
-      tops: per(f.tops, r.n), smalls: per(f.smalls, r.n), biomass: per(f.biomass, r.n),
-      trim: per(f.trim, r.n), waste: per(f.waste, r.n),
+    // Each bag's share of the four weighed parts is its weight over the
+    // group's weight. With every bag full that is exactly the old equal split.
+    //
+    // WASTE IS NOT SPLIT — it is re-derived per bag, as what is left of THAT
+    // bag's weight. The floor's own waste is left over from sacks x a full
+    // sack, because the tracker cannot know a bag was light; splitting it by
+    // weight would carry the light bag's missing pounds onto every bag in the
+    // group and push each one past its own weight. With every bag full the
+    // two give the same figure.
+    const shareFor = lbs => {
+      const sh = {
+        tops: r2(f.tops * lbs / r.lbs), smalls: r2(f.smalls * lbs / r.lbs),
+        biomass: r2(f.biomass * lbs / r.lbs), trim: r2(f.trim * lbs / r.lbs),
+      };
+      sh.waste = r2(Math.max(0, lbs - sh.tops - sh.smalls - sh.biomass - sh.trim));
+      return sh;
     };
-    await execute(db, `
-      UPDATE harvest_sacks
-      SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
-          weights_source = 'allocated', weights_allocated_at = datetime('now')
-      WHERE opened_at >= ? AND opened_at < ? AND season = ? AND cultivar = ?
-        AND is_test = ? AND voided_at IS NULL
-        AND (weights_source IS NULL OR weights_source = 'allocated')
-    `, [share.tops, share.smalls, share.biomass, share.trim, share.waste,
-        dayStart, dayEnd, r.season, r.cultivar, isTest]);
+    const SET = `SET tops_lbs = ?, smalls_lbs = ?, biomass_lbs = ?, trim_lbs = ?, waste_lbs = ?,
+                     weights_source = 'allocated', weights_allocated_at = datetime('now')`;
+    const full = fullSackLbs(r.season);
+    const fullShare = shareFor(full);
+    // One write per 80 full bags in the pool (named by sack_id, since a pool is
+    // now a cut, not a whole cultivar; chunked under D1's bound-parameter cap),
+    // one per weighed bag.
+    const fullIds = r.bags.filter(b => !b.weighed).map(b => b.sack_id);
+    const fullChunks = [];
+    for (let i = 0; i < fullIds.length; i += 80) fullChunks.push(fullIds.slice(i, i + 80));
+    await transaction(db, [
+      ...fullChunks.map(ids => ({
+        sql: `UPDATE harvest_sacks ${SET}
+              WHERE sack_id IN (${ids.map(() => '?').join(',')}) AND fill_lbs IS NULL
+                AND (weights_source IS NULL OR weights_source = 'allocated')`,
+        params: [fullShare.tops, fullShare.smalls, fullShare.biomass, fullShare.trim, fullShare.waste, ...ids],
+      })),
+      ...r.bags.filter(b => b.weighed).map(b => {
+        const sh = shareFor(b.lbs);
+        return {
+          sql: `UPDATE harvest_sacks ${SET}
+                WHERE sack_id = ? AND (weights_source IS NULL OR weights_source = 'allocated')`,
+          params: [sh.tops, sh.smalls, sh.biomass, sh.trim, sh.waste, b.sack_id],
+        };
+      }),
+    ]);
     done.push({
-      season: r.season, cultivar: r.cultivar, sacks: r.n,
+      season: r.season, cultivar: r.cultivar, cut_number: r.cut, harvest_type: r.harvest_type,
+      sacks: r.n, sack_lbs: round1(r.lbs),
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
-      per_sack: share,
+      // What a full bag got. A weighed bag got the same four parts scaled by
+      // its weight, and its own remainder as waste.
+      per_sack: fullShare,
+      weighed_bags: r.bags.filter(b => b.weighed).map(b => ({ sack_id: b.sack_id, lbs: b.lbs, share: shareFor(b.lbs) })),
+      // The floor assumes every bag it opened was full. The gap is the pounds
+      // its raw figure (and its waste) carries that were never in the bags.
+      floor_raw_over_bags_lbs: round1(r.n * full - r.lbs),
     });
   }
 
   // Floor output with no tagged bags behind it. During the changeover that is
   // the ordinary case — 2025 sacks are untagged — but it is worth seeing,
   // because it is also what a missed scan looks like.
-  const untagged = [...floor.values()]
-    .filter(f => !rows.some(r => r.season === f.season && r.cultivar === f.cultivar))
+  const untagged = floorRows
+    .filter(f => !pools.some(p => p.f === f))
     .map(f => ({
-      season: f.season, cultivar: f.cultivar,
+      season: f.season, cultivar: f.cultivar, cut_number: f.cut, harvest_type: f.harvest_type,
+      strain_titles: f.titles,
       floor: { tops: f.tops, smalls: f.smalls, biomass: f.biomass, trim: f.trim, waste: f.waste },
       floor_sacks_opened: f.floorSacks,
     }));
@@ -2738,7 +4131,10 @@ async function handleAllocate(db, env, params) {
     // the per-bag figures for that cultivar are scaled wrong, so it belongs in
     // the result rather than in a log line nobody reads.
     sack_count_mismatches: countMismatches,
-    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON and cultivar, split equally across the TAGGED bags opened the same day. Sacks are filled to 37 lb, so equal is near-exact — the last sack of a lot runs light and still takes a full share. Waste is a derived residual, not a weighed figure.",
+    // A cut-less floor row split across bags of several cuts: those per-bag
+    // figures are a cultivar average, not the yield of each cut.
+    pooled_across_cuts: pooledAcrossCuts,
+    basis: "All five parts of the day's floor output (supersack_entries: tops, smalls, biomass, trim, waste), matched on SEASON, cultivar, cut and harvest type (a floor row with no cut or type matches any only when it is the cultivar's only row that day), split across the TAGGED bags opened the same day in proportion to each bag's weight: a full sack is 35 lb for the 2026 crop and 37 lb through 2025, and a bag weighed off-standard at takedown (usually the light last bag of a lot) counts at its own weight. Waste is a derived residual, not a weighed figure: each bag's is what is left of its own weight after the four weighed parts.",
   });
 }
 
@@ -2910,6 +4306,33 @@ async function handleSackStore(ui, db, env, ctx, body) {
 }
 
 /**
+ * Correct a bag's weight from its page — for a bag weighed after its tag
+ * printed, or a weight typed wrong at takedown. Blank means a full sack.
+ * Refused once the bag is opened: the day's output has been split by it.
+ */
+async function handleSackFill(ui, db, env, ctx, body) {
+  const sackId = String(body.sack_id || '').trim();
+  let fillLbs;
+  try { fillLbs = parseFillLbs(body.fill_lbs); }
+  catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+
+  const view = await getSackView(db, sackId);
+  refuseRealInTest(ui, env, view?.sack);
+  if (!view) throw createError('NOT_FOUND', ui.t('noSack', { id: sackId }));
+  if (view.sack.voided_at) throw createError('VALIDATION_ERROR', ui.t('fillVoided'));
+  if (view.sack.opened_at) throw createError('VALIDATION_ERROR', ui.t('fillOpened'));
+
+  await execute(db, `UPDATE harvest_sacks SET fill_lbs = ? WHERE sack_id = ? AND opened_at IS NULL AND voided_at IS NULL`,
+    [fillLbs, sackId]);
+
+  const updated = await getSackView(db, sackId);
+  return renderPage(ui, `${ui.t('sack')} ${sackId}`,
+    sackDetailBody(ui, updated, fillLbs !== null
+      ? ui.t('fillSaved', { n: fillLbs })
+      : ui.t('fillCleared', { n: fullSackLbs(updated.sack.season) })));
+}
+
+/**
  * e.g. 26-SL-1. Unpadded on purpose (Koa): "1, 2, 3", not "0001".
  *
  * Numbers restart for each cut (Koa, 2026-09-16), so a later cut carries the
@@ -2977,9 +4400,9 @@ function qrImg(target, cls = 'qr', alt = '') {
 
 async function getStatus(db, env) {
   const isTest = isTestMode(env) ? 1 : 0;
-  // Every open session, not one: with two crews there are legitimately two
-  // zones being cut, and asking getActiveSession() here would have reported
-  // only the untagged ones.
+  // Every open session, not one. One crew means one open lot, but data from
+  // the two-crew build can hold two until the next zone scan closes both, and
+  // a status feed that hid one would hide exactly that.
   const open = await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND closed_at IS NULL AND is_test = ?
@@ -3002,8 +4425,14 @@ async function getStatus(db, env) {
   // Carried on the status poll so a tablet left up all day keeps seeing lots
   // that have closed since it loaded.
   const recent = await getRecentEnterSessions(db, isTest);
+  const crewDays = await getCrewDays(db, isTest);
 
   return successResponse({
+    // Each crew's trailers and people today, as the leads entered them.
+    crews_today: crewDays.map(r => ({
+      crew: r.crew, lead: crewById(r.crew)?.lead ?? null, trailers: trailerList(r.trailers),
+      cutters: r.cutters, drivers: r.drivers, water_spiders: r.water_spiders, updated_at: r.updated_at,
+    })),
     success: true,
     season: getSeason(),
     is_test: !!isTest,
@@ -3025,7 +4454,7 @@ async function getRecentEnterSessions(db, isTest, days = LOT_AT_DOOR_DAYS) {
   return await query(db, `
     SELECT * FROM harvest_scan_log
     WHERE event_type = 'enter' AND is_test = ?
-      AND julianday('now') - julianday(occurred_at) <= ?
+      AND julianday('now') - julianday(COALESCE(closed_at, datetime('now'))) <= ?
     ORDER BY occurred_at DESC, id DESC LIMIT 40
   `, [isTest, days]);
 }
@@ -3268,6 +4697,45 @@ async function getReconcile(db, env, params) {
   const isTest = isTestMode(env) ? 1 : 0;
   const season = parseInt(params.season, 10) || getSeason();
 
+  let variants = [];
+  let variantsError = null;
+  try { variants = await listSupersackVariants(env); }
+  catch (e) { variantsError = String(e.message || e); }
+
+  const lines = (await reconcileLines(db, season, isTest, variants))
+    .map(({ key, variant_id, ...line }) => line);
+
+  return successResponse({
+    success: true,
+    season,
+    is_test: !!isTest,
+    generated_at: new Date().toISOString(),
+    variants_error: variantsError,
+    basis: 'Bags tagged and not yet opened, against the Super Sack Inventory count for the same cultivar-year.',
+    note: 'Read-only. Drift is reported, never corrected here — the heal (every 5 min) pays only drift the owed tags explain; anything else is a question about the physical count, not something to paper over.',
+    lines,
+    unmatched_variants: variants
+      .filter(v => String(v.title || '').startsWith(`${season} -`))
+      .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
+      .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
+    // Tags whose Shopify write never settled. Reconcile compares tagged bags
+    // against the Shopify count, so a debt here is the difference — and until
+    // 2026-09-22 it was invisible on every screen while the sweep endpoint sat
+    // there knowing about it.
+    inventory_debts: await loadInventoryDebts(db, env),
+  });
+}
+
+/** Which reconcile line a sack falls on: cultivar, field or glass, cut. */
+const reconcileKey = (r) =>
+  `${String(r.cultivar).toLowerCase()}|${/^GH/i.test(String(r.zone || '')) ? 'GH' : 'FIELD'}|${r.cut_number}`;
+
+/**
+ * Unopened bags against the Shopify count, one line per cultivar, field/glass
+ * and cut. Shared by the reconcile screen and the heal so the two can never
+ * disagree about what "off" means.
+ */
+async function reconcileLines(db, season, isTest, variants) {
   const rows = await query(db, `
     SELECT cultivar, zone, cut_number,
            COUNT(*) AS tagged,
@@ -3280,20 +4748,17 @@ async function getReconcile(db, env, params) {
     ORDER BY cultivar, cut_number
   `, [season, isTest]);
 
-  let variants = [];
-  let variantsError = null;
-  try { variants = await listSupersackVariants(env); }
-  catch (e) { variantsError = String(e.message || e); }
-
   // Per cut, through the same matcher (aliases included) that moves the count —
   // a reconcile that matched differently would report drift that isn't there.
-  const lines = await Promise.all(rows.map(async r => {
+  return Promise.all(rows.map(async r => {
     const m = await matchSupersackVariant(variants, db,
       { season, cultivar: r.cultivar, zone: r.zone, cut: r.cut_number });
     const v = m.variant;
     const title = v ? v.title : m.title;
     const shopify = v ? Number(v.quantity) || 0 : null;
     return {
+      key: reconcileKey(r),
+      variant_id: v ? v.id : null,
       cultivar: r.cultivar,
       cut: r.cut_number,
       variant_title: title,
@@ -3308,26 +4773,85 @@ async function getReconcile(db, env, params) {
       drift: shopify === null ? null : r.unopened - shopify,
     };
   }));
+}
 
-  return successResponse({
-    success: true,
-    season,
-    is_test: !!isTest,
-    generated_at: new Date().toISOString(),
-    variants_error: variantsError,
-    basis: 'Bags tagged and not yet opened, against the Super Sack Inventory count for the same cultivar-year.',
-    note: 'Read-only. Drift is reported, never corrected — a mismatch is a question about the physical count, not something to paper over.',
-    lines,
-    unmatched_variants: variants
-      .filter(v => String(v.title || '').startsWith(`${season} -`))
-      .filter(v => !lines.some(l => l.variant_title.toLowerCase() === String(v.title).toLowerCase()))
-      .map(v => ({ title: v.title, on_hand: Number(v.quantity) || 0 })),
-    // Tags whose Shopify write never settled. Reconcile compares tagged bags
-    // against the Shopify count, so a debt here is the difference — and until
-    // 2026-09-22 it was invisible on every screen while the sweep endpoint sat
-    // there knowing about it.
-    inventory_debts: await loadInventoryDebts(db, env),
-  });
+// ─── INVENTORY HEAL (the retry queue) ───────────────────
+//
+// Every 5 minutes: pay the debts reconcile can explain. The rules, and the
+// 2026-10-07 evidence behind them, live in lib/inventory-heal.js. This part
+// only gathers what they need — Shopify first, then D1, then a check that no
+// count call started in between.
+
+async function readLastCall(db) {
+  const row = await queryOne(db, `SELECT value FROM harvest_settings WHERE key = ?`, [LAST_CALL_KEY]);
+  const at = row ? Date.parse(row.value) : NaN;
+  return Number.isFinite(at) ? at : null;
+}
+
+const loadRealDebts = (db) => query(db, `
+  SELECT sack_id, season, cultivar, zone, cut_number, shopify_variant_id,
+         opened_at, voided_at, shopify_added_at, shopify_add_error,
+         shopify_synced_at, shopify_sync_error
+  FROM harvest_sacks WHERE is_test = 0 AND (${DEBT_SQL})
+`);
+
+export async function runInventoryHeal(env, { now = Date.now() } = {}) {
+  if (isPreviewBuild(env)) return { skipped: 'preview build' };
+  const db = env.DB;
+
+  // Cheap first: most ticks owe nothing and must not touch Google at all.
+  const before = await loadRealDebts(db);
+  if (!before.length) return { skipped: 'nothing owed' };
+  const lastCall = await readLastCall(db);
+  const quietSince = Math.max(lastCall ?? 0, latestMarkerAt(before) ?? 0) || null;
+  if (quietSince !== null && now - quietSince < HEAL_QUIET_MS) return { skipped: 'not quiet' };
+
+  // Shopify, THEN D1: a tag already counted in what Shopify said is already a row.
+  const variants = await listSupersackVariants(env);
+  const debts = await loadRealDebts(db);
+  if ((await readLastCall(db)) !== lastCall) return { skipped: 'a call started while reading' };
+
+  const results = [];
+  for (const season of [...new Set(debts.map(d => d.season))]) {
+    const lines = await reconcileLines(db, season, 0, variants);
+    const byKey = new Map(lines.map(l => [l.key, l]));
+    // Two lines on one variant would each see the whole count and each heal it.
+    const shared = new Set(lines.map(l => l.variant_id).filter((id, i, a) => id && a.indexOf(id) !== i));
+    const groups = new Map();
+    for (const d of debts.filter(x => x.season === season)) {
+      const k = reconcileKey(d);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(d);
+    }
+    for (const [key, owed] of groups) {
+      const line = byKey.get(key);
+      const usable = line && line.variant_id && !shared.has(line.variant_id);
+      const d = decideHeal({ drift: usable ? line.drift : null, debts: owed, lastCallAt: quietSince, now });
+      const result = { variant: line ? line.variant_title : `${season} ${key}`, owed: owed.length,
+        drift: line ? line.drift : null, ...d };
+      if (d.action === 'send') {
+        const r = await adjustSupersackCount(env, {
+          db, variantId: line.variant_id, delta: d.amount,
+          note: `[Harvest] auto-heal ${d.amount > 0 ? '+' : ''}${d.amount} — ${owed.length} tag${owed.length === 1 ? '' : 's'} owed, Shopify off by ${d.amount} (the rest had landed)`,
+        });
+        result.ok = r.ok;
+        result.error = r.error;
+      } else if (d.action === 'settle') {
+        let settled = 0;
+        for (const row of owed) {
+          const { sql, params } = settleStatement(row, { variantId: line.variant_id });
+          settled += (await execute(db, sql, params))?.changes || 0;
+        }
+        result.settled = settled;
+      }
+      results.push(result);
+    }
+  }
+  for (const r of results) {
+    console.log(`[harvest][heal] ${r.variant}: ${r.action}${r.amount ? ` ${r.amount}` : ''}`
+      + ` (owed ${r.owed}, drift ${r.drift})${r.reason ? ` — ${r.reason}` : ''}${r.error ? ` — ${r.error}` : ''}`);
+  }
+  return { results };
 }
 
 // ─── PROVENANCE (downstream) ────────────────────────────
@@ -3436,6 +4960,11 @@ export async function computeRollup(db, env, params) {
         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = l.id AND b.is_test = l.is_test) AS bins,
       (SELECT COUNT(*) FROM harvest_sacks s
         WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS sacks,
+      (SELECT COALESCE(SUM(COALESCE(s.fill_lbs, ?)), 0) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL) AS sack_lbs,
+      (SELECT COUNT(*) FROM harvest_sacks s
+        WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
+          AND s.fill_lbs IS NOT NULL) AS sacks_weighed,
       (SELECT COUNT(*) FROM harvest_sacks s
         WHERE s.zone_session_id = l.id AND s.is_test = l.is_test AND s.voided_at IS NULL
           AND s.opened_at IS NOT NULL) AS sacks_opened,
@@ -3452,7 +4981,7 @@ export async function computeRollup(db, env, params) {
     FROM harvest_scan_log l
     WHERE l.event_type = 'enter' AND l.season = ? AND l.is_test = ?
     ORDER BY l.occurred_at ASC
-  `, [season, isTest]);
+  `, [fullSackLbs(season), season, isTest]);
 
   // Trailer times per session, for clipping an overnight session to the hours
   // it can be seen to have worked. Counts and sums come from the subqueries
@@ -3649,21 +5178,22 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
   const finished = round1(tops + smalls);
 
   // Dry biomass, and the ONLY yield figure available at takedown. Product is
-  // weighed into every sack at 37 lb, so the sack count IS a measurement — no
-  // bucking, no trim floor, no allocation needed. That matters because the
+  // weighed into every sack (35 lb from the 2026 crop, 37 lb before), so the
+  // sacks ARE a measurement — no bucking, no trim floor, no allocation needed. That matters because the
   // finished figures below are gated on every sack having been opened, and
   // sacks are only bucked when there is an order for that strain: a lot cut in
   // October can sit with no yield row until the following spring while this
   // number was knowable the day the rack came down.
   //
-  // Reads UP TO 37 LB HIGH per lot: the last sack of a lot goes out light and
-  // is counted as full. One sack in ~48 (3,965 sacks / 82 lots), always in the
-  // same direction. Accepted by Koa 2026-09-02 rather than ask the crew to
-  // record a fill weight for one sack; the real figure is written in that
-  // tag's notes if anyone needs it.
+  // The light last sack of a lot used to be counted as full (accepted
+  // 2026-09-02). Since 2026-09-28 the crew types its weight at takedown, so a
+  // weighed bag counts at its own weight and only an unweighed light bag still
+  // reads high.
   const sacks = sum('sacks');
   const sacksOpened = sum('sacks_opened');
-  const dryLbs = sacks ? round1(sacks * CONSTANTS.supersackLbs.value) : null;
+  const sacksWeighed = sum('sacks_weighed');
+  const fullLbs = fullSackLbs(l.season || getSeason());
+  const dryLbs = sacks ? round1(sum('sack_lbs')) : null;
 
   // Yields are only honest once every tagged sack has actually been weighed —
   // a partially-opened lot would read as a catastrophic yield miss.
@@ -3706,7 +5236,7 @@ function buildLotRow(sessions, eventsBySession = new Map()) {
     sacks_opened: sacksOpened,
     dry_lbs: dryLbs,
     dry_lbs_basis: dryLbs === null ? null
-      : `${sacks} sacks x ${CONSTANTS.supersackLbs.value} lb; last sack of the lot runs light, so up to 37 lb high`,
+      : `${sacks - sacksWeighed} full sacks x ${fullLbs} lb${sacksWeighed ? ` + ${sacksWeighed} weighed at takedown` : ''}; a light last sack that was not weighed still counts as full`,
     dry_lbs_per_acre: dryLbs !== null && acres ? round1(dryLbs / acres) : null,
     dry_lbs_per_plant: dryLbs !== null && plants ? +(dryLbs / plants).toFixed(3) : null,
     tops_lbs: tops,
@@ -3861,11 +5391,12 @@ async function getMetrics(request, db, env, params, body) {
 }
 
 /**
- * The one-off print job: two crew cards and one code per barn door.
+ * The one-off print jobs: the end-of-day card and one code per barn door
+ * (default), one sign per zone, and one decal per trailer.
  *
- * Generated from CREWS and STATION_CREW rather than typed out, so it cannot
- * drift from what the handler actually accepts — add a Crew C or a third
- * intake and this sheet grows a page on its own.
+ * Generated from STATIONS, TRAILERS and the zone list rather than typed out,
+ * so it cannot drift from what the handler actually accepts — add a seventh
+ * trailer and this sheet grows a page on its own.
  *
  * Bilingual, Spanish first, because these are read by the field and barn crew
  * the same way the screens are. (The supersack TAG is the deliberate exception
@@ -3876,48 +5407,47 @@ async function getMetrics(request, db, env, params, body) {
  * someone who wants to pick the tray and the paper first.
  */
 function codeSheetBody(ui, packet = 'crew') {
-  const card = (crew) => `
-  <div class="card">
-    <div class="kicker">Rogue Family Farms · 2026</div>
-    <div class="big">CUADRILLA ${crew}</div>
-    <div class="sub">Crew ${crew}</div>
-    ${qrImg(`${PUBLIC_BASE}/c/${crew}`)}
-    <div class="how">Escanéalo <strong>una vez</strong> con el teléfono del jefe de cuadrilla.
-      Después dirá &ldquo;Cuadrilla ${crew}&rdquo; en cada pantalla.</div>
-    <div class="how en">Scan <strong>once</strong> on the crew lead's phone. Every screen then says Crew ${crew}.</div>
-    <div class="url">${PUBLIC_BASE.replace('https://', '')}/c/${crew}</div>
-  </div>`;
-
   const door = (n) => `
 <section class="sheet door">
   <div class="kicker">Rogue Family Farms · 2026</div>
   <div class="big">RECEPCIÓN ${n}</div>
-  <div class="sub">Barn intake ${n}${STATION_CREW[n] ? ` &middot; Cuadrilla / Crew ${STATION_CREW[n]}` : ''}</div>
+  <div class="sub">Barn intake ${n}</div>
   ${qrImg(`${PUBLIC_BASE}/b/${n}`, 'qr big-qr')}
-  <div class="how">Abre la recepción. Registra cada carga sin salir de la pantalla.</div>
-  <div class="how en">Open intake once. Log each trailer without leaving the screen.</div>
+  <div class="how">Si una traila no tiene su código, anota la carga aquí.</div>
+  <div class="how en">If a trailer's own code is missing, log the load here.</div>
   <div class="url">${PUBLIC_BASE.replace('https://', '')}/b/${n}</div>
 </section>`;
 
-  // ONE card for both crews. The crew tag lives on the lead's phone, so the
-  // same code closes whichever crew scans it — printing one per crew would be
-  // two things to laminate and one more way to grab the wrong one.
   const dayEndCard = `
   <div class="card">
     <div class="kicker">Rogue Family Farms · 2026</div>
     <div class="big">FIN DEL DÍA</div>
     <div class="sub">End of day</div>
     ${qrImg(`${PUBLIC_BASE}/fin`)}
-    <div class="how">Escanéalo <strong>al terminar el día</strong>, con el mismo teléfono
-      que abrió la zona. Cierra la zona de tu cuadrilla.</div>
-    <div class="how en">Scan at the <strong>end of the day</strong>, on the phone that opened the
-      zone. Closes that crew's zone.</div>
+    <div class="how">Escanéalo <strong>al terminar el día</strong>. Cierra la zona abierta.</div>
+    <div class="how en">Scan at the <strong>end of the day</strong>. Closes the open zone.</div>
     <div class="url">${PUBLIC_BASE.replace('https://', '')}/fin</div>
   </div>`;
 
-  const doors = Object.keys(STATION_CREW).map(n => door(Number(n))).join('');
+  // One decal per trailer. The printed number IS the trailer's name — they had
+  // none before these (Koa, 2026-09-28) — so it is sized to read across a yard.
+  const trailerSheet = (n) => `
+<section class="sheet door trailer">
+  <div class="kicker">Rogue Family Farms · ${getSeason()}</div>
+  <div class="big trailer-num">${trailerName(n)}</div>
+  <div class="sub">Traila / Trailer ${n}</div>
+  ${qrImg(`${PUBLIC_BASE}/t/${n}`, 'qr trailer-qr', `QR ${trailerName(n)}`)}
+  <div class="how">El chofer lo escanea <strong>cada vez que deja una carga</strong>.</div>
+  <div class="how en">The driver scans this <strong>at every drop-off</strong>.</div>
+  <div class="url">${PUBLIC_BASE.replace('https://', '')}/t/${n}</div>
+</section>`;
+
+  const doors = STATIONS.map(door).join('');
+  const trailerSheets = TRAILERS.map(trailerSheet).join('');
   const zones = [...VALID_ZONES].filter(isHarvestTracked).sort((a,b) => a.localeCompare(b,'en',{numeric:true}));
-  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar y la cuadrilla.</div><div class="how en">Scan when cutting starts. Confirm the cultivar and crew.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const zoneSheets = zones.map(z => `<section class="sheet door"><div class="kicker">Rogue Family Farms · ${getSeason()}</div><div class="big">ZONA ${z}</div><div class="sub">Zone ${z}</div>${qrImg(`${PUBLIC_BASE}/z/${z}`, 'qr big-qr', `QR ${z}`)}<div class="how">Escanea al empezar a cortar. Confirma el cultivar.</div><div class="how en">Scan when cutting starts. Confirm the cultivar.</div><div class="url">${PUBLIC_BASE.replace('https://','')}/z/${z}</div></section>`).join('');
+  const pages = packet === 'zones' ? zones.length
+    : packet === 'trailers' ? TRAILERS.length : STATIONS.length + 1;
 
   return `
 <style>
@@ -3959,6 +5489,9 @@ function codeSheetBody(ui, packet = 'crew') {
   .door { padding-top: 0.5in; }
   .door .big-qr { width: 5.2in; height: 5.2in; }
   .door .big { font-size: 54pt; }
+  /* Trailer decals: the number is the name, read from the driver's seat. */
+  .trailer .trailer-num { font-size: 150pt; line-height: .9; }
+  .trailer .trailer-qr { width: 4.6in; height: 4.6in; }
 
   .noprint { max-width: 6.5in; margin: 0 auto 18pt; padding: 12pt 14pt; border: 1pt solid #ccd;
              border-radius: 8pt; background: #f6f7f9; font-size: 11pt; color: #334; text-align: left; }
@@ -3984,27 +5517,27 @@ function codeSheetBody(ui, packet = 'crew') {
 </style>
 <div class="codesheet">
   <div class="noprint">
-    <strong>${ui.t('printCodes')}</strong> — ${packet === 'zones' ? zones.length : Object.keys(STATION_CREW).length + 2} pages.
-    <div><a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${API}?action=print_codes&packet=crew&lang=${ui.lang}">Crew / Cuadrilla</a><a href="${API}?action=print_codes&packet=zones&lang=${ui.lang}">Zones / Zonas</a><button type="button" onclick="window.print()">Print / Imprimir</button><a href="${API}?action=practice&lang=${ui.lang}">${ui.lang === 'es' ? 'Practicar sin guardar' : 'Practice without saving'}</a></div>
+    <strong>${ui.t('printCodes')}</strong> — ${pages} pages.
+    <div><a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${API}?action=print_codes&packet=crew&lang=${ui.lang}">Barn / Recepción</a><a href="${API}?action=print_codes&packet=trailers&lang=${ui.lang}">Trailers / Trailas</a><a href="${API}?action=print_codes&packet=zones&lang=${ui.lang}">Zones / Zonas</a><button type="button" onclick="window.print()">Print / Imprimir</button><a href="${API}?action=practice&lang=${ui.lang}">${ui.lang === 'es' ? 'Practicar sin guardar' : 'Practice without saving'}</a></div>
     Print at 100% (no &ldquo;fit to page&rdquo;), then laminate.
-    ${packet === 'zones' ? '<p>One zone per page / Una zona por página.</p>' : `<ul>
-      <li><strong>Page 1</strong> — the two crew cards. Cut along the dashed line;
-          one for each crew lead's clipboard. Scanned <em>once</em> per phone.</li>
-      <li><strong>Page 2</strong> — End of day / Fin del día.</li>
-      <li><strong>Pages 3–${Object.keys(STATION_CREW).length + 2}</strong> — one per barn intake door.
-          Open once, then log each trailer on the same screen.</li>
+    ${packet === 'zones' ? '<p>One zone per page / Una zona por página.</p>'
+      : packet === 'trailers' ? '<p>One trailer per page / Una traila por página. Weatherproof decal or a laminated sheet on the trailer.</p>'
+      : `<ul>
+      <li><strong>Page 1</strong> — End of day / Fin del día.</li>
+      <li><strong>Pages 2–${STATIONS.length + 1}</strong> — one per barn intake door. The fallback
+          when a trailer's own code is missing.</li>
     </ul>`}
   </div>
 
-  ${packet === 'zones' ? zoneSheets : `<section class="sheet cards">${CREWS.map(card).join('')}</section>
-  <section class="sheet cards">${dayEndCard}</section>
+  ${packet === 'zones' ? zoneSheets : packet === 'trailers' ? trailerSheets
+    : `<section class="sheet cards">${dayEndCard}</section>
   ${doors}`}
 </div>`;
 }
 
 // ─── HTML RENDERING ─────────────────────────────────────
 
-function renderPage(ui, title, bodyHtml, status = 200) {
+function renderPage(ui, title, bodyHtml, status = 200, { head = '' } = {}) {
   const lang = ui.lang;
   const working = !bodyHtml.includes('class="sd"') && !bodyHtml.includes('class="harvest-hub"') && !bodyHtml.includes('class="codesheet"');
   const chrome = `<header class="harvest-header"><img src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="54" height="54"><div><strong>ROGUE ORIGIN</strong><small>${lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</small></div><nav aria-label="${lang === 'es' ? 'Navegación' : 'Navigation'}"><a href="${API}?action=hub&lang=${lang}">${lang === 'es' ? 'Herramientas' : 'All tools'}</a><a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></nav></header>`;
@@ -4014,6 +5547,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)} — Harvest</title>
+${head}
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px 20px; background: #14251a; color: #f2f6f2; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
@@ -4071,6 +5605,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 
   /* Takedown session screen — big targets, gloves on, one job per press. */
   .lot { border-left: 4px solid #2f7a4f; padding-left: 12px; margin-bottom: 22px; }
+  .topnav { display: flex; gap: 10px; margin: 0 0 18px; }
+  .topnav a.btn { flex: 1; padding: 14px 8px; font-size: 1.05rem; }
   .lot-cultivar { font-size: 1.7rem; font-weight: 700; line-height: 1.15; }
   .lot-meta { color: #9fc2ac; margin-top: 2px; }
   .bigbtn {
@@ -4104,6 +5640,9 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .nextnote.pending summary { color: #e9c462; font-weight: 700; }
   .nextnote textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.1rem; padding: 12px;
                        border: none; border-radius: 8px; resize: vertical; margin: 4px 0 6px; }
+  .fillrow { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+  .fillrow input { width: 7em; margin: 0; font-size: 1.4rem; font-weight: 700; text-align: center; }
+  .fillrow span { font-size: 1.2rem; font-weight: 700; }
   a.mini { display: inline-block; padding: 10px 16px; background: #3a5f4c; color: #fff;
            text-decoration: none; border-radius: 8px; font-size: 0.95rem; }
   a.mini.danger { background: #7a3a3a; }
@@ -4136,6 +5675,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   /* Cultivar picker — trial zones can hold 15 cultivars, so a single column of
      full-width targets beats a cramped grid for a gloved thumb. */
   .cvgrid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+
   a.cvbtn { padding: 20px 14px; font-size: 1.15rem; text-align: left; }
   a.findrow { text-align: left; padding: 14px; }
   a.findrow .hint { display: block; margin-top: 3px; }
@@ -4149,9 +5689,19 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   label.lot input { margin: 3px 0 0; width: auto; flex: none; transform: scale(1.4); }
   label.lot:has(input:checked) { border-color: #4a9d6a; background: #21402c; }
   label.lot.green { opacity: 0.72; }
+  details.greenlots { margin: 0 0 20px; }
+  details.greenlots .lotlist { margin-top: 6px; }
   .lotbody { display: block; min-width: 0; }
   .lothead { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 1.1rem; }
   .lotmeta { display: block; color: #9fc2ac; font-size: 0.88rem; margin-top: 4px; }
+  .baypill { font-size: 0.8rem; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+             background: #e9c462; color: #1b2b20; }
+  /* Takedown by bay: the bay leads the card, the zones it holds sit under it. */
+  .baybig { display: inline-block; font-size: 1.15rem; font-weight: 800; padding: 2px 10px; border-radius: 8px;
+            background: #e9c462; color: #1b2b20; white-space: nowrap; }
+  .zonemix { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .zchip { font-size: 0.92rem; padding: 3px 10px; border-radius: 999px; background: #2c4a36; color: #f2f6f2; white-space: nowrap; }
+  .zchip b { color: #e9c462; }
   .badge { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em;
            padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
   .badge.ok   { background: #2f7a4f; color: #fff; }
@@ -4177,6 +5727,8 @@ function renderPage(ui, title, bodyHtml, status = 200) {
   .notice { background: #3d3214; border: 1px solid #8a6d1f; border-left: 6px solid #e9c462; border-radius: 8px;
             padding: 14px 16px; margin: 0 0 18px; font-size: 1.05rem; color: #f4f1e8; }
   .notice button.btn { margin-top: 12px; width: 100%; cursor: pointer; }
+  .notice a.btn { margin-top: 12px; }
+  .notice .hint { display: block; margin-top: 8px; }
   /* ── Sack scan page ──────────────────────────────────────────────────
      A crew member holding a sack, phone at arm's length, gloves on, barn
      light. Built like field signage: three dark planes (page → card →
@@ -4375,7 +5927,7 @@ function renderPage(ui, title, bodyHtml, status = 200) {
 </head>
 <body${ui.isTest ? ' class="testmode"' : ''}>
 ${ui.isTest ? `<div class="testband">${ui.t('testBand')}</div>` : ''}
-<div class="lang">${ui.crew ? `<span class="crewchip">${ui.t('crewTag', { crew: ui.crew })}</span> ` : ''}<a href="${ui.toggle}" data-lang-swap>${ui.t('langOther')}</a></div>
+<div class="lang"><a href="${ui.toggle}" data-lang-swap>${ui.t('langOther')}</a></div>
 ${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtml}
 </body>
 </html>`;
@@ -4397,15 +5949,11 @@ ${working ? `<main class="harvest-screen">${chrome}${bodyHtml}</main>` : bodyHtm
  */
 function makeUi(request, env = null) {
   const lang = pickLang(request);
-  const crew = pickCrew(request);
   const url = new URL(request.url);
   const other = lang === 'es' ? 'en' : 'es';
   url.searchParams.set('lang', other);
   return {
     lang,
-    // null, never undefined: it is bound straight into the session INSERT, and
-    // undefined is not a value SQLite will take.
-    crew: crew ?? null,
     toggle: url.pathname + url.search,
     // Carried on the ui rather than threaded through renderPage's 28 callers.
     // Every crew screen has to be able to say it, because the ONE thing a
@@ -4438,9 +5986,9 @@ function headcountGrid(ui, zone, sessionId, current = null) {
   const cell = (n, extra = '') => {
     const on = Number(current) === n;
     return `<a class="btn${extra}${on ? ' sel' : ''}" data-n="${n}" href="${q}&count=${n}"`
-      + ` aria-pressed="${on}">${n === 13 ? '13+' : n}</a>`;
+      + ` aria-pressed="${on}">${n}</a>`;
   };
-  return HEADCOUNT_OPTIONS.map(n => cell(n)).join('') + cell(13, ' alt');
+  return HEADCOUNT_OPTIONS.map(n => cell(n)).join('');
 }
 
 /**
@@ -4509,28 +6057,177 @@ function headcountScript(ui) {
  * Cultivar picker — shown after scanning a trial/split zone's sign, before the
  * session opens. Big tap targets: this is a gloved thumb in a field.
  */
-function cultivarPickerBody(ui, zone, options) {
+function cultivarPickerBody(ui, zone, options, crew = null) {
   const buttons = options.map(cv =>
-    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
+    `<a class="btn cvbtn" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}${crew ? `&crew=${crew}` : ''}&cultivar=${encodeURIComponent(cv)}">${escapeHtml(cv)}</a>`
   ).join('');
   return `
 <h1>${escapeHtml(zone)}</h1>
-<p class="sub">${ui.t('nCultivars', { n: options.length })}</p>
+<p class="sub">${crew ? `${escapeHtml(crewLabel(ui, crew))} · ` : ''}${ui.t('nCultivars', { n: options.length })}</p>
 <p class="note">${ui.t('whichCutting')}</p>
 <div class="cvgrid">${buttons}</div>`;
 }
 
-function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null }) {
+/** "Z4 · Sour Lifter · Corte 1 · Cuadrilla A · Nico" — every lot picker. */
+function lotLabelText(ui, l) {
+  return `${escapeHtml(l.zone)} · ${escapeHtml(l.cultivar || '?')} · ${ui.t('cut', { n: l.cut_number ?? '?' })}${
+    crewById(l.crew) ? ` · ${escapeHtml(crewLabel(ui, l.crew))}` : ''}`;
+}
+
+/**
+ * Which crew — the first thing a zone sign asks. One big button per crew, in
+ * its own colour so a lead finds theirs before reading it. Links, so a tap is
+ * one GET carrying everything the scan already had (cultivar, test cut).
+ */
+function crewPickerBody(ui, zone, params = {}) {
+  const keep = ['cultivar', 'test_cut'].filter(k => params[k])
+    .map(k => `&${k}=${encodeURIComponent(params[k])}`).join('');
+  const buttons = CREWS.map(c =>
+    `<a class="btn crewbtn crew-${c.id}" href="/z/${encodeURIComponent(zone)}?lang=${ui.lang}&crew=${c.id}${keep}">`
+    + `<span class="crewletter">${c.id}</span><span class="crewlead">${escapeHtml(c.lead)}</span></a>`
+  ).join('');
+  return `
+<h1>${escapeHtml(zone)}</h1>
+<p class="sub">${ui.t('whichCrew')}</p>
+<div class="crewgrid">${buttons}</div>
+<p class="note"><span class="hint">${ui.t('whichCrewSub')}</span></p>`;
+}
+
+/**
+ * The crew's day: which trailers run for it, and — on the first zone scan
+ * only — how many cutters, water spiders and drivers it starts with.
+ *
+ * Trailers are optional: tick none and the crew keeps its last assignment
+ * (named on the form), less any trailer another crew has claimed today. From
+ * the crew card ("change trailers") today's are ticked and only trailers move.
+ * The people are tap buttons with nothing pre-picked: counted fresh each day,
+ * and changes after that come in on the hourly report.
+ */
+function crewDayFormBody(ui, { crew, zone, cultivar, testCut = null, sessionId = null, prefill = null, today = [], editing = false }) {
+  const mine = prefill ? trailerList(prefill.trailers) : [];
+  const elsewhere = new Map();
+  for (const r of today) {
+    if (r.crew === crew) continue;
+    for (const n of trailerList(r.trailers)) elsewhere.set(n, r.crew);
+  }
+  const fallback = mine.filter(n => editing || !elsewhere.has(n));
+  const tiles = TRAILERS.map(n => `<label class="trtile"><input type="checkbox" name="t${n}" value="1"${
+    editing && mine.includes(n) ? ' checked' : ''}><span class="trname">${trailerName(n)}</span>${
+    elsewhere.has(n) ? `<span class="trwith">${ui.t('crewTrailerWith', { c: elsewhere.get(n) })}</span>` : ''}</label>`).join('');
+  const trailerHint = fallback.length
+    ? `<p class="note"><span class="hint">${ui.t(editing ? 'crewTrailersKeepNow' : 'crewTrailersKeep', {
+      t: fallback.map(trailerName).join(' · ') })}</span></p>`
+    : '';
+  const counts = editing ? '' : CREW_DAY_FIELDS.map(f => `
+  <h2>${ui.t(f.label)}</h2>
+  <div class="baygrid cntgrid">${f.buttons.map(n => `<label class="baybtn"><input type="radio" name="${f.key}" value="${n}" required><span>${n}</span></label>`).join('')}</div>`).join('');
+  // With no fallback, a trailer has to be ticked; with one, none ticked is fine.
+  const mustTick = fallback.length ? '' : `if(!this.querySelector('.trgrid input:checked')){alert(${escapeHtml(JSON.stringify(ui.t('crewDayPickTrailer')))});return false}`;
+  const hidden = [
+    ['crew', crew], ['zone', zone], ['cultivar', cultivar], ['test_cut', testCut], ['session_id', sessionId],
+  ].filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<input type="hidden" name="${k}" value="${escapeHtml(v)}">`).join('');
+  return `
+<h1>${escapeHtml(crewLabel(ui, crew))}</h1>
+<p class="sub">${ui.t(editing ? 'crewDayEditTitle' : 'crewDayTitle')} · ${escapeHtml(zone)}${cultivar ? ` · ${escapeHtml(cultivar)}` : ''}</p>
+${editing ? '' : `<p class="note">${ui.t('crewDaySub')}</p>`}
+<form method="POST" action="${API}?action=crew_day&lang=${ui.lang}"
+      onsubmit="${mustTick}var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  ${hidden}
+  <h2>${ui.t('crewTrailers')}</h2>
+  <div class="trgrid">${tiles}</div>
+  ${trailerHint}
+  ${counts}
+  <button class="btn" type="submit">${editing ? ui.t('crewDaySave') : ui.t('crewDayOpen', { zone: escapeHtml(zone) })}</button>
+</form>`;
+}
+
+/** The crew's day at a glance on the zone screen, with the way to change it. */
+function crewCard(ui, crew, crewDay, sessionId) {
+  if (!crewById(crew)) return '';
+  const tr = crewDay ? trailerList(crewDay.trailers).map(trailerName).join(' · ') : '—';
+  const n = (k) => (crewDay && crewDay[k] != null ? crewDay[k] : '—');
+  return `
+<div class="crewcard crew-${crew}">
+  <div class="crewcard-head">${escapeHtml(crewLabel(ui, crew))}</div>
+  <div class="crewcard-tr">${ui.t('crewSummaryTrailers')}: <strong>${tr}</strong></div>
+  <div class="crewcard-n"><span><strong>${n('cutters')}</strong> ${ui.t('crewCutters')}</span>
+    <span><strong>${n('drivers')}</strong> ${ui.t('crewDrivers')}</span>
+    <span><strong>${n('water_spiders')}</strong> ${ui.t('crewWS')}</span></div>
+  <p class="hint">${ui.t('crewPeopleHourly')}</p>
+  <a class="mini" href="${API}?action=crew_day&lang=${ui.lang}&crew=${crew}&session_id=${sessionId}">✏️ ${ui.t('crewDayEdit')}</a>
+</div>`;
+}
+
+function enterBody(ui, { zone, cultivar, cutNumber, sessionId, prevZone, flash = null, headcount = null, daysIdle = null, crew = null, crewDay = null, cutConfirm = null }) {
+  // A crew lot carries its cutters from the crew card; the old grid stays only
+  // for a lot with no crew (nothing opens one any more, but old links exist).
+  const people = crewById(crew)
+    ? crewCard(ui, crew, crewDay, sessionId)
+    : `<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>`;
   return `
 <h1>${flash ? escapeHtml(flash) : ui.t('entered', { zone })}</h1>
-<p class="sub">${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
+<p class="sub">${escapeHtml(zone)} · ${cultivar ? `${escapeHtml(cultivar)} · ` : ''}${ui.t('cut', { n: cutNumber })}</p>
 <p class="note">${prevZone ? ui.t('prevClosed', { lot: escapeHtml(prevZone) }) : ui.t('noPrior')}</p>
-<p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, zone, sessionId, headcount)}</div>
-<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${cutConfirm ? cutConfirmBlock(ui, sessionId, cutConfirm) : ''}
+${people}
+${cutChangeBlock(ui, sessionId, cutNumber, daysIdle)}
 ${cultivarFixBlock(ui, zone, sessionId, cultivar)}
 <div class="footer"><a href="${API}?action=logs&zone=${zone}">${ui.t('viewLog')}</a></div>
 ${headcountScript(ui)}`;
+}
+
+/**
+ * "Is this a new cut?" — the only way the cut number moves. ALWAYS folded shut
+ * (Koa, 2026-10-04): a cut changes only when Koa says the cultivar's cut is
+ * finished, and most retail strains only ever have one. It used to open by
+ * itself after NEW_CUT_PROMPT_DAYS idle, and on Oct 4 that put Z8 Rainbow Cake
+ * on "cut 2" when the crew was finishing cut 1 ten days later — retail trial
+ * blocks are cut in pieces days apart. Idle days are still named inside, for
+ * whoever opens it. A mis-tap has its own way back.
+ */
+/**
+ * The second press. Says what the first press asked for, names the other crew
+ * it will move, and offers the way out first. Posts confirm=1 to the same
+ * action; the plain next/prev forms in cutChangeBlock never carry it.
+ */
+function cutConfirmBlock(ui, sessionId, { dir, to, others = [] }) {
+  const who = others.length ? `<p class="note">${ui.t('cutConfirmOthers', { crews: others.map(escapeHtml).join(', ') })}</p>` : '';
+  return `
+<div class="card cutconfirm">
+  <p class="note"><strong>${ui.t('cutConfirmWhat', { n: to })}</strong></p>
+  ${who}
+  <form method="POST" action="${API}?action=cut_change&lang=${ui.lang}"
+        onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+    <input type="hidden" name="session_id" value="${sessionId}">
+    <input type="hidden" name="dir" value="${dir}">
+    <input type="hidden" name="confirm" value="1">
+    <button class="bigbtn" type="submit">${ui.t('cutConfirmYes', { n: to })}</button>
+  </form>
+  <p class="note" style="margin-top:10px">${ui.t('cutConfirmNo')}</p>
+</div>`;
+}
+
+function cutChangeBlock(ui, sessionId, cutNumber, daysIdle) {
+  const n = Number(cutNumber) || 1;
+  const long = daysIdle != null && daysIdle >= NEW_CUT_PROMPT_DAYS;
+  const form = (dir, label, cls) => `
+  <form method="POST" action="${API}?action=cut_change&lang=${ui.lang}"
+        onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+    <input type="hidden" name="session_id" value="${sessionId}">
+    <input type="hidden" name="dir" value="${dir}">
+    <button class="btn ${cls}" type="submit">${label}</button>
+  </form>`;
+  return `
+<details class="cvfix cutfix">
+  <summary>${ui.t('cutNewAsk')}</summary>
+  ${long ? `<p class="note">${ui.t('cutIdle', { d: Math.floor(daysIdle) })}</p>` : ''}
+  <p class="note"><span class="hint">${ui.t('cutNewHint', { n })}</span></p>
+  ${n < 9 ? form('next', ui.t('cutStart', { n: n + 1 }), '') : ''}
+  ${n > 1 ? form('prev', ui.t('cutBack', { n: n - 1 }), 'alt') : ''}
+</details>`;
 }
 
 /**
@@ -4554,15 +6251,18 @@ function cultivarFixBlock(ui, zone, sessionId, current) {
 </details>`;
 }
 
-function alreadyEnteredBody(ui, active) {
+function alreadyEnteredBody(ui, active, crewDay = null) {
+  const people = crewById(active.crew)
+    ? crewCard(ui, active.crew, crewDay, active.id)
+    : `<p class="note">${ui.t('howManyCutters')}</p>
+<div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
+<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
+${headcountScript(ui)}`;
   return `
 <h1>${ui.t('alreadyEntered', { zone: active.zone })}</h1>
 <p class="sub">${active.cultivar ? `${escapeHtml(active.cultivar)} · ` : ''}${ui.t('cut', { n: active.cut_number })}</p>
 <p class="note">${ui.t('alreadyEnteredAt', { t: active.occurred_at })}</p>
-<p class="note">${ui.t('howManyCutters')}</p>
-<div class="grid">${headcountGrid(ui, active.zone, active.id, active.headcount)}</div>
-<div id="hcstat" class="hcstat" role="status" aria-live="polite"></div>
-${headcountScript(ui)}`;
+${people}`;
 }
 
 function headcountBody(ui, { zone, cutNumber, sessionId, count, cultivar = null }) {
@@ -4613,8 +6313,10 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
   // No autofocus now: the common case needs no keyboard at all. Tapping the
   // field selects it, so a partial is typed over rather than edited around.
   const FULL_TRAILER = CONSTANTS.binsPerTrailer.value;
-  // Follow the matching crew; older arriving trailers use a manual override.
-  const preselect = active ? active.zone : null;
+  // Follow the open lot; an older arriving trailer uses a manual override.
+  // With several crews' zones open there is no one lot to follow, so the door
+  // asks for the zone rather than guessing the newest (three crews, 2026-10-03).
+  const preselect = active && openZones.length <= 1 ? active.zone : null;
 
   // Only zones harvest actually counts — offering GH here would let a load be
   // logged against a zone no bag will ever be tagged from.
@@ -4629,11 +6331,7 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
     : `<p class="note">${ui.t('noZoneOpen')}</p>`;
   // Which door this is, stated on the screen: two intakes that look identical
   // are two chances to log a load at the wrong one.
-  const stationNote = station
-    ? `<p class="sub">${STATION_CREW[station]
-        ? ui.t('atStation', { n: station, crew: STATION_CREW[station] })
-        : ui.t('atStationNoCrew', { n: station })}</p>`
-    : '';
+  const stationNote = station ? `<p class="sub">${ui.t('atStation', { n: station })}</p>` : '';
   // Carried explicitly rather than trusted to the cookie: the cookie makes a
   // bookmark remember its door, this makes THIS submission unambiguous.
   const stationField = station ? `<input type="hidden" name="station" value="${station}">` : '';
@@ -4662,7 +6360,7 @@ function barnIntakeFormBody(ui, active, station = null, lastFill = null,
 <h1>${ui.t('barnIntake')}</h1>
 ${stationNote}
 <div id="intakeActive" role="status">${activeNote}</div>
-${station ? `<button id="followCrew" type="button" class="btn alt" style="margin-bottom:16px">${ui.lang === 'es' ? 'Seguir zona de Cuadrilla ' : 'Follow Crew '}${STATION_CREW[station]}${ui.lang === 'es' ? '' : ' zone'}</button>` : `<p class="note">${ui.lang === 'es' ? 'Elige tu recepción para seguir la zona de tu cuadrilla.' : 'Choose your intake to follow your crew’s scanned zone.'}</p><div class="intake-choices">${[['A', 1], ['B', 2]].map(([crew, door]) => `<a class="intake-choice crew-${crew.toLowerCase()}" href="/b/${door}?lang=${ui.lang}"><span class="intake-letter" aria-hidden="true">${crew}</span><span><strong>${ui.lang === 'es' ? 'Cuadrilla' : 'Crew'} ${crew}</strong><small>${ui.lang === 'es' ? 'Recepción' : 'Barn intake'} ${door}</small></span><span class="intake-arrow" aria-hidden="true">→</span></a>`).join('')}</div>`}
+<button id="followOpen" type="button" class="btn alt" style="margin-bottom:16px">${ui.t('followOpen')}</button>
 <form id="intakeForm" method="POST" action="${API}?action=barn_log&lang=${ui.lang}">
   ${stationField}
   <label for="zone">${ui.t('zone')}</label>
@@ -4683,16 +6381,18 @@ ${station ? `<button id="followCrew" type="button" class="btn alt" style="margin
   <button class="btn" type="submit">${ui.t('logLoad')}</button>
 </form>
 <div id="intakeReceipt" role="status" aria-live="polite"></div>
-${barnLiveScript(ui, station)}`;
+${barnLiveScript(ui)}`;
 }
 
 // Progressive enhancement: the normal POST remains usable without JavaScript.
 // Never retry a failed POST automatically: a lost response may already be saved.
-function barnLiveScript(ui, station) {
+function barnLiveScript(ui) {
   const es = ui.lang === 'es';
   const text = {
-    live: es ? 'Zona actual de Cuadrilla ' : 'Current zone for Crew ',
-    none: es ? 'Sin zona abierta para esta cuadrilla. Elige una zona.' : 'No open zone for this crew. Choose a zone.',
+    live: es ? 'Zona abierta: ' : 'Open zone: ',
+    none: es ? 'Sin zona abierta. Elige una zona.' : 'No zone open. Choose a zone.',
+    several: es ? 'Hay varias zonas abiertas: ' : 'Several zones open: ',
+    pick: es ? '. Elige la zona de esta traila.' : '. Choose the zone this trailer came from.',
     manual: es ? 'Zona manual — se conserva para cargas anteriores. Pulsa Seguir para volver.' : 'Manual zone — held for arriving loads. Press Follow to resume automatic selection.',
     offline: es ? 'No se pudo actualizar la zona. Confírmala antes de registrar.' : 'Zone update unavailable. Confirm the zone before logging.',
     saving: es ? 'Registrando…' : 'Recording…',
@@ -4705,17 +6405,22 @@ function barnLiveScript(ui, station) {
   };
   return `<script>
 (function () {
-  var T = ${JSON.stringify(text)}, crew = ${JSON.stringify(STATION_CREW[station] || null)};
+  var T = ${JSON.stringify(text)};
   var form = document.getElementById('intakeForm'), zone = document.getElementById('zone');
   var status = document.getElementById('intakeActive'), receipt = document.getElementById('intakeReceipt');
-  var follow = document.getElementById('followCrew'), busy = false, manual = false, polling = false;
+  var follow = document.getElementById('followOpen'), busy = false, manual = false, polling = false;
   var latest = null, modeVersion = 0;
   var lotPick = document.getElementById('lotPick'), lotSel = document.getElementById('lot');
   var openZones = [], recentLots = null;
   function applyActive() {
     if (manual || busy) return;
+    if (openZones.length > 1) {
+      zone.value = '';
+      status.textContent = T.several + openZones.join(', ') + T.pick;
+      return;
+    }
     zone.value = latest ? latest.zone : '';
-    status.textContent = latest ? T.live + crew + ': ' + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
+    status.textContent = latest ? T.live + latest.zone + (latest.cultivar ? ' · ' + latest.cultivar : '') : T.none;
   }
   // The picker is for the case the rules cannot answer: this zone has nothing
   // open, so without a lot named here the bins land on no lot at all. With a
@@ -4742,14 +6447,14 @@ function barnLiveScript(ui, station) {
     lotPick.hidden = !needed;
   }
   async function refresh() {
-    if (!crew || polling || busy || document.hidden) return;
+    if (polling || busy || document.hidden) return;
     polling = true;
     try {
       var r = await fetch('${API}?action=status', { cache: 'no-store' });
       if (!r.ok) throw new Error('status');
       var d = await r.json();
       if (!Array.isArray(d.active_zones)) throw new Error('status');
-      latest = d.active_zones.find(function (s) { return s.crew === crew; }) || null;
+      latest = d.active_zones[0] || null;
       openZones = d.active_zones.map(function (s) { return s.zone; });
       if (Array.isArray(d.recent_lots)) recentLots = d.recent_lots;
       applyActive();
@@ -4807,20 +6512,16 @@ function barnLiveScript(ui, station) {
 }
 
 function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grace = null,
-                                  crossedCrew = null, station = null, bay = null,
+                                  station = null, bay = null,
                                   switched = null, chosen = null }) {
-  // Four outcomes, and the person at the door should be able to tell them
+  // Three outcomes, and the person at the door should be able to tell them
   // apart: attributed to the open lot (silent), to a lot that just closed (say
-  // so — it is a correction), to the OTHER crew's lot (say so — only they can
-  // judge it), or to nothing (warn, that one loses bins).
+  // so — it is a correction), or to nothing (warn, that one loses bins).
   const attribution = chosen
     ? `<p class="note">${ui.t('lotChosen', { lot: escapeHtml(chosen) })}</p>`
     : grace
       ? `<p class="note">${ui.t('graceAttributed', { zone: grace.zone, n: grace.cut })}</p>`
       : (hasActiveSession ? '' : `<p class="note">${ui.t('noSessionWarn', { zone })}</p>`);
-  const crossNote = crossedCrew
-    ? `<p class="note">${ui.t('crossedCrew', { crew: crossedCrew })}</p>`
-    : '';
   // Said out loud, like every other correction the cascade makes. The person at
   // the door is the only one who can tell a trailer loaded before the switch
   // from one loaded after it, so they are told which lot it went to.
@@ -4835,8 +6536,303 @@ function barnLogConfirmBody(ui, { zone, bins, loadNumber, hasActiveSession, grac
 <p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone })}${bay ? ` · ${ui.t('hungInBay', { n: bay })}` : ''}</p>
 ${attribution}
 ${switchNote}
-${crossNote}
 <div class="footer"><a href="${API}?action=barn_intake${station ? `&station=${station}` : ''}">${ui.t('logAnother')}</a> · <a href="${API}?action=crew">${ui.t('crewChanged')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a></div>`;
+}
+
+/**
+ * The driver's screen. Built for a phone held in one hand at a barn door:
+ * the trailer's name, the lot it is going to, a bay, one button.
+ *
+ * Every choice is a radio, not a select: one tap each, all visible, and the
+ * page works with no script at all. The lot the server proposed is ticked;
+ * "Different lot?" opens the recent ones for the rare wrong case.
+ */
+function trailerFormBody(ui, { trailer, proposal, recentLots, keep, lastBay, bayToday }) {
+  const name = trailerName(trailer);
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const lotLabel = (l) => lotLabelText(ui, l);
+
+  const lots = [...recentLots];
+  if (proposal.lot && !lots.some(l => l.id === proposal.lot.id)) lots.unshift(proposal.lot);
+  const chosen = keep ? keep.lot : (proposal.lot ? proposal.lot.id : null);
+  const lotRadios = lots.map(l => `<label class="choice"><input type="radio" name="lot" value="${l.id}" required${
+    String(l.id) === String(chosen) ? ' checked' : ''}> ${lotLabel(l)}${
+    l.closed_at ? '' : ` · ${ui.t('lotAtDoorOpen')}`}</label>`).join('');
+
+  const lotCard = proposal.lot
+    ? `<div class="status trailer-lot"><div class="lotmeta"><strong>→ ${lotLabel(proposal.lot)}</strong></div>${
+        proposal.viaGrace ? `<p class="note">${ui.t('trailerGrace')}</p>` : ''}</div>`
+    : `<p class="note">${proposal.crew
+      ? ui.t('trailerCrewNoLot', { crew: escapeHtml(crewLabel(ui, proposal.crew)) })
+      : ui.t('trailerUnassigned', { t: name })}</p>`;
+  const lotPicker = proposal.lot
+    ? `<details class="lotother"${keep && keep.lot !== proposal.lot.id ? ' open' : ''}><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>`
+    : `<fieldset class="lotother"><legend>${ui.t('trailerWhichLot')}</legend>${lotRadios || `<p class="note">${ui.t('trailerNoRecent')}</p>`}</fieldset>`;
+
+  const bayPick = keep ? keep.bay : (bayToday ? lastBay : null);
+  const bayBtn = (n) => `<label class="baybtn"><input type="radio" name="bay" value="${n}" required${
+    Number(bayPick) === n ? ' checked' : ''}><span>${n}</span></label>`;
+  const bayRow = (labelKey, from, to) => {
+    const out = [];
+    for (let n = from; n <= to; n++) out.push(bayBtn(n));
+    return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
+  };
+  const bayHint = lastBay
+    ? (bayToday ? ui.t('bayHungLast', { n: lastBay }) : ui.t('bayStale', { n: lastBay }))
+    : ui.t('trailerBayPick');
+
+  const partialVal = keep && keep.partial ? escapeHtml(keep.partial) : '';
+  const canLog = !!proposal.lot || lots.length > 0;
+  // Why a one-scan decal is asking at all: its first run of the day.
+  const firstBay = proposal.lot && !bayToday && !keep
+    ? `<p class="note">${ui.t('trailerFirstBay')}</p>` : '';
+
+  return `
+<h1 class="trailer-name">${name}</h1>
+<p class="sub">${ui.t('trailerSub')}</p>
+${lotCard}
+${firstBay}
+${canLog ? `<form id="trailerForm" method="POST" action="${API}?action=trailer_log&lang=${ui.lang}"
+      onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${trailer}">
+  ${lotPicker}
+  <label>${ui.t('bayHung')} <span class="hint">${bayHint}</span></label>
+  ${bayRow('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)}
+  ${bayRow('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX)}
+  <details class="partial"${partialVal ? ' open' : ''}><summary>${ui.t('trailerPartial', { n: FULL })}</summary>
+    <label for="partial_bins">${ui.t('trailerPartialHow')}</label>
+    <input id="partial_bins" name="partial_bins" type="number" min="1" max="${FULL - 1}" inputmode="numeric" value="${partialVal}">
+  </details>
+  <button class="btn" type="submit">${ui.t('trailerLogBtn', { n: FULL })}</button>
+</form>` : lotPicker}`;
+}
+
+/**
+ * The receipt: what the scan logged, big enough to check at arm's length, and
+ * — for TRAILER_EDIT_MS — the fixes, folded away so the ordinary load is just
+ * a glance. The bay is the loudest thing on the page because it is the one
+ * default that can quietly stop being true (the barn moved on to the next bay).
+ */
+function trailerReceiptBody(ui, { row, loadNumber, editable, recentLots, fresh = false }) {
+  const name = trailerName(row.trailer);
+  const FULL = CONSTANTS.binsPerTrailer.value;
+  const lotLabel = (l) => lotLabelText(ui, l);
+  const current = { id: row.attributed_zone_session_id, zone: row.zone, cultivar: row.lot_cultivar, cut_number: row.lot_cut, crew: row.lot_crew };
+
+
+  let fix = `<p class="note">${ui.t('trailerFixClosed')}</p>`;
+  if (editable) {
+    const lots = [...recentLots];
+    if (!lots.some(l => l.id === current.id)) lots.unshift(current);
+    const lotRadios = lots.map(l => `<label class="choice"><input type="radio" name="lot" value="${l.id}"${
+      l.id === current.id ? ' checked' : ''}> ${lotLabel(l)}</label>`).join('');
+    const bayBtn = (n) => `<label class="baybtn"><input type="radio" name="bay" value="${n}" required${
+      Number(row.bay) === n ? ' checked' : ''}><span>${n}</span></label>`;
+    const bayRow = (labelKey, from, to) => {
+      const out = [];
+      for (let n = from; n <= to; n++) out.push(bayBtn(n));
+      return `<div class="baybarn">${ui.t(labelKey)}</div><div class="baygrid">${out.join('')}</div>`;
+    };
+    fix = `
+<details class="fixload"><summary>✏️ ${ui.t('trailerFix')} <span class="hint">· ${ui.t('trailerFixHint')}</span></summary>
+<form id="trailerFix" method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}"
+      onsubmit="var b=this.querySelector('button[type=submit]');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="id" value="${row.id}">
+  <label>${ui.t('bayHung')}</label>
+  ${bayRow('bottomBarn', BAY_MIN, BOTTOM_BARN_LAST_BAY)}
+  ${bayRow('topBarn', BOTTOM_BARN_LAST_BAY + 1, BAY_MAX)}
+  <label for="fixbins">${ui.t('trailerBinsNow')}</label>
+  <input id="fixbins" name="bins" type="number" min="1" max="${FULL}" inputmode="numeric" required value="${row.bins}">
+  <details class="lotother"><summary>${ui.t('trailerOtherLot')}</summary>${lotRadios}</details>
+  <button class="btn" type="submit">${ui.t('trailerFixSave')}</button>
+</form>
+<form method="POST" action="${API}?action=trailer_fix&lang=${ui.lang}" class="undo"
+      onsubmit="return confirm(${escapeHtml(JSON.stringify(ui.t('trailerUndoConfirm')))})">
+  <input type="hidden" name="id" value="${row.id}">
+  <input type="hidden" name="undo" value="1">
+  <button class="btn alt" type="submit">${ui.t('trailerUndo')}</button>
+</form>
+</details>
+<p class="note">${ui.t('trailerFixUntil', { time: pacificClock(ui, new Date(editableUntil(row))) })}</p>`;
+  }
+
+  // Drivers asked for an unmistakable "it worked" (Koa, 2026-09-29): a green
+  // screen with a drawn check, read at a glance from the tractor seat, that
+  // fades to the receipt after two seconds or on a tap. No sound or buzz: a
+  // page opened from a camera scan has no user gesture, and browsers block both
+  // without one.
+  const flash = fresh ? `
+<div class="logged-flash ok" role="status" aria-live="assertive" onclick="this.remove()">
+  <svg class="lf-mark" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M14 27 L22 35 L38 17"/></svg>
+  <div class="lf-big">${ui.t('flashOk')}</div>
+  <div class="lf-sub">${name} · ${ui.t('flashBins', { n: row.bins })} · ${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
+  <div class="lf-lot">→ ${escapeHtml(row.zone)} · ${escapeHtml(row.lot_cultivar || '?')}</div>
+</div>
+<script>(function () {
+  var f = document.querySelector('.logged-flash'); if (!f) return;
+  var hold = 2000;
+  setTimeout(function () { f.classList.add('out'); }, hold);
+  setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, hold + 500);
+  // The "Log another load" button stays locked until well after the flash:
+  // a tap meant to dismiss it must never land on the button underneath.
+  setTimeout(function () {
+    var b = document.querySelector('.again-btn[data-unlock]');
+    if (b) { b.disabled = false; b.removeAttribute('data-unlock'); }
+  }, hold + 900);
+})();</script>` : '';
+
+  const again = `
+<form method="POST" action="${API}?action=trailer_again&lang=${ui.lang}" class="again"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${row.trailer}">
+  <button class="btn again-btn" type="submit"${fresh ? ' disabled data-unlock' : ''}>+ ${ui.t('trailerAgain', { t: name })}</button>
+  <p class="hint">${ui.t('trailerAgainHint')}</p>
+</form>`;
+
+  const home = `
+<a class="btn alt home-add" href="/t/${row.trailer}?home&add&lang=${ui.lang}">📲 ${ui.t('homeAdd')}</a>
+<p class="hint">${ui.t('homeAddHint')}</p>${wakeLockScript()}${resumeLogScript(Date.now() - parseSqliteUtc(row.occurred_at).getTime())}`;
+
+  return `${flash}
+<h1>✅ ${ui.t('trailerLogged', { t: name, bins: row.bins })}</h1>
+<div class="status trailer-lot">
+  <div class="lotmeta"><strong>→ ${lotLabel(current)}</strong></div>
+  <div class="baybig">${ui.t('trailerBayBig', { n: row.bay ?? '?' })}</div>
+</div>
+<p class="sub">${ui.t('loadNumToday', { n: loadNumber, zone: escapeHtml(row.zone) })}</p>
+${again}
+${fix}
+${home}`;
+}
+
+/**
+ * What the home-screen icon opens (Koa, 2026-10-08: "an add to Home Screen
+ * button on each scan page"). One big button that posts exactly what the
+ * decal scan does. Opening this page logs nothing.
+ */
+function trailerHomeBody(ui, trailer, { autoOpen = false } = {}) {
+  const name = trailerName(trailer);
+  return `
+<h1 class="trailer-name">${name}</h1>
+<p class="sub">${ui.t('homeLaunchHint', { t: name })}</p>
+<form method="POST" action="${API}?action=trailer_again&lang=${ui.lang}" class="again"
+      onsubmit="var b=this.querySelector('button');if(b.disabled)return false;b.disabled=true">
+  <input type="hidden" name="trailer" value="${trailer}">
+  <button class="btn again-btn launch-btn" type="submit">+ ${ui.t('homeLog', { t: name })}</button>
+  <p class="hint">${ui.t('trailerAgainHint')}</p>
+</form>
+<script>(function () {
+  // Opened from the home-screen icon (iOS keeps the page it was added from,
+  // whatever the manifest says): this IS the scan. Submit at once. In a
+  // browser tab the page waits for the tap, as the text above it says.
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  var f = document.querySelector('form.again'), b = f && f.querySelector('button');
+  if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+})();</script>
+${a2hsBlock(ui, autoOpen)}${wakeLockScript()}`;
+}
+
+/**
+ * "Add to Home Screen". Android Chrome fires beforeinstallprompt and the
+ * button can open the real install sheet; iOS has no such thing, so the
+ * button shows the two taps (Share, then Add to Home Screen). Already
+ * installed: the button says so and does nothing.
+ */
+function a2hsBlock(ui, autoOpen) {
+  return `
+<div class="a2hs">
+  <button type="button" class="btn alt a2hs-btn" id="a2hsBtn">📲 ${ui.t('homeAdd')}</button>
+  <div class="a2hs-how" id="a2hsHow" hidden>
+    <p class="a2hs-ios">${ui.t('homeHowIos')}</p>
+    <p class="a2hs-android">${ui.t('homeHowAndroid')}</p>
+    <p class="hint">${ui.t('homeWhy')}</p>
+  </div>
+</div>
+<script>(function () {
+  var b = document.getElementById('a2hsBtn'), how = document.getElementById('a2hsHow');
+  if (!b || !how) return;
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (standalone) { b.textContent = '✓ ' + ${JSON.stringify(ui.t('homeAdded'))}; b.disabled = true; return; }
+  how.className += /iphone|ipad|ipod/i.test(navigator.userAgent) ? ' ios' : ' android';
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; });
+  b.addEventListener('click', function () {
+    if (deferred) { deferred.prompt(); deferred = null; return; }
+    how.hidden = !how.hidden;
+  });
+  ${autoOpen ? 'how.hidden = false;' : ''}
+})();</script>`;
+}
+
+/**
+ * Home-screen app only (never a browser tab): when the receipt comes back to
+ * the front after RESUME_LOG_MS or more in the background, press the "Log
+ * another load" button for the driver. A cold start goes through ?app and
+ * logs on its own; this covers the warm one.
+ */
+function resumeLogScript(ageMs = 0) {
+  return `
+<script>(function () {
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (!standalone) return;
+  var MIN = ${RESUME_LOG_MS}, hiddenAt = null;
+  var press = function () {
+    var f = document.querySelector('form.again'), b = f && f.querySelector('button');
+    if (f && b && !b.disabled) { b.disabled = true; f.submit(); }
+  };
+  // Relaunched onto an old receipt (iOS reopens the last page after the app
+  // was closed): if that load is older than a trip, this open is the next one.
+  var AGE = ${Math.max(0, Math.round(ageMs))};
+  if (AGE >= MIN) { press(); return; }
+  // Brought back to the front without a reload. iOS did not deliver
+  // visibilitychange to Koa's phone (2026-10-08: a warm return only showed the
+  // old receipt), so the clock is the witness instead: a backgrounded web app
+  // is frozen, and the first tick after it wakes sees the whole gap at once.
+  var last = Date.now();
+  setInterval(function () {
+    var now = Date.now();
+    if (now - last >= MIN) { last = now; press(); return; }
+    last = now;
+  }, 5000);
+  // Every signal iOS might send on the way out and on the way back in; on
+  // Koa's iPhone a warm return delivered no visibilitychange at all.
+  var away = function () { if (!hiddenAt) hiddenAt = Date.now(); };
+  var back = function () {
+    if (!hiddenAt) return;
+    var gone = Date.now() - hiddenAt; hiddenAt = null;
+    if (gone >= MIN) press();
+  };
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') away(); else back();
+  });
+  window.addEventListener('pagehide', away);
+  window.addEventListener('blur', away);
+  document.addEventListener('freeze', away);
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', back);
+  document.addEventListener('resume', back);
+})();</script>`;
+}
+
+/** Keep the screen on while the page is open, so the next load is one tap, not unlock-then-tap. Best effort. */
+function wakeLockScript() {
+  return `
+<script>(function () {
+  if (!('wakeLock' in navigator)) return;
+  function hold() { navigator.wakeLock.request('screen').catch(function () {}); }
+  hold();
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') hold(); });
+})();</script>`;
+}
+
+/** A stored UTC timestamp (or a Date) as a Pacific wall-clock time, "2:14 PM". */
+function pacificClock(ui, ts) {
+  return (ts instanceof Date ? ts : parseSqliteUtc(ts)).toLocaleTimeString(ui.lang === 'es' ? 'es-US' : 'en-US',
+    { timeZone: HARVEST_TZ, hour: 'numeric', minute: '2-digit' });
 }
 
 // ─── CREW ROSTER RENDERING ──────────────────────────────
@@ -4905,12 +6901,53 @@ function storageOptions(ui, selected) {
     + bayOptions(ui, selected);
 }
 
-function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null) {
-  // A finished lot is not a takedown candidate, so it never reaches the radio
-  // list — nor the pre-selection, which reads the top of that list.
-  const lots = allLots.filter(l => !l.takedown_done_at);
-  const finished = allLots.filter(l => l.takedown_done_at)
+/**
+ * "Open in Chrome", for an iPhone that is NOT in Chrome (Koa, 2026-09-30).
+ *
+ * Safari on iOS — and the home-screen app, which prints through the same path —
+ * forces its own margins onto a printed page, so the tag can only come out at
+ * about 3.2 x 1.05 in of the 4 x 2 label. Chrome on iOS prints it full size.
+ * Nothing on the page can widen Safari's box, so the fallback is to hand the
+ * same screen to Chrome: `googlechromes://` is Chrome's own URL scheme for an
+ * https page.
+ *
+ * A BUTTON, not a redirect: iOS only follows an app link from a tap, and a
+ * redirect that silently did nothing would be worse than no offer at all. If
+ * Chrome is not installed the tap does nothing and the crew keeps printing
+ * here at the smaller size — which is why this is an offer and never a gate.
+ *
+ * Hidden by default and revealed by script, so every other device never sees
+ * it. `path` must be a GET that rebuilds this exact screen.
+ */
+function chromeHandoff(ui, path) {
+  const target = `${PUBLIC_BASE.replace(/^https:\/\//, '')}${path}`;
+  return `<div id="chromeHandoff" class="notice handoff" hidden>${ui.t('chromeWhy')}
+  <a class="btn" href="googlechromes://${escapeHtml(target)}">${ui.t('openInChrome')}</a>
+  <span class="hint">${ui.t('chromeHint')}</span>
+</div>
+<script>
+(function () {
+  var ua = navigator.userAgent || '';
+  // iPadOS reports itself as a Mac; touch points tell them apart.
+  var ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (ios && !/CriOS/.test(ua)) document.getElementById('chromeHandoff').hidden = false;
+})();
+</script>`;
+}
+
+function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flash = null, bays = null) {
+  // Lots hung in a bay are offered by BAY (getBayTakedown); only lots with no
+  // bay on any load keep a zone card. A finished lot is not a takedown
+  // candidate, so it never reaches the radio list — nor the pre-selection.
+  const bayInfo = bays || { active: [], finished: [], covered: new Set() };
+  const lots = allLots.filter(l => !l.takedown_done_at && !bayInfo.covered.has(l.id));
+  const finished = allLots.filter(l => l.takedown_done_at && !bayInfo.covered.has(l.id))
     .sort((a, b) => String(b.takedown_done_at).localeCompare(String(a.takedown_done_at)));
+  // Drying days from the bay's FIRST load, as a lot counts from its cut date.
+  const bayDays = (c) => Math.floor((Date.now() - c.firstMs) / 86400000);
+  const bayLevel = (c) => lotLevel({ days_since_cut: bayDays(c), sacks_printed: c.sacks });
+  const activeBays = bayInfo.active.slice().sort((a, b) =>
+    LOT_RANK[bayLevel(a)] - LOT_RANK[bayLevel(b)] || a.bay - b.bay);
   const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
 
   const closeForm = (l, reopen) => `
@@ -4918,7 +6955,7 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
       : ` data-confirm="${escapeHtml(ui.t('confirmFinish', { lot: lotLabel(ui, l), n: l.sacks_printed }))}"`}>
       <input type="hidden" value="${l.id}" name="session_id">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
       <span class="lotbody">
-        <strong>${escapeHtml(lotLabel(ui, l))}</strong>
+        <strong>${escapeHtml(lotLabel(ui, l))}</strong> ${bayPill(ui, l)}
         <span class="lotmeta">${reopen
           ? ui.t('finishedOn', { date: escapeHtml(finishedDate(ui, l.takedown_done_at)), n: l.sacks_printed })
           : escapeHtml(ui.t('noteStarted', { n: l.sacks_printed }))}</span>
@@ -4927,16 +6964,36 @@ function sackPrintFormBody(ui, allLots, lastBay = null, lastStorage = null, flas
       <button class="btn${reopen ? '' : ' alt'}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
     </form>`;
 
+  // A bay in progress or finished: Resume / Finished, or Reopen.
+  const bayForm = (c, reopen) => `
+    <form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}" class="finishrow${reopen ? ' done' : ''}"${reopen ? ''
+      : ` data-confirm="${escapeHtml(ui.t('confirmBayFinish', { bay: c.bay, cv: c.cultivar, n: c.sacks }))}"`}>
+      <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
+      <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}
+      <span class="lotbody">
+        <span class="lothead"><span class="baybig">${ui.t('bayN', { n: c.bay })}</span>
+          <strong>${escapeHtml(c.cultivar)}</strong> <span class="hint">${ui.t('cut', { n: c.cut })}</span></span>
+        ${zoneMix(c)}
+        <span class="lotmeta">${reopen
+          ? ui.t('bayFinishedOn', { date: escapeHtml(finishedDate(ui, c.doneAt)), n: c.sacks })
+          : escapeHtml(ui.t('noteStartedBay', { n: c.sacks }))}</span>
+      </span>
+      ${reopen ? '' : `<a class="btn" href="${API}?action=lot_resume&session_id=${c.primary.id}&bay=${c.bay}&lang=${ui.lang}">${ui.t('resumeLot')}</a>`}
+      <button class="btn${reopen ? '' : ' alt'}" type="submit">${ui.t(reopen ? 'reopenLot' : 'markFinished')}</button>
+    </form>`;
+
   // Open, not collapsed (Koa, 2026-09-28): tucked away, nobody found Reopen.
-  const finishedHtml = finished.length ? `
+  const nFinished = finished.length + bayInfo.finished.length;
+  const finishedHtml = nFinished ? `
 <details class="batch finished" open>
-  <summary>${ui.t('finishedLots', { n: finished.length })}</summary>
-  <div class="lotlist">${finished.map(l => closeForm(l, true)).join('')}</div>
+  <summary>${ui.t('finishedLots', { n: nFinished })}</summary>
+  <div class="lotlist">${bayInfo.finished.map(c => bayForm(c, true)).join('')}${finished.map(l => closeForm(l, true)).join('')}</div>
 </details>` : '';
 
-  if (!lots.length) {
+  if (!lots.length && !activeBays.length) {
     return `
 <h1>${ui.t('printTags')}</h1>
+${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
 ${flashHtml}
 <p class="note">${ui.t(finished.length ? 'noOpenLots' : 'noLots', { n: LOT_PICKER_DAYS })}</p>
 ${finishedHtml}`;
@@ -4945,10 +7002,11 @@ ${finishedHtml}`;
   // Only a lot with tags can be resumed or closed out from here. A lot never started has
   // nothing to finish, and listing every lot twice would bury the ones that do.
   const started = lots.filter(l => l.sacks_printed > 0);
-  const finishHtml = started.length ? `
+  const startedBays = activeBays.filter(c => c.sacks > 0);
+  const finishHtml = started.length || startedBays.length ? `
 <h2>${ui.t('finishSection')}</h2>
 <p class="note">${ui.t('finishSectionHelp')}</p>
-<div class="lotlist">${started.map(l => closeForm(l, false)).join('')}</div>` : '';
+<div class="lotlist">${startedBays.map(c => bayForm(c, false)).join('')}${started.map(l => closeForm(l, false)).join('')}</div>` : '';
 
   const BADGE = {
     ready:   { cls: 'ok',   text: ui.t('badgeReady') },
@@ -4959,10 +7017,34 @@ ${finishedHtml}`;
 
   // Pre-select ONLY when the best candidate is genuinely plausible. If the top
   // of the list is overdue/green/already-started, pre-filling it would make the
-  // dangerous option the default — force a deliberate choice instead.
-  const topIsReady = lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
+  // dangerous option the default — force a deliberate choice instead. Never
+  // with bay cards: which bay is coming down is the crew's call to make.
+  const topIsReady = !activeBays.length && lots.length > 0 && lotPlausibility(ui, lots[0]).level === 'ready';
 
-  const cards = lots.map((l, i) => {
+  const bayCard = (c) => {
+    const level = bayLevel(c);
+    const p = lotPlausibility(ui, { days_since_cut: bayDays(c), sacks_printed: c.sacks });
+    const b = BADGE[level];
+    const label = `${ui.t('bayN', { n: c.bay })} · ${c.cultivar} ${ui.t('cut', { n: c.cut })}`;
+    return `
+    <label class="lot baycard ${level}">
+      <input type="radio" name="session_id" value="${c.primary.id}"
+             data-cultivar="${escapeHtml(c.cultivar)}" data-level="${level}" data-bay="${c.bay}"
+             data-desc="${escapeHtml(label)}"
+             data-confirm="${escapeHtml(ui.t('confirmLot', { lot: label, note: p.note }))}" required>
+      <span class="lotbody">
+        <span class="lothead">
+          <span class="baybig">${ui.t('bayN', { n: c.bay })}</span>
+          <strong>${escapeHtml(c.cultivar)}</strong>
+          <span class="badge ${b.cls}">${b.text}</span>
+        </span>
+        ${zoneMix(c)}
+        <span class="lotmeta">${ui.t('cut', { n: c.cut })} · ${escapeHtml(hungDates(ui, c))} · ${escapeHtml(p.note)}${c.bins ? ` · ${ui.t('binsN', { n: c.bins.toLocaleString('en-US') })}` : ''}</span>
+      </span>
+    </label>`;
+  };
+
+  const card = (l, i) => {
     const p = lotPlausibility(ui, l);
     const b = BADGE[p.level];
     const cv = l.cultivar || '';
@@ -4970,6 +7052,7 @@ ${finishedHtml}`;
     <label class="lot ${p.level}">
       <input type="radio" name="session_id" value="${l.id}"
              data-cultivar="${escapeHtml(cv)}" data-level="${p.level}"
+             data-bay="${(l.bays || []).length === 1 ? l.bays[0] : ''}"
              data-desc="${escapeHtml(`${l.zone}${cv ? ` · ${cv}` : ''} cut ${l.cut_number}`)}"
              data-confirm="${escapeHtml(ui.t('confirmLot', {
                lot: `${l.zone}${cv ? ` · ${cv}` : ''} ${ui.t('cut', { n: l.cut_number })}`,
@@ -4979,23 +7062,38 @@ ${finishedHtml}`;
         <span class="lothead">
           <strong>${escapeHtml(l.zone)}${cv ? ` · ${escapeHtml(cv)}` : ''}</strong>
           <span class="badge ${b.cls}">${b.text}</span>
+          ${bayPill(ui, l)}
         </span>
         <span class="lotmeta">${ui.t('cut', { n: l.cut_number })} · ${escapeHtml(String(l.occurred_at).substring(0, 10))} · ${escapeHtml(p.note)}</span>
       </span>
     </label>`;
-  }).join('');
+  };
+  // Too-green lots fold into a closed section under the list (Koa, 2026-10-05:
+  // "anything that is too green should be minimized"). Still pickable — the
+  // tape can beat the dry clock — just not in the way of the lots coming down.
+  const cards = activeBays.map(c => bayLevel(c) === 'green' ? '' : bayCard(c)).join('')
+    + lots.map((l, i) => lotLevel(l) === 'green' ? '' : card(l, i)).join('');
+  const greenBays = activeBays.filter(c => bayLevel(c) === 'green');
+  const greenLots = lots.filter(l => lotLevel(l) === 'green');
+  const nGreen = greenBays.length + greenLots.length;
+  const greenHtml = nGreen ? `
+  <details class="batch greenlots">
+    <summary>${ui.t('greenLots', { n: nGreen })}</summary>
+    <div class="lotlist">${greenBays.map(bayCard).join('')}${greenLots.map(l => card(l, lots.indexOf(l))).join('')}</div>
+  </details>` : '';
 
   const firstCv = topIsReady ? (lots[0].cultivar || '') : '';
 
   return `
 <h1>${ui.t('printTags')}</h1>
+${chromeHandoff(ui, `${API}?action=sack_print&lang=${ui.lang}`)}
 ${flashHtml}
 ${finishHtml}
 ${finishHtml ? `<h2>${ui.t('startSection')}</h2>` : ''}
-<p class="note">${ui.t('pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
+<p class="note">${ui.t(activeBays.length ? 'pickBayHelp' : 'pickLotHelp', { n: DRY_DAYS_TYPICAL })}</p>
 
 <form method="POST" action="${API}?action=sack_session_start&lang=${ui.lang}" id="lotForm">
-  <div class="lotlist">${cards}</div>
+  ${cards ? `<div class="lotlist">${cards}</div>` : ''}${greenHtml}
   <label for="cultivar">${ui.t('cultivar')} <span class="hint">${ui.t('cultivarHint')}</span></label>
   <input id="cultivar" name="cultivar" required autocomplete="off" value="${escapeHtml(firstCv)}" placeholder="Sour Lifter">
   <label for="bay">${ui.t('bay')} <span class="hint">${lastBay ? ui.t('bayHintLast', { n: lastBay }) : ui.t('bayHint')}</span></label>
@@ -5024,13 +7122,29 @@ ${finishedHtml}
 
   function selected() { return form.querySelector('input[name=session_id]:checked'); }
 
+  // With every lot too green, the only radios sit in the closed section, and
+  // the browser cannot point at a required field it cannot show — so a submit
+  // with nothing picked unfolds it rather than failing silently.
+  var greenBox = form.querySelector('details.greenlots');
+  form.addEventListener('invalid', function (e) {
+    if (greenBox && e.target.name === 'session_id' && !form.querySelector('.lotlist > label.lot')) greenBox.open = true;
+  }, true);
+
   // Cultivar was captured at the zone scan, so it carries through rather than
   // being retyped at takedown — one less place for a mismatch.
-  form.addEventListener('change', function (e) {
-    if (e.target.name !== 'session_id') return;
-    var v = e.target.getAttribute('data-cultivar');
+  function applyLot(r) {
+    var v = r.getAttribute('data-cultivar');
     if (v) cv.value = v;
+    // A lot hung in one bay is taken down from that bay: set it, so the bay
+    // printed on every tag matches the card that was picked. Two bays, or
+    // none known: the field is left alone for the operator.
+    var bay = r.getAttribute('data-bay'), sel = document.getElementById('bay');
+    if (bay && sel && sel.querySelector('option[value="' + bay + '"]')) sel.value = bay;
+  }
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'session_id') applyLot(e.target);
   });
+  if (selected()) applyLot(selected());
 
   // Advisory guard, never a block: the tape and the operator's eyes beat our
   // heuristic, so an implausible pick asks for confirmation and then proceeds.
@@ -5049,12 +7163,696 @@ ${finishedHtml}
 }
 
 /**
+ * The tags-by-bay screen (handleBayTags). Every bay is a native <details>
+ * drawer, active bays by number, finished ones last. Each cultivar row carries
+ * on data-* what PRINT will post (the lot for sack_alloc, cultivar, cut, bay);
+ * the drawer under it holds the small stuff — note, short bag, reprint/void, a
+ * batch, and the per-cultivar Finished. The inline script at the end makes
+ * PRINT, the storage chip and "+ Add a cultivar" work, printing through the
+ * same HARVEST_PRINT_CLIENT as the session screen.
+ */
+function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '', todayIds = new Set(), warn = null, openBay = null } = {}) {
+  const L = `lang=${ui.lang}`;
+  const flashHtml = (flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '')
+    + (warn ? `<div class="notice">⚠️ ${escapeHtml(warn)}</div>` : '');
+  // Two keys chosen here, as tagForLot/tagsForLot are: "1 sack", never "1 sacks".
+  const nText = (n, one, many) => (n === 1 ? ui.t(one) : ui.t(many, { n }));
+  // Each bay's chip starts where THAT bay's newest tag today went (never
+  // another bay's, never yesterday's). It carries the VALUE sack_alloc takes
+  // (parseStorage: '' | 'Supermarket' | a bay number); '' sends no storage.
+  const storageOf = (bay) => (storages.get(Number(bay)) ? String(storages.get(Number(bay))) : '');
+  // Every finish here comes back here (handleBayFinish reads `back`).
+  const back = '<input type="hidden" name="back" value="bay_tags">';
+  const finishForm = (c, reopen) => `
+      <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+        <input type="hidden" name="bay" value="${c.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(c.cultivar)}">
+        <input type="hidden" name="cut" value="${c.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(c.fillStart)}">${reopen ? '<input type="hidden" name="reopen" value="1">' : ''}${back}
+        <button class="btn alt" type="submit">${reopen ? ui.t('reopenLot')
+          : escapeHtml(ui.t('finishCvBay', { c: c.cultivar, bay: c.bay }))}</button>
+      </form>`;
+
+  const row = (g, c) => {
+    const done = g.finished || !!c.doneAt;
+    const last = c.lastTag ? c.lastTag.sack_id : '';
+    const allTags = `${API}?action=sack_session&session_id=${c.primary.id}&cultivar=${encodeURIComponent(c.cultivar)}&bay=${c.bay}&${L}`;
+    return `
+  <div class="cvrow card" data-session="${c.primary.id}" data-cultivar="${escapeHtml(c.cultivar)}" data-cut="${c.cut}" data-bay="${c.bay}" data-fill="${escapeHtml(c.fillStart)}" data-last="${escapeHtml(last)}"${last && todayIds.has(last) ? ' data-lasttoday="1"' : ''}>
+    <div class="cvtop">
+    <button class="cvname" type="button" aria-expanded="false">
+      <b>${escapeHtml(c.cultivar)}</b>
+      <span class="lotmeta">${ui.t('cut', { n: c.cut })} · <span class="sackn" data-n="${c.sacks}">${nText(c.sacks, 'sackOne', 'sacksN')}</span></span>
+      ${zoneMix(c)}${c.noLoads ? `
+      <span class="hint noloads">${ui.t('noLoads')}</span>` : ''}
+    </button>
+    <button class="bigbtn printbtn" type="button"${done ? ' disabled' : ''}><span class="printword">${ui.t('printWord')}</span><span class="printcv">${escapeHtml(c.cultivar)}</span></button>
+    </div>
+    <div class="cvdrawer" hidden>
+      <details class="nextnote"><summary>${ui.t('noteNext')}</summary><textarea class="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea></details>
+      <details class="nextnote"><summary>${ui.t('fillNext')}</summary><div class="fillrow"><input class="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1" placeholder="${fullSackLbs(c.primary.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div></details>
+      <div class="lastActions"><a class="mini reprint" href="#">${ui.t('reprint')}</a> <a class="mini danger voidrow" href="#">${ui.t('void')}</a> <a class="mini" href="${allTags}">${ui.t('allTags')}</a></div>
+      <details class="batch"><summary>${ui.t('printSeveral')}</summary><p class="note">${ui.t('printSeveralHelp')}</p><div class="batchrow"><input class="batchQty" type="number" min="2" max="${MAX_PRINT_QTY}" inputmode="numeric" value="5"><button class="btn batchbtn" type="button"${done ? ' disabled' : ''}>${ui.t('printBatch')}</button></div></details>
+      ${finishForm(c, !!c.doneAt)}
+    </div>
+  </div>`;
+  };
+
+  const drawer = (g) => {
+    const fill = g.rows[0]?.fillStart || '';
+    const meta = g.finished ? ui.t('bayFinishedShort')
+      : `${nText(g.rows.length, 'cultivarOne', 'cultivarsN')} · <span class="sackstoday" data-n="${g.sacksToday}">${nText(g.sacksToday, 'sackTodayOne', 'sacksToday')}</span>`;
+    const lastTag = g.lastTag
+      ? `${ui.t('lastTagBay')} <b>${escapeHtml(g.lastTag.sack_id)}</b> · ${escapeHtml(g.lastTag.cultivar)} <a class="mini danger voidlast" href="#" data-id="${escapeHtml(g.lastTag.sack_id)}" data-cultivar="${escapeHtml(g.lastTag.cultivar)}"${todayIds.has(g.lastTag.sack_id) ? ' data-today="1"' : ''}>${ui.t('void')}</a>`
+      : ui.t('noTagsYet');
+    const foot = g.finished ? `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1"><input type="hidden" name="reopen" value="1">${back}
+    <button class="btn alt" type="submit">${ui.t('reopenWholeBay', { bay: g.bay })}</button>
+  </form>` : `
+  <form method="POST" action="${API}?action=bay_finish&${L}" class="finishlot" data-confirm="${escapeHtml(ui.t('wholeBayConfirm', { bay: g.bay }))}">
+    <input type="hidden" name="bay" value="${g.bay}"><input type="hidden" name="all" value="1">${back}
+    <button class="btn alt" type="submit">${ui.t('wholeBayDown', { bay: g.bay })}</button>
+  </form>`;
+    return `
+<details class="baydrawer${g.finished ? ' finished' : ''}" data-bay="${g.bay}" data-fill="${escapeHtml(fill)}"${g.bay === openBay ? ' open' : ''}>
+  <summary>
+    <span class="baybig">${ui.t('bayN', { n: g.bay })}</span>
+    <span class="lotmeta">${meta}</span>
+    <span class="storagechip" role="button" tabindex="0" data-bay="${g.bay}" data-value="${escapeHtml(storageOf(g.bay))}">${escapeHtml(storageOf(g.bay) ? storageLabel(ui, storageOf(g.bay)) : ui.t('storageNotSet'))}</span>
+  </summary>
+  <div class="lasttag" data-bay="${g.bay}">${lastTag}</div>
+  ${g.rows.map(c => row(g, c)).join('')}
+  <button class="btn alt addcv" type="button" data-bay="${g.bay}">${ui.t('addCultivar')}</button>
+  ${foot}
+</details>`;
+  };
+
+  const mcl = mcloughlinCultivars();
+  // As data in a script tag: a "</" in a name must not close the tag, so "<"
+  // goes out as the six characters <, which JS reads back as "<".
+  const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
+  // Strings injected as data, as on the session screen: no UI text in the JS.
+  const T = {
+    printing: ui.t('printing'), printFailed: ui.t('printFailed', { e: '{e}' }),
+    voidFailed: ui.t('voidFailed', { e: '{e}' }), voidConfirm: ui.t('confirmVoid', { id: '{id}' }),
+    printedOk: ui.t('printedOk', { id: '{id}' }),
+    printedOkN: ui.t('printedOkN', { n: '{n}', first: '{first}', last: '{last}' }), addNoMatch: ui.t('addNoMatch'), addedOk: ui.t('addedOk', { c: '{c}', bay: '{bay}' }), tagVoided: ui.t('tagVoided'),
+    lastTagBay: ui.t('lastTagBay'), noTagsYet: ui.t('noTagsYet'), void: ui.t('void'),
+    sackOne: ui.t('sackOne'), sacksN: ui.t('sacksN', { n: '{n}' }),
+    sackTodayOne: ui.t('sackTodayOne'), sacksToday: ui.t('sacksToday', { n: '{n}' }),
+    storageNotSet: ui.t('storageNotSet'),
+    ...agentPrintStrings(ui),
+  };
+  return `<nav class="topnav">
+  <a class="btn alt" href="${API}?action=hub&${L}">${ui.t('homeTools')}</a>
+  <a class="btn alt" href="${API}?action=sack_print&${L}">${ui.t('oldPicker')}</a>
+</nav>
+${chromeHandoff(ui, `${API}?action=bay_tags&${L}`)}
+<h1>${ui.t('bayTagsTitle')}</h1>
+<p class="note">${ui.t('bayTagsIntro')}</p>
+<div id="lastMsg" class="flash" hidden></div>
+${flashHtml}
+${groups.map(drawer).join('')}
+<p class="note">${ui.t('zoneLotsNote')}</p>
+<dialog id="storageSheet">
+  <h2>${ui.t('storageField')}</h2>
+  <select id="storageSel" aria-label="${escapeHtml(ui.t('storageField'))}">${storageOptions(ui, null)}</select>
+  <div class="batchrow"><button class="btn alt" id="storageCancel" type="button">${ui.t('cancel')}</button></div>
+</dialog>
+<dialog id="addSheet">
+  <h2>${ui.t('addSheetTitle')}</h2>
+  <label for="addCv">${ui.t('addCvLabel')}</label>
+  <input id="addCv" type="search" autocomplete="off" autocapitalize="none" enterkeyhint="done">
+  <!-- The matches are buttons on the page, not a native datalist: phones show a
+       datalist's suggestions late, oddly or not at all (iOS Safari), and the
+       crew member typing "crit" has to SEE Critical Berries to tap it. -->
+  <div id="addList" class="cvlist" role="listbox"></div>
+  <div id="addZones" class="zonemix"></div>
+  <p id="addErr" class="hcstat bad" hidden></p>
+  <div class="batchrow">
+    <button class="btn" id="addSave" type="button">${ui.t('addSave')}</button>
+    <button class="btn alt" id="addCancel" type="button">${ui.t('cancel')}</button>
+  </div>
+</dialog>
+<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>
+<script>${HARVEST_PRINT_CLIENT}</script>
+<script>
+(function () {
+  var T = ${json(T)};
+  var API = '${API}';
+  var LANG = '${ui.lang}';
+  var TODAY = ${json(today)};
+  var msg = document.getElementById('lastMsg');
+  // Agent mode writes its own progress into the same line.
+  var printOpts = { status: msg, statusClass: 'flash', T: T };
+
+  function fmt(s, k, v) { return String(s).split('{' + k + '}').join(v); }
+  function say(text, bad) {
+    msg.hidden = false;
+    msg.className = 'flash' + (bad ? ' bad' : '');
+    msg.textContent = text;
+  }
+  function each(sel, root, fn) { Array.prototype.forEach.call((root || document).querySelectorAll(sel), fn); }
+  // Counts live in data-n so nothing parses translated text.
+  function bump(el, d, one, many) {
+    if (!el) return;
+    var n = Math.max(0, (parseInt(el.getAttribute('data-n'), 10) || 0) + d);
+    el.setAttribute('data-n', n);
+    el.textContent = n === 1 ? one : fmt(many, 'n', n);
+  }
+
+  // ── Storage, per bay, remembered for today on this phone ──
+  var sheet = document.getElementById('storageSheet');
+  var sel = document.getElementById('storageSel');
+  function storeKey(bay) { return 'bayTags.storage.' + bay + '.' + TODAY; }
+  function readStore(bay) { try { return window.localStorage.getItem(storeKey(bay)); } catch (e) { return null; } }
+  function writeStore(bay, v) { try { window.localStorage.setItem(storeKey(bay), v); } catch (e) { /* private mode: chip still set */ } }
+  function optionFor(v) {
+    for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === v) return sel.options[i];
+    return null;
+  }
+  function setChip(chip, v) {
+    var o = v ? optionFor(v) : null;
+    chip.setAttribute('data-value', o ? v : '');
+    chip.textContent = o ? o.text : T.storageNotSet;
+  }
+  each('.storagechip', null, function (chip) {
+    var v = readStore(chip.getAttribute('data-bay'));
+    if (v !== null && (v === '' || optionFor(v))) setChip(chip, v);
+  });
+  function chipFor(bay) { return document.querySelector('.storagechip[data-bay="' + Number(bay) + '"]'); }
+  function storageOf(bay) { var c = chipFor(bay); return (c && c.getAttribute('data-value')) || null; }
+  function openModal(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  function closeModal(d) { if (d.close) d.close(); else d.removeAttribute('open'); }
+  function openStorage(chip) {
+    sheet.setAttribute('data-bay', chip.getAttribute('data-bay'));
+    sel.value = chip.getAttribute('data-value') || '';
+    openModal(sheet);
+  }
+  sel.addEventListener('change', function () {
+    var bay = sheet.getAttribute('data-bay');
+    var chip = chipFor(bay);
+    if (chip) setChip(chip, sel.value);
+    writeStore(bay, sel.value);
+    closeModal(sheet);
+  });
+  document.getElementById('storageCancel').addEventListener('click', function () { closeModal(sheet); });
+
+  // ── Last tag line on the bay header, built from nodes (ids and names are data) ──
+  function setLastTag(drawer, id, cultivar, today) {
+    var box = drawer.querySelector('.lasttag');
+    box.textContent = '';
+    if (!id) { box.textContent = T.noTagsYet; return; }
+    box.appendChild(document.createTextNode(T.lastTagBay + ' '));
+    var b = document.createElement('b'); b.textContent = id; box.appendChild(b);
+    box.appendChild(document.createTextNode(' · ' + cultivar + ' '));
+    var a = document.createElement('a');
+    a.className = 'mini danger voidlast'; a.href = '#'; a.textContent = T.void;
+    a.setAttribute('data-id', id); a.setAttribute('data-cultivar', cultivar);
+    if (today) a.setAttribute('data-today', '1');
+    box.appendChild(a);
+  }
+
+  // ── PRINT and batch ──
+  function print(row, qty, btn) {
+    // Double-tap guard, per ROW: PRINT and the batch button share it, so a
+    // PRINT then a quick batch on the same cultivar cannot both allocate.
+    if (btn.disabled || row.getAttribute('data-busy') === '1') return;
+    row.setAttribute('data-busy', '1');
+    var bay = Number(row.getAttribute('data-bay'));
+    var cultivar = row.getAttribute('data-cultivar');
+    var noteEl = row.querySelector('.noteText');
+    var fillEl = row.querySelector('.fillLbs');
+    // Only a single tag carries the note and the short weight: a batch is several bags.
+    var note = qty === 1 ? noteEl.value.trim() : '';
+    var fill = qty === 1 ? fillEl.value.trim() : '';
+    var label = btn.innerHTML;   // PRINT keeps its two lines (word + cultivar) after
+    btn.disabled = true;
+    btn.textContent = T.printing;
+    RO.allocTags(API, {
+      session_id: Number(row.getAttribute('data-session')), cultivar: cultivar, qty: qty,
+      bay: bay, storage: storageOf(bay), note: note, fill_lbs: fill,
+    })
+      .then(function (d) {
+        var ids = d.ids || [];
+        var last = ids[ids.length - 1] || d.last_sack_id;
+        var drawer = row.closest('.baydrawer');
+        bump(row.querySelector('.sackn'), ids.length, T.sackOne, T.sacksN);
+        bump(drawer.querySelector('.sackstoday'), ids.length, T.sackTodayOne, T.sacksToday);
+        row.setAttribute('data-last', last);
+        row.setAttribute('data-lasttoday', '1');
+        setLastTag(drawer, last, cultivar, true);
+        if (qty === 1) {
+          noteEl.value = ''; fillEl.value = '';
+          each('details.nextnote', row, function (dt) { dt.open = false; });
+        }
+        if (d.print_via !== 'agent') {
+          say(ids.length > 1
+            ? fmt(fmt(fmt(T.printedOkN, 'n', ids.length), 'first', ids[0]), 'last', ids[ids.length - 1])
+            : fmt(T.printedOk, 'id', ids[0] || last));
+        }
+        RO.printIds(API, ids, d.print_via, printOpts);
+        setTimeout(function () { btn.disabled = false; btn.innerHTML = label; row.removeAttribute('data-busy'); }, 1500);
+      })
+      .catch(function (e) {
+        say(fmt(T.printFailed, 'e', e.message), true);
+        btn.disabled = false;
+        btn.innerHTML = label;
+        row.removeAttribute('data-busy');
+      });
+  }
+
+  // ── Void and reprint ──
+  function rowFor(drawer, id, cultivar) {
+    var hit = null, byName = null;
+    each('.cvrow', drawer, function (r) {
+      if (!hit && id && r.getAttribute('data-last') === id) hit = r;
+      if (!byName && r.getAttribute('data-cultivar') === cultivar) byName = r;
+    });
+    return hit || byName;
+  }
+  function pacificDayOf(iso) {
+    try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }); } catch (e) { return ''; }
+  }
+  // The row's newest live tag after a void, from sack_void's d.tags (the
+  // lot's tags, newest first): same bay, printed in this fill. Not
+  // d.last_sack_id: that is the lot's newest in ANY bay, and a lot hanging in
+  // two bays would point this row's Void and Reprint at the other bay's bag.
+  function newestInRow(row, tags) {
+    var bay = Number(row.getAttribute('data-bay'));
+    var fill = Date.parse(String(row.getAttribute('data-fill') || '').replace(' ', 'T') + 'Z');
+    for (var i = 0; i < (tags || []).length; i++) {
+      var t = tags[i];
+      if (t.voided || Number(t.bay) !== bay) continue;
+      if (!isNaN(fill) && !(Date.parse(t.at) > fill)) continue;
+      return t;
+    }
+    return null;
+  }
+  function voidId(drawer, id, cultivar, today) {
+    if (!id || !confirm(fmt(T.voidConfirm, 'id', id))) return;
+    RO.voidTag(API, id)
+      .then(function (d) {
+        var row = rowFor(drawer, id, cultivar);
+        var next = row ? newestInRow(row, d && d.tags) : null;
+        var nextToday = !!(next && pacificDayOf(next.at) === TODAY);
+        if (row) {
+          bump(row.querySelector('.sackn'), -1, T.sackOne, T.sacksN);
+          if (row.getAttribute('data-last') === id) {
+            row.setAttribute('data-last', next ? next.id : '');
+            if (nextToday) row.setAttribute('data-lasttoday', '1'); else row.removeAttribute('data-lasttoday');
+          }
+        }
+        if (today) bump(drawer.querySelector('.sackstoday'), -1, T.sackTodayOne, T.sacksToday);
+        // Only when the header was showing this tag: another cultivar's last
+        // tag stays. It falls back to this row's new last, "no tags yet" only
+        // when the row has none left.
+        var head = drawer.querySelector('.voidlast');
+        if (head && head.getAttribute('data-id') === id) {
+          setLastTag(drawer, next ? next.id : null, row ? row.getAttribute('data-cultivar') : '', nextToday);
+        }
+        say('# ' + id + ' · ' + T.tagVoided);
+      })
+      .catch(function (e) { say(fmt(T.voidFailed, 'e', e.message), true); });
+  }
+
+  // ── Add a McLoughlin cultivar ──
+  var add = document.getElementById('addSheet');
+  var addCv = document.getElementById('addCv');
+  var addZones = document.getElementById('addZones');
+  var addErr = document.getElementById('addErr');
+  var addSave = document.getElementById('addSave');
+  var addBay = null, addZone = '';
+  function renderZones(zones) {
+    addZones.textContent = '';
+    addZone = '';
+    (zones || []).forEach(function (z) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'zchip zpick'; b.textContent = z;
+      b.addEventListener('click', function () {
+        addZone = z;
+        each('.zpick', addZones, function (x) { x.classList.toggle('sel', x === b); });
+      });
+      addZones.appendChild(b);
+    });
+  }
+  function canonical(v) {
+    v = String(v || '').trim().toLowerCase();
+    for (var i = 0; i < (window.MCL || []).length; i++) if (window.MCL[i].toLowerCase() === v) return window.MCL[i];
+    return null;
+  }
+  var addList = document.getElementById('addList');
+  // Matches as tappable rows. Empty box = the whole McLoughlin list, so the
+  // sheet works without typing at all; a few letters narrow it.
+  function renderList() {
+    var q = String(addCv.value || '').trim().toLowerCase();
+    var picked = canonical(addCv.value);
+    addList.textContent = '';
+    (window.MCL || []).forEach(function (c) {
+      if (q && c.toLowerCase().indexOf(q) < 0) return;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'cvpick' + (c === picked ? ' sel' : ''); b.textContent = c;
+      b.setAttribute('role', 'option');
+      b.addEventListener('click', function () { addCv.value = c; cvChanged(); addCv.blur(); });
+      addList.appendChild(b);
+    });
+    if (!addList.children.length) {
+      var none = document.createElement('div'); none.className = 'hint'; none.textContent = T.addNoMatch;
+      addList.appendChild(none);
+    }
+  }
+  function cvChanged() {
+    var name = canonical(addCv.value);
+    var zones = name && window.MCLZ ? window.MCLZ[name] : null;
+    if (zones && zones.length === 2) { if (addZones.children.length !== 2) renderZones(zones); }
+    else renderZones([]);
+    renderList();
+  }
+  addCv.addEventListener('input', cvChanged);
+  addCv.addEventListener('change', cvChanged);
+  document.getElementById('addCancel').addEventListener('click', function () { closeModal(add); });
+  addSave.addEventListener('click', function () {
+    if (addSave.disabled) return;
+    var body = { bay: addBay, cultivar: addCv.value.trim() };
+    if (addZone) body.zone = addZone;
+    addSave.disabled = true;
+    addErr.hidden = true;
+    fetch(API + '?action=lot_add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d || {} }; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (res.status === 200 && d.success) {
+          // Never silent: a clean add used to reload a page of closed drawers,
+          // which read as "nothing happened" (Koa, 2026-10-13).
+          location.href = API + '?action=bay_tags&lang=' + LANG + '&ok=1&open=' + addBay
+            + '&flash=' + encodeURIComponent(fmt(fmt(T.addedOk, 'c', d.cultivar || body.cultivar), 'bay', addBay))
+            + (d.variant_error ? '&warn=' + encodeURIComponent(d.variant_error) : '');
+          return;
+        }
+        if (d.details && d.details.zones) renderZones(d.details.zones);
+        addErr.textContent = d.error || String(res.status);
+        addErr.hidden = false;
+        addSave.disabled = false;
+      })
+      .catch(function (e) {
+        addErr.textContent = e.message;
+        addErr.hidden = false;
+        addSave.disabled = false;
+      });
+  });
+
+  // ── One delegated listener for every row and bay ──
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var chip = t.closest('.storagechip');
+    if (chip) { e.preventDefault(); openStorage(chip); return; }   // not the drawer toggle
+    var drawer = t.closest('.baydrawer');
+    var row = t.closest('.cvrow');
+    var a;
+    if ((a = t.closest('.printbtn')) && row) { print(row, 1, a); return; }
+    if ((a = t.closest('.batchbtn')) && row) {
+      var n = parseInt(row.querySelector('.batchQty').value, 10);
+      if (n >= 2) print(row, n, a);
+      return;
+    }
+    if ((a = t.closest('.voidlast')) && drawer) {
+      e.preventDefault();
+      voidId(drawer, a.getAttribute('data-id'), a.getAttribute('data-cultivar'), a.getAttribute('data-today') === '1');
+      return;
+    }
+    if (t.closest('.voidrow') && row) {
+      e.preventDefault();
+      voidId(drawer, row.getAttribute('data-last'), row.getAttribute('data-cultivar'), row.getAttribute('data-lasttoday') === '1');
+      return;
+    }
+    if (t.closest('.reprint') && row) {
+      e.preventDefault();
+      var id = row.getAttribute('data-last');
+      if (!id) { say(T.noTagsYet, true); return; }
+      RO.reprintTag(API, id, printOpts)
+        .then(function (d) { if (d.print_via !== 'agent') say(fmt(T.printedOk, 'id', id)); })
+        .catch(function (err) { say(fmt(T.printFailed, 'e', err.message), true); });
+      return;
+    }
+    if ((a = t.closest('.cvname')) && row) {
+      var mine = row.querySelector('.cvdrawer');
+      var opening = mine.hidden;
+      // One open drawer per bay: opening this one closes the other.
+      each('.cvrow', drawer, function (r) {
+        r.querySelector('.cvdrawer').hidden = true;
+        r.querySelector('.cvname').setAttribute('aria-expanded', 'false');
+      });
+      mine.hidden = !opening;
+      a.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      return;
+    }
+    if ((a = t.closest('.addcv'))) {
+      addBay = Number(a.getAttribute('data-bay'));
+      addCv.value = '';
+      renderZones([]);
+      renderList();
+      addErr.hidden = true;
+      addSave.disabled = false;
+      openModal(add);
+    }
+  });
+  // The chip is a button to the keyboard too; Enter/Space must not toggle the drawer.
+  document.addEventListener('keydown', function (e) {
+    var chip = e.target.closest && e.target.closest('.storagechip');
+    if (chip && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openStorage(chip); }
+  });
+  // Whole bay down asks first; the per-cultivar Finished does not (one tap, reopenable).
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.matches && f.matches('form[data-confirm]') && !confirm(f.getAttribute('data-confirm'))) e.preventDefault();
+  });
+})();
+</script>`;
+}
+
+// ─── PIPELINE ───────────────────────────────────────────
+// A read-only "what's coming" board for the people downstream of the barn.
+// Koa, 2026-10-01: "so Nathan and Inaiah can see what cultivars are in the
+// pipeline, with expected dates on when they will be ready".
+//
+// Two lists, and each cultivar is on exactly one of them (Koa, same day: "only
+// need to list a cultivar once, not by zone ... if they are [in supersacks],
+// they don't need to be listed in the pipeline again"):
+//   - ALREADY IN SUPERSACKS: any tag this season. Takedown starts when the
+//     first tag prints, so that is also the only "bagging" signal there is.
+//   - COMING: open lots of every other cultivar, with an expected date.
+//
+// THE DATE IS THE BAY'S, NOT THE LOT'S. "We want to take the whole bay down at
+// once" — so a lot that is dry is still waiting on whatever was hung after it
+// in the same bay. A bay is due DRY_DAYS_TYPICAL days after its newest load
+// from a still-open lot. Open lots, not the rack board's fills: a finished lot
+// has come down, and that is the boundary the fills approximate from tags.
+// A lot with no bay recorded (loads before bays were captured) falls back to
+// its own cut day.
+//
+// Cultivar, bay, dates and sack counts only — no weights or projections.
+
+async function handlePipeline(ui, db, env) {
+  const isTest = isTestMode(env) ? 1 : 0;
+  const [lots, loads, sacks] = await Promise.all([
+    getRecentLots(db, isTest),
+    // Every bay-tagged load in the picker window, filtered to open lots in JS:
+    // an IN list over session ids would outgrow D1's 100-variable cap.
+    query(db, `
+      SELECT attributed_zone_session_id AS session_id, bay, occurred_at
+      FROM harvest_scan_log
+      WHERE event_type = 'barn_load' AND is_test = ? AND bay IS NOT NULL
+        AND attributed_zone_session_id IS NOT NULL
+        AND julianday('now') - julianday(occurred_at) <= ?
+    `, [isTest, LOT_PICKER_DAYS]),
+    query(db, `
+      SELECT cultivar, COUNT(*) AS tagged, SUM(CASE WHEN opened_at IS NULL THEN 1 ELSE 0 END) AS unopened
+      FROM harvest_sacks
+      WHERE season = ? AND is_test = ? AND voided_at IS NULL AND cultivar IS NOT NULL AND TRIM(cultivar) <> ''
+      GROUP BY cultivar
+    `, [getSeason(), isTest]),
+  ]);
+  return renderPage(ui, ui.lang === 'es' ? 'Lo que viene' : "What's coming",
+    pipelineBody(ui, { lots: lots.filter(l => !l.takedown_done_at), loads, sacks }));
+}
+
+/** "YYYY-MM-DD" plus n days, calendar arithmetic only (no clock, no zone). */
+function dayPlus(day, n) {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function dayDiff(fromDay, toDay) {
+  return Math.round((Date.parse(`${toDay}T12:00:00Z`) - Date.parse(`${fromDay}T12:00:00Z`)) / 86400000);
+}
+
+function pipelineBody(ui, { lots, loads, sacks }, now = new Date()) {
+  const es = ui.lang === 'es';
+  const L = (en, sp) => (es ? sp : en);
+  const today = pacificDay(now);
+  const fmtDay = (day, opts = { weekday: 'short', month: 'short', day: 'numeric' }) =>
+    new Date(`${day}T12:00:00Z`).toLocaleDateString(es ? 'es-US' : 'en-US', { ...opts, timeZone: 'UTC' });
+  const short = (day) => fmtDay(day, { month: 'short', day: 'numeric' });
+  // Sack cultivars are typed at print time; match them to the scan log loosely.
+  const norm = (s) => String(s || '').trim().toLowerCase();
+
+  // ── Already in supersacks ──
+  // Shown under the scan log's spelling when a lot has one, else the spelling
+  // most of its tags carry.
+  const lotName = new Map(lots.filter(l => norm(l.cultivar)).map(l => [norm(l.cultivar), l.cultivar.trim()]));
+  const bagged = new Map();
+  for (const s of sacks) {
+    const k = norm(s.cultivar);
+    const b = bagged.get(k) || { cultivar: lotName.get(k), most: 0, tagged: 0, unopened: 0 };
+    if (!lotName.has(k) && (s.tagged || 0) > b.most) { b.cultivar = String(s.cultivar).trim(); b.most = s.tagged; }
+    b.tagged += s.tagged || 0;
+    b.unopened += s.unopened || 0;
+    bagged.set(k, b);
+  }
+
+  // ── Bay due dates, from every open lot (bagged cultivars included: their
+  // leftovers hang in the same bay and come down with it) ──
+  const lotOfSession = new Map();
+  for (const l of lots) for (const id of (l.session_ids || [l.id])) lotOfSession.set(id, l);
+  const bayLast = new Map();               // bay -> newest load day
+  const baysOfLot = new Map();             // lot -> Set(bay)
+  for (const ld of loads) {
+    const lot = lotOfSession.get(ld.session_id);
+    if (!lot) continue;
+    const day = pacificDay(parseSqliteUtc(ld.occurred_at));
+    if (!bayLast.has(ld.bay) || day > bayLast.get(ld.bay)) bayLast.set(ld.bay, day);
+    if (!baysOfLot.has(lot)) baysOfLot.set(lot, new Set());
+    baysOfLot.get(lot).add(ld.bay);
+  }
+  const bayDue = (bay) => dayPlus(bayLast.get(bay), DRY_DAYS_TYPICAL);
+
+  // ── Still hanging, per cultivar. A cultivar not yet in a supersack is a
+  // Coming card; one already bagged carries it as a "more drying" line
+  // (Koa, 2026-10-01: Sour Lifter's 2 sacks were a small test lot, while the
+  // crop itself is still hanging). ──
+  const drying = new Map();
+  for (const l of lots) {
+    const k = norm(l.cultivar);
+    if (!k) continue;
+    const c = drying.get(k) || { cultivar: l.cultivar.trim(), dues: [], bays: new Set(), unbayed: false };
+    const bays = baysOfLot.get(l);
+    if (bays && bays.size) {
+      for (const b of bays) { c.bays.add(b); c.dues.push(bayDue(b)); }
+    } else {
+      c.unbayed = true;
+      c.dues.push(dayPlus(pacificDay(parseSqliteUtc(l.occurred_at)), DRY_DAYS_TYPICAL));
+    }
+    drying.set(k, c);
+  }
+  for (const c of drying.values()) {
+    const sorted = c.dues.slice().sort();
+    c.first = sorted[0];
+    c.last = sorted[sorted.length - 1];
+  }
+  const comingCards = [...drying.entries()].filter(([k]) => !bagged.has(k)).map(([, c]) => c).sort((a, b) => a.first.localeCompare(b.first) || a.cultivar.localeCompare(b.cultivar));
+
+  const byNum = (a, b) => a - b;
+  const whenOf = (c) => c.first === c.last ? `~${fmtDay(c.first)}` : `~${short(c.first)} – ${short(c.last)}`;
+  const whereOf = (c) => {
+    const bays = [...c.bays].sort(byNum);
+    return [
+      bays.length ? `${bays.length > 1 ? L('Bays', 'Bahías') : L('Bay', 'Bahía')} ${bays.join(', ')}` : '',
+      c.unbayed ? L('bay not recorded', 'bahía sin registrar') : '',
+    ].filter(Boolean).join(' · ');
+  };
+  const comingCard = (c) => {
+    const when = whenOf(c);
+    const left = dayDiff(today, c.first);
+    const detail = left > 1 ? L(`in ${left} days`, `en ${left} días`)
+      : left === 1 ? L('tomorrow', 'mañana')
+      : L('due — waiting on takedown', 'ya toca — esperando la bajada');
+    const where = whereOf(c);
+    return `<article class="pcard"><h3>${escapeHtml(c.cultivar)}</h3><p class="pwhen"><strong>${escapeHtml(when)}</strong> <span>${escapeHtml(detail)}</span></p><p class="pwhere">${escapeHtml(where)}</p></article>`;
+  };
+
+  const baggedCards = [...bagged.values()].filter(b => b.unopened > 0)
+    .sort((a, b) => a.cultivar.localeCompare(b.cultivar));
+  const baggedCard = (b) => {
+    const more = drying.get(norm(b.cultivar));
+    const moreHtml = more ? `<p class="pmore">${escapeHtml(`${L('More drying', 'Más secando')} ${whenOf(more)} · ${whereOf(more)}`)}</p>` : '';
+    return `<article class="pcard"><h3>${escapeHtml(b.cultivar)}</h3><p class="pwhen"><strong>${b.unopened}</strong> <span>${b.unopened === 1
+      ? L('supersack', 'supersaco') : L('supersacks', 'supersacos')}</span></p>${moreHtml}</article>`;
+  };
+
+  const section = (color, title, sub, cards, render, empty) => `
+<section class="plane" style="--lane:${color}">
+  <div class="plane-head"><h2>${title}</h2><span class="pcount">${cards.length}</span><span class="plane-sub">${sub}</span></div>
+  ${cards.length ? `<div class="pgrid">${cards.map(render).join('')}</div>` : `<p class="pempty">${empty}</p>`}
+</section>`;
+
+  const asOf = now.toLocaleString(es ? 'es-US' : 'en-US',
+    { timeZone: HARVEST_TZ, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  return `
+<style>
+body:has(.pipe) { background: #f6f5ef; color: #263f32; }
+.pipe { max-width: 1100px; margin: 0 auto; font-family: 'Quicksand', system-ui, sans-serif; }
+.pipe h1 { font: 800 clamp(30px, 6vw, 46px)/1.05 'Karla', system-ui, sans-serif; letter-spacing: -.03em; margin: 8px 0 8px; color: #263f32; }
+.pipe .psub { color: #5d6d61; font-size: 1rem; line-height: 1.5; margin: 0 0 6px; }
+.pipe .pasof { color: #7a887d; font-size: .85rem; margin: 0 0 26px; }
+.plane { margin: 0 0 30px; }
+.plane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 0 0 10px; margin-bottom: 14px; border-bottom: 4px solid var(--lane); }
+.plane-head h2 { margin: 0; font: 800 1.5rem 'Karla', system-ui, sans-serif; color: var(--lane); text-transform: none; letter-spacing: -.01em; }
+.pcount { background: var(--lane); color: #fff; font-weight: 800; border-radius: 999px; min-width: 1.8rem; padding: 2px 9px; text-align: center; }
+.plane-sub { color: #5d6d61; font-size: .95rem; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 14px; }
+.pcard { background: #fff; border: 1px solid #dde3d6; border-left: 8px solid var(--lane); border-radius: 14px; padding: 16px 18px; }
+.pcard h3 { margin: 0 0 8px; font: 800 1.45rem/1.15 'Karla', system-ui, sans-serif; color: #263f32; }
+.pwhen { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pwhen strong { font-size: 1.3rem; color: var(--lane); }
+.pwhen span { color: #3d5246; font-weight: 600; }
+.pwhere { margin: 8px 0 0; color: #6b7a6f; font-size: .9rem; }
+.pmore { margin: 8px 0 0; color: #2d7f86; font-weight: 700; font-size: .95rem; }
+.pempty { color: #7a887d; font-style: italic; margin: 0; }
+</style>
+<div class="pipe">
+<h1>${L("What's coming", 'Lo que viene')}</h1>
+<p class="psub">${L(
+    `Each cultivar once. A bay comes down all at once, about ${DRY_DAYS_TYPICAL} days after the last load hung in it, so dates are estimates.`,
+    `Cada variedad una vez. Una bahía se baja completa, unos ${DRY_DAYS_TYPICAL} días después de la última carga colgada; las fechas son estimadas.`)}</p>
+<p class="pasof">${L('As of', 'Al')} ${escapeHtml(asOf)} · ${L('refresh for the latest', 'actualiza para ver lo último')}</p>
+${section('#2d7f86', L('Coming', 'Por venir'), L('Drying in the barn', 'Secando en el granero'),
+    comingCards, comingCard, L('Nothing drying right now.', 'Nada secando por ahora.'))}
+${section('#b8841c', L('Already in supersacks', 'Ya en supersacos'), L('Bagged this season, not yet opened', 'Embolsado esta temporada, sin abrir'),
+    baggedCards, baggedCard, L('No supersacks yet this season.', 'Todavía no hay supersacos esta temporada.'))}
+</div>`;
+}
+
+/**
+ * What agent-mode printing says while the barn PC prints (HARVEST_PRINT_CLIENT
+ * reads these from opts.T). Shared by the session and tags-by-bay screens.
+ */
+function agentPrintStrings(ui) {
+  return {
+    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
+    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
+    printAgentFailed: ui.lang === 'es'
+      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
+      : '⚠ Tag {id} did not print: {e} — use Reprint',
+    printAgentSlow: ui.lang === 'es'
+      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
+      : '⚠ No answer from the printer. Check the barn PC.',
+  };
+}
+
+/**
  * The screen the worker actually lives on during a takedown. Quantity is
  * deliberately NOT asked up front — you don't know how many sacks a rack
  * yields until it's empty, and pre-printing leaves orphan serials that can end
  * up on the next rack's sacks.
  */
-function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, storage = null, finishedAt = null, variantCheck = null, flash = null }) {
+function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, storage = null, finishedAt = null, variantCheck = null, flash = null, bayCard = null }) {
+  // Taking down a whole bay: it is finished as a bay, not as this lot.
+  if (bayCard) finishedAt = bayCard.doneAt || null;
+  const bayHidden = bayCard ? `<input type="hidden" name="bay" value="${bayCard.bay}"><input type="hidden" name="cultivar" value="${escapeHtml(bayCard.cultivar)}">
+    <input type="hidden" name="cut" value="${bayCard.cut}"><input type="hidden" name="fill_start" value="${escapeHtml(bayCard.fillStart)}">` : '';
   const q = `session_id=${lot.id}&cultivar=${encodeURIComponent(cultivar)}&lang=${ui.lang}`;
   const barn = barnForBay(bay);
   // Bay sits on the lot header rather than tucked away: it prints on every tag
@@ -5068,13 +7866,19 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
     : ui.t('storageNotSet')}</div>`;
   // A finished lot says so above everything, with Reopen right there: the print
   // buttons are off, and whoever needs one more tag should not hunt for why.
-  const notice = finishedAt ? `
+  const notice = finishedAt ? (bayCard ? `
+<div class="notice">${ui.t('bayFinishedNotice', { bay: bayCard.bay, date: escapeHtml(finishedDate(ui, finishedAt)) })}
+  <form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}">
+    ${bayHidden}<input type="hidden" name="reopen" value="1">
+    <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
+  </form>
+</div>` : `
 <div class="notice">${ui.t('lotFinishedNotice', { date: escapeHtml(finishedDate(ui, finishedAt)) })}
   <form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}">
     <input type="hidden" value="${lot.id}" name="session_id"><input type="hidden" name="reopen" value="1">
     <button class="btn alt" type="submit">${ui.t('reopenLot')}</button>
   </form>
-</div>` : '';
+</div>`) : '';
   // Printing still works when there is no variant — a Shopify gap must not stop
   // a takedown — but the crew lead sees it on the first screen, not months later.
   // A check that could not run (ok === null) stays quiet: an outage is not news
@@ -5082,10 +7886,21 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   const variantWarn = variantCheck?.ok === false ? `
 <div class="notice">⚠️ ${ui.t('variantMissing', { e: escapeHtml(variantCheck.error) })}</div>` : '';
   const flashHtml = flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : '';
-  return `${flashHtml}${notice}${variantWarn}
+  const handoff = chromeHandoff(ui, `${API}?action=sack_session&${q}`
+    + (bay === null ? '' : `&bay=${bay}`) + (storage ? `&storage=${encodeURIComponent(storage)}` : ''));
+  // Back out to another cultivar from the top, not only from the small footer
+  // link (Koa, 2026-10-05: crews work several cultivars at once). The picker's
+  // Resume brings a started lot back with its bay, so nothing is retyped.
+  const topNav = `<nav class="topnav">
+  <a class="btn alt" href="${API}?action=sack_print&lang=${ui.lang}">${ui.t('otherCultivar')}</a>
+  <a class="btn alt" href="${API}?action=hub&lang=${ui.lang}">${ui.t('homeTools')}</a>
+</nav>`;
+  return `${topNav}${handoff}${flashHtml}${notice}${variantWarn}
 <div class="lot">
   <div class="lot-cultivar">${escapeHtml(cultivar)}</div>
-  <div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>
+  ${bayCard ? `<div class="lot-meta"><span class="baybig">${ui.t('bayN', { n: bayCard.bay })}</span> ${ui.t('cut', { n: bayCard.cut })} · ${escapeHtml(hungDates(ui, bayCard))}</div>
+  <div class="lot-meta">${ui.t('bayMixLabel')} ${zoneMix(bayCard)}</div>`
+  : `<div class="lot-meta">${escapeHtml(lot.zone)} · ${ui.t('cut', { n: lot.cut_number ?? '?' })} · ${escapeHtml(formatTagDate(ui.lang, String(lot.occurred_at).substring(0, 10)))}</div>`}
   ${bayLine}
   ${storageLine}
 </div>
@@ -5097,6 +7912,16 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   <summary>${ui.t('noteNext')}</summary>
   <textarea id="noteText" maxlength="500" rows="2" placeholder="${escapeHtml(ui.t('notePlaceholder'))}"></textarea>
   <div class="hint">${ui.t('noteNextHint')}</div>
+</details>
+
+<!-- The next bag's weight when it is not a full sack — the last bag of a lot,
+     almost always (Koa, 2026-09-28). The crew had been typing it into the note
+     ("18lb"); here it is a number the ledger and the allocator can add up. -->
+<details id="nextFill" class="nextnote"${finishedAt ? ' hidden' : ''}>
+  <summary>${ui.t('fillNext')}</summary>
+  <div class="fillrow"><input id="fillLbs" type="number" inputmode="decimal" min="1" max="60" step="0.1"
+    placeholder="${fullSackLbs(lot.season || getSeason())}" aria-label="${escapeHtml(ui.t('fillNext'))}"><span>lb</span></div>
+  <div class="hint">${ui.t('fillNextHint', { n: fullSackLbs(lot.season || getSeason()) })}</div>
 </details>
 
 <button id="printBtn" class="bigbtn"${finishedAt ? ' disabled' : ''}>${ui.t('printTag')}</button>
@@ -5132,16 +7957,21 @@ function sackSessionBody(ui, { lot, cultivar, stats, tags = [], bay = null, stor
   </div>
 </details>
 
-${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
+${finishedAt ? '' : bayCard ? `<form method="POST" action="${API}?action=bay_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
+  ${bayHidden}
+  <button class="btn alt" type="submit">${ui.t('finishBay', { bay: bayCard.bay })}</button>
+  <span class="hint">${ui.t('finishBayHelp')}</span>
+</form>` : `<form method="POST" action="${API}?action=lot_finish&lang=${ui.lang}" id="finishForm" class="finishlot">
   <input type="hidden" value="${lot.id}" name="session_id">
   <button class="btn alt" type="submit">${ui.t('finishLot')}</button>
   <span class="hint">${ui.t('finishLotHelp')}</span>
 </form>`}
 
-<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
+<div class="footer"><a href="${API}?action=sack_print">${ui.t('changeLot')}</a> · <a href="${API}?action=find">${ui.t('findLink')}</a> · <a href="${API}?action=bajada&lang=${ui.lang}">${ui.lang === 'es' ? 'Bajada por hora' : 'Hourly takedown'}</a> · <a href="${API}?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a></div>
 
 <iframe id="printFrame" title="print" style="position:absolute;width:0;height:0;border:0;left:-9999px"></iframe>
 
+<script>${HARVEST_PRINT_CLIENT}</script>
 <script>
 (function () {
   var Q = '${q}';
@@ -5156,16 +7986,10 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     confirmVoid: ui.t('confirmVoid', { id: '{id}' }),
     confirmFinish: ui.t('confirmFinish', { lot: lotLabel(ui, lot, cultivar), n: '{n}' }),
     printTagNote: ui.t('printTagNote'), noteSavedOn: ui.t('noteSavedOn', { id: '{id}' }),
+    printTagFill: ui.t('printTagFill', { n: '{n}' }), fillSavedOn: ui.t('fillSavedOn', { id: '{id}', n: '{n}' }),
     reprint: ui.t('reprint'), void: ui.t('void'), tagList: ui.t('tagList', { n: '{n}' }),
     tagVoided: ui.t('tagVoided'), tagOpened: ui.t('tagOpened'),
-    printingOnAgent: ui.lang === 'es' ? 'Imprimiendo…' : 'Printing…',
-    printedOnAgent: ui.lang === 'es' ? '✓ Etiqueta impresa' : '✓ Tag printed',
-    printAgentFailed: ui.lang === 'es'
-      ? '⚠ No salió la etiqueta {id}: {e} — usa Reimprimir'
-      : '⚠ Tag {id} did not print: {e} — use Reprint',
-    printAgentSlow: ui.lang === 'es'
-      ? '⚠ La impresora no contesta. Revisa la PC del granero.'
-      : '⚠ No answer from the printer. Check the barn PC.',
+    ...agentPrintStrings(ui),
   })};
   var btn = document.getElementById('printBtn');
   var batchBtn = document.getElementById('batchBtn');
@@ -5205,7 +8029,9 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
       var row = el('div', 'tagrow' + (t.voided ? ' voided' : ''));
       var info = el('span', 'taginfo');
       info.appendChild(el('strong', 'tagid', '# ' + t.id));
-      if (t.at) info.appendChild(el('span', 'tagwhen', new Date(t.at).toLocaleString(TAG_LOCALE, TAG_TIME)));
+      var when = t.at ? new Date(t.at).toLocaleString(TAG_LOCALE, TAG_TIME) : '';
+      if (t.fill != null) when += (when ? ' · ' : '') + t.fill + ' lb';
+      if (when) info.appendChild(el('span', 'tagwhen', when));
       row.appendChild(info);
       var acts = el('span', 'tagacts');
       if (t.voided) {
@@ -5236,11 +8062,22 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     btn.textContent = b ? (label || T.printing) : idleLabel();
   }
 
+  var fillBox = document.getElementById('nextFill');
+  var fillInput = document.getElementById('fillLbs');
   function pendingNote() { return noteText.value.trim(); }
-  // The button names what it will do: a waiting note goes out with the tag.
-  function idleLabel() { return pendingNote() ? T.printTagNote : T.printTag; }
+  function pendingFill() { return fillInput.value.trim(); }
+  // The button names what it will do: a waiting note or weight goes out with
+  // the tag. The weight wins the label — it changes the numbers, a note does not.
+  function idleLabel() {
+    if (pendingFill()) return T.printTagFill.replace('{n}', pendingFill());
+    return pendingNote() ? T.printTagNote : T.printTag;
+  }
   noteText.addEventListener('input', function () {
     noteBox.classList.toggle('pending', !!pendingNote());
+    if (!busy) btn.textContent = idleLabel();
+  });
+  fillInput.addEventListener('input', function () {
+    fillBox.classList.toggle('pending', !!pendingFill());
     if (!busy) btn.textContent = idleLabel();
   });
 
@@ -5260,113 +8097,34 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     }
   }
 
-  // Who prints: the server decides, per allocation, and says so in the alloc
-  // response. NOT a page-level flag — this page can have been open for an hour,
-  // and a stale decision would print the tag twice (iframe here AND the agent).
-  // WebKit scopes window.print() to the TOP-LEVEL document, not the iframe that
-  // called it — so on an iPhone the hidden-iframe trick prints the takedown
-  // screen instead of the tag (Koa, 2026-09-21, in Chrome on iOS; Chrome there
-  // is WebKit underneath, so this is not Safari-only). Desktop Chrome scopes it
-  // to the frame, which is why the barn PC has always worked.
-  var iframePrintUnreliable = ${IFRAME_PRINT_UNRELIABLE_SRC};
-  var topLevelPrint = iframePrintUnreliable(
-    navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
-
-  function print(ids, via) {
-    if (via === 'agent') { watchPrint(ids); return; }  // the barn PC prints it
-    var url = '${API}?action=sack_label&ids=' + encodeURIComponent(ids.join(','));
-    if (window.navigator.standalone === true) {
-      // Running as an iOS home-screen app (Koa, 2026-09-25). There are no tabs
-      // in there: window.open either fails or lands in a view with no way
-      // back. Go to the label page in place; it lays the tag out for the app's
-      // print path and offers history.back() to return here for the next bag.
-      window.location.href = url + '&back=1';
-      return;
-    }
-    if (topLevelPrint) {
-      // A separate tab, so window.print() runs at top level where WebKit will
-      // honour it. Opened from the button's own click handler, so it counts as
-      // user-initiated and is not treated as a popup. The takedown screen stays
-      // loaded underneath with its lot, bay and count intact.
-      //
-      // NAMED, not '_blank': every tag reuses this one tab instead of opening a
-      // fresh one per sack. popup=1 tells the label page to close itself when
-      // printing is done, so the crew lands back here rather than closing a tab
-      // per bag all day (Koa, 2026-09-21).
-      var w = window.open(url + '&popup=1', 'rf_tag_print');
-      // Blocked anyway (a locked-down browser): navigate rather than silently
-      // printing nothing. The label page carries a link back to the lot.
-      if (!w) window.location.href = url;
-      return;
-    }
-    frame.src = url;
-  }
-
-  // In agent mode the crew no longer watches a tag appear as confirmation, so
-  // the screen has to supply it. Queued is NOT printed: the serial is already
-  // spent and the Shopify count already moved, so showing a tick on the
-  // strength of an enqueue would hide exactly the failure the ack exists for.
-  function watchPrint(ids) {
-    var tries = 0;
-    agentMsg.hidden = false;
-    agentMsg.className = 'hcstat';
-    agentMsg.textContent = T.printingOnAgent;
-    (function poll() {
-      tries += 1;
-      fetch('${API}?action=print_check', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: ids }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          var st = (d && d.status) || {};
-          var states = ids.map(function (id) { return (st[id] || {}).status; });
-          var failed = ids.filter(function (id) { return (st[id] || {}).status === 'failed'; });
-          if (failed.length) {
-            agentMsg.className = 'hcstat bad';
-            agentMsg.textContent = T.printAgentFailed
-              .replace('{id}', failed[0])
-              .replace('{e}', (st[failed[0]] || {}).error || '');
-            return;
-          }
-          if (states.every(function (x) { return x === 'done'; })) {
-            agentMsg.className = 'hcstat ok';
-            agentMsg.textContent = T.printedOnAgent;
-            return;
-          }
-          // ~30s. Long enough for a rack of tags, short enough that a stopped
-          // agent is noticed while the crew is still at the printer.
-          if (tries < 40) return setTimeout(poll, 750);
-          agentMsg.className = 'hcstat bad';
-          agentMsg.textContent = T.printAgentSlow;
-        })
-        .catch(function () { if (tries < 40) setTimeout(poll, 1500); });
-    })();
-  }
+  // Who prints (agent or this browser, and how) lives in the shared print
+  // client, HARVEST_PRINT_CLIENT, so this screen and bay_tags cannot drift.
+  var API = '${API}';
+  var printOpts = { frame: frame, status: agentMsg, statusClass: 'hcstat', T: T };
+  function print(ids, via) { RO.printIds(API, ids, via, printOpts); }
 
   function alloc(qty) {
     if (busy) return;           // guards the double-tap: two serials, one sack
     // Only PRINT TAG carries the note: a batch is several bags. The note waits
     // in its box for the next single tag instead.
     var note = qty === 1 ? pendingNote() : '';
+    var fill = qty === 1 ? pendingFill() : '';
     setBusy(true);
-    fetch('${API}?action=sack_alloc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note })
-    })
-      .then(function (r) { return r.json(); })
+    RO.allocTags(API, { session_id: ${lot.id}, cultivar: ${JSON.stringify(cultivar)}, qty: qty, bay: ${bay === null ? 'null' : bay}, storage: ${JSON.stringify(storage)}, note: note, fill_lbs: fill })
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Print failed');
         print(d.ids, d.print_via); refresh(d);
+        var saved = [];
         if (d.note_on) {
           // Saved with the tag: clear the box so it cannot ride onto the next one.
           noteText.value = ''; noteBox.classList.remove('pending'); noteBox.open = false;
-          noteMsg.innerHTML = T.noteSavedOn.replace('{id}', d.note_on);
-          noteMsg.hidden = false;
-        } else {
-          noteMsg.hidden = true;
+          saved.push(T.noteSavedOn.replace('{id}', d.note_on));
         }
+        if (d.fill_on) {
+          fillInput.value = ''; fillBox.classList.remove('pending'); fillBox.open = false;
+          saved.push(T.fillSavedOn.replace('{id}', d.fill_on).replace('{n}', d.fill_lbs));
+        }
+        noteMsg.innerHTML = saved.join('<br>');
+        noteMsg.hidden = !saved.length;
         setBusy(false);
       })
       .catch(function (e) {
@@ -5383,20 +8141,8 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
 
   function reprintTag(id) {
     if (!id) return;
-    // A jam is the most time-critical recovery there is, so it must work on
-    // every handset. ALWAYS ask the server which way to print — this page may
-    // have been loaded without allocating anything, so there is no local answer
-    // that can be trusted, and guessing 'browser' is the path WebKit breaks.
-    fetch('${API}?action=print_reprint', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id }),
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Reprint failed');
-        if (d.print_via === 'agent') watchPrint([id]);
-        else print([id], 'browser');
-      })
+    // The shared client asks the server which way to print (see its comment).
+    RO.reprintTag(API, id, printOpts)
       .catch(function (err) { alert(T.printFailed.replace('{e}', err.message)); });
   }
 
@@ -5404,14 +8150,8 @@ ${finishedAt ? '' : `<form method="POST" action="${API}?action=lot_finish&lang=$
     if (!id || busy) return;
     if (!confirm(T.confirmVoid.replace('{id}', id))) return;
     setBusy(true, T.voiding);
-    fetch('${API}?action=sack_void', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sack_id: id })
-    })
-      .then(function (r) { return r.json(); })
+    RO.voidTag(API, id)
       .then(function (d) {
-        if (!d.success) throw new Error(d.error || 'Void failed');
         refresh(d); setBusy(false);
       })
       .catch(function (e) { setBusy(false); alert(T.voidFailed.replace('{e}', e.message)); });
@@ -6117,10 +8857,12 @@ function formatTagDate(lang, iso) {
  * 2026-09-16: "a dashboard/ect that has all these accessible through it").
  *
  * Links only — no season data — so it needs no password; the pages that carry
- * numbers keep their own. Three tools are deliberately NOT links: a zone sign
- * (/z/) opens a cutting session, /fin closes the day, and a crew card (/c/)
- * tags the phone. Opening those from a menu would write real records, so they
- * are shown as "scan only" with where the printed code lives.
+ * numbers keep their own. Two tools are deliberately NOT links: a zone sign
+ * (/z/) opens a cutting session and /fin closes the day. Opening those from a
+ * menu would write real records, so they are shown as "scan only" with where
+ * the printed code lives. A trailer decal (/t/) writes nothing until its
+ * button is pressed, but it is still shown as a scan: it belongs to the
+ * driver standing at the trailer, not to a menu.
  */
 function hubBody(ui) {
   const es = ui.lang === 'es';
@@ -6252,7 +8994,7 @@ body:has(.harvest-hub) > .testband { margin: 0; }
 </a>
 <div class="hub-workbench">
  <section class="hub-start"><h2>${L('Keep the harvest moving.', 'Que la cosecha siga.')}</h2><p>${L('Bring a load in. Get the next bag tagged.', 'Recibe una carga. Etiqueta la siguiente bolsa.')}</p>
- <div class="hub-actions"><a href="${API}?action=sack_print&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>
+ <div class="hub-actions"><a href="${API}?action=bay_tags&${q}">${L('Print sack tags', 'Imprimir etiquetas')} <span aria-hidden="true">↗</span></a><a href="/b?${q}">${L('Barn intake', 'Recibo de cargas')} <span aria-hidden="true">↗</span></a></div></section>
  <section class="hub-lookup"><label for="hub-query">${L('Find a sack', 'Buscar bolsa')}</label><p id="hub-query-help">${L('Enter the code or number printed on the tag.', 'Ingresa el código o número impreso en la etiqueta.')}</p>
  <form class="hub-search" method="GET" action="${API}">
   <input type="hidden" name="action" value="find"><input type="hidden" name="lang" value="${ui.lang}">
@@ -6265,24 +9007,28 @@ ${[L('Field', 'Campo'), L('Barn', 'Bodega'), L('Takedown', 'Bajada'), L('Bags', 
 </nav>
 ${lane(1, LANE[0], L('Field', 'Campo'), L('cutting crews', 'cuadrillas de corte'), [
     scan(L('Zone sign', 'Letrero de zona'), L('Starts cutting a zone: cultivar and crew size.', 'Empieza a cortar una zona: cultivar y número de cortadores.'), '/z/Z8'),
-    scan(L('Crew card', 'Tarjeta de cuadrilla'), L('Scan once per phone to set Crew A or B.', 'Escanéala una vez por teléfono: Cuadrilla A o B.'), '/c/A · /c/B'),
     scan(L('End of day', 'Fin del día'), L('Closes the zone that is open.', 'Cierra la zona que esté abierta.'), '/fin'),
-    card(`${API}?action=print_codes&${q}`, L('Print signs &amp; cards', 'Imprimir letreros y tarjetas'), L('Every zone sign, crew card and barn code as QR codes.', 'Todos los letreros, tarjetas y códigos de bodega en QR.')),
+    card(`${API}?action=print_codes&${q}`, L('Print signs &amp; decals', 'Imprimir letreros y códigos'), L('Every zone sign, trailer decal and barn code as QR codes.', 'Todos los letreros, códigos de traila y de bodega en QR.')),
   ])}
 ${lane(2, LANE[1], L('Barn', 'Bodega'), L('trailers in, racks hung', 'trailas y racks'), [
-    card(`/b?${q}`, L('Barn intake', 'Recibo de cargas'), L('Log a trailer: zone, bins and the bay it is hung in.', 'Anota una traila: zona, cajas y la bahía donde se cuelga.')),
+    scan(L('Trailer decal', 'Código de traila'), L('The driver scans it at every drop-off: lot, bay, one tap.', 'El chofer lo escanea en cada descarga: lote, bahía, un toque.'), '/t/1 … /t/6'),
+    card(`/b?${q}`, L('Barn intake (fallback)', 'Recibo de cargas (respaldo)'), L('When a trailer code is missing: log it here with zone, bins and bay.', 'Si falta el código de la traila: anótala aquí con zona, cajas y bahía.')),
     card(`${API}?action=crew&${q}`, L('Hourly crew report', 'Reporte por hora'), L('On the hour: who is working and how many sticks went up.', 'Cada hora: quién está trabajando y cuántos palos se colgaron.')),
   ])}
 ${lane(3, LANE[2], L('Takedown', 'Bajada'), L('bagging and tagging', 'embolsar y etiquetar'), [
-    card(`${API}?action=sack_print&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('Pick the lot, set bay and storage, print a tag per bag. Notes and Finished are here.', 'Escoge el lote, bahía y lugar, imprime una etiqueta por bolsa. Notas y Terminado van aquí.'), '', true),
+    card(`${API}?action=bay_tags&${q}`, L('Print sack tags', 'Imprimir etiquetas'), L('One screen. Open the bay, press PRINT beside the cultivar. Notes, weight and Finished are in the row.', 'Una pantalla. Abre la bahía y pulsa IMPRIMIR junto a la variedad. Notas, peso y Terminado van en la fila.'), '', true),
+    card(`${API}?action=sack_print&${q}`, L('Old lot picker', 'Selector anterior'), L('The lot-by-lot screen. Sour Lifter zone-lots without a bay card are here.', 'La pantalla lote por lote. Los lotes de Sour Lifter sin tarjeta de bahía están aquí.'), '', false),
+    card(`${API}?action=bajada&${q}`, L('Hourly takedown report', 'Bajada por hora'), L('On the hour: people by role and sticks taken down. Sacks come from the tags.', 'Cada hora: personas por puesto y palos bajados. Las bolsas salen de las etiquetas.')),
     card(`${API}?action=sack_label&examples=1&${q}`, L('Example tags', 'Etiquetas de ejemplo'), L('Test the printer. No real numbers, no Shopify.', 'Prueba la impresora. Sin números reales ni Shopify.')),
     card(`${API}?action=sack_label&sheet=avery5163&calibrate=1&${q}`, L('Avery calibration sheet', 'Hoja de calibración Avery'), L('Laser fallback: check the sheet lines up.', 'Respaldo láser: revisa que la hoja cuadre.')),
   ])}
 ${lane(4, LANE[3], L('Bags', 'Bolsas'), L('storage to opening', 'del almacén a abrirlas'), [
+    card(`/salida?${q}`, L('Sack scan-out', 'Salida de bolsas'), L('Scan or type a sack as it goes to the line: off the Shopify count and onto its order.', 'Escanea o escribe la bolsa al salir a la línea: baja del conteo de Shopify y queda en su pedido.'), null, true),
     card(`${API}?action=find&${q}`, L('Find a sack', 'Buscar bolsa'), L('Look up any tag by code or number; recent tags listed.', 'Busca cualquier etiqueta por código o número; muestra las recientes.')),
     scan(L('Bag page', 'Página de la bolsa'), L('The QR on each tag: details, location, weights, notes, open the sack.', 'El QR de cada etiqueta: datos, ubicación, pesos, notas, abrir la bolsa.'), '/s/26-RAINGQ-7'),
   ])}
 ${lane(5, LANE[4], L('Oversight', 'Supervisión'), L('for the office', 'para la oficina'), [
+    card(`${API}?action=pipeline&${q}`, L("What's coming", 'Lo que viene'), L('Cultivars drying in the barn with expected dates, and what is already in supersacks.', 'Variedades secando en el granero con fechas estimadas, y lo que ya está en supersacos.')),
     card(`${API}?action=harvest_dash`, L('Harvest dashboard', 'Tablero de cosecha'), L('Rack board, storage, cycle times.', 'Racks, almacén, tiempos de ciclo.'), PW),
     card(`${API}?action=board_page`, L('Lot board', 'Tablero de lotes'), L('Every lot from untested to supersacked.', 'Cada lote, de sin probar a embolsado.'), PW),
     card(`${API}?action=reconcile_page&season=${getSeason()}`, L('Reconcile with Shopify', 'Cuadrar con Shopify'), L('Unopened bags vs the Super Sack count, per cut.', 'Bolsas sin abrir contra el conteo de Super Sacks, por corte.'), L('DATA', 'DATOS')),
@@ -6491,7 +9237,9 @@ ${canMove ? `<details class="batch">
     { cls: 'waste', label: ui.t('wWaste'), v: num(sack.waste_lbs), derived: true },
   ].filter(p => p.v !== null);
   const hasWeights = parts.length > 0;
-  const fill = CONSTANTS.supersackLbs.value;   // 37 lb; null would hide the reference, not fake it
+  // What went into THIS bag: its weighed fill, else a full sack for its crop
+  // year (35 lb from 2026, 37 before). Never null.
+  const fill = sackLbs(sack);
   const measured = sack.weights_source === 'measured';
   const srcBadge = `<span class="badge ${measured ? 'ok' : 'warn'}">${measured ? ui.t('srcMeasuredBadge') : ui.t('srcAllocatedBadge')}</span>`;
   const srcLine = measured ? ui.t('weightsMeasured') : ui.t('weightsAllocated');
@@ -6513,7 +9261,23 @@ ${canMove ? `<details class="batch">
   <p class="note" style="margin:0">${ui.t('voidedNoOpen')}</p>
 </div>`;
   } else if (!opened) {
+    // The bag's weight, and a way to correct it until it is opened — after that
+    // the day's output has been split by it, so it is fixed.
+    const full = fullSackLbs(sack.season);
+    const weighed = sack.fill_lbs !== null && sack.fill_lbs !== undefined;
     weights = `<div class="card">
+  <p class="note" style="margin:0 0 6px"><strong>${ui.t('bagWeight')}:</strong> ${weighed
+    ? ui.t('bagWeighed', { n: lb(Number(sack.fill_lbs)) }) : ui.t('bagFull', { n: full })}</p>
+  <details class="batch" style="margin:0 0 12px">
+    <summary>${ui.t('fillChange')}</summary>
+    <form method="POST" action="/api/harvest?action=sack_fill&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
+      <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
+      <div class="fillrow"><input name="fill_lbs" type="number" inputmode="decimal" min="1" max="60" step="0.1"
+        value="${weighed ? lb(Number(sack.fill_lbs)) : ''}" placeholder="${full}" aria-label="${escapeHtml(ui.t('bagWeight'))}"><span>lb</span></div>
+      <p class="hint" style="margin:0 0 8px">${ui.t('fillChangeHint', { n: full })}</p>
+      <button class="btn" type="submit">${ui.t('fillSave')}</button>
+    </form>
+  </details>
   <p class="note" style="margin:0 0 12px">${ui.t('notOpened')}</p>
   <form method="POST" action="/api/harvest?action=sack_open&lang=${ui.lang}" onsubmit="this.querySelector('button[type=submit]').disabled=true">
     <input type="hidden" name="sack_id" value="${escapeHtml(sack.sack_id)}">
@@ -6630,7 +9394,7 @@ ${canMove ? `<details class="batch">
     : `<p class="note"><span class="hint">${ui.t('noNotes')}</span></p>`;
 
   return `<div class="sd">
-<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language">${ui.crew ? `<span>${ui.t('crewTag', { crew: ui.crew })}</span>` : ''}<a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></span></div>
+<div class="sd-brand"><img class="sd-logo" src="${SACK_BRAND_LOGO}" alt="Rogue Origin" width="76" height="76"><span class="sd-brand-caption">${ui.lang === 'es' ? 'Del campo a la flor' : 'From field to flower'}</span><span class="sd-language"><a href="${escapeHtml(ui.toggle)}" data-lang-swap>${ui.t('langOther')}</a></span></div>
 ${flash ? `<div class="flash">✅ ${escapeHtml(flash)}</div>` : ''}
 ${head}
 ${notes.length ? `<div class="flash" style="margin-top:18px"><strong>${ui.t('secNotes')}</strong><br>${notes.map(n => escapeHtml(n.note)).join('<br>')}</div>` : ''}
@@ -6666,3 +9430,8 @@ ${noteList}
 <div class="footer"><a href="/api/harvest?action=hub&lang=${ui.lang}">${ui.lang === 'es' ? 'Todas las herramientas' : 'All harvest tools'}</a> · <a href="/api/harvest?action=sack_label&lang=${ui.lang}&id=${encodeURIComponent(sack.sack_id)}">${ui.t('reprintTag')}</a></div>
 </div>`;
 }
+
+const SACK_OUT_DEPS = {
+  isTestMode, getSeason, normalizeSackId, demoKey, pacificToday, pacificDayRange,
+  takeSackOut: (...a) => takeSackOut(...a), adjustSupersackCount,
+};
