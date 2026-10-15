@@ -6,6 +6,17 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-10-14 — scan sacks out to an order, and size the order from this year's crop
+
+- `workers/src/handlers/harvest-sack-out.js`, `harvest-salida-*.js`, `lib/sack-out.js`, `vendor/jsqr.js` — the `/salida` water spider page (PRs #98–#102): one scan per 2026 sack as it goes to the trim line, by camera, Socket S720 scanner or typed number; proposed order from the wholesale queue; undo; Today list; offline queue. Migration 0045 adds `out_order_id/out_order_source/out_by`.
+- `workers/src/handlers/harvest-d1.js` — `takeSackOut()` with in-flight/debt guards; cut change asks once then moves every open crew in the zone (PR #104).
+- PR #119 — the Today count is order-wide (`sacks_out` of `sacks_total`), not sacks still to pull.
+- PR #120 — `lib/sack-rates.js` `preferSeason()`: a cultivar's current-season history sets its sack rate once it has 10 sacks; `wholesale-d1.js` history query grouped by season.
+- D1 data: 28 `cultivar_aliases` rows for the 2026 "/ Nth Cut" titles (no migration file yet; see wiki todo).
+- Wiki context: wiki/seasons/2026/journal/2026-10-14.md
+
+---
+
 ## 2026-09-24 — make the harvest record say what actually happened
 
 - `workers/src/handlers/harvest-d1.js` — the cultivar is picked, never guessed.
