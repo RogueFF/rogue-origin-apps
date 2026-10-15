@@ -10,6 +10,7 @@ import { successResponse, parseBody, getAction, getQueryParams } from '../lib/re
 import { createError } from '../lib/errors.js';
 import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
 import { laneStatus, seasonWindow } from '../lib/bin-math.js';
+import { validateBinConfig } from '../lib/bin-config.js';
 
 const SHEET_NAME = '12.12 Supplies';
 
@@ -1091,6 +1092,75 @@ async function getBinStatus(request, env) {
   return successResponse({ success: true, lanes, unmapped });
 }
 
+/** POST ?action=receiveBins {cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?} */
+async function receiveBins(body, env) {
+  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
+  const cfg = await queryOne(env.DB, 'SELECT * FROM kanban_bin_config WHERE card_id = ?', [cardId]);
+  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
+  const boxes = Number(body.boxes || 0), leftover = Number(body.leftoverBins || 0);
+  if (!Number.isInteger(boxes) || boxes < 0 || !Number.isInteger(leftover) || leftover < 0) {
+    throw createError('VALIDATION_ERROR', 'boxes/leftoverBins must be whole numbers ≥ 0');
+  }
+  // Overrides go through the same rules as setBinConfig (bags_per_bin is a divisor).
+  const override = validateBinConfig({ bagsPerBox: body.bagsPerBox, bagsPerBin: body.bagsPerBin });
+  if (override.error && override.error !== 'nothing to set') throw createError('VALIDATION_ERROR', override.error);
+  const perBox = override.data?.bags_per_box ?? cfg.bags_per_box, per = override.data?.bags_per_bin ?? cfg.bags_per_bin;
+  const before = await computeLane(env, await laneRow(env, cardId));
+  const recount = Math.abs(leftover * per - before.onHand) > per;
+  const bags = leftover * per + boxes * perBox;
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, lot, by, note, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(cardId, 'receive', Math.ceil(bags / per), per, body.lot || null, body.by || null, `leftover ${leftover} bins + ${boxes} boxes × ${perBox}`, at),
+    env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'receive'),
+    env.DB.prepare('UPDATE kanban_bin_config SET bags_per_box = ?, bags_per_bin = ?, updated_at = ? WHERE card_id = ?').bind(perBox, per, at, cardId),
+    env.DB.prepare(`UPDATE kanban_reorder_requests SET status='ordered', closed_at=?, closed_by='receive' WHERE card_id = ? AND status='open'`).bind(at, cardId),
+  ]);
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, lane, recount, estimateBefore: before.onHand });
+}
+
+/** POST ?action=recount {cardId, sealedBins, by?} — physical count resets the baseline. */
+async function recount(body, env) {
+  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
+  const sealedBins = Number(body.sealedBins);
+  if (body.sealedBins == null || !Number.isInteger(sealedBins) || sealedBins < 0) throw createError('VALIDATION_ERROR', 'sealedBins must be a whole number ≥ 0');
+  const cfg = await queryOne(env.DB, 'SELECT bags_per_bin FROM kanban_bin_config WHERE card_id = ?', [cardId]);
+  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
+  await laneRow(env, cardId);
+  const per = cfg.bags_per_bin, bags = sealedBins * per;
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, by, at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(cardId, 'recount', sealedBins, per, body.by || null, at),
+    env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'recount'),
+  ]);
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, lane });
+}
+
+/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, colour?} — upsert. */
+async function setBinConfig(body, env) {
+  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
+  const { data, error } = validateBinConfig(body);
+  if (error) throw createError('VALIDATION_ERROR', error);
+  const card = await queryOne(env.DB, 'SELECT id FROM kanban_cards WHERE id = ?', [cardId]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  const at = new Date().toISOString();
+  const exists = await queryOne(env.DB, 'SELECT card_id FROM kanban_bin_config WHERE card_id = ?', [cardId]);
+  const cols = Object.keys(data);
+  if (exists) {
+    await execute(env.DB, `UPDATE kanban_bin_config SET ${cols.map(c => `${c} = ?`).join(', ')}, updated_at = ? WHERE card_id = ?`,
+      [...cols.map(c => data[c]), at, cardId]);
+  } else {
+    const row = { seed_per_month: 0, ...data, card_id: cardId, updated_at: at };
+    const keys = Object.keys(row);
+    await execute(env.DB, `INSERT INTO kanban_bin_config (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`, keys.map(k => row[k]));
+  }
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, lane });
+}
+
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -1121,6 +1191,9 @@ export async function handleKanbanD1(request, env, ctx) {
     getRecipes: () => getRecipes(env),
     setRecipe: () => setRecipe(body, env),
     getBinStatus: () => getBinStatus(request, env),
+    receiveBins: () => receiveBins(body, env),
+    recount: () => recount(body, env),
+    setBinConfig: () => setBinConfig(body, env),
   };
 
   if (!action || !actions[action]) {
