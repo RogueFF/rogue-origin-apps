@@ -8,6 +8,7 @@ import { readSheet } from '../lib/sheets.js';
 import { sendEmail } from '../lib/mailer.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
+import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
 
 const SHEET_NAME = '12.12 Supplies';
 
@@ -963,6 +964,32 @@ async function getOrderHistory(request, env) {
   return successResponse({ success: true, orders, count: orders.length });
 }
 
+/**
+ * POST ?action=orderUsage&secret=<WEBHOOK_SECRET>  — Shopify Flow "Order created".
+ * Writes one kanban_usage row per (line item × recipe). Idempotent on
+ * (source, ref, card_id, variant_id), so Flow retries are harmless.
+ * Secret check mirrors the production inventory webhook (header or ?secret=).
+ */
+async function orderUsage(body, request, env, ctx) {
+  const secret = env.WEBHOOK_SECRET;
+  if (secret) {
+    const header = request.headers.get('X-Webhook-Secret');
+    const param = new URL(request.url).searchParams.get('secret');
+    if (header !== secret && param !== secret) throw createError('UNAUTHORIZED', 'bad secret');
+  }
+  let order;
+  try { order = parseFlowOrder(body); } catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+  const recipes = await query(env.DB, 'SELECT variant_id, card_id, qty FROM kanban_recipes');
+  const rows = usageRowsFor(order, recipes);
+  if (rows.length === 0) return successResponse({ success: true, written: 0, unmapped: 0, touched: [] });
+  await env.DB.batch(rows.map(r => env.DB.prepare(
+    'INSERT OR IGNORE INTO kanban_usage (card_id, qty, source, ref, variant_id, at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(r.card_id, r.qty, r.source, r.ref, r.variant_id, r.at)));
+  const touched = [...new Set(rows.filter(r => r.card_id > 0).map(r => r.card_id))];
+  // Task 10 adds: ledger trigger check for `touched`
+  return successResponse({ success: true, written: rows.length, unmapped: rows.filter(r => !r.card_id).length, touched });
+}
+
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -988,6 +1015,8 @@ export async function handleKanbanD1(request, env, ctx) {
     reorderRequest: () => showReorderRequest(request, env),
     closeReorderRequest: () => closeReorderRequest(body, env),
     getReorderRequests: () => getReorderRequests(request, env),
+    // Grove bins — design doc 2026-10-14
+    orderUsage: () => orderUsage(body, request, env, ctx),
   };
 
   if (!action || !actions[action]) {
