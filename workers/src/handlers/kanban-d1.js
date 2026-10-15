@@ -9,8 +9,12 @@ import { sendEmail } from '../lib/mailer.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
+import { laneStatus, seasonWindow } from '../lib/bin-math.js';
 
 const SHEET_NAME = '12.12 Supplies';
+
+/** Grove 10 LB card: its usage comes from production (inventory_adjustments), not the Shopify ledger. */
+const TEN_LB_CARD = 99;
 
 /**
  * Vendors whose reordering runs outside the Friday cart. Scanning one of these
@@ -1015,6 +1019,78 @@ async function setRecipe(body, env) {
   return successResponse({ success: true });
 }
 
+// ── Grove bins: lane status (design §5) ─────────────────────────────────────
+
+async function laneRows(env, cardId) {
+  const where = cardId ? 'WHERE c.card_id = ?' : '';
+  return query(env.DB, `
+    SELECT c.*, k.item, k.crumbtrail, k.supplier,
+      (SELECT id FROM kanban_bin_cards b WHERE b.card_id = c.card_id AND b.kind='red' AND b.retired=0 ORDER BY id DESC LIMIT 1) AS redCardId,
+      (SELECT token FROM kanban_bin_cards b WHERE b.card_id = c.card_id AND b.kind='red' AND b.retired=0 ORDER BY id DESC LIMIT 1) AS redToken
+    FROM kanban_bin_config c JOIN kanban_cards k ON k.id = c.card_id ${where} ORDER BY k.item`, cardId ? [cardId] : []);
+}
+
+/** One lane row or NOT_FOUND (config without a kanban_cards row drops out of the JOIN). */
+async function laneRow(env, cardId) {
+  const row = (await laneRows(env, cardId))[0];
+  if (!row) throw createError('NOT_FOUND', 'no bin lane for this card');
+  return row;
+}
+
+/**
+ * Bags consumed for a card in (fromIso, toIso]. Card 99 (10 lb) reads production's
+ * inventory_adjustments. Its timestamps are ISO (toISOString in logBag and the
+ * webhook fallback; the Shopify Flow passes its own ISO through), so the string
+ * comparison is sound.
+ */
+async function usageSum(env, cardId, fromIso, toIso = null) {
+  if (cardId === TEN_LB_CARD) {
+    const r = await queryOne(env.DB, `SELECT COUNT(*) AS n FROM inventory_adjustments
+      WHERE size = '10lb' AND quantity_adjusted > 0 AND timestamp > ? ${toIso ? 'AND timestamp <= ?' : ''}`, toIso ? [fromIso, toIso] : [fromIso]);
+    return Number(r?.n || 0);
+  }
+  const r = await queryOne(env.DB, `SELECT COALESCE(SUM(qty),0) AS n FROM kanban_usage
+    WHERE card_id = ? AND source NOT LIKE '%unmapped' AND at > ? ${toIso ? 'AND at <= ?' : ''}`, toIso ? [cardId, fromIso, toIso] : [cardId, fromIso]);
+  return Number(r?.n || 0);
+}
+
+async function computeLane(env, row, today = new Date()) {
+  const cardId = row.card_id;
+  const baseline = await queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]);
+  const first = await queryOne(env.DB, cardId === TEN_LB_CARD
+    ? `SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size='10lb'`
+    : `SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, cardId === TEN_LB_CARD ? [] : [cardId]);
+  const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / 86400000) : 0;
+  const since56 = new Date(today.getTime() - 56 * 86400000).toISOString();
+  // seasonWindow gives YYYY-MM-DD; a date prefix sorts correctly against ISO `at`.
+  const win = seasonWindow(today, row.lead_days, row.safety_days);
+  const seasonRaw = await usageSum(env, cardId, win.from, win.to);
+  const red = baseline ? await queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]) : null;
+  const openReq = await queryOne(env.DB, `SELECT id, requested_at AS requestedAt, notify_state AS notifyState FROM kanban_reorder_requests WHERE card_id = ? AND status='open'`, [cardId]);
+  const s = laneStatus({
+    per: row.bags_per_bin, lead: row.lead_days, safety: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month,
+    baseline: baseline ? { bags: baseline.bags, at: baseline.at } : { bags: 0, at: '1970-01-01T00:00:00.000Z' },
+    usageSince: baseline ? await usageSum(env, cardId, baseline.at) : 0,
+    usage56: await usageSum(env, cardId, since56), usageDays,
+    seasonUsage: seasonRaw > 0 ? seasonRaw : null,
+    redScanned: !!red, today,
+  });
+  return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
+    config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month },
+    baseline: baseline || null, redCard: row.redToken ? { id: row.redCardId, token: row.redToken } : null, openRequest: openReq || null, ...s };
+}
+
+/** GET ?action=getBinStatus[&cardId=] → { lanes:[…], unmapped:[{variant_id, qty, lastSeen}] } */
+async function getBinStatus(request, env) {
+  const { cardId } = getQueryParams(request);
+  const rows = await laneRows(env, cardId ? Number(cardId) : null);
+  const lanes = [];
+  for (const r of rows) lanes.push(await computeLane(env, r));
+  const unmapped = await query(env.DB, `SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen FROM kanban_usage
+    WHERE source='shopify:unmapped' AND at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days') GROUP BY variant_id ORDER BY qty DESC`);
+  return successResponse({ success: true, lanes, unmapped });
+}
+
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -1044,6 +1120,7 @@ export async function handleKanbanD1(request, env, ctx) {
     orderUsage: () => orderUsage(body, request, env, ctx),
     getRecipes: () => getRecipes(env),
     setRecipe: () => setRecipe(body, env),
+    getBinStatus: () => getBinStatus(request, env),
   };
 
   if (!action || !actions[action]) {
