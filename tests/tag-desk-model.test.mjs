@@ -207,4 +207,11 @@ test('lane rate line: bags per week with its source', () => {
   assert.equal(laneRateLine({ rate: 20, rateSource: 'season' }, true), '~140/sem (otoño pasado)');
   assert.equal(laneRateLine({ rate: 3.3, rateSource: 'seed' }), '~23/wk (estimate)');
   assert.equal(laneRateLine({ rate: null, rateSource: 'seed' }), '—');
+  assert.equal(laneRateLine({ rate: 0, rateSource: 'ledger' }), '—');
+  assert.equal(laneRateLine({ rate: -1, rateSource: 'ledger' }), '—');
+});
+
+test('lane headline never reassures on an unknown status', () => {
+  assert.equal(laneHeadline({ status: undefined, orderBy: null, runOut: '2027-01-01' }, '2026-10-14'), 'ORDER NOW');
+  assert.equal(laneHeadline({ status: 'weird', orderBy: '2026-10-10' }, '2026-10-14'), 'ORDER NOW · 4 days late');
 });

@@ -23,7 +23,9 @@ let RAW = {};
 async function fetchModel() {
   const d = await api.loadAll();
   RAW = Object.fromEntries(d.cards.map(c => [c.id, c]));
-  return buildModel({ ...d, today: todayISO(), levelsChanged: L.levelsChanged, archived: L.archived, undone: L.undone });
+  const M = buildModel({ ...d, today: todayISO(), levelsChanged: L.levelsChanged, archived: L.archived, undone: L.undone });
+  M.bins = d.bins; // Grove lanes, straight from getBinStatus
+  return M;
 }
 async function reload() { const M = await fetchModel(); setModel(M, RAW); }
 

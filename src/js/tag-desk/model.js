@@ -193,11 +193,11 @@ export function baseState(c, M, L) {
   return c.n ? 'ok' : 'no-history';
 }
 /**
- * @param {object} L desk memory slice: ordered {id: vendor}, groveOrdered {id}, backorder {id}, out {id}, dismissed {id: untilISO}, received {id: ISO}
+ * @param {object} L desk memory slice: ordered {id: vendor}, backorder {id}, out {id}, dismissed {id: untilISO}, received {id: ISO}
  */
 export function cardState(c, M, L = {}) {
   if (c.inCart) return 'queued';
-  if (L.ordered?.[c.id] || L.groveOrdered?.[c.id]) return 'on-order';
+  if (L.ordered?.[c.id]) return 'on-order';
   if (L.backorder?.[c.id] || L.out?.[c.id]) return 'due';
   if (L.dismissed?.[c.id] && L.dismissed[c.id] > M.today) return 'ok';
   if (c.openRequest) return 'requested';
@@ -262,7 +262,7 @@ export function scanPlan(c, { red = false } = {}) {
 // ---------- Grove bin lanes (worker getBinStatus) ----------
 /** The one line a lane tile leads with. `today` is 'YYYY-MM-DD'. Pure. */
 export function laneHeadline(lane, today, es = false) {
-  if (lane.status === 'order') {
+  if (lane.status !== 'soon' && lane.status !== 'ok') {   // 'order', or anything unknown: never reassuring by default
     const late = lane.orderBy && lane.orderBy < today ? daysBetween(lane.orderBy, today) : 0;
     const head = es ? 'PEDIR YA' : 'ORDER NOW';
     return late > 0 ? `${head} · ${late} ${es ? 'días tarde' : 'days late'}` : head;
@@ -273,7 +273,8 @@ export function laneHeadline(lane, today, es = false) {
 const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'] };
 /** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. Pure. */
 export function laneRateLine(lane, es = false) {
-  if (lane.rate == null || !Number.isFinite(Number(lane.rate))) return '—';
+  const rate = Number(lane.rate);
+  if (lane.rate == null || !Number.isFinite(rate) || rate <= 0) return '—';
   const src = RATE_SOURCE[lane.rateSource];
-  return `~${Math.round(Number(lane.rate) * 7)}/${es ? 'sem' : 'wk'}${src ? ` (${src[es ? 1 : 0]})` : ''}`;
+  return `~${Math.round(rate * 7)}/${es ? 'sem' : 'wk'}${src ? ` (${src[es ? 1 : 0]})` : ''}`;
 }

@@ -40,7 +40,7 @@ export const getRecipes = () => apiGet(EP, 'getRecipes').then(ok);
 export const setRecipe = body => apiPost(EP, 'setRecipe', body).then(ok);
 
 export async function loadAll() {
-  // bins: a worker without the bins migration still loads the Desk.
-  const [cards, cart, orders, requests, bins] = await Promise.all([getCards(), getCart(), getOrders(), getRequests(), getBinStatus().catch(() => ({ lanes: [], unmapped: [] }))]);
+  // bins: a worker without the bins migration still loads the Desk; the Grove tab says why it is empty.
+  const [cards, cart, orders, requests, bins] = await Promise.all([getCards(), getCart(), getOrders(), getRequests(), getBinStatus().catch(e => ({ lanes: [], unmapped: [], unavailable: String(e?.message || e) }))]);
   return { cards, cart, orders, requests, bins };
 }
