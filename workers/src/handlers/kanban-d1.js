@@ -446,7 +446,10 @@ async function addToCart(body, env, ctx) {
 
   // Vendors handled outside the Friday cart never touch kanban_cart.
   if (isReorderAlertVendor(card.supplier)) {
-    return successResponse(await raiseReorderRequest(card, env, ctx));
+    // A Grove card with a bin lane gets the order-by email; one without keeps the old body.
+    const rows = await laneRows(env, card.id);
+    const lane = rows[0] ? await computeLane(env, rows[0]) : null;
+    return successResponse(await raiseReorderRequest(card, env, ctx, lane));
   }
 
   // UPSERT: if card_id already in cart, bump qty; else insert new row
@@ -480,7 +483,7 @@ async function addToCart(body, env, ctx) {
  * Returns a plain payload ({ success, mode, request }); HTTP callers wrap it in
  * successResponse, internal callers (scanCard) use it directly.
  */
-async function raiseReorderRequest(card, env, ctx) {
+async function raiseReorderRequest(card, env, ctx, lane = null) {
   const existing = await queryOne(
     env.DB,
     `SELECT id, requested_at AS requestedAt, notify_state AS notifyState,
@@ -499,7 +502,7 @@ async function raiseReorderRequest(card, env, ctx) {
     // scan can ever re-trigger it, and nobody finds out until the shelf is bare.
     const retried = existing.notifyState !== 'sent';
     if (retried) {
-      const job = notifyReorderHandler(env, card, existing.id, existing.closeToken);
+      const job = notifyReorderHandler(env, card, existing.id, existing.closeToken, lane);
       if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
       else await job;
     }
@@ -529,10 +532,10 @@ async function raiseReorderRequest(card, env, ctx) {
   });
 
   if (ctx && typeof ctx.waitUntil === 'function') {
-    ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken));
+    ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken, lane));
   } else {
     // No ctx (direct call / test): don't drop the notification silently.
-    await notifyReorderHandler(env, card, id, closeToken);
+    await notifyReorderHandler(env, card, id, closeToken, lane);
   }
 
   return {
@@ -557,7 +560,8 @@ async function raiseReorderRequest(card, env, ctx) {
  * to act; the item name alone means looking the amount up somewhere else.
  * Fields the card happens to be missing are omitted rather than printed empty.
  */
-export function buildReorderEmailBody(card, confirmUrl) {
+export function buildReorderEmailBody(card, confirmUrl, lane = null) {
+  if (lane) return groveLaneEmailBody(card, confirmUrl, lane);
   const facts = [
     ['Item', card.item],
     ['Order', card.order_qty],
@@ -574,11 +578,36 @@ export function buildReorderEmailBody(card, confirmUrl) {
   );
 }
 
+/** 'YYYY-MM-DD' → 'Sep 15' (UTC); missing → '—'. */
+const fmtMD = (iso) => iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—';
+const fmtN = (x) => Number(x).toLocaleString('en-US');
+const RATE_SOURCE = { ledger: 'from the usage ledger', season: "last fall's pace", seed: 'seed estimate' };
+
+/**
+ * Grove bin lane email (design §7): the order-by date leads, because that is
+ * the decision; then how much, what is left, how fast it goes, when it runs out.
+ */
+function groveLaneEmailBody(card, confirmUrl, lane) {
+  const rate = Number(lane.rate) || 0, moq = lane.config?.moq, lead = lane.config?.leadDays ?? 75;
+  const cover = rate > 0 ? ` ≈ ${Math.round(lane.suggestedQty / rate / 30.4)} months of cover` : '';
+  const facts = [
+    ['Suggest', `${fmtN(lane.suggestedQty)}${moq && lane.suggestedQty === moq ? ' (MOQ)' : ''}${cover}`],
+    ['On hand', `${fmtN(lane.onHand)} bags (${lane.bins} bins)`],
+    ['Using', rate > 0 ? `~${fmtN(Math.round(rate * 7))} / week (${RATE_SOURCE[lane.rateSource] || lane.rateSource})` : null],
+    ['Runs out', lane.runOut ? `~${fmtMD(lane.runOut)} · lead ${lead} days` : null],
+    ['Location', card.crumbtrail],
+    ['Supplier', card.supplier],
+  ].filter(([, v]) => v);
+  return `${card.item} — order by ${fmtMD(lane.orderBy)}.\n\n` +
+    facts.map(([k, v]) => `${k}: ${v}`).join('\n') +
+    `\n\nOnce you've placed the order, mark it done here:\n${confirmUrl}\n\n— Rogue Origin supply kanban`;
+}
+
 /**
  * Send the alert and record the outcome on the request row. Never throws — a
  * send failure must land in notify_state, not bubble out of ctx.waitUntil.
  */
-async function notifyReorderHandler(env, card, requestId, closeToken) {
+async function notifyReorderHandler(env, card, requestId, closeToken, lane = null) {
   const confirmUrl =
     `${env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev'}` +
     `/api/kanban?action=reorderRequest&token=${closeToken}`;
@@ -588,7 +617,7 @@ async function notifyReorderHandler(env, card, requestId, closeToken) {
       to: env.DAMON_EMAIL,
       cc: env.REORDER_CC || undefined,
       subject: `Reorder needed: ${card.item}`,
-      text: buildReorderEmailBody(card, confirmUrl),
+      text: buildReorderEmailBody(card, confirmUrl, lane),
     });
 
     await update(
@@ -666,6 +695,18 @@ async function closeReorderRequest(body, env) {
     'id = ?',
     [row.id]
   );
+
+  // Closing is the order being placed: log it in kanban_orders so Grove orders
+  // show in the Desk history beside the Friday-cart vendors.
+  const card = await queryOne(env.DB, 'SELECT k.id, k.item, k.supplier FROM kanban_reorder_requests r JOIN kanban_cards k ON k.id = r.card_id WHERE r.id = ?', [row.id]);
+  const cfg = card ? await queryOne(env.DB, 'SELECT moq FROM kanban_bin_config WHERE card_id = ?', [card.id]) : null;
+  if (card) {
+    await insert(env.DB, 'kanban_orders', {
+      vendor: card.supplier || 'Grove',
+      placed_by: body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link',
+      items_json: JSON.stringify([{ cardId: card.id, item: card.item, qty: cfg?.moq || null }]),
+    });
+  }
 
   return successResponse({ success: true, alreadyClosed: false });
 }
@@ -1245,7 +1286,10 @@ async function scanCard(body, env, ctx) {
   // event is left behind to flip the lane to 'order' with nobody told. (Not a
   // transaction — a failure between the two leaves an open request without the
   // event, which the next scan repairs; the reverse would be a silent dead end.)
-  const { request } = await raiseReorderRequest(card, env, ctx);
+  // The email's lane is read before the red event exists (only status depends on it);
+  // the response's lane is read after, so it shows 'order'.
+  const emailLane = await computeLane(env, await laneRow(env, bc.card_id));
+  const { request } = await raiseReorderRequest(card, env, ctx, emailLane);
   // Raw insert: kanban_bin_events is not in db.js VALID_TABLES, and `at` is set explicitly (ISO).
   await env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bin_card, by, at) VALUES (?, ?, ?, ?, ?)')
     .bind(bc.card_id, 'red', bc.id, shortText(body.by), new Date().toISOString()).run();
