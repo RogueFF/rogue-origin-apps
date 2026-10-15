@@ -1040,9 +1040,9 @@ async function laneRow(env, cardId) {
 
 /**
  * Bags consumed for a card in (fromIso, toIso]. Card 99 (10 lb) reads production's
- * inventory_adjustments. Its timestamps are ISO (toISOString in logBag and the
- * webhook fallback; the Shopify Flow passes its own ISO through), so the string
- * comparison is sound.
+ * inventory_adjustments. Code-written timestamps there are ISO (toISOString in
+ * logBag and the webhook fallback), so the string comparison holds; the inventory
+ * Flow passes its own Timestamp through unchanged — assumed ISO, not verified.
  */
 async function usageSum(env, cardId, fromIso, toIso = null) {
   if (cardId === TEN_LB_CARD) {
