@@ -43,6 +43,7 @@ Full steps: `docs/guides/grove-email-intake.md`.
 - [ ] Bags per box for the custom sizes.
 - [ ] Where the open bin lives: rack or bench (default: **bench**).
 - [ ] Do 1/4 lb and 1/2 lb really use the **1 LB** bag? The recipe seed assumes they do.
+- [ ] **Where else are 10 lb bags consumed, outside the barn scans?** The 10 lb lane only counts `MANUAL-10LB-BAG` rows from the barn (`usageSum` in `kanban-d1.js`). Koa orders 6 cases × 100 = 600 every ~2 weeks and still runs out, so either the barn scans miss some bags or another use exists (wholesale packing, samples, waste). Until Koa answers, the usage source stays as is; the email intake only adds the deliveries side.
 
 ## 7. Wiki
 - [ ] Log the go-live in the farm wiki `wiki/log.md` and close the Grove todo.
