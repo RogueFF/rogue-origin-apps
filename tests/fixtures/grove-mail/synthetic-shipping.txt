@@ -1,0 +1,17 @@
+Subject: A shipment from order #18234 is on the way
+
+Your order is on the way
+Your order is on its way. Track your shipment to see the delivery status.
+
+Shipped on October 13, 2026
+Estimated delivery: Oct 17
+
+UPS tracking number: 1Z999AA10123456784
+Track your package: https://www.ups.com/track?tracknum=1Z999AA10123456784
+
+Items in this shipment
+10 LB Grove Bags - Case of 100 × 6
+Custom 1 oz Bags (Rogue Origin) - Case of 500 × 5
+
+Rogue Family Farms
+Medford OR 97501

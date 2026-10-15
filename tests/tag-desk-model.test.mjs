@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   checkDays, nextCheckAfter, addDays, localDay, zoneOf, deliveryDays, parsePrice,
   normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl, amazonQueueUrl, walmartCartUrl,
-  laneHeadline, laneRateLine, fmtMD,
+  laneHeadline, laneRateLine, laneOrderLine, fmtMD,
 } from '../src/js/tag-desk/model.js';
 
 const card = (o) => ({ id: 1, item: 'Packing Tape', supplier: 'Uline', orderQty: 'x72', orderWhen: '36', deliveryTime: '1 Day', price: '$2.10', crumbtrail: 'Supply Rack > A-1', url: '', picture: '', imageFile: '', ...o });
@@ -196,6 +196,18 @@ test('lane headline: order / soon / ok, both languages', () => {
   assert.equal(laneHeadline({ status: 'soon', orderBy: '2026-10-29' }, '2026-10-14', true), 'Pedir antes del 29 oct');
   assert.equal(laneHeadline({ status: 'ok', runOut: '2027-02-10' }, '2026-10-14', true), 'Bien hasta 10 feb');
   assert.equal(laneHeadline({ status: 'ok', runOut: null }, '2026-10-14'), 'OK until —');
+});
+
+test('lane order line: ordered / shipped / overdue / delivered from getBinStatus `order`, both languages', () => {
+  const T = '2026-10-20';
+  assert.equal(laneOrderLine(null, T), null);
+  assert.equal(laneOrderLine({ stage: 'ordered', qtyOrdered: 600, expectedAt: '2026-10-29T16:00:00.000Z' }, T), '600 on order · arrives Oct 29');
+  assert.equal(laneOrderLine({ stage: 'ordered', qtyOrdered: 2500, expectedAt: '2026-12-28T16:00:00.000Z', expectedEstimated: true }, T, true), '2,500 pedido · llega ~28 dic');
+  assert.equal(laneOrderLine({ stage: 'ordered', qtyOrdered: null, expectedAt: null }, T), 'on order');
+  assert.equal(laneOrderLine({ stage: 'shipped', qtyOrdered: 600, trackingNo: '1Z999AA10123456784', carrier: 'ups', expectedAt: '2026-10-17T12:00:00.000Z' }, T), '600 shipped · UPS 1Z999AA10123456784 · arrives Oct 17');
+  assert.equal(laneOrderLine({ stage: 'overdue', qtyOrdered: 600, trackingNo: '1Z999AA10123456784', carrier: 'ups', expectedAt: '2026-10-17T12:00:00.000Z' }, T), 'OVERDUE · 600 expected Oct 17 (3 days) · UPS 1Z999AA10123456784');
+  assert.equal(laneOrderLine({ stage: 'overdue', qtyOrdered: 600, expectedAt: '2026-10-19T12:00:00.000Z' }, T, true), 'ATRASADO · 600 se esperaba el 19 oct (1 día)');
+  assert.equal(laneOrderLine({ stage: 'delivered', qtyOrdered: 600, deliveredAt: '2026-10-17T19:05:00.000Z' }, T), '600 delivered Oct 17 · received automatically');
 });
 
 test('fmtMD is pure: explicit language, dash for empty', () => {

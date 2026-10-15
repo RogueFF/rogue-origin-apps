@@ -25,11 +25,14 @@ test.afterAll(() => { if (server) server.kill(); });
 const laneFixture = () => [
   { cardId: 21, item: 'Custom 1 Oz Bags', crumbtrail: 'Grove Rack > A-1', colour: 'orange', config: { bagsPerBox: 500, bagsPerBin: 50, leadDays: 75, safetyDays: 30, moq: 2500, seedPerMonth: 600 },
     baseline: { bags: 2400, at: '2026-08-02T17:00:00.000Z', reason: 'receive' }, redCard: { id: 301, token: 'tok21' }, openRequest: { id: 77, requestedAt: '2026-08-25 18:00:00', notifyState: 'sent' },
-    onHand: 1500, bins: 30, rate: 20, rateSource: 'ledger', reorderPoint: 2100, redTapeAtBins: 42, suggestedQty: 2500, runOut: '2026-11-17', orderBy: '2026-08-20', status: 'order', recount: false },
+    onHand: 1500, bins: 30, rate: 20, rateSource: 'ledger', reorderPoint: 2100, redTapeAtBins: 42, suggestedQty: 2500, runOut: '2026-11-17', orderBy: '2026-08-20', status: 'order', recount: false, order: null },
   { cardId: 99, item: '10 LB GROVE BAGS', crumbtrail: 'Grove Bags Rack > E-1', colour: 'slate', config: { bagsPerBox: 100, bagsPerBin: 50, leadDays: 75, safetyDays: 30, moq: 2500, seedPerMonth: 90 },
     baseline: { bags: 650, at: '2026-08-20T17:00:00.000Z', reason: 'recount' }, redCard: null, openRequest: null,
-    onHand: 600, bins: 12, rate: 3, rateSource: 'seed', reorderPoint: 315, redTapeAtBins: 7, suggestedQty: 2500, runOut: '2027-01-15', orderBy: '2026-11-01', status: 'ok', recount: false },
+    onHand: 600, bins: 12, rate: 3, rateSource: 'seed', reorderPoint: 315, redTapeAtBins: 7, suggestedQty: 2500, runOut: '2027-01-15', orderBy: '2026-11-01', status: 'ok', recount: false,
+    // The order in flight from the email intake (design §9b): shipped, UPS, due Sep 5.
+    order: { id: 501, stage: 'shipped', qtyOrdered: 600, trackingNo: '1Z999AA10123456784', carrier: 'ups', vendorRef: '18234', orderedAt: '2026-08-28T16:00:00.000Z', shippedAt: '2026-09-01T12:00:00.000Z', expectedAt: '2026-09-05T12:00:00.000Z', expectedEstimated: false, deliveredAt: null, closedBy: 'email' } },
 ];
+const reviewFixture = () => [{ id: 9, receivedAt: '2026-09-02T15:00:00.000Z', from: 'orders@grovebags.com', subject: 'Order #18240 confirmed', missing: ['qty'], kind: 'order' }];
 
 function mockApi(page, { today = '2026-09-03T21:00:00Z', bins = true } = {}) {
   const cards = JSON.parse(fs.readFileSync(path.join(FIX, 'cards.json'), 'utf8')).cards;
@@ -37,7 +40,7 @@ function mockApi(page, { today = '2026-09-03T21:00:00Z', bins = true } = {}) {
   const orders = JSON.parse(fs.readFileSync(path.join(FIX, 'orders.json'), 'utf8')).orders;
   const requests = JSON.parse(fs.readFileSync(path.join(FIX, 'requests.json'), 'utf8')).requests;
   const calls = [];
-  const lanes = laneFixture(); const unmapped = [{ variant_id: '4455667788', qty: 12, lastSeen: '2026-09-01' }];
+  const lanes = laneFixture(); const unmapped = [{ variant_id: '4455667788', qty: 12, lastSeen: '2026-09-01' }]; const review = reviewFixture();
   const laneOf = id => lanes.find(l => l.cardId === Number(id));
   let nextCart = 900, nextOrder = 500;
   const rows = () => Object.values(cart).flat();
@@ -67,7 +70,8 @@ function mockApi(page, { today = '2026-09-03T21:00:00Z', bins = true } = {}) {
       case 'update': { const c = findCard(body.id); Object.assign(c, body); return json({ success: true, message: 'Card updated' }); }
       case 'add': { const c = { id: 200, ...body }; cards.push(c); return json({ success: true, id: 200 }); }
       case 'delete': { const i = cards.findIndex(c => c.id === Number(body.id)); if (i >= 0) cards.splice(i, 1); return json({ success: true }); }
-      case 'getBinStatus': return bins ? json({ success: true, lanes, unmapped }) : route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'no such table: kanban_bin_config' }) });
+      case 'markMailHandled': { const i = review.findIndex(m => m.id === Number(body.id)); if (i >= 0) review.splice(i, 1); return json({ success: true, id: body.id }); }
+      case 'getBinStatus': return bins ? json({ success: true, lanes, unmapped, review }) : route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'no such table: kanban_bin_config' }) });
       case 'receiveBins': { const l = laneOf(body.cardId); const before = l.onHand; const per = body.bagsPerBin || l.config.bagsPerBin, perBox = body.bagsPerBox || l.config.bagsPerBox; l.bins = body.leftoverBins + Math.ceil(body.boxes * perBox / per); l.onHand = body.leftoverBins * l.config.bagsPerBin + body.boxes * perBox; l.status = 'ok'; l.openRequest = null; return json({ success: true, lane: l, needsRecount: true, estimateBefore: before }); }
       case 'recount': { const l = laneOf(body.cardId); l.bins = body.sealedBins; l.onHand = body.sealedBins * l.config.bagsPerBin; return json({ success: true, lane: l }); }
       case 'setBinConfig': { const l = laneOf(body.cardId); const { cardId, colour, ...cfg } = body; Object.assign(l.config, cfg); if (colour) l.colour = colour; return json({ success: true, lane: l }); }
@@ -269,6 +273,32 @@ test('grove: one tile per lane, headline from the lane, red tape line, request a
   expect(await page.$eval('.lane-tile[data-lane="21"]', e => e.classList.contains('st-order'))).toBe(true);
   expect(await page.$eval('#view-grove', e => e.innerText)).toMatch(/Shopify items with no bag recipe \(1\)/);
   expect(errs).toEqual([]);
+});
+
+test('grove: the order line from the email intake, the Receive prefill, and the needs-review strip', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(`${PAGE}?view=grove`); await page.waitForSelector('.lane-tile');          // ?view= lands on the tab (the Telegram link)
+  expect(await page.$eval('.lane-tile[data-lane="99"] .lt-order', e => e.innerText)).toBe('600 shipped · UPS 1Z999AA10123456784 · arrives Sep 5');
+  expect(await page.$eval('.lane-tile[data-lane="99"] .lt-order', e => e.classList.contains('st-shipped'))).toBe(true);
+  expect(await page.$('.lane-tile[data-lane="21"] .lt-order')).toBeNull();
+  // Overdue reads red (the class the CSS colours), with the days late.
+  api.lanes[1].order = { ...api.lanes[1].order, stage: 'overdue', expectedAt: '2026-08-30T12:00:00.000Z' };
+  await page.click('.tabs [data-view="order"]'); await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  await page.click('.lane-tile[data-lane="99"] [data-rc]'); await page.waitForSelector('#recv[open]'); await page.fill('#rcSealed', '12'); await page.click('#rvSave'); await page.waitForSelector('.toast');
+  expect(await page.$eval('.lane-tile[data-lane="99"] .lt-order', e => e.innerText)).toBe('OVERDUE · 600 expected Aug 30 (4 days) · UPS 1Z999AA10123456784');
+  expect(await page.$eval('.lane-tile[data-lane="99"] .lt-order', e => getComputedStyle(e).color !== getComputedStyle(e.closest('.lane-tile')).color)).toBe(true);
+  // Receive prefills boxes = 600 / 100 and the lot from Grove's order number.
+  await page.click('.lane-tile[data-lane="99"] [data-rv]'); await page.waitForSelector('#recv[open]');
+  expect(await page.$eval('#rvBoxes', e => e.value)).toBe('6');
+  expect(await page.$eval('#rvLot', e => e.value)).toBe('GRV-18234');
+  expect(await page.$eval('#rvBody', e => e.innerText)).toMatch(/From the Grove email: 600 bags ordered/);
+  await page.click('#recv [data-closedlg]');
+  // The strip: one mail waiting, Mark as handled clears it.
+  expect(await page.$eval('.mail-review', e => e.innerText)).toMatch(/Grove emails that need a look \(1\)/);
+  expect(await page.$eval('.mail-review li[data-mail="9"]', e => e.innerText)).toMatch(/Order #18240 confirmed · Sep 2 · missing: qty/);
+  await page.click('.mail-review [data-handled="9"]'); await page.waitForSelector('.toast:has-text("handled")');
+  expect(api.calls.find(c => c.action === 'markMailHandled').body).toMatchObject({ id: 9 });
+  expect(await page.$('.mail-review')).toBeNull();
 });
 
 test('grove: Receive posts leftover + boxes and the toast names the new red-tape depth', async ({ page }) => {

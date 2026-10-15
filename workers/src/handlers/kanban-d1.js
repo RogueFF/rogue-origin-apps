@@ -11,6 +11,8 @@ import { createError } from '../lib/errors.js';
 import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
 import { DAY, laneStatus, seasonWindow } from '../lib/bin-math.js';
 import { validateBinConfig } from '../lib/bin-config.js';
+// Email intake + delivery tracking. Imports lane helpers back from this file; both sides only call at request time.
+import { groveMail, trackingEvent, markMailHandled, reviewMail, inFlightOrder, RAW_BODY_ACTIONS } from './grove-intake.js';
 
 const SHEET_NAME = '12.12 Supplies';
 
@@ -1144,7 +1146,7 @@ function countOf(v, dflt = NaN) {
 /** Free-text field (lot, by): at most 100 chars, or null. */
 const shortText = (v) => (v == null || v === '' ? null : String(v).slice(0, 100));
 
-async function laneRows(env, cardId) {
+export async function laneRows(env, cardId) {
   const where = cardId ? 'WHERE c.card_id = ?' : '';
   return query(env.DB, `
     SELECT c.*, k.item, k.crumbtrail, k.supplier,
@@ -1154,7 +1156,7 @@ async function laneRows(env, cardId) {
 }
 
 /** One lane row (config + card) or NOT_FOUND. */
-async function laneRow(env, cardId) {
+export async function laneRow(env, cardId) {
   const row = (await laneRows(env, cardId))[0];
   if (!row) throw createError('NOT_FOUND', 'no bin lane for this card');
   return row;
@@ -1184,7 +1186,7 @@ async function usageSum(env, cardId, after, until = null) {
  * Lane status for one laneRows() row. `leftoverBins` (a physical count of sealed
  * bins at the row's current bin size) feeds laneStatus's recount check.
  */
-async function computeLane(env, row, today = new Date(), leftoverBins = null) {
+export async function computeLane(env, row, today = new Date(), leftoverBins = null) {
   const cardId = row.card_id;
   const since56 = new Date(today.getTime() - 56 * DAY).toISOString();
   const win = seasonWindow(today, row.lead_days, row.safety_days);
@@ -1213,17 +1215,22 @@ async function computeLane(env, row, today = new Date(), leftoverBins = null) {
     seasonUsage: seasonRaw > 0 ? seasonRaw : null,
     redScanned: !!red, leftoverBins, today,
   });
+  // The order in flight (email intake, design §9b). A read error here must not
+  // take the lane down: the tile just shows no order line.
+  let order = null;
+  try { order = await inFlightOrder(env, row, today); } catch (e) { console.error('[grove][lane] order read failed', e); }
   return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
     config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month },
-    baseline: baseline || null, redCard: row.redToken ? { id: row.redCardId, token: row.redToken } : null, openRequest: openReq || null, ...s };
+    baseline: baseline || null, redCard: row.redToken ? { id: row.redCardId, token: row.redToken } : null, openRequest: openReq || null, order, ...s };
 }
 
-/** GET ?action=getBinStatus[&cardId=] → { lanes:[…], unmapped:[{variant_id, qty, lastSeen}] } */
+/** GET ?action=getBinStatus[&cardId=] → { lanes:[…], unmapped:[{variant_id, qty, lastSeen}], review:[{id, subject, missing}] } */
 async function getBinStatus(request, env) {
   const { cardId } = getQueryParams(request);
   const rows = await laneRows(env, cardId ? cardIdOf(cardId) : null); // empty = all lanes
-  const [lanes, unmapped] = await Promise.all([Promise.all(rows.map(r => computeLane(env, r))), recentUnmapped(env)]);
-  return successResponse({ success: true, lanes, unmapped });
+  const [lanes, unmapped, review] = await Promise.all([Promise.all(rows.map(r => computeLane(env, r))), recentUnmapped(env),
+    reviewMail(env).catch(e => { console.error('[grove][review] read failed', e); return []; })]);
+  return successResponse({ success: true, lanes, unmapped, review });
 }
 
 /**
@@ -1245,8 +1252,19 @@ async function receiveBins(body, env) {
   const override = validateBinConfig({ bagsPerBox: body.bagsPerBox, bagsPerBin: body.bagsPerBin });
   if (override.error && override.error !== 'nothing to set') throw createError('VALIDATION_ERROR', override.error);
   const row = await laneRow(env, cardId);
+  const r = await applyReceive(env, row, { leftover, boxes, perBox: override.data?.bags_per_box, per: override.data?.bags_per_bin, lot: body.lot, by: body.by });
+  return successResponse({ success: true, ...r });
+}
+
+/**
+ * The receive itself, shared by the Desk (receiveBins) and the delivery
+ * callback (grove-intake.js trackingEvent, by 'tracking'). `row` is a laneRow.
+ * Returns { lane, needsRecount, estimateBefore }.
+ */
+export async function applyReceive(env, row, { leftover, boxes, perBox: perBoxIn, per: perIn, lot, by }) {
+  const cardId = row.card_id;
   const oldPer = row.bags_per_bin;
-  const perBox = override.data?.bags_per_box ?? row.bags_per_box, per = override.data?.bags_per_bin ?? oldPer;
+  const perBox = perBoxIn ?? row.bags_per_box, per = perIn ?? oldPer;
   const before = await computeLane(env, row, new Date(), leftover);
   const needsRecount = before.recount;
   const bags = leftover * oldPer + boxes * perBox;
@@ -1254,7 +1272,7 @@ async function receiveBins(body, env) {
   const at = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, lot, by, note, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(cardId, 'receive', bins, per, shortText(body.lot), shortText(body.by), `leftover ${leftover} bins × ${oldPer} + ${boxes} boxes × ${perBox}`, at),
+      .bind(cardId, 'receive', bins, per, shortText(lot), shortText(by), `leftover ${leftover} bins × ${oldPer} + ${boxes} boxes × ${perBox}`, at),
     env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'receive'),
     env.DB.prepare('UPDATE kanban_bin_config SET bags_per_box = ?, bags_per_bin = ?, updated_at = ? WHERE card_id = ?').bind(perBox, per, at, cardId),
     // An open request this delivery answers: log the order first (only if one is
@@ -1266,7 +1284,7 @@ async function receiveBins(body, env) {
     env.DB.prepare(`UPDATE kanban_reorder_requests SET status='ordered', closed_at=?, closed_by='receive' WHERE card_id = ? AND status='open'`).bind(at, cardId),
   ]);
   const lane = await computeLane(env, await laneRow(env, cardId));
-  return successResponse({ success: true, lane, needsRecount, estimateBefore: before.onHand });
+  return { lane, needsRecount, estimateBefore: before.onHand };
 }
 
 /** POST ?action=recount {cardId, sealedBins, by?} — physical count resets the baseline. */
@@ -1358,6 +1376,8 @@ async function scanCard(body, env, ctx) {
 
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
+  // The 17TRACK signature is over the raw bytes: hand that action the request untouched.
+  if (RAW_BODY_ACTIONS.has(action) && request.method === 'POST') return trackingEvent(request, env, ctx);
   const body = request.method === 'POST' ? await parseBody(request) : {};
 
   const actions = {
@@ -1391,6 +1411,9 @@ export async function handleKanbanD1(request, env, ctx) {
     setBinConfig: () => setBinConfig(body, env),
     makeLaneKit: () => makeLaneKit(body, env),
     scanCard: () => scanCard(body, env, ctx),
+    // Grove email intake + delivery tracking — design §9b (handlers/grove-intake.js)
+    groveMail: () => groveMail(body, request, env, ctx),
+    markMailHandled: () => markMailHandled(body, env),
   };
 
   if (!action || !actions[action]) {
