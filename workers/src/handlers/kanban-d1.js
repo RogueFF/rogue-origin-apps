@@ -1005,7 +1005,7 @@ async function getRecipes(env) {
      ORDER BY k.item, r.variant_id`);
   const unmapped = await query(env.DB, `
     SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen
-      FROM kanban_usage WHERE source = 'shopify:unmapped' AND at >= datetime('now', '-30 days')
+      FROM kanban_usage WHERE source = 'shopify:unmapped' AND at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
      GROUP BY variant_id ORDER BY qty DESC`);
   return successResponse({ success: true, recipes, unmapped });
 }
@@ -1040,14 +1040,16 @@ async function laneRow(env, cardId) {
 
 /**
  * Bags consumed for a card in (fromIso, toIso]. Card 99 (10 lb) reads production's
- * inventory_adjustments. Code-written timestamps there are ISO (toISOString in
- * logBag and the webhook fallback), so the string comparison holds; the inventory
- * Flow passes its own Timestamp through unchanged — assumed ISO, not verified.
+ * inventory_adjustments. Its timestamps are ISO in both sources (barn scans via
+ * toISOString, Shopify Flow rows pass ISO through), so the string comparison is sound.
  */
 async function usageSum(env, cardId, fromIso, toIso = null) {
   if (cardId === TEN_LB_CARD) {
+    // One row per barn bag scan = the rows with adjustment_source IS NULL. The
+    // shopify_flow rows are echoes of the resulting inventory change, not bags
+    // (quantity_adjusted blank/zero); counting both would double count.
     const r = await queryOne(env.DB, `SELECT COUNT(*) AS n FROM inventory_adjustments
-      WHERE size = '10lb' AND quantity_adjusted > 0 AND timestamp > ? ${toIso ? 'AND timestamp <= ?' : ''}`, toIso ? [fromIso, toIso] : [fromIso]);
+      WHERE size = '10lb' AND adjustment_source IS NULL AND timestamp > ? ${toIso ? 'AND timestamp <= ?' : ''}`, toIso ? [fromIso, toIso] : [fromIso]);
     return Number(r?.n || 0);
   }
   const r = await queryOne(env.DB, `SELECT COALESCE(SUM(qty),0) AS n FROM kanban_usage
@@ -1059,11 +1061,11 @@ async function computeLane(env, row, today = new Date()) {
   const cardId = row.card_id;
   const baseline = await queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]);
   const first = await queryOne(env.DB, cardId === TEN_LB_CARD
-    ? `SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size='10lb'`
+    ? `SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size='10lb' AND adjustment_source IS NULL` // barn scans only, as usageSum
     : `SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, cardId === TEN_LB_CARD ? [] : [cardId]);
   const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / 86400000) : 0;
   const since56 = new Date(today.getTime() - 56 * 86400000).toISOString();
-  // seasonWindow gives YYYY-MM-DD; a date prefix sorts correctly against ISO `at`.
+  // seasonWindow: from is YYYY-MM-DD (sorts before any ISO time that day), to is end-of-day ISO.
   const win = seasonWindow(today, row.lead_days, row.safety_days);
   const seasonRaw = await usageSum(env, cardId, win.from, win.to);
   const red = baseline ? await queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]) : null;
