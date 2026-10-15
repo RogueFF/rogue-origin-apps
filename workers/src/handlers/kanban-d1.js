@@ -1025,6 +1025,20 @@ async function checkLedgerTriggers(cardIds, env, ctx) {
       if (!rows[0]) continue;
       const lane = await computeLane(env, rows[0]);
       if (lane.status !== 'order' || lane.openRequest) continue;
+      // Already on order: Damon closed a request after the last delivery was
+      // received. The lane stays 'order' through the whole lead time (nothing
+      // re-baselines until receiveBins), so without this every Shopify order
+      // would email him again and invite a duplicate order. Keyed on the last
+      // receive, not any baseline: a mid-lead recount must not re-arm it.
+      // An order older than lead + safety with no receive is stale (pre-Grove
+      // closes, or a delivery nobody logged), so the trigger re-arms then.
+      // closed_at is always ISO (closeReorderRequest / receiveBins write it).
+      const staleBefore = new Date(Date.now() - (rows[0].lead_days + rows[0].safety_days) * DAY).toISOString();
+      const inFlight = await queryOne(env.DB, `SELECT r.id FROM kanban_reorder_requests r
+        WHERE r.card_id = ? AND r.status = 'ordered' AND COALESCE(r.closed_by, '') <> 'receive' AND r.closed_at > ?
+          AND r.closed_at > COALESCE((SELECT MAX(at) FROM kanban_bin_events WHERE card_id = ? AND kind = 'receive'), '')
+        LIMIT 1`, [id, staleBefore, id]);
+      if (inFlight) continue;
       const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [id]);
       if (card) await raiseReorderRequest(card, env, null, lane);   // null ctx → the send is awaited inside this job
     } catch (e) {

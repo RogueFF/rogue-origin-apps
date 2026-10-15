@@ -36,6 +36,7 @@ function show(bg, nodes) { document.body.style.background = bg; v.replaceChildre
 function fail(status, msg) {
   const [es, en] = status === 404 ? ['Tarjeta no reconocida', 'Card not recognised']
     : status === 400 ? ['Tarjeta reemplazada o anulada', 'Card replaced or void']
+    : status === 0 ? ['Sin conexión', 'No connection']
     : ['Error', msg || ''];
   show('#7f1d1d', [el('h1', null, '✗'), el('p', 'big', es), el('p', 'en', en), ...pair('Avisa a Koa', 'Tell Koa')]);
 }
@@ -57,7 +58,7 @@ function ok(d) {
 fetch(BASE + '/api/kanban?action=scanCard', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: TOKEN }),
 }).then(r => r.json().catch(() => ({})).then(d => (r.ok && d.success ? ok(d) : fail(r.status, d.error || 'HTTP ' + r.status))))
-  .catch(() => fail(0, 'Sin conexión / No connection'));
+  .catch(() => fail(0));
 </script></body></html>`;
 }
 
