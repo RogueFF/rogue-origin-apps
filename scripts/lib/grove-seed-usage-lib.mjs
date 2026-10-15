@@ -30,14 +30,23 @@ export function pickColumn(header, candidates) {
   return -1;
 }
 
-/** Mid-month noon UTC for 'YYYY-MM'. */
-export const seedAt = month => new Date(`${month}-15T12:00:00Z`).toISOString();
+/** Every calendar day of 'YYYY-MM' at noon UTC: [{ day: 'YYYY-MM-DD', at: ISO }]. */
+export function seedDays(month) {
+  const [y, m] = month.split('-').map(Number);
+  const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Array.from({ length: n }, (_, i) => {
+    const at = new Date(Date.UTC(y, m - 1, i + 1, 12)).toISOString();
+    return { day: at.slice(0, 10), at };
+  });
+}
 
 /**
  * records: [{ month, variantId, title, sku, qty }] (raw strings from the CSV).
- * → { rows: [{ card, qty, month, variantId, at, sql }], unmapped: [{ variantId, title }],
- *     bad: [{ variantId, title, reason }] }
- * One row per (month, variant, card), qty summed. Rows with qty ≤ 0 are skipped before anything else.
+ * → { rows: [{ card, qty, month, day, variantId, at, sql }], months: [{ card, qty, month, variantId }],
+ *     unmapped: [{ variantId, title }], bad: [{ variantId, title, reason }] }
+ * qty is summed per (month, variant, card) into `months`, then spread evenly over every day of
+ * the month (qty / daysInMonth, 3 decimals) so a short season window sees a steady daily pace
+ * instead of a whole month or nothing. Rows with qty ≤ 0 are skipped before anything else.
  */
 export function seedRows(records) {
   const agg = new Map(), unmapped = [], bad = [];
@@ -60,22 +69,23 @@ export function seedRows(records) {
     row.qty += qty;
     agg.set(key, row);
   }
-  const rows = [...agg.values()]
-    .sort((a, b) => a.month.localeCompare(b.month) || a.card - b.card || a.variantId.localeCompare(b.variantId))
-    .map(r => {
-      const at = seedAt(r.month);
-      return {
-        ...r, at,
-        sql: `INSERT OR IGNORE INTO kanban_usage (card_id, qty, source, ref, variant_id, at) VALUES (${r.card}, ${r.qty}, 'shopify:seed', '${r.month}', '${r.variantId}', '${at}');`,
-      };
-    });
-  return { rows, unmapped, bad };
+  const months = [...agg.values()]
+    .sort((a, b) => a.month.localeCompare(b.month) || a.card - b.card || a.variantId.localeCompare(b.variantId));
+  const rows = months.flatMap(r => {
+    const days = seedDays(r.month);
+    const qty = Math.round((r.qty / days.length) * 1000) / 1000;
+    return days.map(({ day, at }) => ({
+      card: r.card, qty, month: r.month, day, variantId: r.variantId, at,
+      sql: `INSERT OR IGNORE INTO kanban_usage (card_id, qty, source, ref, variant_id, at) VALUES (${r.card}, ${qty}, 'shopify:seed', '${day}', '${r.variantId}', '${at}');`,
+    }));
+  });
+  return { rows, months, unmapped, bad };
 }
 
-/** { 'YYYY-MM': { card: qty } } for the stderr eyeball summary. */
-export function monthlyTotals(rows) {
+/** { 'YYYY-MM': { card: qty } } from seedRows().months, for the stderr eyeball summary. */
+export function monthlyTotals(months) {
   const out = {};
-  for (const r of rows) {
+  for (const r of months) {
     const m = (out[r.month] ||= {});
     m[r.card] = (m[r.card] || 0) + r.qty;
   }
