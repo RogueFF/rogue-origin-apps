@@ -7,8 +7,8 @@ const LADDER = [
   // Most specific first.
   [99, new RegExp(`${B}10(lb|lbs|pound)`)],
   // 1/4 & 1/2 lb use the 1 LB bag — CONFIRM with Koa
-  [54, new RegExp(`1/4(lb|pound)|1/2(lb|pound)|quarterpound|halfpound|${B}4oz|${B}8oz`)],
-  [54, new RegExp(`${B}1(lb|lbs|pound)|${B}16oz`)],
+  [54, new RegExp(`1/4(lb|pound)|1/2(lb|pound)|quarterpound|halfpound|${B}(4|8)(oz|ounce)`)],
+  [54, new RegExp(`${B}1(lb|lbs|pound)|${B}16(oz|ounce)`)],
   [56, new RegExp(`1/4(oz|ounce)|1/2(oz|ounce)|${B}7g|${B}14g|quarter|half`)],
   [21, new RegExp(`${B}1oz|${B}28g|ounce`)],
 ];
