@@ -75,3 +75,17 @@ test('counts must be plain whole numbers: true / [5] / 1.5 are 400', async () =>
   assert.equal(ok.lane.baseline.bags, 2 * 50 + 3 * 100);
   assert.equal((await call(env, 'recount', { cardId: 21, sealedBins: '4' })).lane.baseline.bags, 200);
 });
+
+test('receive that answers an open request logs the order (placed_by receive, bags received)', async () => {
+  const env = fakeEnv();
+  await call(env, 'addToCart', { cardId: 21 });                         // opens a Damon request (mail fails harmlessly)
+  await call(env, 'receiveBins', { cardId: 21, leftoverBins: 2, boxes: 25 });
+  assert.equal(env.db.prepare(`SELECT status FROM kanban_reorder_requests`).get().status, 'ordered');
+  const rows = env.db.prepare('SELECT vendor, placed_by, items_json FROM kanban_orders').all();
+  assert.equal(rows.length, 1);
+  assert.deepEqual({ vendor: rows[0].vendor, placed_by: rows[0].placed_by }, { vendor: 'Grove', placed_by: 'receive' });
+  assert.deepEqual(JSON.parse(rows[0].items_json), [{ cardId: 21, item: '1 oz', qty: 2500 }]);
+  // No open request → a receive logs no order.
+  await call(env, 'receiveBins', { cardId: 21, leftoverBins: 0, boxes: 5 });
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_orders').get().n, 1);
+});

@@ -447,8 +447,15 @@ async function addToCart(body, env, ctx) {
   // Vendors handled outside the Friday cart never touch kanban_cart.
   if (isReorderAlertVendor(card.supplier)) {
     // A Grove card with a bin lane gets the order-by email; one without keeps the old body.
-    const rows = await laneRows(env, card.id);
-    const lane = rows[0] ? await computeLane(env, rows[0]) : null;
+    // A lane error falls back to the old email: it must never fail a scan that used to work.
+    let lane = null;
+    try {
+      const rows = await laneRows(env, card.id);
+      lane = rows[0] ? await computeLane(env, rows[0]) : null;
+    } catch (e) {
+      console.error('[grove][addToCart] lane read failed, sending the plain alert', e);
+      lane = null;
+    }
     return successResponse(await raiseReorderRequest(card, env, ctx, lane));
   }
 
@@ -580,7 +587,7 @@ export function buildReorderEmailBody(card, confirmUrl, lane = null) {
 
 /** 'YYYY-MM-DD' → 'Sep 15' (UTC); missing → '—'. */
 const fmtMD = (iso) => iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—';
-const fmtN = (x) => Number(x).toLocaleString('en-US');
+const fmtN = (x) => (Number(x) || 0).toLocaleString('en-US');
 const RATE_SOURCE = { ledger: 'from the usage ledger', season: "last fall's pace", seed: 'seed estimate' };
 
 /**
@@ -684,29 +691,26 @@ async function closeReorderRequest(body, env) {
     return successResponse({ success: true, alreadyClosed: true });
   }
 
-  await update(
-    env.DB,
-    'kanban_reorder_requests',
-    {
-      status: 'ordered',
-      closed_at: new Date().toISOString(),
-      closed_by: body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link',
-    },
-    'id = ?',
-    [row.id]
-  );
-
-  // Closing is the order being placed: log it in kanban_orders so Grove orders
-  // show in the Desk history beside the Friday-cart vendors.
+  const closedBy = body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link';
+  const closedAt = new Date().toISOString();
   const card = await queryOne(env.DB, 'SELECT k.id, k.item, k.supplier FROM kanban_reorder_requests r JOIN kanban_cards k ON k.id = r.card_id WHERE r.id = ?', [row.id]);
   const cfg = card ? await queryOne(env.DB, 'SELECT moq FROM kanban_bin_config WHERE card_id = ?', [card.id]) : null;
+  let lane = null;
+  if (card) { try { lane = await computeLane(env, await laneRow(env, card.id)); } catch { lane = null; } }
+
+  // Closing is the order being placed: log it in kanban_orders (same batch, so
+  // a request is never closed without its history row) so Grove orders show in
+  // the Desk history beside the Friday-cart vendors. qty is the suggested order
+  // at close time — what the email told Damon to buy — not a confirmed amount.
+  const stmts = [
+    env.DB.prepare(`UPDATE kanban_reorder_requests SET status = 'ordered', closed_at = ?, closed_by = ? WHERE id = ?`).bind(closedAt, closedBy, row.id),
+  ];
   if (card) {
-    await insert(env.DB, 'kanban_orders', {
-      vendor: card.supplier || 'Grove',
-      placed_by: body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link',
-      items_json: JSON.stringify([{ cardId: card.id, item: card.item, qty: cfg?.moq || null }]),
-    });
+    stmts.push(env.DB.prepare('INSERT INTO kanban_orders (vendor, placed_by, items_json) VALUES (?, ?, ?)').bind(
+      card.supplier || 'Grove', closedBy,
+      JSON.stringify([{ cardId: card.id, item: card.item, qty: lane?.suggestedQty ?? cfg?.moq ?? null }])));
   }
+  await env.DB.batch(stmts);
 
   return successResponse({ success: true, alreadyClosed: false });
 }
@@ -1033,6 +1037,12 @@ async function checkLedgerTriggers(cardIds, env, ctx) {
       // An order older than lead + safety with no receive is stale (pre-Grove
       // closes, or a delivery nobody logged), so the trigger re-arms then.
       // closed_at is always ISO (closeReorderRequest / receiveBins write it).
+      // Both of these are intended:
+      //  (a) The red card deliberately bypasses this hold — scanCard never checks
+      //      it. It is the human escape hatch: someone looking at a near-empty
+      //      lane can always get Damon told again.
+      //  (b) A delivery later than lead + safety with nothing received re-emails
+      //      once (the hold has gone stale), then dedups via the open request.
       const staleBefore = new Date(Date.now() - (rows[0].lead_days + rows[0].safety_days) * DAY).toISOString();
       const inFlight = await queryOne(env.DB, `SELECT r.id FROM kanban_reorder_requests r
         WHERE r.card_id = ? AND r.status = 'ordered' AND COALESCE(r.closed_by, '') <> 'receive' AND r.closed_at > ?
@@ -1243,6 +1253,12 @@ async function receiveBins(body, env) {
       .bind(cardId, 'receive', bins, per, shortText(body.lot), shortText(body.by), `leftover ${leftover} bins × ${oldPer} + ${boxes} boxes × ${perBox}`, at),
     env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'receive'),
     env.DB.prepare('UPDATE kanban_bin_config SET bags_per_box = ?, bags_per_bin = ?, updated_at = ? WHERE card_id = ?').bind(perBox, per, at, cardId),
+    // An open request this delivery answers: log the order first (only if one is
+    // open — the insert reads it before the UPDATE below closes it), so an order
+    // Damon never confirmed by link still shows in history. qty = bags received.
+    env.DB.prepare(`INSERT INTO kanban_orders (vendor, placed_by, items_json)
+      SELECT ?, 'receive', ? WHERE ? > 0 AND EXISTS (SELECT 1 FROM kanban_reorder_requests WHERE card_id = ? AND status = 'open')`)
+      .bind(row.supplier || 'Grove', JSON.stringify([{ cardId, item: row.item, qty: boxes * perBox }]), boxes * perBox, cardId),
     env.DB.prepare(`UPDATE kanban_reorder_requests SET status='ordered', closed_at=?, closed_by='receive' WHERE card_id = ? AND status='open'`).bind(at, cardId),
   ]);
   const lane = await computeLane(env, await laneRow(env, cardId));
