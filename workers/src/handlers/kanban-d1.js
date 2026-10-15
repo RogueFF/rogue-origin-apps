@@ -976,6 +976,8 @@ async function orderUsage(body, request, env, ctx) {
     const header = request.headers.get('X-Webhook-Secret');
     const param = new URL(request.url).searchParams.get('secret');
     if (header !== secret && param !== secret) throw createError('UNAUTHORIZED', 'bad secret');
+  } else {
+    console.warn('[grove][orderUsage] WEBHOOK_SECRET unset — endpoint open');
   }
   let order;
   try { order = parseFlowOrder(body); } catch (e) { throw createError('VALIDATION_ERROR', e.message); }

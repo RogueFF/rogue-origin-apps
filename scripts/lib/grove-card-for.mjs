@@ -2,15 +2,15 @@
 // Card ids are the kanban bag cards: 21 = 1 oz, 56 = 1/4–1/2 oz, 54 = 1 LB, 99 = 10 LB.
 
 // Not preceded by a digit or a fraction ("1/"): keeps "1/4oz" off "4oz" and "11oz" off "1oz".
-const B = String.raw`(?<!\d)(?<!\d/)`;
+const NOT_AFTER_DIGIT = String.raw`(?<!\d)(?<!\d/)`;
 const LADDER = [
   // Most specific first.
-  [99, new RegExp(`${B}10(lb|lbs|pound)`)],
+  [99, new RegExp(`${NOT_AFTER_DIGIT}10(lb|lbs|pound)`)],
   // 1/4 & 1/2 lb use the 1 LB bag — CONFIRM with Koa
-  [54, new RegExp(`1/4(lb|pound)|1/2(lb|pound)|quarterpound|halfpound|${B}(4|8)(oz|ounce)`)],
-  [54, new RegExp(`${B}1(lb|lbs|pound)|${B}16(oz|ounce)`)],
-  [56, new RegExp(`1/4(oz|ounce)|1/2(oz|ounce)|${B}7g|${B}14g|quarter|half`)],
-  [21, new RegExp(`${B}1oz|${B}28g|ounce`)],
+  [54, new RegExp(`1/4(lb|pound)|1/2(lb|pound)|quarterpound|halfpound|${NOT_AFTER_DIGIT}(4|8)(oz|ounce)`)],
+  [54, new RegExp(`${NOT_AFTER_DIGIT}1(lb|lbs|pound)|${NOT_AFTER_DIGIT}16(oz|ounce)`)],
+  [56, new RegExp(`1/4(oz|ounce)|1/2(oz|ounce)|${NOT_AFTER_DIGIT}7g|${NOT_AFTER_DIGIT}14g|quarter(oz|ounce)|half(oz|ounce)`)],
+  [21, new RegExp(`oneounce|${NOT_AFTER_DIGIT}1(oz|ounce)|${NOT_AFTER_DIGIT}28g`)],
 ];
 
 /** Bag card id for a variant title / SKU string, or 0 when it cannot be placed. */

@@ -3,19 +3,24 @@
 /**
  * Normalise the Flow "Order created" body.
  * { order: '#1001', at?: ISO, items: [{ variant_id: 'gid://…/111' | '111', qty }] }
- * → { ref, at, items: [{ variantId, qty }] }. Items with no id or qty ≤ 0 / NaN are dropped.
+ * → { ref, at (ISO), items: [{ variantId, qty }] }. Items with no id or qty ≤ 0 / NaN are dropped;
+ * repeated variants are summed into one item.
  */
 export function parseFlowOrder(body) {
   const ref = String(body?.order || '').trim();
   if (!ref) throw new Error('order (name) is required');
-  const at = body.at ? String(body.at) : new Date().toISOString();
-  const items = [];
+  // Grove standard: ISO 8601 exactly as toISOString() writes it, so string compares sort.
+  const d = new Date(body.at);
+  const at = body.at && !isNaN(d) ? d.toISOString() : new Date().toISOString();
+  // Sum per variant: the unique index (source, ref, card_id, variant_id) would drop a second line.
+  const qtyByVariant = new Map();
   for (const it of Array.isArray(body.items) ? body.items : []) {
     const variantId = String(it?.variant_id || '').replace(/^gid:\/\/shopify\/ProductVariant\//, '').trim();
     const qty = Number(it?.qty);
     if (!variantId || !(qty > 0)) continue;
-    items.push({ variantId, qty });
+    qtyByVariant.set(variantId, (qtyByVariant.get(variantId) || 0) + qty);
   }
+  const items = [...qtyByVariant].map(([variantId, qty]) => ({ variantId, qty }));
   return { ref, at, items };
 }
 

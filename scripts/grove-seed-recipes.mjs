@@ -24,14 +24,13 @@ for (const cells of rows) {
   if (!id || seen.has(id)) continue;
   const title = [cells[iTitle], cells[iSku]].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
   // Inference uses variant title + SKU only; the product title just helps the reviewer.
-  const label = [cells[iProduct], title].filter(Boolean).join(' / ');
+  const label = [cells[iProduct], title].filter(Boolean).join(' / ').replace(/\s+/g, ' ').trim();
   seen.set(id, { label, card: cardFor(title) });
 }
 
 for (const [id, v] of seen) {
-  const safeId = id.replace(/'/g, "''");
-  const sql = v.card
-    ? `INSERT OR IGNORE INTO kanban_recipes (variant_id, card_id, qty) VALUES ('${safeId}', ${v.card}, 1);`
+  const sql = !/^\d+$/.test(id) ? `-- BAD ID ${id.replace(/\s+/g, ' ')}`
+    : v.card ? `INSERT OR IGNORE INTO kanban_recipes (variant_id, card_id, qty) VALUES ('${id}', ${v.card}, 1);`
     : `-- UNMAPPED ${id}`;
   console.log(`${sql}  -- ${v.label}`);
 }
