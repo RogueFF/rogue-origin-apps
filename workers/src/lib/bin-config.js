@@ -25,7 +25,7 @@ export function validateBinConfig(body) {
   for (const [key, f] of Object.entries(FIELDS)) {
     const raw = body?.[key];
     if (raw === undefined || raw === null || raw === '') continue;
-    const n = Number(raw);
+    const n = typeof raw === 'number' || (typeof raw === 'string' && raw.trim()) ? Number(raw) : NaN;
     if (!Number.isFinite(n) || (f.int && !Number.isInteger(n)) || n < f.min) {
       return { data: null, error: `${key} must be ${f.int ? 'an integer' : 'a number'} ≥ ${f.min}` };
     }

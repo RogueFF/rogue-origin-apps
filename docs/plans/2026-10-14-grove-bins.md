@@ -1059,7 +1059,7 @@ function renderGrove() {
   $$('[data-map]', el).forEach(b => b.onclick = () => openMapRecipe(b.dataset.map));
 }
 ```
-`openReceive(id)`: two inputs — *Bins still sealed on the rack* and *Boxes arrived* — plus bags/box and bags/bin prefilled from the lane config and a lot field; live line `= N bins · red tape at bin X`; Save → `api.receiveBins(...)` → `M.bins = await api.getBinStatus()` → `render()` → toast `Red tape at bin X · move the red card` (and `Recount? The estimate said Y` when `recount` is true).
+`openReceive(id)`: two inputs — *Bins still sealed on the rack* and *Boxes arrived* — plus bags/box and bags/bin prefilled from the lane config and a lot field; live line `= N bins · red tape at bin X`; Save → `api.receiveBins(...)` → `M.bins = await api.getBinStatus()` → `render()` → toast `Red tape at bin X · move the red card` (and `Recount? The estimate said Y` when `needsRecount` is true).
 `openRecount(id)`: one input, sealed bins → `api.recountBins`.
 `openBinSettings(id)`: the six config numbers + colour → `api.setBinConfig`.
 `openMapRecipe(variantId)`: pick a Grove card → `api.setRecipe({ variant_id, card_id, qty: 1 })`.
