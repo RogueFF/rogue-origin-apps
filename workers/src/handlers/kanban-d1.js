@@ -1028,6 +1028,10 @@ async function checkLedgerTriggers(cardIds, env, ctx) {
       const rows = await laneRows(env, id);
       if (!rows[0]) continue;
       const lane = await computeLane(env, rows[0]);
+      // No baseline = no estimate (design §5): an uncounted lane reads onHand 0,
+      // which is 'order' at any rate. Firing on it would email Damon "0 bags"
+      // for every lane nobody has counted yet.
+      if (!lane.baseline) continue;
       if (lane.status !== 'order' || lane.openRequest) continue;
       // Already on order: Damon closed a request after the last delivery was
       // received. The lane stays 'order' through the whole lead time (nothing

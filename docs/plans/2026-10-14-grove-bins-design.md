@@ -29,7 +29,7 @@ from across the room without reading a number.
 
 | Question | Decision | Why |
 |---|---|---|
-| Count of record | **Receive count + the ledger.** Receive sets the baseline (boxes × bags per box); Shopify usage counts down from it. The crew does not scan bins. | One scan per 75 days (the red card) beats fifty. Compliance over precision. |
+| Count of record | **Receive count + the ledger.** Receive sets the baseline (leftover bins × bags per bin + boxes × bags per box); Shopify usage counts down from it. The crew does not scan bins. | One scan per 75 days (the red card) beats fifty. Compliance over precision. |
 | Unit | **The bin as Koa splits it.** Grove ships sealed boxes of a fixed count (10 lb: 100); the crew breaks each box into smaller bins (10 lb: 2 × 50). Receive takes boxes × bags per box and the bin size, and prints one card per bin. | ±1 bin of accuracy is fine against a 2,500 MOQ. Bin size is per card config, not a constant. |
 | Shopify's role | **Usage signal only**, never the count | A counter that nobody restocks is always wrong. Usage since the last count, subtracted from that count, is an independent on-hand estimate. |
 | How usage reaches us | **Shopify Flow → HTTP → worker ledger** (`kanban_usage`), via a per-variant recipe table | Same transport the production webhook already uses. Replaces the fake "Grove Bags" product. One row per material per line item; adding a material later is a recipe row, not a new Flow. |
@@ -84,7 +84,7 @@ receipt (10 lb: box of 100 → 2 bins of 50). The bin is the unit that gets a
 card; the box is just what Receive counts. Still open: whether the open bin
 lives at the rack or goes to the bench (default: bench).
 
-## 3. Data model — migration `0045-kanban-bins.sql`
+## 3. Data model — migration `0046-kanban-bins.sql`
 
 (0044 is the latest applied; renumber if that changes before build. Nothing is
 added to `kanban_cards` — `updateCard` is a full-row overwrite.)
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS kanban_bin_config (
   lead_days       INTEGER NOT NULL DEFAULT 75,
   safety_days     INTEGER NOT NULL DEFAULT 30,
   moq             INTEGER NOT NULL DEFAULT 2500,
-  seed_per_month  REAL    NOT NULL,              -- used until >= 3 bins opened
+  seed_per_month  REAL    NOT NULL,              -- used until the ledger has 14 days
   colour          TEXT,                          -- lane colour token
   updated_at      TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (card_id) REFERENCES kanban_cards(id) ON DELETE CASCADE
