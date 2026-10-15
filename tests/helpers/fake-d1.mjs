@@ -14,6 +14,7 @@ export function fakeEnv() {
   db.exec(`CREATE TABLE kanban_cards (id INTEGER PRIMARY KEY, item TEXT, crumbtrail TEXT, supplier TEXT, order_qty TEXT);
     CREATE TABLE inventory_adjustments (id INTEGER PRIMARY KEY, timestamp TEXT, size TEXT, sku TEXT, adjustment_source TEXT);
     INSERT INTO kanban_cards (id, item, supplier) VALUES (21,'1 oz','Grove'),(54,'1 lb','Grove'),(56,'1/4','Grove'),(69,'blank','Grove'),(99,'10 lb','Grove'),(7,'tape','Uline');`);
+  db.exec(mig('0005-kanban-cart-orders.sql'));
   db.exec(mig('0013-kanban-reorder-requests.sql'));
   db.exec(mig('0046-kanban-bins.sql'));
   const stmt = (sql, args = []) => ({
