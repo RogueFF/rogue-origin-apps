@@ -12,7 +12,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
 
 /**
  * @param {object} i
- * @param {number} i.per            bags per bin
+ * @param {number} i.per            bags per bin, > 0
  * @param {number} i.lead           lead time, days
  * @param {number} i.safety         safety stock, days
  * @param {number} i.moq            minimum order qty (0 = none)
@@ -27,15 +27,16 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
  * @param {Date} i.today
  */
 export function laneStatus(i) {
-  const { per, lead, safety, moq, seedPerMonth, baseline, usageSince, usage56, usageDays,
+  const { lead, safety, moq, seedPerMonth, baseline, usageSince, usage56, usageDays,
     seasonUsage, redScanned, leftoverBins, today } = i;
+  const per = Math.max(1, Number(i.per) || 0);
 
   const onHand = Math.max(0, baseline.bags - usageSince);
-  const window = Math.min(56, Math.max(1, usageDays));
+  const windowDays = Math.min(56, Math.max(1, usageDays));
 
   let rate, rateSource;
   if (usageDays >= 14) {
-    rate = usage56 / window;
+    rate = usage56 / windowDays;
     rateSource = 'ledger';
   } else {
     rate = seedPerMonth / 30.4;

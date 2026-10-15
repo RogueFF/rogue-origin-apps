@@ -59,9 +59,12 @@ CREATE TABLE IF NOT EXISTS kanban_usage (
   qty       REAL NOT NULL,
   source    TEXT NOT NULL,                        -- shopify | shopify:seed | shopify:unmapped | wholesale | consignment
   ref       TEXT,                                 -- order name (#1234) or seed label
-  variant_id TEXT,                                -- kept for unmapped rows so the Desk can list them
+  variant_id TEXT,                                -- written on every Shopify row; part of the dedupe key (idx_ku_ref)
   at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Dedupe key. SQLite treats NULLs as distinct in a UNIQUE index, so this only
+-- dedupes while ref and variant_id are both non-null: Phase 2 wholesale and
+-- consignment rows must supply both.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ku_ref ON kanban_usage(source, ref, card_id, variant_id);
 CREATE INDEX IF NOT EXISTS idx_ku_card_at ON kanban_usage(card_id, at);
 

@@ -77,6 +77,12 @@ test('last season wins when it was busier', () => {
   assert.equal(r.rateSource, 'season');
 });
 
+test('a season tie keeps the ledger as the source', () => {
+  const r = lane({ seasonUsage: 105 * 20 });
+  assert.equal(r.rate, 20);
+  assert.equal(r.rateSource, 'ledger');
+});
+
 test('last season is ignored when it was quieter', () => {
   const r = lane({ seasonUsage: 105 * 10 });
   assert.equal(r.rate, 20);
@@ -89,6 +95,11 @@ test('reorder point and red tape depth', () => {
   const r = lane();
   assert.equal(r.reorderPoint, 2100); // 20 × 105
   assert.equal(r.redTapeAtBins, 42); // ceil(2100 / 50)
+});
+
+test('reorder point rounds to a whole bag', () => {
+  // 1121 / 56 = 20.0178… × 105 = 2101.875
+  assert.equal(lane({ usage56: 1121 }).reorderPoint, 2102);
 });
 
 test('red tape depth rounds up to a whole bin', () => {
