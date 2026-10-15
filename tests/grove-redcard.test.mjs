@@ -64,3 +64,31 @@ test('scanCard: retired token is 400, unknown or garbage token is 404', async ()
   await assert.rejects(call(env, 'scanCard', {}), (e) => e.code === 'NOT_FOUND');
   assert.equal(env.db.prepare(`SELECT COUNT(*) AS n FROM kanban_bin_events`).get().n, 0);
 });
+
+test('scanCard: request rows carry an ISO requested_at; a rescan reports retried', async () => {
+  const env = fakeEnv();
+  const { redCard } = await call(env, 'makeLaneKit', { cardId: 21 });
+  const r = await call(env, 'scanCard', { token: redCard.token });
+  assert.match(r.request.requestedAt, ISO);
+  assert.match(env.db.prepare(`SELECT requested_at FROM kanban_reorder_requests`).get().requested_at, ISO);
+  // First send failed (no transport), so the rescan re-sends.
+  assert.equal((await call(env, 'scanCard', { token: redCard.token })).request.retried, true);
+  env.db.exec(`UPDATE kanban_reorder_requests SET notify_state = 'sent'`);
+  assert.equal((await call(env, 'scanCard', { token: redCard.token })).request.retried, false);
+});
+
+test('scanCard: a request that cannot be raised leaves no orphan red event', async () => {
+  const env = fakeEnv();
+  const { redCard } = await call(env, 'makeLaneKit', { cardId: 21 });
+  env.db.exec('DROP TABLE kanban_reorder_requests');
+  await assert.rejects(call(env, 'scanCard', { token: redCard.token }));
+  assert.equal(env.db.prepare(`SELECT COUNT(*) AS n FROM kanban_bin_events`).get().n, 0);
+});
+
+test('addToCart on a Grove card still answers over HTTP with the reorder_request shape', async () => {
+  const env = fakeEnv();
+  const r = await call(env, 'addToCart', { cardId: 21 });
+  assert.equal(r.mode, 'reorder_request');
+  assert.equal(r.request.outcome, 'created');
+  assert.equal((await call(env, 'addToCart', { cardId: 21 })).request.outcome, 'already_open');
+});

@@ -446,7 +446,7 @@ async function addToCart(body, env, ctx) {
 
   // Vendors handled outside the Friday cart never touch kanban_cart.
   if (isReorderAlertVendor(card.supplier)) {
-    return raiseReorderRequest(card, env, ctx);
+    return successResponse(await raiseReorderRequest(card, env, ctx));
   }
 
   // UPSERT: if card_id already in cart, bump qty; else insert new row
@@ -476,6 +476,9 @@ async function addToCart(body, env, ctx) {
  * a failed email leaves a visible, retryable record rather than vanishing. The
  * send itself runs in ctx.waitUntil so the person scanning isn't held up by
  * Gmail.
+ *
+ * Returns a plain payload ({ success, mode, request }); HTTP callers wrap it in
+ * successResponse, internal callers (scanCard) use it directly.
  */
 async function raiseReorderRequest(card, env, ctx) {
   const existing = await queryOne(
@@ -501,7 +504,7 @@ async function raiseReorderRequest(card, env, ctx) {
       else await job;
     }
 
-    return successResponse({
+    return {
       success: true,
       mode: 'reorder_request',
       request: {
@@ -513,20 +516,17 @@ async function raiseReorderRequest(card, env, ctx) {
         retried,
         requestedAt: existing.requestedAt,
       },
-    });
+    };
   }
 
   const closeToken = crypto.randomUUID().replace(/-/g, '');
+  // ISO, set explicitly: migration 0013's default is SQLite's 'YYYY-MM-DD HH:MM:SS'.
+  const requestedAt = new Date().toISOString();
   const id = await insert(env.DB, 'kanban_reorder_requests', {
     card_id: card.id,
     close_token: closeToken,
+    requested_at: requestedAt,
   });
-
-  const row = await queryOne(
-    env.DB,
-    'SELECT requested_at AS requestedAt FROM kanban_reorder_requests WHERE id = ?',
-    [id]
-  );
 
   if (ctx && typeof ctx.waitUntil === 'function') {
     ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken));
@@ -535,7 +535,7 @@ async function raiseReorderRequest(card, env, ctx) {
     await notifyReorderHandler(env, card, id, closeToken);
   }
 
-  return successResponse({
+  return {
     success: true,
     mode: 'reorder_request',
     request: {
@@ -544,9 +544,10 @@ async function raiseReorderRequest(card, env, ctx) {
       item: card.item,
       status: 'open',
       outcome: 'created',
-      requestedAt: row?.requestedAt || null,
+      retried: false,
+      requestedAt,
     },
-  });
+  };
 }
 
 /**
@@ -1240,13 +1241,16 @@ async function scanCard(body, env, ctx) {
   if (bc.kind !== 'red') throw createError('VALIDATION_ERROR', 'Per-bin cards are not in use yet');
   const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [bc.card_id]);
   if (!card) throw createError('NOT_FOUND', 'card not found');
+  // Request first, red event second: if raising the request throws, no 'red'
+  // event is left behind to flip the lane to 'order' with nobody told. (Not a
+  // transaction — a failure between the two leaves an open request without the
+  // event, which the next scan repairs; the reverse would be a silent dead end.)
+  const { request } = await raiseReorderRequest(card, env, ctx);
   // Raw insert: kanban_bin_events is not in db.js VALID_TABLES, and `at` is set explicitly (ISO).
   await env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bin_card, by, at) VALUES (?, ?, ?, ?, ?)')
     .bind(bc.card_id, 'red', bc.id, shortText(body.by), new Date().toISOString()).run();
   const lane = await computeLane(env, await laneRow(env, bc.card_id));
-  const res = await raiseReorderRequest(card, env, ctx);     // Task 9 adds `lane` as a 4th arg for the email body
-  const payload = await res.json();
-  return successResponse({ success: true, lane, request: payload.request });
+  return successResponse({ success: true, lane, request });
 }
 
 export async function handleKanbanD1(request, env, ctx) {
