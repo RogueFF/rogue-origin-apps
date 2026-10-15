@@ -1,7 +1,7 @@
 # Grove Bags — Bins, Usage Ledger, and the Visual Rack
 
 **Date:** 2026-10-14
-**Status:** Design approved in conversation with Koa (2026-10-14; reusable cards added the same evening). Supersedes
+**Status:** Design approved in conversation with Koa (2026-10-14; reusable cards, then red-card-only, the same evening). Supersedes
 `2026-09-02-grove-bag-bins-design.md` (never built).
 **Builds on:** `2026-08-10-grove-reorder-alert-design.md` (scan → email → "mark as
 ordered" loop, live since 2026-08-11) and the Tag & Desk page
@@ -29,7 +29,7 @@ from across the room without reading a number.
 
 | Question | Decision | Why |
 |---|---|---|
-| Count of record | **Sealed bins on the rack**, recorded by scanning a bin card when the bin is opened | Catches every channel. Crew already scans kanban QRs. Scan timestamps give the burn rate for free. |
+| Count of record | **Receive count + the ledger.** Receive sets the baseline (boxes × bags per box); Shopify usage counts down from it. The crew does not scan bins. | One scan per 75 days (the red card) beats fifty. Compliance over precision. |
 | Unit | **The bin as Koa splits it.** Grove ships sealed boxes of a fixed count (10 lb: 100); the crew breaks each box into smaller bins (10 lb: 2 × 50). Receive takes boxes × bags per box and the bin size, and prints one card per bin. | ±1 bin of accuracy is fine against a 2,500 MOQ. Bin size is per card config, not a constant. |
 | Shopify's role | **Usage signal only**, never the count | A counter that nobody restocks is always wrong. Usage since the last count, subtracted from that count, is an independent on-hand estimate. |
 | How usage reaches us | **Shopify Flow → HTTP → worker ledger** (`kanban_usage`), via a per-variant recipe table | Same transport the production webhook already uses. Replaces the fake "Grove Bags" product. One row per material per line item; adding a material later is a recipe row, not a new Flow. |
@@ -40,7 +40,7 @@ from across the room without reading a number.
 | Surfaces | **Tag & Desk Grove tab** + the Damon email + the phone scan page. No Ops Hub tile, no `kanban.html` panel. | One home. YAGNI on a second surface. |
 | In-person system | Colour lane per size, header card, one **EN USO** slot, bin cards, **red tape line** + **red ORDER card** at the reorder depth | Every state is a colour and a position. Three independent triggers: eyes (tape), hands (red card), automation (usage). |
 | Boxes vs bins | Receive records boxes; cards go on bins | The box is the receipt unit, the bin is the consumption unit. |
-| Cards | **Reusable, printed once per lane** (laminated set = MOQ ÷ bin size + spares, each with its own token). Scanned card goes into the SCANNED box at the rack; at Receive the cards go back into the new bins. | Koa: no reprinting every shipment. Classic kanban card loop. Count becomes a per-lane tally (received adds, scans subtract, recount sets). |
+| Cards | **One red ORDER card per lane**, laminated, printed once. No per-bin cards. | Koa 2026-10-14: fewer worker actions. The ledger already counts; per-bin scans would duplicate it. If a size drifts (sells outside Shopify), that size can get per-bin cards later — the model allows it. |
 | Scope now | **Grove bags only.** The recipe table is general; only bag recipes are seeded. | "Start with Grove, we keep running out." Labels, boxes, humidity bins come later as rows. |
 
 ## 2. The rack (in-person system)
@@ -65,19 +65,19 @@ screen → Desk tile.
 
 **Rules (the whole SOP, printed on the header card):**
 1. Only one open bin per lane. Open the next one when EN USO is empty.
-2. When you open a bin, scan its card, then drop the card in the SCANNED box.
-3. If you uncover the red card, scan it. (That raises the Damon request even
-   if no bin scan ever did.)
+2. **If you uncover the red card, scan it.** That is the only scan a worker
+   ever does on this rack.
 
 **Red tape = the reorder point you can see from the door.** Bins are uniform,
 so height is count. The Desk prints a small label whenever the reorder point
 changes ("Red tape at 15 bins · move the red card"), and Receive ends with
 "move the red card to bin N".
 
-**Receive station** (laminated one-pager at the rack): count boxes → Desk →
-Receive (boxes × bags per box, bin size) → break the boxes down into bins →
-take cards from the SCANNED box, one per bin → restock behind EN USO → move
-the red card and tape. Nothing to print. Twenty minutes, no judgement calls.
+**Receive station** (laminated one-pager at the rack): count the bins still
+sealed → Desk → Receive (leftover bins, boxes arrived, bags per box, bin
+size) → break the boxes down into bins → restock behind EN USO → put the red
+card and tape at the depth the Desk shows. Nothing to print. The leftover
+count is also the recount that checks the ledger.
 
 **Confirmed 2026-10-14:** Grove boxes are broken down into smaller bins on
 receipt (10 lb: box of 100 → 2 bins of 50). The bin is the unit that gets a
@@ -103,12 +103,13 @@ CREATE TABLE IF NOT EXISTS kanban_bin_config (
   FOREIGN KEY (card_id) REFERENCES kanban_cards(id) ON DELETE CASCADE
 );
 
--- Reusable cards: a fixed set per lane, printed once. Interchangeable.
+-- One red card per lane (kind='red'). kind='bin' is reserved for a size that
+-- later needs per-bin scanning; nothing creates them in v1.
 CREATE TABLE IF NOT EXISTS kanban_bin_cards (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   card_id   INTEGER NOT NULL,                    -- the kanban card (size)
-  slot_no   INTEGER NOT NULL,                    -- 1..N, printed on the card
-  kind      TEXT NOT NULL DEFAULT 'bin',         -- bin | red
+  slot_no   INTEGER NOT NULL DEFAULT 0,
+  kind      TEXT NOT NULL DEFAULT 'red',         -- red | bin
   token     TEXT NOT NULL,                       -- 10 chars base32, in the QR
   retired   INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY (card_id) REFERENCES kanban_cards(id) ON DELETE CASCADE
@@ -119,16 +120,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_kbc_token ON kanban_bin_cards(token);
 CREATE TABLE IF NOT EXISTS kanban_bin_events (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   card_id   INTEGER NOT NULL,
-  kind      TEXT NOT NULL,                       -- receive | open | recount | void
-  bins      INTEGER NOT NULL,                    -- +N receive, -1 open, absolute for recount, -N void
+  kind      TEXT NOT NULL,                       -- receive | recount | red | void | open (v2)
+  bins      INTEGER NOT NULL,                    -- +N receive, absolute for recount, 0 red, -N void
   bag_count INTEGER NOT NULL,                    -- bags per bin at the time
-  bin_card  INTEGER,                             -- kanban_bin_cards.id for 'open'
+  bin_card  INTEGER,                             -- kanban_bin_cards.id for 'red' / 'open'
   lot       TEXT, by TEXT, note TEXT,
   at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_kbe_card_at ON kanban_bin_events(card_id, at);
 
--- Red ORDER card per lane: kind='red'. Scanning it raises the request; /k/<token> is one route.
 
 -- Recipe: what one sold unit of a variant consumes.
 CREATE TABLE IF NOT EXISTS kanban_recipes (
@@ -194,24 +194,21 @@ two weeks and matches; then it is archived.
 
 ```
 per            = bags_per_bin
-sealedBins     = latest recount (absolute) + Σ receive − Σ open − Σ void since it
-countOnHand    = sealedBins × per                             (count signal)
-baseline       = latest kanban_baselines row
+baseline       = latest kanban_baselines row (written by Receive / Recount)
 usageSince     = Σ kanban_usage.qty WHERE at > baseline.at
-usageOnHand    = baseline.bags − usageSince                    (usage signal)
-onHand         = min(countOnHand, usageOnHand)                 (alarm uses the lower)
-recount        = |countOnHand − usageOnHand| > per             (Desk flag)
+onHand         = baseline.bags − usageSince                    (the ledger estimate)
+redScanned     = a 'red' event after baseline.at → status 'order' regardless of onHand
+recount        = at Receive: |counted leftover × per − onHand| > per  (Desk flag)
 
-rateScans      = open events ≥ 3 in 56 d ? Σ bag_count(open, 56 d) / 56 : seed_per_month / 30.4
-rateUsage      = Σ usage(56 d) / 56
+rateUsage      = usage rows ≥ 14 d ? Σ usage(56 d) / 56 : seed_per_month / 30.4
 rateSeason     = Σ usage(same window last year: today+lead … today+lead+safety) / (lead+safety)
-rate           = max(rateScans, rateUsage, rateSeason)
+rate           = max(rateUsage, rateSeason)
 
 reorderPoint   = rate × (lead + safety)
 runOut         = today + onHand / rate
 orderBy        = today + (onHand − rate × lead) / rate         (may be in the past)
 suggestedQty   = max(moq, ceil(rate × 120 / 100) × 100)        (MOQ or ~4 months)
-status         = onHand ≤ reorderPoint ? 'order' : orderBy ≤ today+14 ? 'soon' : 'ok'
+status         = redScanned || onHand ≤ reorderPoint ? 'order' : orderBy ≤ today+14 ? 'soon' : 'ok'
 redTapeAtBins = ceil(reorderPoint / per)
 ```
 
@@ -226,34 +223,31 @@ and the max falls through to the other two.
 ## 6. Scan page — `GET /k/<token>`
 
 Self-contained worker page (`handlers/bin-scan.js`), JS POSTs
-`?action=openBin {token}` on load (mutate on POST, not GET, same as
+`?action=scanCard {token}` on load (mutate on POST, not GET, same as
 `kanban.html?flag=`). Big type, lane colour background, Spanish first:
 
 | Case | Screen |
 |---|---|
-| bin card, first scan in 3 h | **1 oz** · contenedor abierto · **quedan 9 contenedores** · ▓▓▓▓▓▓▓▓▓ (one square per sealed bin, red ones below the tape line) · ~7 semanas |
-| same card again within 3 h | Esta tarjeta ya se escaneó a las 10:14 · quedan 9 · **[Era otro contenedor — contar de nuevo]** (button POSTs with `force: true`) |
-| red card | **PEDIR** · solicitud enviada a Damon · (or "ya está pedido" if a request is open) |
-| crossed reorder point on this scan | as opened + "Solicitud enviada a Damon" |
+| red card | **PEDIR 1 oz** · solicitud enviada a Damon · lane colour · (or "ya está pedido" if a request is open) |
 | void / unknown | Paquete anulado / Tarjeta no reconocida |
 
-Cards are reusable, so the double-scan guard is time-based: the same token
-within 3 hours is ignored unless forced. A bin lasts days, so that is safe. QR data is the ~62-char `/k/`
+A second scan of the red card while a request is open just re-sends the
+email (same as today's `already_open` path). QR data is the ~62-char `/k/`
 URL, version 4 at level M.
 
 ## 7. Cards
 
-Printed **once** from the Desk ("Lane kit"), laminated, 6×4 in card stock, one
-set per lane sized MOQ ÷ bin size + 5 spares (e.g. 1 oz at 50/bin → 55 cards):
+Printed **once** per lane from the Desk ("Lane kit"), laminated:
 
-- lane colour band · **1 oz** · TARJETA 7 · 50 bolsas por contenedor
-- QR · **ESCANEA AL ABRIR, LUEGO A LA CAJA** / *scan when you open, then into the box*
+- **Header card** (full sheet): bag photo · size huge · lane colour · the two
+  rules in Spanish and English.
+- **Red ORDER card** (full sheet, red, lane colour band): **PEDIR · 1 oz** ·
+  QR (`/k/<token>`) · *ESCANEA ESTA TARJETA* / *scan this card* · "Then put it
+  back here at the next delivery."
+- **Red tape label** (small, reprinted when the depth changes): "Red tape at
+  bin 15".
 
-A lane also gets a labelled **SCANNED / ESCANEADAS** box. Re-print only to
-replace a lost card (retire the old token).
-
-Header card (full sheet, laminated, once per lane) and the red ORDER card (full
-sheet, red, once per lane) print from the same view under "Lane kit".
+No per-bin cards. A lost red card is retired and reprinted from the kit.
 
 ## 8. Desk — Grove tab (`src/js/tag-desk/`)
 
@@ -261,13 +255,13 @@ Replaces the current localStorage-only Grove tab. One **lane tile per size**,
 same colour as the rack, in this order of information:
 
 1. **Order by Sep 15** (or "OK until Feb", or "ORDER NOW · 3 days late")
-2. Bin squares: sealed bins as filled squares, red tape drawn at
-   `redTapeAtBins`, the open bin hatched
-3. Small line: `9 sealed · ~140/wk · usage says 8 · recount?` — the recount
-   badge only when the two signals disagree by more than a bin
-4. Buttons: **Receive** (boxes → bins, no printing) · **Lane kit** (print once;
-   reprint a lost card) · **Void** · **Recount** (sets the tally and a baseline)
-   · **Settings**
+2. Bin squares from the ledger estimate (`onHand / per`), red tape drawn at
+   `redTapeAtBins`; a RED CARD SCANNED banner when one has been
+3. Small line: `~9 bins · ~140/wk (fall: 230) · last count Sep 2` — the
+   recount badge only when the last Receive count disagreed with the ledger
+4. Buttons: **Receive** (leftover + boxes → new baseline, shows red-tape depth)
+   · **Lane kit** (print once; reprint a lost card) · **Recount** (baseline
+   from a physical count) · **Settings**
 
 An open Damon request shows inline with its date; "Mark as ordered" is unchanged.
 A "no recipe" strip lists unmapped Shopify variants seen in the last 30 days.
@@ -300,11 +294,11 @@ reading zero orders in analytics.
 | Action | Method | Body / params | Does |
 |---|---|---|---|
 | `getBinStatus` | GET | `?cardId=` optional | §5 per bag-tracked card + bins + open request + unmapped variants |
-| `receiveBins` | POST | `{cardId, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}` | +N bins event, writes a baseline, returns red-tape depth |
-| `openBin` | POST | `{token, by?, force?}` | −1 bin event (3 h repeat guard); red card → raise request; recompute; may raise request |
+| `receiveBins` | POST | `{cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}` | receive event, new baseline, recount flag, returns red-tape depth |
+| `scanCard` | POST | `{token, by?}` | red card → 'red' event + raise request (re-sends if open); kind='bin' reserved for v2 |
 | `voidBin` | POST | `{binId, reason}` | status → void |
 | `recount` | POST | `{cardId, sealed}` | absolute tally event + baseline |
-| `makeLaneKit` | POST | `{cardId, count}` | creates N bin cards + the red card (tokens) for printing |
+| `makeLaneKit` | POST | `{cardId}` | creates the lane's red card token for printing |
 | `setBinConfig` | POST | `{cardId, ...}` | upsert config |
 | `orderUsage` | POST (secret) | Flow body (§4) | writes usage rows |
 | `setRecipe` / `getRecipes` | POST / GET | `{variant_id, card_id, qty}` | recipe maintenance |
@@ -316,9 +310,9 @@ Desk writes carry the shared password like the rest of Phase A.
 1. **Ledger first:** migration, `orderUsage`, recipes seeded from the Shopify
    product export, Flow pointed at the worker. The backstop starts collecting
    on day one, before any card exists. Run beside the old Flow; compare.
-2. **Bins:** `receiveBins` / `openBin` / `/k/` page / lane kit print (once).
-   Koa counts bins per size → Recount → print + laminate the lane kits → one
-   card per bin → scan one to prove the loop.
+2. **Lanes:** `receiveBins` / `scanCard` / `/k/` page / lane kit print (once).
+   Koa counts bins per size → Recount → print + laminate the five kits →
+   red tape + red card at the depth shown → scan one red card to prove the loop.
 3. **Desk tab + email + red card.** Retire localStorage Grove memory.
 4. **Seasonal seed** from last year's orders; `rateSeason` goes live.
 5. **Phase 2:** wholesale/consignment usage hooks; more materials as recipe rows.
@@ -328,3 +322,4 @@ Desk writes carry the shared password like the rest of Phase A.
 - Bags per bin as shipped by Grove (default 100 — read the next bining slip).
 - Bin to bench vs single bags at the rack (default: bin to bench).
 - Lane colours: reuse the Desk's Grove badge colours unless Koa picks others.
+- Per-bin cards (kind='bin') only if a size's Receive count keeps disagreeing with the ledger.
