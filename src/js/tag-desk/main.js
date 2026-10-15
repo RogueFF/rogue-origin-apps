@@ -92,5 +92,7 @@ document.addEventListener('ro:langchange', () => { $('#langBtn').textContent = E
 if (!getLang()) setLang('en');
 
 const params = new URLSearchParams(location.search);
+// `?view=grove`: the link in Koa's delivery / review messages lands on that tab.
+if (['order', 'cards', 'print', 'grove', 'tag'].includes(params.get('view'))) S.view = params.get('view');
 const flag = parseInt(params.get('flag') || '', 10);
 if (flag) runTag(flag, params.get('red') === '1'); else runDesk();

@@ -101,6 +101,18 @@ export default {
       }
     }
 
+    // Daily 6 AM PT: Grove orders past their expected date with no delivery →
+    // one line to Koa per request (handlers/grove-intake.js).
+    if (isDailyCron) {
+      try {
+        const { runGroveOverdueCheck } = await import('./handlers/grove-intake.js');
+        const flagged = await runGroveOverdueCheck(env);
+        if (flagged.length) console.log(`[Cron] Grove overdue: requests ${flagged.join(', ')}`);
+      } catch (e) {
+        console.error(`[Cron] Grove overdue check failed: ${e.message}`);
+      }
+    }
+
     // Friday 9 AM PT: Friday cart reminder via Telegram
     if (isFridayCron) {
       try {

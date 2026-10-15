@@ -1,0 +1,13 @@
+{
+  "synthetic-order.txt": {
+    "kind": "order", "vendorRef": "18234", "trackingNo": null,
+    "items": [{ "cardId": 99, "qty": 600, "cases": 6 }, { "cardId": 21, "qty": 2500, "cases": 5 }],
+    "missing": []
+  },
+  "synthetic-shipping.txt": {
+    "kind": "shipping", "vendorRef": "18234", "trackingNo": "1Z999AA10123456784", "carrier": "ups",
+    "shippedAt": "2026-10-13T12:00:00.000Z", "expectedAt": "2026-10-17T12:00:00.000Z",
+    "items": [{ "cardId": 99, "qty": 600, "cases": 6 }, { "cardId": 21, "qty": 2500, "cases": 5 }],
+    "missing": []
+  }
+}

@@ -290,6 +290,59 @@ Once you've placed the order, mark it done here: <confirmUrl>
 `closeReorderRequest` also writes the `kanban_orders` row so Grove stops
 reading zero orders in analytics.
 
+### 9b. Email intake and auto-receive (added 2026-10-15)
+
+Koa's facts: 10 lb bags are ordered about every two weeks (6 cases × 100 =
+600 bags) and still run out, and the manual **Receive** on 26 deliveries a year
+is the step that gets skipped. So the order and shipping emails Grove already
+sends become the input, and the carrier's "delivered" becomes the receive.
+Setup: `docs/guides/grove-email-intake.md`.
+
+```
+Grove email ──Gmail filter (Grove/Orders)──▶ Apps Script poller (5 min)
+   ──▶ POST ?action=groveMail ──▶ lib/grove-mail.js (pure parser)
+        ├─ order confirmation → request per size (closes the open Damon one,
+        │      else attaches to his link-closed one, else creates 'ordered' by
+        │      'email'); qty_ordered, vendor_ref, expected_at; kanban_orders row
+        ├─ shipping notice   → tracking_no, carrier, shipped_at, expected_at on
+        │      the same requests (by Grove order number); registers with 17TRACK
+        └─ anything missing  → kanban_inbound_mail 'needs_review' + one line to Koa
+17TRACK push ──▶ POST ?action=trackingEvent (sign = SHA-256 hex of body/key)
+        └─ Delivered, nothing received since shipped_at → applyReceive(leftover =
+           ledger bins, boxes = qty ÷ bags_per_box, by 'tracking', lot = order no.)
+           → delivered_at → "600 10 lb delivered · lane now ~N bags" to Koa
+daily cron ──▶ runGroveOverdueCheck: expected_at + 3 days, no delivery → one line, once
+```
+
+**Parser rule (`lib/grove-mail.js`):** a line the §4 size ladder can place is a
+line item; its quantity is on the line (`× 6`, `Qty: 2,500`, `6 cases`) or on
+one of the next two lines. `cases × bags_per_box` (the line's own "case of
+100" wins over the lane's config) or a bare bag count. Tracking: UPS `1Z…`
+first, then USPS 20–22 digits, then FedEx 12/15/20, with a carrier word
+settling the digit forms. The parser is tuned against real Grove emails kept in
+`tests/fixtures/grove-mail/`; the synthetic ones are placeholders. It never
+guesses: no size, no quantity, or a shipping mail with neither items nor an
+order number → `needs_review`.
+
+**Migration `0047-grove-mail-intake.sql`:** `kanban_reorder_requests` gains
+`qty_ordered, tracking_no, carrier, expected_at, vendor_ref, shipped_at,
+delivered_at, overdue_notified_at`; new table `kanban_inbound_mail` (every
+forwarded mail, its parse, status `applied | needs_review | ignored`, deduped
+on the Gmail message id).
+
+**Why 17TRACK:** AfterShip's webhooks are on its $119/mo plan; UPS/FedEx APIs
+are free but poll-only and two more accounts. 17TRACK: 200 free registrations
+(one per number, updates free), a signed push, one key. If it lapses, the
+overdue check and the Desk's Receive still cover the lane, and `trackingEvent`
+takes a manual `{number, status: "Delivered"}` with the webhook secret.
+
+**Desk:** `getBinStatus` adds `lane.order` (`stage: ordered | shipped |
+overdue | delivered`, qty, tracking, expected) and a top-level `review` list.
+The tile shows one line ("600 on order · arrives ~Oct 29" / "600 shipped ·
+UPS 1Z… · arrives Oct 17" / **OVERDUE** in red); Receive prefills boxes from
+`qty_ordered` and the lot from the Grove order number; a strip lists
+needs-review mails with **Mark as handled**.
+
 ## 10. Actions added to the kanban router
 
 | Action | Method | Body / params | Does |
@@ -303,8 +356,12 @@ reading zero orders in analytics.
 | `setBinConfig` | POST | `{cardId, ...}` | upsert config |
 | `orderUsage` | POST (secret) | Flow body (§4) | writes usage rows |
 | `setRecipe` / `getRecipes` | POST / GET | `{variant_id, card_id, qty}` | recipe maintenance |
+| `groveMail` | POST (secret) | `{from, subject, text, html?, receivedAt, messageId?}` | §9b: parse one Grove email → request fields + order row + 17TRACK registration, or `needs_review` |
+| `trackingEvent` | POST (17TRACK `sign` header, or secret + `{number, status}`) | 17TRACK push | Delivered → receive + baseline + `delivered_at`, idempotent |
+| `markMailHandled` | POST | `{id, by?}` | a needs-review mail Koa dealt with |
 
-Desk writes carry the shared password like the rest of Phase A.
+`getBinStatus` also returns `lane.order` and `review` (§9b). Desk writes carry
+the shared password like the rest of Phase A.
 
 ## 11. Build order (each step ships alone and is useful alone)
 
