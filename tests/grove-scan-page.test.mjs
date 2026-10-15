@@ -37,7 +37,7 @@ test('GET /k/<token> never touches the database', async () => {
 
 test('errors are Spanish first by status; the three rescan messages exist', () => {
   const html = scanPageHtml('abcdefgh23', BASE);
-  for (const s of ['Tarjeta no reconocida', 'Card not recognised', 'Tarjeta reemplazada o anulada', 'Card replaced or void', 'Sin conexión', 'No connection',
+  for (const s of ['Tarjeta no reconocida', 'Card not recognised', 'Tarjeta reemplazada — usa la nueva', 'Card replaced — use the new one', 'No se pudo registrar', 'Could not record', '/replaced/i', 'Sin conexión', 'No connection',
     'Solicitud enviada a Damon ✓', 'Ya está pedido · correo reenviado', 'Ya está pedido · Damon ya tiene el correo',
     'Already requested · Damon already has the email', 'retried']) assert.ok(html.includes(s), s);
 });

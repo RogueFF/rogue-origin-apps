@@ -65,3 +65,30 @@ test('closing via the email link with no lane config logs qty null and placed_by
   assert.equal(row.placed_by, 'email-link');
   assert.deepEqual(JSON.parse(row.items_json), [{ cardId: 300, item: 'Grove misc', qty: null }]);
 });
+
+test('close logs the suggested qty at close time (a MOQ-0 lane gets a number, not null)', async () => {
+  const env = mailEnv();
+  await call(env, 'addToCart', { cardId: 69 });
+  const { close_token } = env.db.prepare('SELECT close_token FROM kanban_reorder_requests').get();
+  await call(env, 'closeReorderRequest', { token: close_token });
+  const [it] = JSON.parse(env.db.prepare('SELECT items_json FROM kanban_orders').get().items_json);
+  assert.equal(typeof it.qty, 'number');
+  assert.ok(it.qty > 0);
+});
+
+test('close is atomic: if the history row cannot be written the request stays open', async () => {
+  const env = mailEnv();
+  await call(env, 'addToCart', { cardId: 21 });
+  const { close_token } = env.db.prepare('SELECT close_token FROM kanban_reorder_requests').get();
+  env.db.exec('DROP TABLE kanban_orders');
+  await assert.rejects(call(env, 'closeReorderRequest', { token: close_token }));
+  assert.equal(env.db.prepare('SELECT status FROM kanban_reorder_requests').get().status, 'open');
+});
+
+test('addToCart: a lane read error falls back to the plain alert instead of failing the scan', async () => {
+  const env = mailEnv();
+  env.db.exec('DROP TABLE kanban_baselines');
+  const r = await call(env, 'addToCart', { cardId: 21 });
+  assert.equal(r.request.outcome, 'created');
+  assert.match(sent[0].body, /was flagged for reorder/);
+});

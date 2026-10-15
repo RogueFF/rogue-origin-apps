@@ -35,7 +35,8 @@ function show(bg, nodes) { document.body.style.background = bg; v.replaceChildre
 /** Spanish first by status; the server's (English) message only for the unexpected. */
 function fail(status, msg) {
   const [es, en] = status === 404 ? ['Tarjeta no reconocida', 'Card not recognised']
-    : status === 400 ? ['Tarjeta reemplazada o anulada', 'Card replaced or void']
+    : status === 400 && /replaced/i.test(msg || '') ? ['Tarjeta reemplazada — usa la nueva', 'Card replaced — use the new one']
+    : status === 400 ? ['No se pudo registrar', 'Could not record · ' + (msg || '')]
     : status === 0 ? ['Sin conexión', 'No connection']
     : ['Error', msg || ''];
   show('#7f1d1d', [el('h1', null, '✗'), el('p', 'big', es), el('p', 'en', en), ...pair('Avisa a Koa', 'Tell Koa')]);
