@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseFlowOrder, usageRowsFor } from '../workers/src/lib/bin-usage.js';
 
+const AT = '2026-10-14T18:00:00.000Z';
+
 const RECIPES = [{ variant_id: '111', card_id: 21, qty: 1 }, { variant_id: '222', card_id: 54, qty: 1 }, { variant_id: '222', card_id: 99, qty: 0 }, { variant_id: '333', card_id: 56, qty: 2 }];
 
 test('parseFlowOrder accepts the Flow body and ignores junk', () => {
@@ -12,15 +14,15 @@ test('parseFlowOrder rejects a body with no order name', () => {
   assert.throws(() => parseFlowOrder({ items: [] }), /order/);
 });
 test('usageRowsFor multiplies qty by recipe qty and skips zero recipes', () => {
-  const rows = usageRowsFor({ ref: '#1001', at: 'T', items: [{ variantId: '111', qty: 2 }, { variantId: '222', qty: 1 }] }, RECIPES);
+  const rows = usageRowsFor({ ref: '#1001', at: AT, items: [{ variantId: '111', qty: 2 }, { variantId: '222', qty: 1 }] }, RECIPES);
   assert.deepEqual(rows, [
-    { card_id: 21, qty: 2, source: 'shopify', ref: '#1001', variant_id: '111', at: 'T' },
-    { card_id: 54, qty: 1, source: 'shopify', ref: '#1001', variant_id: '222', at: 'T' },
+    { card_id: 21, qty: 2, source: 'shopify', ref: '#1001', variant_id: '111', at: AT },
+    { card_id: 54, qty: 1, source: 'shopify', ref: '#1001', variant_id: '222', at: AT },
   ]);
 });
 test('an unmapped variant becomes a loud card_id 0 row, never silence', () => {
-  const rows = usageRowsFor({ ref: '#1002', at: 'T', items: [{ variantId: '999', qty: 3 }] }, RECIPES);
-  assert.deepEqual(rows, [{ card_id: 0, qty: 3, source: 'shopify:unmapped', ref: '#1002', variant_id: '999', at: 'T' }]);
+  const rows = usageRowsFor({ ref: '#1002', at: AT, items: [{ variantId: '999', qty: 3 }] }, RECIPES);
+  assert.deepEqual(rows, [{ card_id: 0, qty: 3, source: 'shopify:unmapped', ref: '#1002', variant_id: '999', at: AT }]);
 });
 test('parseFlowOrder accepts qty as a numeric string', () => {
   const o = parseFlowOrder({ order: '#1003', items: [{ variant_id: '111', qty: '2' }] });
@@ -54,6 +56,6 @@ test('the same variant twice in one order is summed, so the unique index cannot 
   assert.equal(rows[0].qty, 3);
 });
 test('a recipe qty of 2 doubles the bags consumed', () => {
-  const rows = usageRowsFor({ ref: '#1010', at: 'T', items: [{ variantId: '333', qty: 2 }] }, RECIPES);
-  assert.deepEqual(rows, [{ card_id: 56, qty: 4, source: 'shopify', ref: '#1010', variant_id: '333', at: 'T' }]);
+  const rows = usageRowsFor({ ref: '#1010', at: AT, items: [{ variantId: '333', qty: 2 }] }, RECIPES);
+  assert.deepEqual(rows, [{ card_id: 56, qty: 4, source: 'shopify', ref: '#1010', variant_id: '333', at: AT }]);
 });

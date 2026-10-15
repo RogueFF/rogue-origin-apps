@@ -1,3 +1,4 @@
+-- Timestamp standard: every `at`/`*_at` value is ISO 8601 as new Date().toISOString() writes it (YYYY-MM-DDTHH:MM:SS.sssZ); inserts set it explicitly.
 -- Grove bins: per-size config, usage ledger, baselines, red cards.
 -- Design: docs/plans/2026-10-14-grove-bins-design.md
 --
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS kanban_bin_config (
   moq             INTEGER NOT NULL DEFAULT 2500,
   seed_per_month  REAL    NOT NULL,               -- used until the ledger has 14 days
   colour          TEXT,                           -- lane colour token
-  updated_at      TEXT DEFAULT (datetime('now')),
+  updated_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY (card_id) REFERENCES kanban_cards(id) ON DELETE CASCADE
 );
 
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS kanban_bin_cards (
   kind      TEXT NOT NULL DEFAULT 'red',          -- red | bin
   token     TEXT NOT NULL,                        -- 10 chars base32, in the QR
   retired   INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   FOREIGN KEY (card_id) REFERENCES kanban_cards(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kbc_token ON kanban_bin_cards(token);
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS kanban_bin_events (
   bag_count INTEGER NOT NULL DEFAULT 0,           -- bags per bin at the time
   bin_card  INTEGER,                              -- kanban_bin_cards.id for 'red'
   lot       TEXT, by TEXT, note TEXT,
-  at        TEXT NOT NULL DEFAULT (datetime('now'))
+  at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS idx_kbe_card_at ON kanban_bin_events(card_id, at);
 
@@ -60,7 +61,7 @@ CREATE TABLE IF NOT EXISTS kanban_usage (
   source    TEXT NOT NULL,                        -- shopify | shopify:seed | shopify:unmapped | wholesale | consignment
   ref       TEXT,                                 -- order name (#1234) or seed label
   variant_id TEXT,                                -- written on every Shopify row; part of the dedupe key (idx_ku_ref)
-  at        TEXT NOT NULL DEFAULT (datetime('now'))
+  at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 -- Dedupe key. SQLite treats NULLs as distinct in a UNIQUE index, so this only
 -- dedupes while ref and variant_id are both non-null: Phase 2 wholesale and
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS kanban_baselines (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   card_id   INTEGER NOT NULL,
   bags      INTEGER NOT NULL,
-  at        TEXT NOT NULL DEFAULT (datetime('now')),
+  at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   reason    TEXT                                  -- receive | recount
 );
 CREATE INDEX IF NOT EXISTS idx_kbl_card_at ON kanban_baselines(card_id, at);
