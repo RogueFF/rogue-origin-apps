@@ -38,3 +38,32 @@ test('a trigger failure never fails the webhook', async () => {
   assert.equal(r.success, true);
   assert.equal(r.written, 1);
 });
+
+test('once Damon marks it ordered, later orders do not raise again until the bins are received', async () => {
+  const env = await laneAbovePoint(1);
+  await call(env, 'orderUsage', order('#1001'));
+  const { close_token } = env.db.prepare('SELECT close_token FROM kanban_reorder_requests').get();
+  await call(env, 'closeReorderRequest', { token: close_token, closedBy: 'Damon' });
+  await call(env, 'orderUsage', order('#1002'));
+  await call(env, 'orderUsage', order('#1003'));
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_reorder_requests').get().n, 1);
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_orders').get().n, 1);
+  // A mid-lead recount must not re-arm the trigger either.
+  await call(env, 'recount', { cardId: 21, sealedBins: 1 });
+  await call(env, 'orderUsage', order('#1004'));
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_reorder_requests').get().n, 1);
+  // The delivery lands (receive), then the lane runs down again: the trigger is armed again.
+  await call(env, 'receiveBins', { cardId: 21, leftoverBins: 0, boxes: 0 });
+  await new Promise(r => setTimeout(r, 5));
+  await call(env, 'orderUsage', order('#1005'));
+  assert.equal(openRequests(env).length, 1);
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_reorder_requests').get().n, 2);
+});
+
+test('an ordered request older than lead + safety with no receive no longer holds the trigger', async () => {
+  const env = await laneAbovePoint(1);
+  env.db.prepare(`INSERT INTO kanban_reorder_requests (card_id, status, close_token, requested_at, closed_at, closed_by) VALUES (21, 'ordered', 'old', ?, ?, 'Damon')`)
+    .run(new Date(Date.now() - 200 * 864e5).toISOString(), new Date(Date.now() - 120 * 864e5).toISOString());
+  await call(env, 'orderUsage', order('#1001'));
+  assert.equal(openRequests(env).length, 1);
+});
