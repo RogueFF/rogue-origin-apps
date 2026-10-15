@@ -96,3 +96,22 @@ describe('supersack submit — premium trim above biomass', () => {
     assert.equal(bliss[8], 37);
   });
 });
+
+describe('supersack submit — a full sack by crop year', () => {
+  test('a 2026-crop sack is 35 lb and a 2025-crop sack stays 37, opened the same day', async () => {
+    // Koa, 2026-09-28: 35 lb from the 2026 crop. The year is the one in the
+    // strain title — 2025 material trimmed in 2026 is still a 37 lb sack.
+    const NEW = '2026 - Lifter / Sungrown / 1st Cut';
+    const r = await submit({ date: '2026-10-02', biomass_lbs: 40, trim_lbs: 8, strains: {
+      [NEW]: { sacks: 2, tops: 30, smalls: 12 },
+      [LIFTER]: { sacks: 2, tops: 30, smalls: 12 },
+    } });
+    assert.equal(r.status, 200);
+    const byStrain = Object.fromEntries(r.writes.map(w => [w.params[1], w.params]));
+    assert.equal(byStrain[NEW][8], 70, '2 x 35');
+    assert.equal(byStrain[LIFTER][8], 74, '2 x 37');
+    // waste is the residual of each strain's own raw: 70 - 30 - 12 - 20 - 4
+    assert.equal(byStrain[NEW][7], 4);
+    assert.equal(byStrain[LIFTER][7], 8);
+  });
+});

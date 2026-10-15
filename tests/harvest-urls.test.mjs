@@ -41,7 +41,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0042-harvest-crew-day.sql',
 ];
 
 function freshDb() {
@@ -53,6 +53,9 @@ function freshDb() {
   }
   sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
   sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER)');
+  // The floor today: Crew A with every trailer (three crews, 2026-10-03).
+  sqlite.prepare("INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test) VALUES (?, 'A', '1,2,3,4,5,6', 16, 4, 4, 1)")
+    .run(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }));
   const DB = {
     async batch(x) { return Promise.all(x.map(s => s.run())); },
     prepare(sql) {
@@ -87,12 +90,13 @@ before(function () {
 test('the scanned zone sign has no relative action URLs', async () => {
   const { env, ctx } = freshDb();
   const html = await (await quiet(() =>
-    handleZoneScan(new Request('https://x/z/Z4?lang=en'), env, ctx))).text();
+    handleZoneScan(new Request('https://x/z/Z4?crew=A&lang=en'), env, ctx))).text();
 
   assert.deepEqual(relativeActionUrls(html), [],
     'served from /z/Z4, a relative ?action= goes back to the zone handler and records nothing');
-  // The specific one that was losing every cutter count.
-  assert.match(html, /href="\/api\/harvest\?lang=en&zone=Z4&action=headcount/);
+  // The specific one that was losing every cutter count. Cutters now change
+  // through the crew card (three crews, 2026-10-03); its link must be absolute too.
+  assert.match(html, /href="\/api\/harvest\?action=crew_day&lang=en&crew=A&session_id=\d+"/);
 });
 
 test('the barn intake form posts to an absolute path', async () => {
@@ -121,26 +125,36 @@ test('the takedown screens have none either', async () => {
   }
 });
 
-test('a cutter count tapped from a scanned sign is actually recorded', async () => {
+test('a trailer change made from a scanned sign is actually recorded', async () => {
   const { sqlite, env, ctx } = freshDb();
   const enter = await (await quiet(() =>
-    handleZoneScan(new Request('https://x/z/Z4?lang=en'), env, ctx))).text();
+    handleZoneScan(new Request('https://x/z/Z4?crew=A&lang=en'), env, ctx))).text();
 
   // Follow the link the crew lead's thumb actually lands on, resolved the way
   // a browser resolves it — against the page's own URL. That resolution IS the
   // bug: a bare `?action=...` on a page served from /z/Z4 becomes /z/Z4, which
-  // never reaches the headcount handler.
-  const href = (enter.match(/href="([^"]*action=headcount[^"]*)&count=6"/) || [])[1];
-  assert.ok(href, 'no headcount link found on the entry screen');
-  const resolved = new URL(href + '&count=6', 'https://x/z/Z4');
-  assert.equal(resolved.pathname, '/api/harvest',
-    `tapping resolves to ${resolved.pathname}, which is not the harvest API`);
+  // never reaches the harvest API. Trailers change on the crew card.
+  const href = (enter.match(/href="([^"]*action=crew_day[^"]*)"/) || [])[1];
+  assert.ok(href, 'no crew-card link found on the entry screen');
+  const editUrl = new URL(href, 'https://x/z/Z4');
+  assert.equal(editUrl.pathname, '/api/harvest',
+    `tapping resolves to ${editUrl.pathname}, which is not the harvest API`);
 
-  const res = await quiet(() => handleHarvestD1(new Request(resolved), env, ctx));
+  const form = await (await quiet(() => handleHarvestD1(new Request(editUrl), env, ctx))).text();
+  const action = (form.match(/<form method="POST" action="([^"]*)"/) || [])[1];
+  assert.ok(action, 'the crew card opens a form');
+  const post = new URL(action, 'https://x/z/Z4');
+  assert.equal(post.pathname, '/api/harvest');
+  const fields = Object.fromEntries([...form.matchAll(/<input type="hidden" name="(\w+)" value="([^"]*)">/g)]
+    .map(m => [m[1], m[2]]));
+  const res = await quiet(() => handleHarvestD1(new Request(post, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ ...fields, t1: '1' }),
+  }), env, ctx));
 
   assert.equal(res.status, 200);
-  const row = sqlite.prepare("SELECT headcount FROM harvest_scan_log WHERE event_type='enter'").get();
-  assert.equal(row.headcount, 6, 'the tap must record the count, not just look like it did');
+  const row = sqlite.prepare("SELECT trailers FROM harvest_crew_day WHERE crew = 'A'").get();
+  assert.equal(row.trailers, '1', 'the save must record the change, not just look like it did');
 });
 
 // ─── the tools home ──────────────────────────────────────────────────────────
@@ -156,7 +170,7 @@ test('the tools home links every harvest page, and never links a scan that write
     '/api/harvest?action=sack_print&lang=en', '/api/harvest?action=find&lang=en', '/b?lang=en',
     '/api/harvest?action=crew&lang=en', '/api/harvest?action=print_codes&lang=en',
     '/api/harvest?action=sack_label&examples=1&lang=en', '/api/harvest?action=harvest_dash',
-    '/api/harvest?action=board_page',
+    '/api/harvest?action=board_page', '/api/harvest?action=bay_tags&lang=en',
   ]) {
     assert.ok(html.includes(`href="${href}"`), `links ${href}`);
   }
@@ -172,4 +186,6 @@ test('the tools home links every harvest page, and never links a scan that write
   const es = await handleHarvestD1(new Request('https://x/api/harvest?action=hub&lang=es'), env, ctx).then(r => r.text());
   assert.match(es, /Herramientas de cosecha/);
   assert.match(es, /Imprimir etiquetas/);
+  assert.match(es, /Selector anterior/, "the old picker stays reachable from the hub");
+  assert.ok(es.includes('href="/api/harvest?action=bay_tags&lang=es"'));
 });

@@ -41,9 +41,9 @@ const MIGRATIONS = [
   '0016-harvest-sacks-sku.sql', '0017-harvest-sacks-shopify-sync.sql',
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
-  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql',
+  '0029-harvest-crew-tag.sql', '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql',
   '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql',
-  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql', '0042-harvest-crew-day.sql',
 ];
 
 function freshDb() {
@@ -55,6 +55,9 @@ function freshDb() {
   }
   sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT, sku_prefix TEXT)');
   sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER)');
+  // The floor today: Crew A with every trailer (three crews, 2026-10-03).
+  sqlite.prepare("INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, drivers, water_spiders, is_test) VALUES (?, 'A', '1,2,3,4,5,6', 16, 4, 4, 1)")
+    .run(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }));
   const DB = {
     async batch(stmts) { return Promise.all(stmts.map(st => st.run())); },
     prepare(sql) {
@@ -86,7 +89,9 @@ const sessions = (sqlite) => sqlite.prepare(
 ).all();
 
 /** The QR on the zone sign. */
-const scan = (env, ctx, path) => quiet(() => handleZoneScan(new Request(`https://x/z/${path}`), env, ctx));
+// Crew A, as every lead now picks on the first screen (three crews, 2026-10-03).
+const scan = (env, ctx, path) => quiet(() => handleZoneScan(
+  new Request(`https://x/z/${path.includes("?") ? path.replace("?", "?crew=A&") : `${path}?crew=A`}`), env, ctx));
 
 /** The same screen reached as a URL — no picker in front of it. */
 const api = (env, ctx, qs) => quiet(() => handleHarvestD1(new Request(`https://x/api/harvest?${qs}`), env, ctx));
@@ -100,7 +105,7 @@ before((t) => { if (!DatabaseSync) t.skip('node:sqlite unavailable (Node < 22.5)
 test('?action=enter on a multi-cultivar zone records nothing and asks', async () => {
   const { sqlite, env, ctx } = freshDb();
 
-  const res = await api(env, ctx, 'action=enter&zone=R1&lang=en');
+  const res = await api(env, ctx, 'action=enter&crew=A&zone=R1&lang=en');
   const html = await res.text();
 
   assert.equal(sessions(sqlite).length, 0,
@@ -113,7 +118,7 @@ test('?action=enter on a multi-cultivar zone records nothing and asks', async ()
 test('a single-cultivar zone still auto-fills — there is nothing to ask', async () => {
   const { sqlite, env, ctx } = freshDb();
 
-  await api(env, ctx, 'action=enter&zone=Z4&lang=en');
+  await api(env, ctx, 'action=enter&crew=A&zone=Z4&lang=en');
 
   const rows = sessions(sqlite);
   assert.equal(rows.length, 1);
@@ -123,7 +128,7 @@ test('a single-cultivar zone still auto-fills — there is nothing to ask', asyn
 test('a cultivar that is not planted in the zone is refused, by scan or by URL', async () => {
   const { sqlite, env, ctx } = freshDb();
 
-  const viaApi = await (await api(env, ctx, 'action=enter&zone=R1&cultivar=Lemon&lang=en')).text();
+  const viaApi = await (await api(env, ctx, 'action=enter&crew=A&zone=R1&cultivar=Lemon&lang=en')).text();
   assert.match(viaApi, /isn&#39;t planted in R1|isn't planted in R1/);
 
   const viaScan = await (await scan(env, ctx, 'R1?cultivar=Lemon&lang=en')).text();
@@ -179,10 +184,10 @@ test('the fix moves the lot in place rather than opening a second one', async ()
 
 test('the cut number is re-derived for the cultivar the lot turned out to be', async () => {
   const { sqlite, env, ctx } = freshDb();
-  // Orange Fritter has been cut in R1 before, Animal Muffins has not.
+  // Orange Fritter is on its second cut in R1; Animal Muffins has never been cut.
   sqlite.prepare(`
     INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, is_test, occurred_at, closed_at)
-    VALUES ('enter', 'R1', 'Orange Fritter', ?, 1, 1, datetime('now','-30 days'), datetime('now','-29 days'))
+    VALUES ('enter', 'R1', 'Orange Fritter', ?, 2, 1, datetime('now','-3 days'), datetime('now','-2 days'))
   `).run(new Date().getUTCFullYear());
 
   await scan(env, ctx, `R1?cultivar=${encodeURIComponent('Animal Muffins')}&lang=en`);
@@ -193,7 +198,7 @@ test('the cut number is re-derived for the cultivar the lot turned out to be', a
     `action=cultivar_fix&session_id=${open.id}&cultivar=${encodeURIComponent('Orange Fritter')}&lang=en`);
 
   assert.equal(sessions(sqlite).at(-1).cut_number, 2,
-    'as Orange Fritter it is the second cut — the cut number belongs to zone x cultivar, not to the row');
+    'as Orange Fritter it carries on cut 2 of that cultivar — the cut number belongs to zone x cultivar, not to the row');
 });
 
 test('the fix refuses a cultivar that is not planted in the zone', async () => {
@@ -240,8 +245,10 @@ test('the fix refuses on a closed lot', async () => {
 test('a real lot cannot be corrected while the tracker is in test mode', async () => {
   const { sqlite, env, ctx } = freshDb();
   const live = { ...env, HARVEST_TEST_MODE: 'false' };
+  sqlite.prepare("INSERT INTO harvest_crew_day (harvest_date, crew, trailers, cutters, is_test) VALUES (?, 'A', '1', 16, 0)")
+    .run(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }));   // Crew A on the real floor
   await quiet(() => handleZoneScan(
-    new Request(`https://x/z/R1?cultivar=${encodeURIComponent('Animal Muffins')}&lang=en`), live, ctx));
+    new Request(`https://x/z/R1?crew=A&cultivar=${encodeURIComponent('Animal Muffins')}&lang=en`), live, ctx));
   const [row] = sessions(sqlite);
   assert.equal(row.cultivar, 'Animal Muffins');
 

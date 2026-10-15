@@ -49,7 +49,7 @@ const MIGRATIONS = [
   '0018-harvest-sacks-shopify-add.sql', '0019-harvest-sacks-weight-source.sql',
   '0027-harvest-sacks-all-parts.sql', '0028-harvest-sacks-bay.sql',
   '0029-harvest-crew-tag.sql',
-  '0030-harvest-load-bay.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql',
+  '0030-harvest-load-bay.sql', '0040-harvest-load-trailer.sql', '0031-harvest-sacks-storage.sql', '0034-harvest-lot-takedown-done.sql', '0035-harvest-sacks-serial-per-cut.sql', '0036-harvest-sack-notes-edit.sql', '0037-harvest-settings.sql', '0038-harvest-print-queue.sql', '0041-harvest-sacks-fill-lbs.sql',
 ];
 
 function freshDb() {
@@ -355,12 +355,12 @@ test('the board links to the takedown screen, absolutely', async () => {
   const { env, ctx } = freshDb();
   const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
 
-  const hrefs = [...html.matchAll(/href="([^"]*action=sack_print[^"]*)"/g)].map(m => m[1]);
+  const hrefs = [...html.matchAll(/href="([^"]*action=bay_tags[^"]*)"/g)].map(m => m[1]);
   assert.ok(hrefs.length >= 1, 'the board needs a way to reach the takedown screen');
   for (const href of hrefs) {
     const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
     assert.equal(resolved.pathname, '/api/harvest');
-    assert.equal(resolved.searchParams.get('action'), 'sack_print');
+    assert.equal(resolved.searchParams.get('action'), 'bay_tags');
   }
 });
 
