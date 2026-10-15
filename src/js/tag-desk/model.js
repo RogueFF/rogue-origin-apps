@@ -21,6 +21,9 @@ export const pd = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map
 export const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate() + n); return isoOf(d); };
 export const daysBetween = (a, b) => Math.round((pd(b) - pd(a)) / 86400000);
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], MON_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+/** "Feb 10" / "10 feb"; "—" when empty. Pure: the language is passed in (render.js defaults it to the Desk's). */
+export const fmtMD = (s, es = false) => { if (!s) return '—'; const d = pd(s); return es ? `${d.getDate()} ${MON_ES[d.getMonth()]}` : `${MON[d.getMonth()]} ${d.getDate()}`; };
 export function nextCheckAfter(s) { const d = pd(s); do { d.setDate(d.getDate() + 1); } while (!CHECK_DOWS.includes(d.getDay())); return isoOf(d); }
 export function checkDays(today) { const d1 = nextCheckAfter(today), d2 = nextCheckAfter(d1), d3 = nextCheckAfter(d2); return { d1, d2, d3 }; }
 /** D1 stores `datetime('now')` as "YYYY-MM-DD HH:MM:SS" in UTC with no marker; make it a real instant. */
@@ -254,4 +257,23 @@ export function scanPlan(c, { red = false } = {}) {
   if (c.inCart) return red ? { outcome: 'out', call: 'note', note: 'RED CARD' } : { outcome: 'already' };
   if (c.onOrder && !red) return { outcome: 'on-order' };
   return red ? { outcome: 'out', call: 'addToCart', qty: c.suggested, note: 'RED CARD' } : { outcome: 'queued', call: 'addToCart', qty: c.suggested };
+}
+
+// ---------- Grove bin lanes (worker getBinStatus) ----------
+/** The one line a lane tile leads with. `today` is 'YYYY-MM-DD'. Pure. */
+export function laneHeadline(lane, today, es = false) {
+  if (lane.status === 'order') {
+    const late = lane.orderBy && lane.orderBy < today ? daysBetween(lane.orderBy, today) : 0;
+    const head = es ? 'PEDIR YA' : 'ORDER NOW';
+    return late > 0 ? `${head} · ${late} ${es ? 'días tarde' : 'days late'}` : head;
+  }
+  if (lane.status === 'soon') return es ? `Pedir antes del ${fmtMD(lane.orderBy, es)}` : `Order by ${fmtMD(lane.orderBy, es)}`;
+  return es ? `Bien hasta ${fmtMD(lane.runOut, es)}` : `OK until ${fmtMD(lane.runOut, es)}`;
+}
+const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'] };
+/** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. Pure. */
+export function laneRateLine(lane, es = false) {
+  if (lane.rate == null || !Number.isFinite(Number(lane.rate))) return '—';
+  const src = RATE_SOURCE[lane.rateSource];
+  return `~${Math.round(Number(lane.rate) * 7)}/${es ? 'sem' : 'wk'}${src ? ` (${src[es ? 1 : 0]})` : ''}`;
 }

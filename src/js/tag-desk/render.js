@@ -6,7 +6,7 @@
  */
 import { t, ES } from './labels.js';
 import * as api from './api.js';
-import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl } from './model.js';
+import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure } from './model.js';
 
 // ---------- context (set by init) ----------
 let M = null, L = null, saveL = () => {}, reload = async () => {}, RAW = {}, PAGE_URL = '';
@@ -22,7 +22,7 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Fe
 const DOW_ES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], MON_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const pd = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
 const fmtD = (s, es = ES()) => { if (!s) return '—'; const d = pd(s); return es ? `${DOW_ES[d.getDay()]} ${d.getDate()} ${MON_ES[d.getMonth()]}` : `${DOW[d.getDay()]} ${MON[d.getMonth()]} ${d.getDate()}`; };
-const fmtMD = (s, es = ES()) => { if (!s) return '—'; const d = pd(s); return es ? `${d.getDate()} ${MON_ES[d.getMonth()]}` : `${MON[d.getMonth()]} ${d.getDate()}`; };
+const fmtMD = (s, es = ES()) => fmtMDPure(s, es);
 const fmtTS = (s, es = ES()) => { const d = d1Instant(s); if (!d || Number.isNaN(d.getTime())) return '—'; try { return d.toLocaleString(es ? 'es-MX' : 'en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: '2-digit' }).replace(',', '').replace(/\s?([AP]M)/, m => m.toLowerCase()).replace(/\s?p\.\s?m\./, ' pm').replace(/\s?a\.\s?m\./, ' am'); } catch { return d.toISOString(); } };
 const nowISO = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 const daysSince = s => daysBetween(s, M.today);
