@@ -67,3 +67,25 @@ test('an ordered request older than lead + safety with no receive no longer hold
   await call(env, 'orderUsage', order('#1001'));
   assert.equal(openRequests(env).length, 1);
 });
+
+test('an uncounted lane (no baseline) never emails Damon, however low it looks', async () => {
+  const env = fakeEnv();
+  await call(env, 'setRecipe', { variant_id: '111', card_id: 21, qty: 1 });
+  assert.equal((await call(env, 'getBinStatus&cardId=21')).lanes[0].status, 'order');   // onHand 0 at seed rate
+  await call(env, 'orderUsage', order('#1001'));
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_reorder_requests').get().n, 0);
+});
+
+test('runbook re-arm: a zero-box receive after a closed test request re-arms the trigger and logs no order', async () => {
+  const env = await laneAbovePoint(1);
+  await call(env, 'orderUsage', order('#1001'));
+  const { close_token } = env.db.prepare('SELECT close_token FROM kanban_reorder_requests').get();
+  await call(env, 'closeReorderRequest', { token: close_token });
+  const ordersBefore = env.db.prepare('SELECT COUNT(*) AS n FROM kanban_orders').get().n;
+  await new Promise(r => setTimeout(r, 5));
+  await call(env, 'receiveBins', { cardId: 21, leftoverBins: 1, boxes: 0 });
+  assert.equal(env.db.prepare('SELECT COUNT(*) AS n FROM kanban_orders').get().n, ordersBefore);
+  await new Promise(r => setTimeout(r, 5));
+  await call(env, 'orderUsage', order('#1002'));
+  assert.equal(openRequests(env).length, 1);
+});

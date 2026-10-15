@@ -5,6 +5,7 @@ Walk it top to bottom. Design: `docs/plans/2026-10-14-grove-bins-design.md`.
 ## 1. Before anything (the back end)
 - [ ] **Migration 0046 on remote:** `cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0046-kanban-bins.sql`. Cards 21, 54, 56, 69 and 99 must already exist, or the whole file rolls back.
 - [ ] **Worker deployed** from `workers/`: `npx wrangler deploy` (not the root `npm run deploy`).
+- [ ] **`WEBHOOK_SECRET` bound** on the production worker before the Flow goes on: `cd workers && npx wrangler secret list` must show it. `orderUsage` only logs a warning when it is unset, so without it the endpoint is open to anyone.
 - [ ] **Flow on**, following `docs/guides/grove-shopify-flow.md`. Leave the old "Grove Bags" Flow running too.
 - [ ] **Recipes seeded:** `node scripts/grove-seed-recipes.mjs <sales-by-variant.csv>`, review, apply.
 - [ ] **Last year seeded:** `node scripts/grove-seed-usage.mjs <monthly.csv> > /tmp/seed.sql`, check the totals it prints (1 oz about 600 a month, about 1,000 in Nov), apply.
@@ -23,7 +24,7 @@ Walk it top to bottom. Design: `docs/plans/2026-10-14-grove-bins-design.md`.
 - [ ] Scan one red card with a phone → the red **PEDIR** page opens.
 - [ ] Damon gets the email → he taps **Mark as ordered**.
 - [ ] The Desk shows the request closed and an order in the history.
-- [ ] **Recount** that lane so the test request's hold doesn't sit on it. (Skip if an order really is due.)
+- [ ] After the test close, log a **Receive with 0 boxes** on that lane, with the current sealed bin count as leftovers. That writes a receive event, which re-arms the ledger trigger, and adds no order row because boxes = 0. A recount would not do it: by design, a recount does not lift the hold an "ordered" request puts on the lane. (Skip if an order really is due.)
 
 ## 5. Two weeks later
 - [ ] Compare the ledger against the Shopify counters (SQL in the Flow guide).
