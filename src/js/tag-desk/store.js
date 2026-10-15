@@ -2,9 +2,9 @@
  * Tag & Desk — desk memory (this device).
  *
  * The lifecycle state that has no D1 tables yet lives here: receipts with
- * per-item receiving, push-offs, red-card acknowledgements, Grove "ordered
- * with Damon" and bins, print state, per-card preferences, hidden cards and
- * level-change dates. Phase A moves these server-side; the page says so in
+ * per-item receiving, push-offs, red-card acknowledgements, print state,
+ * per-card preferences, hidden cards and level-change dates. Grove bins live
+ * on the worker (getBinStatus), not here. Phase A moves these server-side; the page says so in
  * its footer. Everything is plain JSON under one key.
  */
 const KEY = 'ro-tagdesk-v1';
@@ -26,8 +26,6 @@ export function defaults() {
     dismissed: {},     // cardId → ISO day it comes back
     outAck: {},        // cartId → true (red-card alarm cleared on this desk)
     nudged: {},        // cardId → ISO day Damon was asked again
-    groveOrdered: {},  // cardId → { at, expected }
-    bins: {},          // cardId → { total, sealed, perBin, at, lot }
     printed: {},       // cardId → ISO timestamp last printed from this page
     prefs: {},         // cardId → { unit, printFmt }
     archived: [],      // cardIds hidden on this desk

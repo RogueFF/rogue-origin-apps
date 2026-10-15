@@ -51,3 +51,35 @@ test('a card with no order quantity still produces a usable alert', () => {
 test('the re-scan note survives, so the handler knows why a second scan is quiet', () => {
   assert.match(buildReorderEmailBody(CARD, URL), /re-scanning this card won't send another email/i);
 });
+
+// ── Grove bins: with lane status the email leads with the order-by date ──────
+const LANE = { onHand: 900, bins: 18, rate: 20, rateSource: 'ledger', orderBy: '2026-09-15', runOut: '2026-11-20', suggestedQty: 2500, config: { leadDays: 75, moq: 2500 } };
+
+test('with lane status the first line is the order-by date', () => {
+  const body = buildReorderEmailBody(CARD, URL, LANE);
+  assert.match(body.split('\n')[0], /order by Sep 15/);
+  assert.match(body, /Suggest: 2,500 \(MOQ\)/);
+  assert.match(body, /On hand: 900 bags \(18 bins\)/);
+  assert.match(body, /Using: ~140 \/ week \(from the usage ledger\)/);
+  assert.match(body, /Runs out: ~Nov 20 · lead 75 days/);
+  assert.match(body, /Location: Grove Bags Rack > E-1/);
+  assert.ok(body.includes(URL));
+  assert.doesNotMatch(body, /undefined|NaN|Infinity/);
+});
+
+test('rate source wording: season and seed', () => {
+  assert.match(buildReorderEmailBody(CARD, URL, { ...LANE, rateSource: 'season' }), /\(last fall's pace\)/);
+  assert.match(buildReorderEmailBody(CARD, URL, { ...LANE, rateSource: 'seed' }), /\(seed estimate\)/);
+});
+
+test('a suggestion above the MOQ is not labelled MOQ; a zero rate prints no cover or NaN', () => {
+  const body = buildReorderEmailBody(CARD, URL, { ...LANE, suggestedQty: 3000, rate: 0, orderBy: null, runOut: null });
+  assert.match(body, /Suggest: 3,000\b/);
+  assert.doesNotMatch(body, /\(MOQ\)|months of cover|undefined|NaN|Infinity/);
+  assert.match(body.split('\n')[0], /order by —/);
+});
+
+test('the two-argument form is unchanged', () => {
+  assert.match(buildReorderEmailBody(CARD, URL), /was flagged for reorder/);
+  assert.equal(buildReorderEmailBody(CARD, URL), buildReorderEmailBody(CARD, URL, null));
+});

@@ -14,6 +14,7 @@
  * - /api/irrigation - Irrigation crew reports (D1)
  * - /api/harvest - Harvest zone-entry & barn-intake tracking (D1) [TEST]
  * - /sms/inbound - Twilio webhook for the harvest hourly crew log (D1)
+ * - /k/<token> - Grove red ORDER card scan page (renders only; the page POSTs scanCard)
  */
 
 import { handleProductionD1 } from './handlers/production-d1.js';
@@ -31,6 +32,7 @@ import { handleWholesaleD1 } from './handlers/wholesale-d1.js';
 import { handleHarvestD1, handleSackScan, handleZoneScan,
   handleCrewScan, handleBarnScan, handleDayEndScan, handleTrailerScan } from './handlers/harvest-d1.js';
 import { handleHarvestHourly, handleSmsInbound, HOURLY_ACTIONS } from './handlers/harvest-hourly-d1.js';
+import { handleBinScan } from './handlers/bin-scan.js';
 import { salidaDecoderResponse, SALIDA_DECODER_PATH } from './handlers/harvest-salida-decoder.js';
 import { corsHeaders, handleCors } from './lib/cors.js';
 import { jsonResponse, errorResponse } from './lib/response.js';
@@ -269,6 +271,10 @@ export default {
         } else {
           response = await handleBarnScan(request, env, ctx);
         }
+      } else if (path.startsWith('/k/')) {
+        // Grove red ORDER card QR. GET only renders; the page's script POSTs
+        // /api/kanban?action=scanCard (absolute URL), so prefetchers record nothing.
+        response = await handleBinScan(request, env);
       } else if (path.startsWith('/api/pool')) {
         // Shopify pool inventory proxy
         response = await handlePoolRequest(request, env);

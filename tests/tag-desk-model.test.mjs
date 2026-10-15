@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   checkDays, nextCheckAfter, addDays, localDay, zoneOf, deliveryDays, parsePrice,
   normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl, amazonQueueUrl, walmartCartUrl,
+  laneHeadline, laneRateLine, fmtMD,
 } from '../src/js/tag-desk/model.js';
 
 const card = (o) => ({ id: 1, item: 'Packing Tape', supplier: 'Uline', orderQty: 'x72', orderWhen: '36', deliveryTime: '1 Day', price: '$2.10', crumbtrail: 'Supply Rack > A-1', url: '', picture: '', imageFile: '', ...o });
@@ -183,4 +184,34 @@ test('Amazon and Walmart cart links come from the product URLs; cards without an
 test('hidden cards leave the model; an open Grove request shows as requested', () => {
   const M = buildModel({ cards: [card(), card({ id: 3, supplier: 'Grove' })], cart: {}, orders: [], requests: [{ id: 9, cardId: 3, status: 'open', requestedAt: '2026-08-11 22:00:00' }], today: '2026-09-03', archived: [1] });
   assert.equal(M.cards.length, 1); assert.equal(cardState(M.byId[3], M, {}), 'requested');
+});
+
+// --- Grove bin lanes --------------------------------------------------------
+test('lane headline: order / soon / ok, both languages', () => {
+  assert.equal(laneHeadline({ status: 'order', orderBy: '2026-09-15' }, '2026-10-14'), 'ORDER NOW · 29 days late');
+  assert.equal(laneHeadline({ status: 'order', orderBy: '2026-09-15' }, '2026-10-14', true), 'PEDIR YA · 29 días tarde');
+  assert.equal(laneHeadline({ status: 'order', orderBy: null }, '2026-10-14'), 'ORDER NOW');
+  assert.equal(laneHeadline({ status: 'order', orderBy: '2026-10-14' }, '2026-10-14'), 'ORDER NOW');
+  assert.equal(laneHeadline({ status: 'soon', orderBy: '2026-10-29' }, '2026-10-14'), 'Order by Oct 29');
+  assert.equal(laneHeadline({ status: 'soon', orderBy: '2026-10-29' }, '2026-10-14', true), 'Pedir antes del 29 oct');
+  assert.equal(laneHeadline({ status: 'ok', runOut: '2027-02-10' }, '2026-10-14', true), 'Bien hasta 10 feb');
+  assert.equal(laneHeadline({ status: 'ok', runOut: null }, '2026-10-14'), 'OK until —');
+});
+
+test('fmtMD is pure: explicit language, dash for empty', () => {
+  assert.equal(fmtMD('2027-02-10', false), 'Feb 10'); assert.equal(fmtMD('2027-02-10', true), '10 feb'); assert.equal(fmtMD(null), '—');
+});
+
+test('lane rate line: bags per week with its source', () => {
+  assert.equal(laneRateLine({ rate: 20, rateSource: 'ledger' }), '~140/wk (ledger)');
+  assert.equal(laneRateLine({ rate: 20, rateSource: 'season' }, true), '~140/sem (otoño pasado)');
+  assert.equal(laneRateLine({ rate: 3.3, rateSource: 'seed' }), '~23/wk (estimate)');
+  assert.equal(laneRateLine({ rate: null, rateSource: 'seed' }), '—');
+  assert.equal(laneRateLine({ rate: 0, rateSource: 'ledger' }), '—');
+  assert.equal(laneRateLine({ rate: -1, rateSource: 'ledger' }), '—');
+});
+
+test('lane headline never reassures on an unknown status', () => {
+  assert.equal(laneHeadline({ status: undefined, orderBy: null, runOut: '2027-01-01' }, '2026-10-14'), 'ORDER NOW');
+  assert.equal(laneHeadline({ status: 'weird', orderBy: '2026-10-10' }, '2026-10-14'), 'ORDER NOW · 4 days late');
 });
