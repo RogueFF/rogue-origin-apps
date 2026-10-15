@@ -24,6 +24,34 @@ export function median(arr) {
 }
 
 /**
+ * This year's crop stands on its own.
+ *
+ * History arrives per cultivar AND season. Once the current season has
+ * `minSacks` of measured history for a cultivar, that season alone is the
+ * rate: a new year's sacks are packed differently and trim differently, and
+ * last year's number would only drag the estimate toward a product that no
+ * longer exists. Until then every season is summed, as it always was, because
+ * a rate built on three sacks is noise.
+ *
+ * @param rows [{ key, season, sacks, tops }] — season null = unknown = old
+ * @returns [{ key, sacks, tops }] in first-seen key order, for buildRates
+ */
+export function preferSeason(rows = [], season, minSacks = 10) {
+  const byKey = new Map();
+  for (const r of rows) {
+    if (!byKey.has(r.key)) byKey.set(r.key, { all: { sacks: 0, tops: 0 }, cur: { sacks: 0, tops: 0 } });
+    const k = byKey.get(r.key);
+    const sacks = Number(r.sacks) || 0, tops = Number(r.tops) || 0;
+    k.all.sacks += sacks; k.all.tops += tops;
+    if (Number(r.season) === Number(season)) { k.cur.sacks += sacks; k.cur.tops += tops; }
+  }
+  return [...byKey].map(([key, k]) => {
+    const pick = k.cur.sacks >= minSacks ? k.cur : k.all;
+    return { key, sacks: pick.sacks, tops: pick.tops };
+  });
+}
+
+/**
  * Build the rate table from aggregated history.
  *
  * @param rows [{ key, sacks, tops }] — one row per cultivar (or strain), already
