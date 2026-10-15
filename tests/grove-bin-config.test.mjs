@@ -48,3 +48,11 @@ test('unknown keys (incl. cardId) ignored', () => {
   assert.equal(validateBinConfig({ cardId: 21, hack: 'DROP TABLE' }).error, 'nothing to set');
   assert.deepEqual(validateBinConfig({ cardId: 21, safetyDays: 14, bogus: 1 }).data, { safety_days: 14 });
 });
+
+test('non-number/non-string types rejected (Number(true) is 1, Number([50]) is 50)', () => {
+  assert.match(validateBinConfig({ bagsPerBin: true }).error, /bagsPerBin/);
+  assert.match(validateBinConfig({ bagsPerBin: [50] }).error, /bagsPerBin/);
+  assert.match(validateBinConfig({ colour: 7 }).error, /colour/);
+  assert.match(validateBinConfig({ moq: '  ' }).error, /moq/);
+  assert.deepEqual(validateBinConfig({ bagsPerBin: '25' }).data, { bags_per_bin: 25 });
+});

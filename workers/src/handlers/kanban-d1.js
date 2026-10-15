@@ -9,13 +9,15 @@ import { sendEmail } from '../lib/mailer.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
-import { laneStatus, seasonWindow } from '../lib/bin-math.js';
+import { DAY, laneStatus, seasonWindow } from '../lib/bin-math.js';
 import { validateBinConfig } from '../lib/bin-config.js';
 
 const SHEET_NAME = '12.12 Supplies';
 
 /** Grove 10 LB card: its usage comes from production (inventory_adjustments), not the Shopify ledger. */
 const TEN_LB_CARD = 99;
+/** The sku production's logBag writes on every barn 10 lb bag scan. */
+const TEN_LB_SCAN_SKU = 'MANUAL-10LB-BAG';
 
 /**
  * Vendors whose reordering runs outside the Friday cart. Scanning one of these
@@ -997,16 +999,20 @@ async function orderUsage(body, request, env, ctx) {
   return successResponse({ success: true, written: rows.length, unmapped: rows.filter(r => !r.card_id).length, touched });
 }
 
-/** GET ?action=getRecipes → { recipes:[{variant_id, card_id, qty, item}], unmapped:[{variant_id, qty, lastSeen}] } */
-async function getRecipes(env) {
-  const recipes = await query(env.DB, `
-    SELECT r.variant_id, r.card_id, r.qty, k.item
-      FROM kanban_recipes r LEFT JOIN kanban_cards k ON k.id = r.card_id
-     ORDER BY k.item, r.variant_id`);
-  const unmapped = await query(env.DB, `
+/** Unmapped Shopify variants seen in the last 30 days (ISO bound, like every Grove `at`). */
+function recentUnmapped(env) {
+  return query(env.DB, `
     SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen
       FROM kanban_usage WHERE source = 'shopify:unmapped' AND at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
      GROUP BY variant_id ORDER BY qty DESC`);
+}
+
+/** GET ?action=getRecipes → { recipes:[{variant_id, card_id, qty, item}], unmapped:[{variant_id, qty, lastSeen}] } */
+async function getRecipes(env) {
+  const [recipes, unmapped] = await Promise.all([query(env.DB, `
+    SELECT r.variant_id, r.card_id, r.qty, k.item
+      FROM kanban_recipes r LEFT JOIN kanban_cards k ON k.id = r.card_id
+     ORDER BY k.item, r.variant_id`), recentUnmapped(env)]);
   return successResponse({ success: true, recipes, unmapped });
 }
 
@@ -1022,6 +1028,16 @@ async function setRecipe(body, env) {
 
 // ── Grove bins: lane status (design §5) ─────────────────────────────────────
 
+/** cardId as a positive integer, or VALIDATION_ERROR. */
+function cardIdOf(v) {
+  const n = typeof v === 'number' || (typeof v === 'string' && v.trim()) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n <= 0) throw createError('VALIDATION_ERROR', 'cardId must be a positive integer');
+  return n;
+}
+
+/** Free-text field (lot, by): at most 100 chars, or null. */
+const shortText = (v) => (v == null || v === '' ? null : String(v).slice(0, 100));
+
 async function laneRows(env, cardId) {
   const where = cardId ? 'WHERE c.card_id = ?' : '';
   return query(env.DB, `
@@ -1031,7 +1047,7 @@ async function laneRows(env, cardId) {
     FROM kanban_bin_config c JOIN kanban_cards k ON k.id = c.card_id ${where} ORDER BY k.item`, cardId ? [cardId] : []);
 }
 
-/** One lane row or NOT_FOUND (config without a kanban_cards row drops out of the JOIN). */
+/** One lane row (config + card) or NOT_FOUND. */
 async function laneRow(env, cardId) {
   const row = (await laneRows(env, cardId))[0];
   if (!row) throw createError('NOT_FOUND', 'no bin lane for this card');
@@ -1039,44 +1055,57 @@ async function laneRow(env, cardId) {
 }
 
 /**
- * Bags consumed for a card in (fromIso, toIso]. Card 99 (10 lb) reads production's
+ * Bags consumed for a card in (after, until]. Card 99 (10 lb) reads production's
  * inventory_adjustments. Its timestamps are ISO in both sources (barn scans via
  * toISOString, Shopify Flow rows pass ISO through), so the string comparison is sound.
  */
-async function usageSum(env, cardId, fromIso, toIso = null) {
+async function usageSum(env, cardId, after, until = null) {
   if (cardId === TEN_LB_CARD) {
-    // One row per barn bag scan = the rows with adjustment_source IS NULL. The
-    // shopify_flow rows are echoes of the resulting inventory change, not bags
-    // (quantity_adjusted blank/zero); counting both would double count.
+    // One row per barn bag scan: logBag (production/bag-tracking.js) always writes
+    // sku MANUAL-10LB-BAG. The shopify_flow rows are echoes of the resulting
+    // inventory change, not bags; counting both would double count.
     const r = await queryOne(env.DB, `SELECT COUNT(*) AS n FROM inventory_adjustments
-      WHERE size = '10lb' AND adjustment_source IS NULL AND timestamp > ? ${toIso ? 'AND timestamp <= ?' : ''}`, toIso ? [fromIso, toIso] : [fromIso]);
+      WHERE size = '10lb' AND sku = ? AND timestamp > ? ${until ? 'AND timestamp <= ?' : ''}`,
+      until ? [TEN_LB_SCAN_SKU, after, until] : [TEN_LB_SCAN_SKU, after]);
     return Number(r?.n || 0);
   }
   const r = await queryOne(env.DB, `SELECT COALESCE(SUM(qty),0) AS n FROM kanban_usage
-    WHERE card_id = ? AND source NOT LIKE '%unmapped' AND at > ? ${toIso ? 'AND at <= ?' : ''}`, toIso ? [cardId, fromIso, toIso] : [cardId, fromIso]);
+    WHERE card_id = ? AND source NOT LIKE '%unmapped' AND at > ? ${until ? 'AND at <= ?' : ''}`, until ? [cardId, after, until] : [cardId, after]);
   return Number(r?.n || 0);
 }
 
-async function computeLane(env, row, today = new Date()) {
+/**
+ * Lane status for one laneRows() row. `leftoverBins` (a physical count of sealed
+ * bins at the row's current bin size) feeds laneStatus's recount check.
+ */
+async function computeLane(env, row, today = new Date(), leftoverBins = null) {
   const cardId = row.card_id;
-  const baseline = await queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]);
-  const first = await queryOne(env.DB, cardId === TEN_LB_CARD
-    ? `SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size='10lb' AND adjustment_source IS NULL` // barn scans only, as usageSum
-    : `SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, cardId === TEN_LB_CARD ? [] : [cardId]);
-  const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / 86400000) : 0;
-  const since56 = new Date(today.getTime() - 56 * 86400000).toISOString();
-  // seasonWindow: from is YYYY-MM-DD (sorts before any ISO time that day), to is end-of-day ISO.
+  const since56 = new Date(today.getTime() - 56 * DAY).toISOString();
   const win = seasonWindow(today, row.lead_days, row.safety_days);
-  const seasonRaw = await usageSum(env, cardId, win.from, win.to);
-  const red = baseline ? await queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]) : null;
-  const openReq = await queryOne(env.DB, `SELECT id, requested_at AS requestedAt, notify_state AS notifyState FROM kanban_reorder_requests WHERE card_id = ? AND status='open'`, [cardId]);
+  // Ledger age counts live orders only (source 'shopify'), while usageSum also
+  // counts seed rows ('shopify:seed') as usage: seeded history is real demand,
+  // but it must not make a two-day-old ledger look like 14 days of data.
+  const [firstSql, firstArgs] = cardId === TEN_LB_CARD
+    ? [`SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size = '10lb' AND sku = ?`, [TEN_LB_SCAN_SKU]]
+    : [`SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, [cardId]];
+  const [baseline, first, seasonRaw, usage56, openReq] = await Promise.all([
+    queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]),
+    queryOne(env.DB, firstSql, firstArgs),
+    usageSum(env, cardId, win.from, win.to),
+    usageSum(env, cardId, since56),
+    queryOne(env.DB, `SELECT id, requested_at AS requestedAt, notify_state AS notifyState FROM kanban_reorder_requests WHERE card_id = ? AND status='open'`, [cardId]),
+  ]);
+  const [red, usageSince] = baseline ? await Promise.all([
+    queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]),
+    usageSum(env, cardId, baseline.at),
+  ]) : [null, 0];
+  const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / DAY) : 0;
   const s = laneStatus({
     per: row.bags_per_bin, lead: row.lead_days, safety: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month,
-    baseline: baseline ? { bags: baseline.bags, at: baseline.at } : { bags: 0, at: '1970-01-01T00:00:00.000Z' },
-    usageSince: baseline ? await usageSum(env, cardId, baseline.at) : 0,
-    usage56: await usageSum(env, cardId, since56), usageDays,
+    baseline: baseline ? { bags: baseline.bags, at: baseline.at } : null,
+    usageSince, usage56, usageDays,
     seasonUsage: seasonRaw > 0 ? seasonRaw : null,
-    redScanned: !!red, today,
+    redScanned: !!red, leftoverBins, today,
   });
   return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
     config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month },
@@ -1086,19 +1115,22 @@ async function computeLane(env, row, today = new Date()) {
 /** GET ?action=getBinStatus[&cardId=] → { lanes:[…], unmapped:[{variant_id, qty, lastSeen}] } */
 async function getBinStatus(request, env) {
   const { cardId } = getQueryParams(request);
-  const rows = await laneRows(env, cardId ? Number(cardId) : null);
-  const lanes = [];
-  for (const r of rows) lanes.push(await computeLane(env, r));
-  const unmapped = await query(env.DB, `SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen FROM kanban_usage
-    WHERE source='shopify:unmapped' AND at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days') GROUP BY variant_id ORDER BY qty DESC`);
+  const rows = await laneRows(env, cardId ? cardIdOf(cardId) : null); // empty = all lanes
+  const [lanes, unmapped] = await Promise.all([Promise.all(rows.map(r => computeLane(env, r))), recentUnmapped(env)]);
   return successResponse({ success: true, lanes, unmapped });
 }
 
-/** POST ?action=receiveBins {cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?} */
+/**
+ * POST ?action=receiveBins {cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}
+ *
+ * New baseline = leftover sealed bins at the lane's CURRENT bin size + boxes × bagsPerBox.
+ * A bagsPerBin override is how the incoming boxes are split; it is stored as the
+ * lane's bin size for next time but does not re-value the leftovers.
+ * needsRecount: the leftover count disagrees with the ledger estimate by more than a bin
+ * (never on a lane with no baseline — there is no estimate yet).
+ */
 async function receiveBins(body, env) {
-  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
-  const cfg = await queryOne(env.DB, 'SELECT * FROM kanban_bin_config WHERE card_id = ?', [cardId]);
-  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
+  const cardId = cardIdOf(body.cardId);
   const boxes = Number(body.boxes || 0), leftover = Number(body.leftoverBins || 0);
   if (!Number.isInteger(boxes) || boxes < 0 || !Number.isInteger(leftover) || leftover < 0) {
     throw createError('VALIDATION_ERROR', 'boxes/leftoverBins must be whole numbers ≥ 0');
@@ -1106,59 +1138,57 @@ async function receiveBins(body, env) {
   // Overrides go through the same rules as setBinConfig (bags_per_bin is a divisor).
   const override = validateBinConfig({ bagsPerBox: body.bagsPerBox, bagsPerBin: body.bagsPerBin });
   if (override.error && override.error !== 'nothing to set') throw createError('VALIDATION_ERROR', override.error);
-  const perBox = override.data?.bags_per_box ?? cfg.bags_per_box, per = override.data?.bags_per_bin ?? cfg.bags_per_bin;
-  const before = await computeLane(env, await laneRow(env, cardId));
-  const recount = Math.abs(leftover * per - before.onHand) > per;
-  const bags = leftover * per + boxes * perBox;
+  const row = await laneRow(env, cardId);
+  const oldPer = row.bags_per_bin;
+  const perBox = override.data?.bags_per_box ?? row.bags_per_box, per = override.data?.bags_per_bin ?? oldPer;
+  const before = await computeLane(env, row, new Date(), leftover);
+  const needsRecount = before.recount;
+  const bags = leftover * oldPer + boxes * perBox;
+  const bins = leftover + Math.ceil((boxes * perBox) / per);
   const at = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, lot, by, note, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(cardId, 'receive', Math.ceil(bags / per), per, body.lot || null, body.by || null, `leftover ${leftover} bins + ${boxes} boxes × ${perBox}`, at),
+      .bind(cardId, 'receive', bins, per, shortText(body.lot), shortText(body.by), `leftover ${leftover} bins × ${oldPer} + ${boxes} boxes × ${perBox}`, at),
     env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'receive'),
     env.DB.prepare('UPDATE kanban_bin_config SET bags_per_box = ?, bags_per_bin = ?, updated_at = ? WHERE card_id = ?').bind(perBox, per, at, cardId),
     env.DB.prepare(`UPDATE kanban_reorder_requests SET status='ordered', closed_at=?, closed_by='receive' WHERE card_id = ? AND status='open'`).bind(at, cardId),
   ]);
   const lane = await computeLane(env, await laneRow(env, cardId));
-  return successResponse({ success: true, lane, recount, estimateBefore: before.onHand });
+  return successResponse({ success: true, lane, needsRecount, estimateBefore: before.onHand });
 }
 
 /** POST ?action=recount {cardId, sealedBins, by?} — physical count resets the baseline. */
 async function recount(body, env) {
-  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
+  const cardId = cardIdOf(body.cardId);
   const sealedBins = Number(body.sealedBins);
   if (body.sealedBins == null || !Number.isInteger(sealedBins) || sealedBins < 0) throw createError('VALIDATION_ERROR', 'sealedBins must be a whole number ≥ 0');
-  const cfg = await queryOne(env.DB, 'SELECT bags_per_bin FROM kanban_bin_config WHERE card_id = ?', [cardId]);
-  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
-  await laneRow(env, cardId);
-  const per = cfg.bags_per_bin, bags = sealedBins * per;
+  const row = await laneRow(env, cardId);
+  const per = row.bags_per_bin, bags = sealedBins * per;
   const at = new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, by, at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(cardId, 'recount', sealedBins, per, body.by || null, at),
+      .bind(cardId, 'recount', sealedBins, per, shortText(body.by), at),
     env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'recount'),
   ]);
-  const lane = await computeLane(env, await laneRow(env, cardId));
+  const lane = await computeLane(env, row);
   return successResponse({ success: true, lane });
 }
 
-/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, colour?} — upsert. */
+/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, colour?} — atomic upsert. */
 async function setBinConfig(body, env) {
-  const cardId = Number(body.cardId); if (!(cardId > 0)) throw createError('VALIDATION_ERROR', 'cardId required');
+  const cardId = cardIdOf(body.cardId);
   const { data, error } = validateBinConfig(body);
   if (error) throw createError('VALIDATION_ERROR', error);
   const card = await queryOne(env.DB, 'SELECT id FROM kanban_cards WHERE id = ?', [cardId]);
   if (!card) throw createError('NOT_FOUND', 'card not found');
   const at = new Date().toISOString();
-  const exists = await queryOne(env.DB, 'SELECT card_id FROM kanban_bin_config WHERE card_id = ?', [cardId]);
-  const cols = Object.keys(data);
-  if (exists) {
-    await execute(env.DB, `UPDATE kanban_bin_config SET ${cols.map(c => `${c} = ?`).join(', ')}, updated_at = ? WHERE card_id = ?`,
-      [...cols.map(c => data[c]), at, cardId]);
-  } else {
-    const row = { seed_per_month: 0, ...data, card_id: cardId, updated_at: at };
-    const keys = Object.keys(row);
-    await execute(env.DB, `INSERT INTO kanban_bin_config (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`, keys.map(k => row[k]));
-  }
+  // A new row needs seed_per_month (NOT NULL); an existing row keeps every column not given.
+  // Column names come from validateBinConfig's fixed map, never from the body.
+  const ins = { seed_per_month: 0, ...data, card_id: cardId, updated_at: at };
+  const keys = Object.keys(ins);
+  const sets = [...Object.keys(data), 'updated_at'].map(c => `${c} = excluded.${c}`).join(', ');
+  await execute(env.DB, `INSERT INTO kanban_bin_config (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})
+    ON CONFLICT(card_id) DO UPDATE SET ${sets}`, keys.map(k => ins[k]));
   const lane = await computeLane(env, await laneRow(env, cardId));
   return successResponse({ success: true, lane });
 }

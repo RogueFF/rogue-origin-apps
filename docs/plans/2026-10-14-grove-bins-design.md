@@ -166,7 +166,8 @@ show "no recipe" loudly instead of silently consuming nothing.
 ## 4. Usage ingest
 
 **Shopify Flow:** trigger *Order created* → action *Send HTTP request*, POST
-`/api/kanban?action=orderUsage&secret=<WEBHOOK_SECRET>` with a Liquid body:
+`/api/kanban?action=orderUsage` with the secret in the `X-Webhook-Secret` header
+(`?secret=<WEBHOOK_SECRET>` is also accepted) and a Liquid body:
 
 ```
 { "order": "{{ order.name }}", "at": "{{ order.createdAt }}",
@@ -294,10 +295,10 @@ reading zero orders in analytics.
 | Action | Method | Body / params | Does |
 |---|---|---|---|
 | `getBinStatus` | GET | `?cardId=` optional | §5 per bag-tracked card + bins + open request + unmapped variants |
-| `receiveBins` | POST | `{cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}` | receive event, new baseline, recount flag, returns red-tape depth |
+| `receiveBins` | POST | `{cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}` | receive event, new baseline, `needsRecount` flag, returns red-tape depth |
 | `scanCard` | POST | `{token, by?}` | red card → 'red' event + raise request (re-sends if open); kind='bin' reserved for v2 |
 | `voidBin` | POST | `{binId, reason}` | status → void |
-| `recount` | POST | `{cardId, sealed}` | absolute tally event + baseline |
+| `recount` | POST | `{cardId, sealedBins, by?}` | absolute tally event + baseline |
 | `makeLaneKit` | POST | `{cardId}` | creates the lane's red card token for printing |
 | `setBinConfig` | POST | `{cardId, ...}` | upsert config |
 | `orderUsage` | POST (secret) | Flow body (§4) | writes usage rows |

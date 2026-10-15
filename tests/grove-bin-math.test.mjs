@@ -163,6 +163,12 @@ test('recount flags a physical count more than a bin off', () => {
   assert.equal(lane({ leftoverBins: 39 }).recount, true); // 1950 vs 1800
 });
 
+test('no baseline = no estimate: on hand 0, recount false even with a count', () => {
+  const r = lane({ baseline: null, usageSince: 0, leftoverBins: 10 });
+  assert.equal(r.onHand, 0);
+  assert.equal(r.recount, false);
+});
+
 test('recount is false with no physical count', () => {
   assert.equal(lane().recount, false);
   assert.equal(lane({ leftoverBins: null }).recount, false);
@@ -196,14 +202,14 @@ test('does not mutate its input', () => {
 
 test('season window is [today, today+lead+safety] a year back, end day inclusive', () => {
   assert.deepEqual(seasonWindow(new Date('2026-10-14T12:00:00Z'), 75, 30), {
-    from: '2025-10-14',
+    from: '2025-10-14T00:00:00.000Z',
     to: '2026-01-27T23:59:59.999Z',
   });
 });
 
 test('season window for a short-lead lane', () => {
   assert.deepEqual(seasonWindow(new Date('2026-10-14T12:00:00Z'), 7, 7), {
-    from: '2025-10-14',
+    from: '2025-10-14T00:00:00.000Z',
     to: '2025-10-28T23:59:59.999Z',
   });
 });

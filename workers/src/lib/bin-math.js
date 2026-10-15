@@ -17,7 +17,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
  * @param {number} i.safety         safety stock, days
  * @param {number} i.moq            minimum order qty (0 = none)
  * @param {number} i.seedPerMonth   bags/month used until the ledger has 14 days
- * @param {{bags:number, at:string}} i.baseline
+ * @param {{bags:number, at:string}|null} i.baseline  null = never received/counted: no estimate (on hand 0, recount false)
  * @param {number} i.usageSince     bags used after baseline.at
  * @param {number} i.usage56        bags used in the last 56 days
  * @param {number} i.usageDays      days of ledger data available
@@ -31,7 +31,7 @@ export function laneStatus(i) {
     seasonUsage, redScanned, leftoverBins, today } = i;
   const per = Math.max(1, Number(i.per) || 0);
 
-  const onHand = Math.max(0, baseline.bags - usageSince);
+  const onHand = baseline ? Math.max(0, baseline.bags - usageSince) : 0;
   const windowDays = Math.min(56, Math.max(1, usageDays));
 
   let rate, rateSource;
@@ -65,7 +65,8 @@ export function laneStatus(i) {
   else if (rate > 0 && onHand <= reorderPoint + 14 * rate) status = 'soon';
   else status = 'ok';
 
-  const recount = leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
+  // With no baseline there is no estimate to disagree with.
+  const recount = !!baseline && leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
   const bins = Math.floor(onHand / per);
 
   return { onHand, bins, rate, rateSource, reorderPoint, redTapeAtBins, suggestedQty,
@@ -75,8 +76,9 @@ export function laneStatus(i) {
 /**
  * Last year's demand over the span a reorder placed today must cover:
  * [today, today+lead+safety], shifted back one year (laneStatus divides it by
- * lead+safety). `from` is a date (YYYY-MM-DD); `to` is the ISO end of its day
- * (YYYY-MM-DDT23:59:59.999Z) so `at <= to` includes the last day. UTC.
+ * lead+safety). Both bounds are full ISO: `from` is the start of its day
+ * (T00:00:00.000Z), `to` the end of its day (T23:59:59.999Z) so `at <= to`
+ * includes the last day. UTC.
  */
 export function seasonWindow(today, lead, safety) {
   const back = (days) => {
@@ -84,5 +86,5 @@ export function seasonWindow(today, lead, safety) {
     d.setUTCFullYear(d.getUTCFullYear() - 1);
     return d.toISOString().slice(0, 10);
   };
-  return { from: back(0), to: `${back(lead + safety)}T23:59:59.999Z` };
+  return { from: `${back(0)}T00:00:00.000Z`, to: `${back(lead + safety)}T23:59:59.999Z` };
 }
