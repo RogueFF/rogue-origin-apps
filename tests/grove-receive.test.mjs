@@ -1,37 +1,10 @@
 /**
- * Grove receive/recount/setBinConfig through the real router, on an in-memory
- * SQLite wrapped to look like D1 (migration 0046 + 0013 + the columns of
- * kanban_cards / inventory_adjustments the lane reads touch).
+ * Grove receive/recount/setBinConfig through the real router, on the in-memory
+ * SQLite D1 stand-in in helpers/fake-d1.mjs.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
-import { handleKanbanD1 } from '../workers/src/handlers/kanban-d1.js';
-
-const mig = (f) => readFileSync(new URL(`../workers/migrations/${f}`, import.meta.url), 'utf8');
-
-function fakeEnv() {
-  const db = new DatabaseSync(':memory:');
-  db.exec(`CREATE TABLE kanban_cards (id INTEGER PRIMARY KEY, item TEXT, crumbtrail TEXT, supplier TEXT);
-    CREATE TABLE inventory_adjustments (id INTEGER PRIMARY KEY, timestamp TEXT, size TEXT, sku TEXT, adjustment_source TEXT);
-    INSERT INTO kanban_cards (id, item, supplier) VALUES (21,'1 oz','Grove'),(54,'1 lb','Grove'),(56,'1/4','Grove'),(69,'blank','Grove'),(99,'10 lb','Grove'),(7,'tape','Uline');`);
-  db.exec(mig('0013-kanban-reorder-requests.sql'));
-  db.exec(mig('0046-kanban-bins.sql'));
-  const stmt = (sql, args = []) => ({
-    bind: (...a) => stmt(sql, a),
-    first: async () => db.prepare(sql).get(...args) ?? null,
-    all: async () => ({ results: db.prepare(sql).all(...args) }),
-    run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes, last_row_id: r.lastInsertRowid } }; },
-  });
-  return { db, DB: { prepare: (sql) => stmt(sql), batch: async (list) => { db.exec('BEGIN'); try { for (const s of list) await s.run(); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } } } };
-}
-
-async function call(env, action, body) {
-  const url = `https://x.test/api/kanban?action=${action}`;
-  const req = body ? new Request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) : new Request(url);
-  return (await handleKanbanD1(req, env)).json();
-}
+import { fakeEnv, call } from './helpers/fake-d1.mjs';
 
 test('first receive on an empty lane: no recount, baseline = boxes × perBox', async () => {
   const env = fakeEnv();
@@ -89,4 +62,16 @@ test('10 lb lane counts only barn scans (MANUAL-10LB-BAG), not Flow echoes', asy
     ('${t}','10lb','MANUAL-10LB-BAG',NULL), ('${t}','10lb','RO-10LB-X','shopify_flow')`);
   const s = await call(env, 'getBinStatus&cardId=99');
   assert.equal(s.lanes[0].onHand, 499);
+});
+
+test('counts must be plain whole numbers: true / [5] / 1.5 are 400', async () => {
+  const env = fakeEnv();
+  for (const bad of [true, [5], 1.5, -1, '2x']) {
+    await assert.rejects(call(env, 'receiveBins', { cardId: 21, leftoverBins: 0, boxes: bad }), (e) => e.code === 'VALIDATION_ERROR', `boxes ${JSON.stringify(bad)}`);
+    await assert.rejects(call(env, 'receiveBins', { cardId: 21, leftoverBins: bad, boxes: 1 }), (e) => e.code === 'VALIDATION_ERROR', `leftoverBins ${JSON.stringify(bad)}`);
+    await assert.rejects(call(env, 'recount', { cardId: 21, sealedBins: bad }), (e) => e.code === 'VALIDATION_ERROR', `sealedBins ${JSON.stringify(bad)}`);
+  }
+  const ok = await call(env, 'receiveBins', { cardId: 21, leftoverBins: '2', boxes: '3' });
+  assert.equal(ok.lane.baseline.bags, 2 * 50 + 3 * 100);
+  assert.equal((await call(env, 'recount', { cardId: 21, sealedBins: '4' })).lane.baseline.bags, 200);
 });

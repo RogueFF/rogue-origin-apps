@@ -1035,6 +1035,17 @@ function cardIdOf(v) {
   return n;
 }
 
+/**
+ * A bin/box count: a number or a digits-only string, else NaN (→ caller 400s).
+ * null/undefined/'' give `dflt`. Booleans and arrays are NaN — Number(true) is 1.
+ */
+function countOf(v, dflt = NaN) {
+  if (v == null || v === '') return dflt;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\s*\d+\s*$/.test(v)) return Number(v);
+  return NaN;
+}
+
 /** Free-text field (lot, by): at most 100 chars, or null. */
 const shortText = (v) => (v == null || v === '' ? null : String(v).slice(0, 100));
 
@@ -1131,7 +1142,7 @@ async function getBinStatus(request, env) {
  */
 async function receiveBins(body, env) {
   const cardId = cardIdOf(body.cardId);
-  const boxes = Number(body.boxes || 0), leftover = Number(body.leftoverBins || 0);
+  const boxes = countOf(body.boxes, 0), leftover = countOf(body.leftoverBins, 0);
   if (!Number.isInteger(boxes) || boxes < 0 || !Number.isInteger(leftover) || leftover < 0) {
     throw createError('VALIDATION_ERROR', 'boxes/leftoverBins must be whole numbers ≥ 0');
   }
@@ -1160,8 +1171,8 @@ async function receiveBins(body, env) {
 /** POST ?action=recount {cardId, sealedBins, by?} — physical count resets the baseline. */
 async function recount(body, env) {
   const cardId = cardIdOf(body.cardId);
-  const sealedBins = Number(body.sealedBins);
-  if (body.sealedBins == null || !Number.isInteger(sealedBins) || sealedBins < 0) throw createError('VALIDATION_ERROR', 'sealedBins must be a whole number ≥ 0');
+  const sealedBins = countOf(body.sealedBins);
+  if (!Number.isInteger(sealedBins) || sealedBins < 0) throw createError('VALIDATION_ERROR', 'sealedBins must be a whole number ≥ 0');
   const row = await laneRow(env, cardId);
   const per = row.bags_per_bin, bags = sealedBins * per;
   const at = new Date().toISOString();
@@ -1191,6 +1202,51 @@ async function setBinConfig(body, env) {
     ON CONFLICT(card_id) DO UPDATE SET ${sets}`, keys.map(k => ins[k]));
   const lane = await computeLane(env, await laneRow(env, cardId));
   return successResponse({ success: true, lane });
+}
+
+// ── Grove bins: red ORDER card (design §6, §7) ──────────────────────────────
+
+const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
+/** 10 chars of base32 (50 bits) — what the red card's QR carries. */
+function newToken() {
+  const a = crypto.getRandomValues(new Uint8Array(10));
+  return [...a].map(b => B32[b & 31]).join('');
+}
+
+/** POST ?action=makeLaneKit {cardId} — (re)creates the lane's red card; retires any previous one. */
+async function makeLaneKit(body, env) {
+  const cardId = cardIdOf(body.cardId);
+  const card = await queryOne(env.DB, 'SELECT id, item, supplier, crumbtrail FROM kanban_cards WHERE id = ?', [cardId]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  const cfg = await queryOne(env.DB, 'SELECT card_id FROM kanban_bin_config WHERE card_id = ?', [cardId]);
+  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
+  const token = newToken(), at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE kanban_bin_cards SET retired = 1 WHERE card_id = ? AND kind='red' AND retired = 0`).bind(cardId),
+    env.DB.prepare('INSERT INTO kanban_bin_cards (card_id, kind, token, created_at) VALUES (?, ?, ?, ?)').bind(cardId, 'red', token, at),
+  ]);
+  const base = env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, redCard: { token, url: `${base}/k/${token}` }, card, lane });
+}
+
+/** POST ?action=scanCard {token, by?} — the red ORDER card. Logs a 'red' event and raises (or re-sends) the Damon request. */
+async function scanCard(body, env, ctx) {
+  const token = String(body.token || '').trim().toLowerCase();
+  if (!/^[a-z2-7]{10}$/.test(token)) throw createError('NOT_FOUND', 'Card not recognised');
+  const bc = await queryOne(env.DB, 'SELECT id, card_id, kind, retired FROM kanban_bin_cards WHERE token = ?', [token]);
+  if (!bc) throw createError('NOT_FOUND', 'Card not recognised');
+  if (bc.retired) throw createError('VALIDATION_ERROR', 'This card was replaced — use the new one');
+  if (bc.kind !== 'red') throw createError('VALIDATION_ERROR', 'Per-bin cards are not in use yet');
+  const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [bc.card_id]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  // Raw insert: kanban_bin_events is not in db.js VALID_TABLES, and `at` is set explicitly (ISO).
+  await env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bin_card, by, at) VALUES (?, ?, ?, ?, ?)')
+    .bind(bc.card_id, 'red', bc.id, shortText(body.by), new Date().toISOString()).run();
+  const lane = await computeLane(env, await laneRow(env, bc.card_id));
+  const res = await raiseReorderRequest(card, env, ctx);     // Task 9 adds `lane` as a 4th arg for the email body
+  const payload = await res.json();
+  return successResponse({ success: true, lane, request: payload.request });
 }
 
 export async function handleKanbanD1(request, env, ctx) {
@@ -1226,6 +1282,8 @@ export async function handleKanbanD1(request, env, ctx) {
     receiveBins: () => receiveBins(body, env),
     recount: () => recount(body, env),
     setBinConfig: () => setBinConfig(body, env),
+    makeLaneKit: () => makeLaneKit(body, env),
+    scanCard: () => scanCard(body, env, ctx),
   };
 
   if (!action || !actions[action]) {
