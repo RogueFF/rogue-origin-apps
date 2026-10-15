@@ -990,6 +990,29 @@ async function orderUsage(body, request, env, ctx) {
   return successResponse({ success: true, written: rows.length, unmapped: rows.filter(r => !r.card_id).length, touched });
 }
 
+/** GET ?action=getRecipes → { recipes:[{variant_id, card_id, qty, item}], unmapped:[{variant_id, qty, lastSeen}] } */
+async function getRecipes(env) {
+  const recipes = await query(env.DB, `
+    SELECT r.variant_id, r.card_id, r.qty, k.item
+      FROM kanban_recipes r LEFT JOIN kanban_cards k ON k.id = r.card_id
+     ORDER BY k.item, r.variant_id`);
+  const unmapped = await query(env.DB, `
+    SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen
+      FROM kanban_usage WHERE source = 'shopify:unmapped' AND at >= datetime('now', '-30 days')
+     GROUP BY variant_id ORDER BY qty DESC`);
+  return successResponse({ success: true, recipes, unmapped });
+}
+
+/** POST ?action=setRecipe {variant_id, card_id, qty}. qty 0 deletes. */
+async function setRecipe(body, env) {
+  const variantId = String(body.variant_id || '').trim();
+  const cardId = Number(body.card_id), qty = Number(body.qty ?? 1);
+  if (!variantId || !(cardId > 0) || !(qty >= 0)) throw createError('VALIDATION_ERROR', 'variant_id, card_id, qty required');
+  if (qty === 0) await execute(env.DB, 'DELETE FROM kanban_recipes WHERE variant_id = ? AND card_id = ?', [variantId, cardId]);
+  else await execute(env.DB, 'INSERT OR REPLACE INTO kanban_recipes (variant_id, card_id, qty) VALUES (?, ?, ?)', [variantId, cardId, qty]);
+  return successResponse({ success: true });
+}
+
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -1017,6 +1040,8 @@ export async function handleKanbanD1(request, env, ctx) {
     getReorderRequests: () => getReorderRequests(request, env),
     // Grove bins — design doc 2026-10-14
     orderUsage: () => orderUsage(body, request, env, ctx),
+    getRecipes: () => getRecipes(env),
+    setRecipe: () => setRecipe(body, env),
   };
 
   if (!action || !actions[action]) {
