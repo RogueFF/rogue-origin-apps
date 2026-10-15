@@ -73,8 +73,10 @@ export function laneStatus(i) {
 }
 
 /**
- * Last year's equivalent of the window a reorder placed today must cover:
- * [today+lead, today+lead+safety], shifted back one year. ISO dates (UTC).
+ * Last year's demand over the span a reorder placed today must cover:
+ * [today, today+lead+safety], shifted back one year (laneStatus divides it by
+ * lead+safety). `from` is a date (YYYY-MM-DD); `to` is the ISO end of its day
+ * (YYYY-MM-DDT23:59:59.999Z) so `at <= to` includes the last day. UTC.
  */
 export function seasonWindow(today, lead, safety) {
   const back = (days) => {
@@ -82,5 +84,5 @@ export function seasonWindow(today, lead, safety) {
     d.setUTCFullYear(d.getUTCFullYear() - 1);
     return d.toISOString().slice(0, 10);
   };
-  return { from: back(lead), to: back(lead + safety) };
+  return { from: back(0), to: `${back(lead + safety)}T23:59:59.999Z` };
 }

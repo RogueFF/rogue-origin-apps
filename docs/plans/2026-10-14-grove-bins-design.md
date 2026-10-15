@@ -201,7 +201,7 @@ redScanned     = a 'red' event after baseline.at → status 'order' regardless o
 recount        = at Receive: |counted leftover × per − onHand| > per  (Desk flag)
 
 rateUsage      = usage rows ≥ 14 d ? Σ usage(56 d) / 56 : seed_per_month / 30.4
-rateSeason     = Σ usage(same window last year: today+lead … today+lead+safety) / (lead+safety)
+rateSeason     = Σ usage(same window last year: today … today+lead+safety) / (lead+safety)
 rate           = max(rateUsage, rateSeason)
 
 reorderPoint   = rate × (lead + safety)

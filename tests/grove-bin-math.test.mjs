@@ -194,16 +194,16 @@ test('does not mutate its input', () => {
 
 // --- season window ---------------------------------------------------------
 
-test('season window is [today+lead, today+lead+safety] a year back', () => {
+test('season window is [today, today+lead+safety] a year back, end day inclusive', () => {
   assert.deepEqual(seasonWindow(new Date('2026-10-14T12:00:00Z'), 75, 30), {
-    from: '2025-12-28',
-    to: '2026-01-27',
+    from: '2025-10-14',
+    to: '2026-01-27T23:59:59.999Z',
   });
 });
 
 test('season window for a short-lead lane', () => {
   assert.deepEqual(seasonWindow(new Date('2026-10-14T12:00:00Z'), 7, 7), {
-    from: '2025-10-21',
-    to: '2025-10-28',
+    from: '2025-10-14',
+    to: '2025-10-28T23:59:59.999Z',
   });
 });
