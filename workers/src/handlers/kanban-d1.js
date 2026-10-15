@@ -8,8 +8,16 @@ import { readSheet } from '../lib/sheets.js';
 import { sendEmail } from '../lib/mailer.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
+import { parseFlowOrder, usageRowsFor } from '../lib/bin-usage.js';
+import { DAY, laneStatus, seasonWindow } from '../lib/bin-math.js';
+import { validateBinConfig } from '../lib/bin-config.js';
 
 const SHEET_NAME = '12.12 Supplies';
+
+/** Grove 10 LB card: its usage comes from production (inventory_adjustments), not the Shopify ledger. */
+const TEN_LB_CARD = 99;
+/** The sku production's logBag writes on every barn 10 lb bag scan. */
+const TEN_LB_SCAN_SKU = 'MANUAL-10LB-BAG';
 
 /**
  * Vendors whose reordering runs outside the Friday cart. Scanning one of these
@@ -438,7 +446,17 @@ async function addToCart(body, env, ctx) {
 
   // Vendors handled outside the Friday cart never touch kanban_cart.
   if (isReorderAlertVendor(card.supplier)) {
-    return raiseReorderRequest(card, env, ctx);
+    // A Grove card with a bin lane gets the order-by email; one without keeps the old body.
+    // A lane error falls back to the old email: it must never fail a scan that used to work.
+    let lane = null;
+    try {
+      const rows = await laneRows(env, card.id);
+      lane = rows[0] ? await computeLane(env, rows[0]) : null;
+    } catch (e) {
+      console.error('[grove][addToCart] lane read failed, sending the plain alert', e);
+      lane = null;
+    }
+    return successResponse(await raiseReorderRequest(card, env, ctx, lane));
   }
 
   // UPSERT: if card_id already in cart, bump qty; else insert new row
@@ -468,8 +486,11 @@ async function addToCart(body, env, ctx) {
  * a failed email leaves a visible, retryable record rather than vanishing. The
  * send itself runs in ctx.waitUntil so the person scanning isn't held up by
  * Gmail.
+ *
+ * Returns a plain payload ({ success, mode, request }); HTTP callers wrap it in
+ * successResponse, internal callers (scanCard) use it directly.
  */
-async function raiseReorderRequest(card, env, ctx) {
+async function raiseReorderRequest(card, env, ctx, lane = null) {
   const existing = await queryOne(
     env.DB,
     `SELECT id, requested_at AS requestedAt, notify_state AS notifyState,
@@ -488,12 +509,12 @@ async function raiseReorderRequest(card, env, ctx) {
     // scan can ever re-trigger it, and nobody finds out until the shelf is bare.
     const retried = existing.notifyState !== 'sent';
     if (retried) {
-      const job = notifyReorderHandler(env, card, existing.id, existing.closeToken);
+      const job = notifyReorderHandler(env, card, existing.id, existing.closeToken, lane);
       if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job);
       else await job;
     }
 
-    return successResponse({
+    return {
       success: true,
       mode: 'reorder_request',
       request: {
@@ -505,29 +526,26 @@ async function raiseReorderRequest(card, env, ctx) {
         retried,
         requestedAt: existing.requestedAt,
       },
-    });
+    };
   }
 
   const closeToken = crypto.randomUUID().replace(/-/g, '');
+  // ISO, set explicitly: migration 0013's default is SQLite's 'YYYY-MM-DD HH:MM:SS'.
+  const requestedAt = new Date().toISOString();
   const id = await insert(env.DB, 'kanban_reorder_requests', {
     card_id: card.id,
     close_token: closeToken,
+    requested_at: requestedAt,
   });
 
-  const row = await queryOne(
-    env.DB,
-    'SELECT requested_at AS requestedAt FROM kanban_reorder_requests WHERE id = ?',
-    [id]
-  );
-
   if (ctx && typeof ctx.waitUntil === 'function') {
-    ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken));
+    ctx.waitUntil(notifyReorderHandler(env, card, id, closeToken, lane));
   } else {
     // No ctx (direct call / test): don't drop the notification silently.
-    await notifyReorderHandler(env, card, id, closeToken);
+    await notifyReorderHandler(env, card, id, closeToken, lane);
   }
 
-  return successResponse({
+  return {
     success: true,
     mode: 'reorder_request',
     request: {
@@ -536,9 +554,10 @@ async function raiseReorderRequest(card, env, ctx) {
       item: card.item,
       status: 'open',
       outcome: 'created',
-      requestedAt: row?.requestedAt || null,
+      retried: false,
+      requestedAt,
     },
-  });
+  };
 }
 
 /**
@@ -548,7 +567,8 @@ async function raiseReorderRequest(card, env, ctx) {
  * to act; the item name alone means looking the amount up somewhere else.
  * Fields the card happens to be missing are omitted rather than printed empty.
  */
-export function buildReorderEmailBody(card, confirmUrl) {
+export function buildReorderEmailBody(card, confirmUrl, lane = null) {
+  if (lane) return groveLaneEmailBody(card, confirmUrl, lane);
   const facts = [
     ['Item', card.item],
     ['Order', card.order_qty],
@@ -565,11 +585,36 @@ export function buildReorderEmailBody(card, confirmUrl) {
   );
 }
 
+/** 'YYYY-MM-DD' → 'Sep 15' (UTC); missing → '—'. */
+const fmtMD = (iso) => iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—';
+const fmtN = (x) => (Number(x) || 0).toLocaleString('en-US');
+const RATE_SOURCE = { ledger: 'from the usage ledger', season: "last fall's pace", seed: 'seed estimate' };
+
+/**
+ * Grove bin lane email (design §7): the order-by date leads, because that is
+ * the decision; then how much, what is left, how fast it goes, when it runs out.
+ */
+function groveLaneEmailBody(card, confirmUrl, lane) {
+  const rate = Number(lane.rate) || 0, moq = lane.config?.moq, lead = lane.config?.leadDays ?? 75;
+  const cover = rate > 0 ? ` ≈ ${Math.round(lane.suggestedQty / rate / 30.4)} months of cover` : '';
+  const facts = [
+    ['Suggest', `${fmtN(lane.suggestedQty)}${moq && lane.suggestedQty === moq ? ' (MOQ)' : ''}${cover}`],
+    ['On hand', `${fmtN(lane.onHand)} bags (${lane.bins} bins)`],
+    ['Using', rate > 0 ? `~${fmtN(Math.round(rate * 7))} / week (${RATE_SOURCE[lane.rateSource] || lane.rateSource})` : null],
+    ['Runs out', lane.runOut ? `~${fmtMD(lane.runOut)} · lead ${lead} days` : null],
+    ['Location', card.crumbtrail],
+    ['Supplier', card.supplier],
+  ].filter(([, v]) => v);
+  return `${card.item} — order by ${fmtMD(lane.orderBy)}.\n\n` +
+    facts.map(([k, v]) => `${k}: ${v}`).join('\n') +
+    `\n\nOnce you've placed the order, mark it done here:\n${confirmUrl}\n\n— Rogue Origin supply kanban`;
+}
+
 /**
  * Send the alert and record the outcome on the request row. Never throws — a
  * send failure must land in notify_state, not bubble out of ctx.waitUntil.
  */
-async function notifyReorderHandler(env, card, requestId, closeToken) {
+async function notifyReorderHandler(env, card, requestId, closeToken, lane = null) {
   const confirmUrl =
     `${env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev'}` +
     `/api/kanban?action=reorderRequest&token=${closeToken}`;
@@ -579,7 +624,7 @@ async function notifyReorderHandler(env, card, requestId, closeToken) {
       to: env.DAMON_EMAIL,
       cc: env.REORDER_CC || undefined,
       subject: `Reorder needed: ${card.item}`,
-      text: buildReorderEmailBody(card, confirmUrl),
+      text: buildReorderEmailBody(card, confirmUrl, lane),
     });
 
     await update(
@@ -646,17 +691,26 @@ async function closeReorderRequest(body, env) {
     return successResponse({ success: true, alreadyClosed: true });
   }
 
-  await update(
-    env.DB,
-    'kanban_reorder_requests',
-    {
-      status: 'ordered',
-      closed_at: new Date().toISOString(),
-      closed_by: body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link',
-    },
-    'id = ?',
-    [row.id]
-  );
+  const closedBy = body.closedBy ? String(body.closedBy).slice(0, 100) : 'email-link';
+  const closedAt = new Date().toISOString();
+  const card = await queryOne(env.DB, 'SELECT k.id, k.item, k.supplier FROM kanban_reorder_requests r JOIN kanban_cards k ON k.id = r.card_id WHERE r.id = ?', [row.id]);
+  const cfg = card ? await queryOne(env.DB, 'SELECT moq FROM kanban_bin_config WHERE card_id = ?', [card.id]) : null;
+  let lane = null;
+  if (card) { try { lane = await computeLane(env, await laneRow(env, card.id)); } catch { lane = null; } }
+
+  // Closing is the order being placed: log it in kanban_orders (same batch, so
+  // a request is never closed without its history row) so Grove orders show in
+  // the Desk history beside the Friday-cart vendors. qty is the suggested order
+  // at close time — what the email told Damon to buy — not a confirmed amount.
+  const stmts = [
+    env.DB.prepare(`UPDATE kanban_reorder_requests SET status = 'ordered', closed_at = ?, closed_by = ? WHERE id = ?`).bind(closedAt, closedBy, row.id),
+  ];
+  if (card) {
+    stmts.push(env.DB.prepare('INSERT INTO kanban_orders (vendor, placed_by, items_json) VALUES (?, ?, ?)').bind(
+      card.supplier || 'Grove', closedBy,
+      JSON.stringify([{ cardId: card.id, item: card.item, qty: lane?.suggestedQty ?? cfg?.moq ?? null }])));
+  }
+  await env.DB.batch(stmts);
 
   return successResponse({ success: true, alreadyClosed: false });
 }
@@ -963,6 +1017,345 @@ async function getOrderHistory(request, env) {
   return successResponse({ success: true, orders, count: orders.length });
 }
 
+/**
+ * After usage is written: any touched Grove lane now at 'order' with no open
+ * request → raise it (dedup is raiseReorderRequest's). Never throws — the
+ * webhook must not fail (and be retried by Flow) over a notification.
+ */
+async function checkLedgerTriggers(cardIds, env, ctx) {
+  for (const id of cardIds) {
+    try {
+      const rows = await laneRows(env, id);
+      if (!rows[0]) continue;
+      const lane = await computeLane(env, rows[0]);
+      // No baseline = no estimate (design §5): an uncounted lane reads onHand 0,
+      // which is 'order' at any rate. Firing on it would email Damon "0 bags"
+      // for every lane nobody has counted yet.
+      if (!lane.baseline) continue;
+      if (lane.status !== 'order' || lane.openRequest) continue;
+      // Already on order: Damon closed a request after the last delivery was
+      // received. The lane stays 'order' through the whole lead time (nothing
+      // re-baselines until receiveBins), so without this every Shopify order
+      // would email him again and invite a duplicate order. Keyed on the last
+      // receive, not any baseline: a mid-lead recount must not re-arm it.
+      // An order older than lead + safety with no receive is stale (pre-Grove
+      // closes, or a delivery nobody logged), so the trigger re-arms then.
+      // closed_at is always ISO (closeReorderRequest / receiveBins write it).
+      // Both of these are intended:
+      //  (a) The red card deliberately bypasses this hold — scanCard never checks
+      //      it. It is the human escape hatch: someone looking at a near-empty
+      //      lane can always get Damon told again.
+      //  (b) A delivery later than lead + safety with nothing received re-emails
+      //      once (the hold has gone stale), then dedups via the open request.
+      const staleBefore = new Date(Date.now() - (rows[0].lead_days + rows[0].safety_days) * DAY).toISOString();
+      const inFlight = await queryOne(env.DB, `SELECT r.id FROM kanban_reorder_requests r
+        WHERE r.card_id = ? AND r.status = 'ordered' AND COALESCE(r.closed_by, '') <> 'receive' AND r.closed_at > ?
+          AND r.closed_at > COALESCE((SELECT MAX(at) FROM kanban_bin_events WHERE card_id = ? AND kind = 'receive'), '')
+        LIMIT 1`, [id, staleBefore, id]);
+      if (inFlight) continue;
+      const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [id]);
+      if (card) await raiseReorderRequest(card, env, null, lane);   // null ctx → the send is awaited inside this job
+    } catch (e) {
+      console.error('[grove][ledger-trigger]', id, e);
+    }
+  }
+}
+
+/**
+ * POST ?action=orderUsage&secret=<WEBHOOK_SECRET>  — Shopify Flow "Order created".
+ * Writes one kanban_usage row per (line item × recipe). Idempotent on
+ * (source, ref, card_id, variant_id), so Flow retries are harmless.
+ * Secret check mirrors the production inventory webhook (header or ?secret=).
+ */
+async function orderUsage(body, request, env, ctx) {
+  const secret = env.WEBHOOK_SECRET;
+  if (secret) {
+    const header = request.headers.get('X-Webhook-Secret');
+    const param = new URL(request.url).searchParams.get('secret');
+    if (header !== secret && param !== secret) throw createError('UNAUTHORIZED', 'bad secret');
+  } else {
+    console.warn('[grove][orderUsage] WEBHOOK_SECRET unset — endpoint open');
+  }
+  let order;
+  try { order = parseFlowOrder(body); } catch (e) { throw createError('VALIDATION_ERROR', e.message); }
+  const recipes = await query(env.DB, 'SELECT variant_id, card_id, qty FROM kanban_recipes');
+  const rows = usageRowsFor(order, recipes);
+  if (rows.length === 0) return successResponse({ success: true, written: 0, unmapped: 0, touched: [] });
+  await env.DB.batch(rows.map(r => env.DB.prepare(
+    'INSERT OR IGNORE INTO kanban_usage (card_id, qty, source, ref, variant_id, at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(r.card_id, r.qty, r.source, r.ref, r.variant_id, r.at)));
+  const touched = [...new Set(rows.filter(r => r.card_id > 0).map(r => r.card_id))];
+  // The backstop: a lane the ledger has taken to its reorder point raises the
+  // Damon request on its own, even if nobody pulls the red card.
+  if (touched.length) {
+    const job = checkLedgerTriggers(touched, env, ctx);
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(job); else await job;
+  }
+  return successResponse({ success: true, written: rows.length, unmapped: rows.filter(r => !r.card_id).length, touched });
+}
+
+/** Unmapped Shopify variants seen in the last 30 days (ISO bound, like every Grove `at`). */
+function recentUnmapped(env) {
+  return query(env.DB, `
+    SELECT variant_id, SUM(qty) AS qty, MAX(at) AS lastSeen
+      FROM kanban_usage WHERE source = 'shopify:unmapped' AND at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
+     GROUP BY variant_id ORDER BY qty DESC`);
+}
+
+/** GET ?action=getRecipes → { recipes:[{variant_id, card_id, qty, item}], unmapped:[{variant_id, qty, lastSeen}] } */
+async function getRecipes(env) {
+  const [recipes, unmapped] = await Promise.all([query(env.DB, `
+    SELECT r.variant_id, r.card_id, r.qty, k.item
+      FROM kanban_recipes r LEFT JOIN kanban_cards k ON k.id = r.card_id
+     ORDER BY k.item, r.variant_id`), recentUnmapped(env)]);
+  return successResponse({ success: true, recipes, unmapped });
+}
+
+/** POST ?action=setRecipe {variant_id, card_id, qty}. qty 0 deletes. */
+async function setRecipe(body, env) {
+  const variantId = String(body.variant_id || '').trim();
+  const cardId = Number(body.card_id), qty = Number(body.qty ?? 1);
+  if (!variantId || !(cardId > 0) || !(qty >= 0)) throw createError('VALIDATION_ERROR', 'variant_id, card_id, qty required');
+  if (qty === 0) await execute(env.DB, 'DELETE FROM kanban_recipes WHERE variant_id = ? AND card_id = ?', [variantId, cardId]);
+  else await execute(env.DB, 'INSERT OR REPLACE INTO kanban_recipes (variant_id, card_id, qty) VALUES (?, ?, ?)', [variantId, cardId, qty]);
+  return successResponse({ success: true });
+}
+
+// ── Grove bins: lane status (design §5) ─────────────────────────────────────
+
+/** cardId as a positive integer, or VALIDATION_ERROR. */
+function cardIdOf(v) {
+  const n = typeof v === 'number' || (typeof v === 'string' && v.trim()) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n <= 0) throw createError('VALIDATION_ERROR', 'cardId must be a positive integer');
+  return n;
+}
+
+/**
+ * A bin/box count: a number or a digits-only string, else NaN (→ caller 400s).
+ * null/undefined/'' give `dflt`. Booleans and arrays are NaN — Number(true) is 1.
+ */
+function countOf(v, dflt = NaN) {
+  if (v == null || v === '') return dflt;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\s*\d+\s*$/.test(v)) return Number(v);
+  return NaN;
+}
+
+/** Free-text field (lot, by): at most 100 chars, or null. */
+const shortText = (v) => (v == null || v === '' ? null : String(v).slice(0, 100));
+
+async function laneRows(env, cardId) {
+  const where = cardId ? 'WHERE c.card_id = ?' : '';
+  return query(env.DB, `
+    SELECT c.*, k.item, k.crumbtrail, k.supplier,
+      (SELECT id FROM kanban_bin_cards b WHERE b.card_id = c.card_id AND b.kind='red' AND b.retired=0 ORDER BY id DESC LIMIT 1) AS redCardId,
+      (SELECT token FROM kanban_bin_cards b WHERE b.card_id = c.card_id AND b.kind='red' AND b.retired=0 ORDER BY id DESC LIMIT 1) AS redToken
+    FROM kanban_bin_config c JOIN kanban_cards k ON k.id = c.card_id ${where} ORDER BY k.item`, cardId ? [cardId] : []);
+}
+
+/** One lane row (config + card) or NOT_FOUND. */
+async function laneRow(env, cardId) {
+  const row = (await laneRows(env, cardId))[0];
+  if (!row) throw createError('NOT_FOUND', 'no bin lane for this card');
+  return row;
+}
+
+/**
+ * Bags consumed for a card in (after, until]. Card 99 (10 lb) reads production's
+ * inventory_adjustments. Its timestamps are ISO in both sources (barn scans via
+ * toISOString, Shopify Flow rows pass ISO through), so the string comparison is sound.
+ */
+async function usageSum(env, cardId, after, until = null) {
+  if (cardId === TEN_LB_CARD) {
+    // One row per barn bag scan: logBag (production/bag-tracking.js) always writes
+    // sku MANUAL-10LB-BAG. The shopify_flow rows are echoes of the resulting
+    // inventory change, not bags; counting both would double count.
+    const r = await queryOne(env.DB, `SELECT COUNT(*) AS n FROM inventory_adjustments
+      WHERE size = '10lb' AND sku = ? AND timestamp > ? ${until ? 'AND timestamp <= ?' : ''}`,
+      until ? [TEN_LB_SCAN_SKU, after, until] : [TEN_LB_SCAN_SKU, after]);
+    return Number(r?.n || 0);
+  }
+  const r = await queryOne(env.DB, `SELECT COALESCE(SUM(qty),0) AS n FROM kanban_usage
+    WHERE card_id = ? AND source NOT LIKE '%unmapped' AND at > ? ${until ? 'AND at <= ?' : ''}`, until ? [cardId, after, until] : [cardId, after]);
+  return Number(r?.n || 0);
+}
+
+/**
+ * Lane status for one laneRows() row. `leftoverBins` (a physical count of sealed
+ * bins at the row's current bin size) feeds laneStatus's recount check.
+ */
+async function computeLane(env, row, today = new Date(), leftoverBins = null) {
+  const cardId = row.card_id;
+  const since56 = new Date(today.getTime() - 56 * DAY).toISOString();
+  const win = seasonWindow(today, row.lead_days, row.safety_days);
+  // Ledger age counts live orders only (source 'shopify'), while usageSum also
+  // counts seed rows ('shopify:seed') as usage: seeded history is real demand,
+  // but it must not make a two-day-old ledger look like 14 days of data.
+  const [firstSql, firstArgs] = cardId === TEN_LB_CARD
+    ? [`SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size = '10lb' AND sku = ?`, [TEN_LB_SCAN_SKU]]
+    : [`SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, [cardId]];
+  const [baseline, first, seasonRaw, usage56, openReq] = await Promise.all([
+    queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]),
+    queryOne(env.DB, firstSql, firstArgs),
+    usageSum(env, cardId, win.from, win.to),
+    usageSum(env, cardId, since56),
+    queryOne(env.DB, `SELECT id, requested_at AS requestedAt, notify_state AS notifyState FROM kanban_reorder_requests WHERE card_id = ? AND status='open'`, [cardId]),
+  ]);
+  const [red, usageSince] = baseline ? await Promise.all([
+    queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]),
+    usageSum(env, cardId, baseline.at),
+  ]) : [null, 0];
+  const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / DAY) : 0;
+  const s = laneStatus({
+    per: row.bags_per_bin, lead: row.lead_days, safety: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month,
+    baseline: baseline ? { bags: baseline.bags, at: baseline.at } : null,
+    usageSince, usage56, usageDays,
+    seasonUsage: seasonRaw > 0 ? seasonRaw : null,
+    redScanned: !!red, leftoverBins, today,
+  });
+  return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
+    config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month },
+    baseline: baseline || null, redCard: row.redToken ? { id: row.redCardId, token: row.redToken } : null, openRequest: openReq || null, ...s };
+}
+
+/** GET ?action=getBinStatus[&cardId=] → { lanes:[…], unmapped:[{variant_id, qty, lastSeen}] } */
+async function getBinStatus(request, env) {
+  const { cardId } = getQueryParams(request);
+  const rows = await laneRows(env, cardId ? cardIdOf(cardId) : null); // empty = all lanes
+  const [lanes, unmapped] = await Promise.all([Promise.all(rows.map(r => computeLane(env, r))), recentUnmapped(env)]);
+  return successResponse({ success: true, lanes, unmapped });
+}
+
+/**
+ * POST ?action=receiveBins {cardId, leftoverBins, boxes, bagsPerBox?, bagsPerBin?, lot?, by?}
+ *
+ * New baseline = leftover sealed bins at the lane's CURRENT bin size + boxes × bagsPerBox.
+ * A bagsPerBin override is how the incoming boxes are split; it is stored as the
+ * lane's bin size for next time but does not re-value the leftovers.
+ * needsRecount: the leftover count disagrees with the ledger estimate by more than a bin
+ * (never on a lane with no baseline — there is no estimate yet).
+ */
+async function receiveBins(body, env) {
+  const cardId = cardIdOf(body.cardId);
+  const boxes = countOf(body.boxes, 0), leftover = countOf(body.leftoverBins, 0);
+  if (!Number.isInteger(boxes) || boxes < 0 || !Number.isInteger(leftover) || leftover < 0) {
+    throw createError('VALIDATION_ERROR', 'boxes/leftoverBins must be whole numbers ≥ 0');
+  }
+  // Overrides go through the same rules as setBinConfig (bags_per_bin is a divisor).
+  const override = validateBinConfig({ bagsPerBox: body.bagsPerBox, bagsPerBin: body.bagsPerBin });
+  if (override.error && override.error !== 'nothing to set') throw createError('VALIDATION_ERROR', override.error);
+  const row = await laneRow(env, cardId);
+  const oldPer = row.bags_per_bin;
+  const perBox = override.data?.bags_per_box ?? row.bags_per_box, per = override.data?.bags_per_bin ?? oldPer;
+  const before = await computeLane(env, row, new Date(), leftover);
+  const needsRecount = before.recount;
+  const bags = leftover * oldPer + boxes * perBox;
+  const bins = leftover + Math.ceil((boxes * perBox) / per);
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, lot, by, note, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(cardId, 'receive', bins, per, shortText(body.lot), shortText(body.by), `leftover ${leftover} bins × ${oldPer} + ${boxes} boxes × ${perBox}`, at),
+    env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'receive'),
+    env.DB.prepare('UPDATE kanban_bin_config SET bags_per_box = ?, bags_per_bin = ?, updated_at = ? WHERE card_id = ?').bind(perBox, per, at, cardId),
+    // An open request this delivery answers: log the order first (only if one is
+    // open — the insert reads it before the UPDATE below closes it), so an order
+    // Damon never confirmed by link still shows in history. qty = bags received.
+    env.DB.prepare(`INSERT INTO kanban_orders (vendor, placed_by, items_json)
+      SELECT ?, 'receive', ? WHERE ? > 0 AND EXISTS (SELECT 1 FROM kanban_reorder_requests WHERE card_id = ? AND status = 'open')`)
+      .bind(row.supplier || 'Grove', JSON.stringify([{ cardId, item: row.item, qty: boxes * perBox }]), boxes * perBox, cardId),
+    env.DB.prepare(`UPDATE kanban_reorder_requests SET status='ordered', closed_at=?, closed_by='receive' WHERE card_id = ? AND status='open'`).bind(at, cardId),
+  ]);
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, lane, needsRecount, estimateBefore: before.onHand });
+}
+
+/** POST ?action=recount {cardId, sealedBins, by?} — physical count resets the baseline. */
+async function recount(body, env) {
+  const cardId = cardIdOf(body.cardId);
+  const sealedBins = countOf(body.sealedBins);
+  if (!Number.isInteger(sealedBins) || sealedBins < 0) throw createError('VALIDATION_ERROR', 'sealedBins must be a whole number ≥ 0');
+  const row = await laneRow(env, cardId);
+  const per = row.bags_per_bin, bags = sealedBins * per;
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bins, bag_count, by, at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(cardId, 'recount', sealedBins, per, shortText(body.by), at),
+    env.DB.prepare('INSERT INTO kanban_baselines (card_id, bags, at, reason) VALUES (?, ?, ?, ?)').bind(cardId, bags, at, 'recount'),
+  ]);
+  const lane = await computeLane(env, row);
+  return successResponse({ success: true, lane });
+}
+
+/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, colour?} — atomic upsert. */
+async function setBinConfig(body, env) {
+  const cardId = cardIdOf(body.cardId);
+  const { data, error } = validateBinConfig(body);
+  if (error) throw createError('VALIDATION_ERROR', error);
+  const card = await queryOne(env.DB, 'SELECT id FROM kanban_cards WHERE id = ?', [cardId]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  const at = new Date().toISOString();
+  // A new row needs seed_per_month (NOT NULL); an existing row keeps every column not given.
+  // Column names come from validateBinConfig's fixed map, never from the body.
+  const ins = { seed_per_month: 0, ...data, card_id: cardId, updated_at: at };
+  const keys = Object.keys(ins);
+  const sets = [...Object.keys(data), 'updated_at'].map(c => `${c} = excluded.${c}`).join(', ');
+  await execute(env.DB, `INSERT INTO kanban_bin_config (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})
+    ON CONFLICT(card_id) DO UPDATE SET ${sets}`, keys.map(k => ins[k]));
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, lane });
+}
+
+// ── Grove bins: red ORDER card (design §6, §7) ──────────────────────────────
+
+const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
+/** 10 chars of base32 (50 bits) — what the red card's QR carries. */
+function newToken() {
+  const a = crypto.getRandomValues(new Uint8Array(10));
+  return [...a].map(b => B32[b & 31]).join('');
+}
+
+/** POST ?action=makeLaneKit {cardId} — (re)creates the lane's red card; retires any previous one. */
+async function makeLaneKit(body, env) {
+  const cardId = cardIdOf(body.cardId);
+  const card = await queryOne(env.DB, 'SELECT id, item, supplier, crumbtrail FROM kanban_cards WHERE id = ?', [cardId]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  const cfg = await queryOne(env.DB, 'SELECT card_id FROM kanban_bin_config WHERE card_id = ?', [cardId]);
+  if (!cfg) throw createError('NOT_FOUND', 'no bin config for this card');
+  const token = newToken(), at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE kanban_bin_cards SET retired = 1 WHERE card_id = ? AND kind='red' AND retired = 0`).bind(cardId),
+    env.DB.prepare('INSERT INTO kanban_bin_cards (card_id, kind, token, created_at) VALUES (?, ?, ?, ?)').bind(cardId, 'red', token, at),
+  ]);
+  const base = env.PUBLIC_API_BASE || 'https://rogue-origin-api.roguefamilyfarms.workers.dev';
+  const lane = await computeLane(env, await laneRow(env, cardId));
+  return successResponse({ success: true, redCard: { token, url: `${base}/k/${token}` }, card, lane });
+}
+
+/** POST ?action=scanCard {token, by?} — the red ORDER card. Logs a 'red' event and raises (or re-sends) the Damon request. */
+async function scanCard(body, env, ctx) {
+  const token = String(body.token || '').trim().toLowerCase();
+  if (!/^[a-z2-7]{10}$/.test(token)) throw createError('NOT_FOUND', 'Card not recognised');
+  const bc = await queryOne(env.DB, 'SELECT id, card_id, kind, retired FROM kanban_bin_cards WHERE token = ?', [token]);
+  if (!bc) throw createError('NOT_FOUND', 'Card not recognised');
+  if (bc.retired) throw createError('VALIDATION_ERROR', 'This card was replaced — use the new one');
+  if (bc.kind !== 'red') throw createError('VALIDATION_ERROR', 'Per-bin cards are not in use yet');
+  const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [bc.card_id]);
+  if (!card) throw createError('NOT_FOUND', 'card not found');
+  // Request first, red event second: if raising the request throws, no 'red'
+  // event is left behind to flip the lane to 'order' with nobody told. (Not a
+  // transaction — a failure between the two leaves an open request without the
+  // event, which the next scan repairs; the reverse would be a silent dead end.)
+  // The email's lane is read before the red event exists (only status depends on it);
+  // the response's lane is read after, so it shows 'order'.
+  const emailLane = await computeLane(env, await laneRow(env, bc.card_id));
+  const { request } = await raiseReorderRequest(card, env, ctx, emailLane);
+  // Raw insert: kanban_bin_events is not in db.js VALID_TABLES, and `at` is set explicitly (ISO).
+  await env.DB.prepare('INSERT INTO kanban_bin_events (card_id, kind, bin_card, by, at) VALUES (?, ?, ?, ?, ?)')
+    .bind(bc.card_id, 'red', bc.id, shortText(body.by), new Date().toISOString()).run();
+  const lane = await computeLane(env, await laneRow(env, bc.card_id));
+  return successResponse({ success: true, lane, request });
+}
+
 export async function handleKanbanD1(request, env, ctx) {
   const action = getAction(request);
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -988,6 +1381,16 @@ export async function handleKanbanD1(request, env, ctx) {
     reorderRequest: () => showReorderRequest(request, env),
     closeReorderRequest: () => closeReorderRequest(body, env),
     getReorderRequests: () => getReorderRequests(request, env),
+    // Grove bins — design doc 2026-10-14
+    orderUsage: () => orderUsage(body, request, env, ctx),
+    getRecipes: () => getRecipes(env),
+    setRecipe: () => setRecipe(body, env),
+    getBinStatus: () => getBinStatus(request, env),
+    receiveBins: () => receiveBins(body, env),
+    recount: () => recount(body, env),
+    setBinConfig: () => setBinConfig(body, env),
+    makeLaneKit: () => makeLaneKit(body, env),
+    scanCard: () => scanCard(body, env, ctx),
   };
 
   if (!action || !actions[action]) {

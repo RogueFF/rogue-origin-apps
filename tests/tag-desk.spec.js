@@ -22,12 +22,23 @@ test.beforeAll(async () => {
 });
 test.afterAll(() => { if (server) server.kill(); });
 
-function mockApi(page, { today = '2026-09-03T21:00:00Z' } = {}) {
+const laneFixture = () => [
+  { cardId: 21, item: 'Custom 1 Oz Bags', crumbtrail: 'Grove Rack > A-1', colour: 'orange', config: { bagsPerBox: 500, bagsPerBin: 50, leadDays: 75, safetyDays: 30, moq: 2500, seedPerMonth: 600 },
+    baseline: { bags: 2400, at: '2026-08-02T17:00:00.000Z', reason: 'receive' }, redCard: { id: 301, token: 'tok21' }, openRequest: { id: 77, requestedAt: '2026-08-25 18:00:00', notifyState: 'sent' },
+    onHand: 1500, bins: 30, rate: 20, rateSource: 'ledger', reorderPoint: 2100, redTapeAtBins: 42, suggestedQty: 2500, runOut: '2026-11-17', orderBy: '2026-08-20', status: 'order', recount: false },
+  { cardId: 99, item: '10 LB GROVE BAGS', crumbtrail: 'Grove Bags Rack > E-1', colour: 'slate', config: { bagsPerBox: 100, bagsPerBin: 50, leadDays: 75, safetyDays: 30, moq: 2500, seedPerMonth: 90 },
+    baseline: { bags: 650, at: '2026-08-20T17:00:00.000Z', reason: 'recount' }, redCard: null, openRequest: null,
+    onHand: 600, bins: 12, rate: 3, rateSource: 'seed', reorderPoint: 315, redTapeAtBins: 7, suggestedQty: 2500, runOut: '2027-01-15', orderBy: '2026-11-01', status: 'ok', recount: false },
+];
+
+function mockApi(page, { today = '2026-09-03T21:00:00Z', bins = true } = {}) {
   const cards = JSON.parse(fs.readFileSync(path.join(FIX, 'cards.json'), 'utf8')).cards;
   const cart = JSON.parse(fs.readFileSync(path.join(FIX, 'cart.json'), 'utf8')).cart;
   const orders = JSON.parse(fs.readFileSync(path.join(FIX, 'orders.json'), 'utf8')).orders;
   const requests = JSON.parse(fs.readFileSync(path.join(FIX, 'requests.json'), 'utf8')).requests;
   const calls = [];
+  const lanes = laneFixture(); const unmapped = [{ variant_id: '4455667788', qty: 12, lastSeen: '2026-09-01' }];
+  const laneOf = id => lanes.find(l => l.cardId === Number(id));
   let nextCart = 900, nextOrder = 500;
   const rows = () => Object.values(cart).flat();
   const findCard = id => cards.find(c => c.id === Number(id));
@@ -56,9 +67,15 @@ function mockApi(page, { today = '2026-09-03T21:00:00Z' } = {}) {
       case 'update': { const c = findCard(body.id); Object.assign(c, body); return json({ success: true, message: 'Card updated' }); }
       case 'add': { const c = { id: 200, ...body }; cards.push(c); return json({ success: true, id: 200 }); }
       case 'delete': { const i = cards.findIndex(c => c.id === Number(body.id)); if (i >= 0) cards.splice(i, 1); return json({ success: true }); }
+      case 'getBinStatus': return bins ? json({ success: true, lanes, unmapped }) : route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'no such table: kanban_bin_config' }) });
+      case 'receiveBins': { const l = laneOf(body.cardId); const before = l.onHand; const per = body.bagsPerBin || l.config.bagsPerBin, perBox = body.bagsPerBox || l.config.bagsPerBox; l.bins = body.leftoverBins + Math.ceil(body.boxes * perBox / per); l.onHand = body.leftoverBins * l.config.bagsPerBin + body.boxes * perBox; l.status = 'ok'; l.openRequest = null; return json({ success: true, lane: l, needsRecount: true, estimateBefore: before }); }
+      case 'recount': { const l = laneOf(body.cardId); l.bins = body.sealedBins; l.onHand = body.sealedBins * l.config.bagsPerBin; return json({ success: true, lane: l }); }
+      case 'setBinConfig': { const l = laneOf(body.cardId); const { cardId, colour, ...cfg } = body; Object.assign(l.config, cfg); if (colour) l.colour = colour; return json({ success: true, lane: l }); }
+      case 'makeLaneKit': { const l = laneOf(body.cardId); l.redCard = { id: 302, token: 'tok' + l.cardId }; return json({ success: true, redCard: { token: l.redCard.token, url: `https://rogue-origin-api.roguefamilyfarms.workers.dev/k/${l.redCard.token}` }, card: findCard(body.cardId), lane: l }); }
+      case 'setRecipe': { const i = unmapped.findIndex(u => u.variant_id === String(body.variant_id)); if (i >= 0) unmapped.splice(i, 1); return json({ success: true }); }
       default: return json({ success: false, error: 'Unknown action: ' + action });
     }
-  }).then(() => ({ calls, cart, cards, orders }));
+  }).then(() => ({ calls, cart, cards, orders, lanes, unmapped }));
 }
 
 test('desk loads the live shape: tiles, three lanes, counts, no console errors', async ({ page }) => {
@@ -232,4 +249,101 @@ test('phone: no order control, rows dense, editor fits', async ({ browser }) => 
   await page.click('.pc'); await page.waitForSelector('#editor[open]');
   expect(await page.evaluate(() => { const b = document.getElementById('edBody'); return b.scrollWidth <= b.clientWidth + 1; })).toBe(true);
   await ctx.close();
+});
+
+// --- Grove lanes (getBinStatus) ---------------------------------------------
+test('grove: one tile per lane, headline from the lane, red tape line, request and no-recipe strip', async ({ page }) => {
+  const errs = []; page.on('pageerror', e => errs.push(e.message));
+  await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  expect(await page.$$eval('.lane-tile', e => e.length)).toBe(2);
+  const heads = await page.$$eval('.lane-tile h3', e => e.map(x => x.innerText));
+  expect(heads).toEqual(['ORDER NOW · 14 days late', 'OK until Jan 15']);
+  const first = await page.$eval('.lane-tile[data-lane="21"]', e => e.innerText);
+  expect(first).toMatch(/Red tape at bin 42/); expect(first).toMatch(/~140\/wk \(ledger\)/); expect(first).toMatch(/Requested from Damon · Aug 25/); expect(first).toMatch(/last count Aug 2/);
+  expect(await page.$$eval('.lane-tile[data-lane="21"] .sq', e => e.length)).toBe(42);           // tape deeper than the stock: empty red outlines keep it visible
+  expect(await page.$$eval('.lane-tile[data-lane="21"] .sq.on', e => e.length)).toBe(30);
+  expect(await page.$$eval('.lane-tile[data-lane="99"] .sq.red', e => e.length)).toBe(7);
+  expect(await page.$eval('.lane-tile[data-lane="99"]', e => e.innerText)).not.toMatch(/Requested from Damon/);
+  expect(await page.$eval('.lane-tile[data-lane="21"]', e => e.classList.contains('st-order'))).toBe(true);
+  expect(await page.$eval('#view-grove', e => e.innerText)).toMatch(/Shopify items with no bag recipe \(1\)/);
+  expect(errs).toEqual([]);
+});
+
+test('grove: Receive posts leftover + boxes and the toast names the new red-tape depth', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  await page.click('.lane-tile[data-lane="21"] [data-rv]'); await page.waitForSelector('#recv[open]');
+  expect(await page.$eval('#rvPerBox', e => e.value)).toBe('500'); expect(await page.$eval('#rvPerBin', e => e.value)).toBe('50');
+  await page.fill('#rvLeft', '39'); await page.fill('#rvBoxes', '25');
+  expect(await page.$eval('#rvLive', e => e.innerText)).toMatch(/= 289 bins · red tape at bin 42/);
+  await page.click('#rvSave'); await page.waitForSelector('.toast');
+  const call = api.calls.find(c => c.action === 'receiveBins');
+  expect(call.body).toMatchObject({ cardId: 21, leftoverBins: 39, boxes: 25 });
+  const toast = await page.$eval('.toast', e => e.innerText);
+  expect(toast).toMatch(/Red tape at bin 42 · move the red card · print the tape label/); expect(toast).toMatch(/Recount\?/);
+  expect(await page.$eval('.lane-tile[data-lane="21"] h3', e => e.innerText)).toMatch(/^OK until/);
+});
+
+test('grove: Recount posts one number; Map assigns a recipe', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  await page.click('.lane-tile[data-lane="99"] [data-rc]'); await page.waitForSelector('#recv[open]');
+  await page.fill('#rcSealed', '9'); await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Count saved")');
+  expect(api.calls.find(c => c.action === 'recount').body).toMatchObject({ cardId: 99, sealedBins: 9 });
+  await page.click('[data-map="4455667788"]'); await page.waitForSelector('#recv[open]');
+  await page.selectOption('#mpCard', '54'); await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Mapped")');
+  expect(api.calls.find(c => c.action === 'setRecipe').body).toMatchObject({ variant_id: '4455667788', card_id: 54, qty: 1 });
+  expect(await page.$('[data-map="4455667788"]')).toBeNull();
+});
+
+const stubPrintWindow = page => page.evaluate(() => { window.__kits = []; window.open = () => { const w = { document: { html: '', open() { this.html = ''; }, write(s) { this.html += s; }, close() {} }, focus() {}, print() {}, close() {} }; window.__kits.push(w); return w; }; });
+
+test('grove: Lane kit asks first, then opens a print window with PEDIR, the /k/ URL and the bag photo slot', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt'); await stubPrintWindow(page);
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  let asked = ''; page.once('dialog', d => { asked = d.message(); d.dismiss(); });
+  await page.click('.lane-tile[data-lane="21"] [data-kit]'); await page.waitForTimeout(200);
+  expect(asked).toMatch(/replaces the red card on the rack — the old one stops working/);
+  expect(api.calls.some(c => c.action === 'makeLaneKit')).toBe(false); expect(await page.evaluate(() => window.__kits.length)).toBe(0);
+  page.once('dialog', d => d.accept());
+  await page.click('.lane-tile[data-lane="21"] [data-kit]'); await page.waitForFunction(() => window.__kits[0] && /PEDIR/.test(window.__kits[0].document.html));
+  const html = await page.evaluate(() => window.__kits[0].document.html);
+  expect(html).toMatch(/PEDIR · 1 oz/); expect(html).toMatch(/\/k\/tok21/); expect(html).toMatch(/Cinta roja en el bin 42/); expect(html).toMatch(/Solo un bin abierto por carril/);
+  expect(html).not.toMatch(/Outfit/);
+  expect(api.calls.filter(c => c.action === 'makeLaneKit').length).toBe(1);
+});
+
+test('grove: Tape label prints page 3 only, with no API call', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt'); await stubPrintWindow(page);
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  const before = api.calls.length;
+  await page.click('.lane-tile[data-lane="21"] [data-tape]'); await page.waitForFunction(() => window.__kits[0] && window.__kits[0].document.html.length > 0);
+  const html = await page.evaluate(() => window.__kits[0].document.html);
+  expect(html).toMatch(/Red tape at bin 42/); expect(html).toMatch(/Cinta roja en el bin 42/); expect(html).not.toMatch(/PEDIR/);
+  expect(api.calls.length).toBe(before);
+});
+
+test('grove: Settings sends only the keys that changed', async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('.lane-tile');
+  await page.click('.lane-tile[data-lane="21"] [data-cfg]'); await page.waitForSelector('#recv[open]');
+  expect(await page.$eval('#cfg-leadDays', e => e.value)).toBe('75');
+  await page.fill('#cfg-leadDays', '80'); await page.selectOption('#cfg-colour', 'teal');
+  await page.click('#rvSave'); await page.waitForSelector('.toast:has-text("Settings saved")');
+  expect(api.calls.find(c => c.action === 'setBinConfig').body).toEqual({ cardId: 21, leadDays: 80, colour: 'teal' });
+});
+
+test('grove: a worker without bin tracking shows a plain note, not an empty board', async ({ page }) => {
+  await mockApi(page, { bins: false });
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.click('.tabs [data-view="grove"]'); await page.waitForSelector('#view-grove .unavail');
+  expect(await page.$eval('#view-grove .unavail', e => e.innerText)).toMatch(/Bin tracking unavailable: .*no such table: kanban_bin_config/);
+  expect(await page.$('.lane-tile')).toBeNull();
 });
