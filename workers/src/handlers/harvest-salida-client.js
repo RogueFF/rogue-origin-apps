@@ -113,7 +113,59 @@ export function salidaMain(boot, S, decoderUrl) {
   async function refresh() {
     if (document.hidden) return;
     try { const r = await fetch(api + '?action=sack_out_today'); const raw = await r.json(); today = raw.data || raw; renderChips(); renderList(); } catch (e) { /* offline: keep last list */ }
+    try { const r = await fetch(ssApi + '?action=close_day_preview'); const raw = await r.json(); preview = raw.data || raw; renderClose(); } catch (e) { /* offline: keep last panel */ }
   }
+
+  // ---- cerrar día: the two end-of-day weights, on this screen ----
+  // The supersack API lives beside the harvest one on the same worker.
+  const ssApi = api.replace(/\/harvest$/, '/supersack');
+  let preview = null, closing = false, prefilled = false;
+  function renderClose() {
+    const v = closeDayView(preview, S); const box = $('sclose');
+    if (!v) { box.hidden = true; return; }
+    box.hidden = false; $('sclosehours').textContent = v.hours;
+    const host = $('scloselines'); host.textContent = '';
+    for (const l of v.lines) {
+      const d = document.createElement('div'); d.className = 'scline';
+      const b = document.createElement('b'); b.textContent = l.name; d.appendChild(b);
+      for (const t of [l.sacks, l.tops, l.smalls]) { const s = document.createElement('span'); s.textContent = t; d.appendChild(s); }
+      if (l.note) { const i = document.createElement('i'); i.textContent = l.note; if (l.warn) i.className = 'warn'; d.appendChild(i); }
+      host.appendChild(d);
+    }
+    const ex = $('scloseexisting'); ex.hidden = !v.existing;
+    if (v.existing) {
+      ex.textContent = S.closeExisting.replace('{b}', v.existing.biomass_lbs).replace('{t}', v.existing.trim_lbs);
+      // Saved weights fill empty boxes once, so a correction starts from them.
+      if (!prefilled && !$('sbio').value && !$('strim').value) { $('sbio').value = v.existing.biomass_lbs; $('strim').value = v.existing.trim_lbs; }
+      prefilled = true;
+    }
+    if (!closing) $('sclosego').textContent = v.existing ? S.closeAgain : S.closeGo;
+  }
+  function closeMsg(text, ok) { const m = $('sclosemsg'); m.hidden = !text; m.textContent = text || ''; m.className = 'sclosemsg' + (ok ? ' ok' : ''); }
+  async function closeDay() {
+    if (closing) return;
+    const err = closeDayCheck($('sbio').value, $('strim').value, S);
+    if (err) { closeMsg(err, false); beep('warn'); return; }
+    if (navigator.onLine === false) { closeMsg(S.closeOffline, false); return; }
+    closing = true; closeMsg('', false); $('scloseyield').hidden = true;
+    const go = $('sclosego'); go.disabled = true; go.textContent = S.closeSaving;
+    try {
+      const r = await fetch(ssApi + '?action=close_day', { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ date: (preview && preview.date) || undefined, biomass_lbs: Number($('sbio').value), trim_lbs: Number($('strim').value) }) });
+      const raw = await r.json(); const d = raw.data || raw;
+      if (!r.ok || d.success === false) {
+        const saved = /ALLOCATE_FAILED/.test(String(d.code || ''));
+        closeMsg(saved ? S.closeSavedNoYield : (d.error || S.closeFailed), saved); beep(saved ? 'ok' : 'bad');
+      } else {
+        closeMsg(S.closeSaved, true); beep('ok');
+        const lines = closeDayYieldLines(d.yield, S);
+        for (const pe of (Array.isArray(d.pool_errors) ? d.pool_errors : [])) lines.push('⚠ ' + S.closePool + ' ' + pe);
+        const y = $('scloseyield'); y.hidden = false; y.textContent = lines.join('\n');
+      }
+    } catch (e) { closeMsg(S.closeFailed, false); beep('bad'); }
+    finally { closing = false; go.disabled = false; renderClose(); refresh(); }
+  }
+  $('sclosego').addEventListener('click', closeDay);
 
   // ---- today's list ----
   function renderList() {
