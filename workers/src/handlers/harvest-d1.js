@@ -964,7 +964,7 @@ async function handleEnter(ui, db, env, ctx, params) {
   // the three-crew build leave no orphan open.
   await closeOpenSessions(db, isTest, crew.id);
 
-  const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut);
+  const cutNumber = await computeCutNumber(db, zone, cultivar, season, isTest, params.test_cut, now);
   // How long since this lot was last worked — only to decide whether the "new
   // cut?" question opens unfolded. Read before the INSERT, after the close.
   const lastHere = await getLastClosedSession(db, zone, cultivar, season, isTest);
@@ -1222,7 +1222,21 @@ async function getLastClosedSession(db, zone, cultivar, season, isTest) {
 //
 // Keyed on (zone, cultivar): in a trial zone, Z10 "Lemon" cut 1 is independent
 // of Z10 "Rocket Sauce" cut 1.
-async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam) {
+/**
+ * Sour Lifter's second cut. Koa, 2026-10-16: "second cut will be all the sour
+ * lifter trailer scans". Every Sour Lifter zone finished its first cut on
+ * 2026-10-08; from Thursday 2026-10-15 (Pacific) the crews go back over those
+ * zones for what the first cut left, onto tables rather than sticks. So a Sour
+ * Lifter lot opened from that day on is AT LEAST cut 2, without the lead
+ * tapping "Empezar corte 2" in every zone (the 10/15-10/16 lots were fixed by
+ * hand in D1). A crew joining a zone another crew has open still joins that
+ * cut, and the zone screen can still move a lot back to 1 for a mis-tap.
+ * Retail blocks and Lifter keep the old rule: they are finished in pieces and
+ * stay cut 1 (Koa, 2026-10-04 and 2026-10-16).
+ */
+const SECOND_CUT_FROM = { cultivar: 'Sour Lifter', fromMs: Date.parse('2026-10-15T07:00:00Z') };
+
+async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam, now = new Date()) {
   const forced = parseInt(testCutParam, 10);
   if (Number.isInteger(forced) && forced >= 1 && forced <= 9) return forced;
 
@@ -1240,7 +1254,11 @@ async function computeCutNumber(db, zone, cultivar, season, isTest, testCutParam
   if (concurrent) return concurrent.cut_number;
 
   const last = await getLastClosedSession(db, zone, cultivar, season, isTest);
-  return last ? last.cut_number : 1;
+  const lastCut = last ? last.cut_number : 1;
+  if (cultivar === SECOND_CUT_FROM.cultivar && now.getTime() >= SECOND_CUT_FROM.fromMs) {
+    return Math.max(lastCut, 2);
+  }
+  return lastCut;
 }
 
 /**
