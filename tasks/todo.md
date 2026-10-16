@@ -57,3 +57,20 @@ session. Decision needed on which of these:
 ## Sack scan-out (2026-10-06)
 
 Design and checklist: `docs/plans/2026-10-06-sack-scan-out-design.md` §11. Branch `feat/sack-scan-out`. Awaiting Koa's go before build.
+
+## Cerrar día on /salida (2026-10-16)
+
+Design: `docs/plans/2026-10-16-salida-close-day-design.md`. Branch `feat/grove-packs`.
+
+- [x] `close_day_preview` + `close_day` on `/api/supersack` (`supersack-day-yield.js`), 13 tests
+- [x] Panel on `/salida` (logic, strings EN/ES, markup, client), 5 tests
+- [x] Shopify trim pools move by the delta on a re-close (missed in the design, caught in the build)
+- [x] Form: 2026 rows point at /salida and stay out of the submit payload
+- [x] Worker deployed 2026-10-16 (version 826c21ce); live preview checked for today
+- [ ] `git push` so the form change reaches GitHub Pages (Koa confirms pushes)
+- [ ] Watch the first real close from the station desktop; confirm the pool notes land as `[Salida] …`
+- [ ] Delete the form's now-dead 2026 scan-count code once a week of closes has gone through
+
+**Review.** The design said "delete rather than hide" the form's 2026 code; the
+build only re-pointed it, because `scanned_day` still feeds the history view
+and the Playwright spec. Deleting is the last unchecked item above.
