@@ -751,7 +751,7 @@
 
   // i18n
   const LANG = { en: {
-    fromScans: 'From scans (not typed)', scanOwned: '2026 sack counts come from the scans and cannot be corrected here.', cutsPoundsCombined: 'Pounds for both cuts are combined on the first row:', scansMore: '{n} more sacks scanned since you opened this page — count updated.', scansFewer: '{n} fewer sacks scanned than when you opened this page — count updated.', scansUnreadableShort: 'Scans not read', scansUnreadable: 'Could not read the sack scans for this day. 2026 sack counts will save as 0 and nothing is taken from Shopify for them. Check signal and reload before saving.', scansUnmapped: 'Scanned sacks with no row here — tell the office:', scansModuleMissing: 'Page did not load fully. Reload before saving.', noScansWarn: 'Weights entered for a 2026 strain with no sacks scanned today. That output will reach no sack. Scan the sacks at /salida first, then save (or save now and save again after scanning).', dayYieldTitle: 'Yield for the scanned sacks:', dayYieldFailed: 'Saved. Could not load the per-sack yield; it will run tonight.', mismatch: 'scanned count differs from the floor count — check for a missed scan', outputNoScans: 'output with no sacks scanned — scan them, then save again', scansNoOutput: 'sacks scanned with no output entered', unknownStrain: 'strain unknown to the system — tell the office', cut: 'cut', stock: 'stock', sacksWord: 'sacks', topsWord: 'tops', smallsWord: 'smalls',
+    closeOnSalida: 'Closed on /salida — sacks from the scans, tops and smalls from the hourly log, biomass and trim typed there. Not saved from this page.', onlySalidaRows: 'Every strain today is a 2026 strain. Close the day on /salida, not here.', fromScans: 'From scans (not typed)', scanOwned: '2026 sack counts come from the scans and cannot be corrected here.', cutsPoundsCombined: 'Pounds for both cuts are combined on the first row:', scansMore: '{n} more sacks scanned since you opened this page — count updated.', scansFewer: '{n} fewer sacks scanned than when you opened this page — count updated.', scansUnreadableShort: 'Scans not read', scansUnreadable: 'Could not read the sack scans for this day. 2026 sack counts will save as 0 and nothing is taken from Shopify for them. Check signal and reload before saving.', scansUnmapped: 'Scanned sacks with no row here — tell the office:', scansModuleMissing: 'Page did not load fully. Reload before saving.', noScansWarn: 'Weights entered for a 2026 strain with no sacks scanned today. That output will reach no sack. Scan the sacks at /salida first, then save (or save now and save again after scanning).', dayYieldTitle: 'Yield for the scanned sacks:', dayYieldFailed: 'Saved. Could not load the per-sack yield; it will run tonight.', mismatch: 'scanned count differs from the floor count — check for a missed scan', outputNoScans: 'output with no sacks scanned — scan them, then save again', scansNoOutput: 'sacks scanned with no output entered', unknownStrain: 'strain unknown to the system — tell the office', cut: 'cut', stock: 'stock', sacksWord: 'sacks', topsWord: 'tops', smallsWord: 'smalls',
     title: 'Supersack Tracker', supersacksOpened: 'Supersacks Opened',
     waterSpiderEntry: 'Water Spider Entry', biomass: 'Biomass #2 Trim',
     premiumTrim: 'Premium #1 Trim', productionData: 'Production Data (auto-pulled)',
@@ -767,7 +767,7 @@
     swap: 'Swap', saveFailed: 'Entry not saved',
     dayTotalsHint: 'Whole day, every strain together — the floor separates by quality, not by strain.',
   }, es: {
-    fromScans: 'De escaneos (no se escribe)', scanOwned: 'Los conteos de sacos 2026 vienen de los escaneos y no se corrigen aquí.', cutsPoundsCombined: 'Las libras de los dos cortes van juntas en la primera fila:', scansMore: '{n} sacos más escaneados desde que abrió esta página — conteo actualizado.', scansFewer: '{n} sacos menos escaneados que cuando abrió esta página — conteo actualizado.', scansUnreadableShort: 'Escaneos no leídos', scansUnreadable: 'No se pudieron leer los escaneos de hoy. Los sacos 2026 se guardan en 0 y no se descuenta nada en Shopify por ellos. Revise la señal y recargue antes de guardar.', scansUnmapped: 'Sacos escaneados sin fila aquí — avise a la oficina:', scansModuleMissing: 'La página no cargó completa. Recargue antes de guardar.', noScansWarn: 'Hay pesos para una cepa 2026 sin sacos escaneados hoy. Ese producto no llegará a ningún saco. Escanee los sacos en /salida primero y luego guarde (o guarde ahora y otra vez después de escanear).', dayYieldTitle: 'Rendimiento de los sacos escaneados hoy:', dayYieldFailed: 'Guardado. No se pudo cargar el rendimiento por saco; se calcula esta noche.', mismatch: 'el conteo escaneado no coincide con el del piso — revise si faltó un escaneo', outputNoScans: 'producto sin sacos escaneados — escanéelos y guarde otra vez', scansNoOutput: 'sacos escaneados sin producto ingresado', unknownStrain: 'cepa desconocida para el sistema — avise a la oficina', cut: 'corte', stock: 'inventario', sacksWord: 'sacos', topsWord: 'tops', smallsWord: 'smalls',
+    closeOnSalida: 'Se cierra en /salida — sacos de los escaneos, tops y smalls del registro por hora, biomasa y trim se escriben allá. No se guarda desde esta página.', onlySalidaRows: 'Todas las cepas de hoy son 2026. Cierre el día en /salida, no aquí.', fromScans: 'De escaneos (no se escribe)', scanOwned: 'Los conteos de sacos 2026 vienen de los escaneos y no se corrigen aquí.', cutsPoundsCombined: 'Las libras de los dos cortes van juntas en la primera fila:', scansMore: '{n} sacos más escaneados desde que abrió esta página — conteo actualizado.', scansFewer: '{n} sacos menos escaneados que cuando abrió esta página — conteo actualizado.', scansUnreadableShort: 'Escaneos no leídos', scansUnreadable: 'No se pudieron leer los escaneos de hoy. Los sacos 2026 se guardan en 0 y no se descuenta nada en Shopify por ellos. Revise la señal y recargue antes de guardar.', scansUnmapped: 'Sacos escaneados sin fila aquí — avise a la oficina:', scansModuleMissing: 'La página no cargó completa. Recargue antes de guardar.', noScansWarn: 'Hay pesos para una cepa 2026 sin sacos escaneados hoy. Ese producto no llegará a ningún saco. Escanee los sacos en /salida primero y luego guarde (o guarde ahora y otra vez después de escanear).', dayYieldTitle: 'Rendimiento de los sacos escaneados hoy:', dayYieldFailed: 'Guardado. No se pudo cargar el rendimiento por saco; se calcula esta noche.', mismatch: 'el conteo escaneado no coincide con el del piso — revise si faltó un escaneo', outputNoScans: 'producto sin sacos escaneados — escanéelos y guarde otra vez', scansNoOutput: 'sacos escaneados sin producto ingresado', unknownStrain: 'cepa desconocida para el sistema — avise a la oficina', cut: 'corte', stock: 'inventario', sacksWord: 'sacos', topsWord: 'tops', smallsWord: 'smalls',
     title: 'Rastreador de Supersacos', supersacksOpened: 'Supersacos Abiertos',
     waterSpiderEntry: 'Entrada del Water Spider', biomass: 'Biomasa #2 (recorte)',
     premiumTrim: 'Recorte Premium #1', productionData: 'Datos de Producción (automático)',
@@ -936,8 +936,7 @@
         <div class="strain-row" data-strain="${escHtml(name)}">
           <div class="strain-row-main">
             <div class="strain-name">${escHtml(shortStrain(name))}
-              <div class="strain-production">${scanState.ok ? tl.fromScans : tl.scansUnreadableShort}</div>
-              ${s.poundsOn ? `<div class="strain-production">${tl.cutsPoundsCombined} ${escHtml(shortStrain(s.poundsOn))}</div>` : ''}
+              <div class="strain-production"><a href="https://rogue-origin-api.roguefamilyfarms.workers.dev/salida">${tl.closeOnSalida}</a></div>
             </div>
             <div class="strain-counter"><input type="number" value="${s.sacks}" readonly tabindex="-1" aria-label="${tl.fromScans}"></div>
           </div>
@@ -1604,12 +1603,11 @@
       if (scanMsg) setStatus(scanMsg, 'success');
     }
     applyScans();
-    if (Object.keys(strainData).some(isScanRow) && !scanState.ok
-        && !confirm(tw.scansUnreadable)) return;
-    const orphan = SS().weightsWithoutScans(
-      Object.entries(strainData).map(([title, s]) => ({ title, tops: s.tops, smalls: s.smalls })), scanState.counts);
-    if (orphan.length && !confirm(`${tw.noScansWarn}\n\n${orphan.join('\n')}`)) return;
-    const sackCount = totalSacks();
+    // 2026+ strains close on /salida (design: docs/plans/2026-10-16-salida-close-day-design.md).
+    // They never leave this page: not in the payload, not in the sack count.
+    const typedRows = Object.entries(strainData).filter(([title]) => !isScanRow(title));
+    if (!typedRows.length) { setStatus(tw.onlySalidaRows, 'error'); return; }
+    const sackCount = typedRows.reduce((sum, [, s]) => sum + (s.sacks || 0), 0);
     if (sackCount === 0 && !editMode) { setStatus('Enter supersack count first', 'error'); return; }
 
     const t = LANG[(window.getLang && window.getLang()) || 'en'];
@@ -1722,7 +1720,7 @@
           waste_lbs: Math.max(0, rawLbs() - topsLbs - smallsLbs - biomass - trim),
           // Per-strain sacks/tops/smalls only — biomass and trim travel as day
           // totals and the API splits them by sack share.
-          strains: Object.fromEntries(Object.entries(strainData).map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
+          strains: Object.fromEntries(typedRows.map(([k, v]) => [k, { sacks: v.sacks, tops: v.tops, smalls: v.smalls }])),
         }),
       });
       const data = await res.json().catch(() => ({}));
