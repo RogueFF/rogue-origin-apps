@@ -149,6 +149,61 @@ export function groupToday(today, pending, s) {
   return out;
 }
 
+// ---- Cerrar día (design: docs/plans/2026-10-16-salida-close-day-design.md) ----
+
+// The end-of-day panel's view of the server's close_day_preview: one line per
+// scanned group with the hourly pounds beside it. null = nothing to close
+// (no 2026 sack scanned today), which also covers a garbage response.
+export function closeDayView(p, s) {
+  const groups = p && Array.isArray(p.groups) ? p.groups : [];
+  if (!groups.length) return null;
+  const h = Number(p.hours_logged) || 0;
+  const lines = groups.map((g) => {
+    const onFirst = g.pounds_on ? s.closePoundsOn.replace('{cut}', s.cut + ' ' + firstCutOf(groups, g)) : '';
+    const note = g.alias_missing ? s.closeNoAlias : onFirst;
+    return { name: (g.cultivar || '') + (g.cut_number != null ? ' · ' + s.cut + ' ' + g.cut_number : ''),
+      sacks: countText(Number(g.sacks) || 0, null, s), tops: 'tops ' + (Number(g.tops) || 0), smalls: 'smalls ' + (Number(g.smalls) || 0),
+      note, warn: !!g.alias_missing };
+  });
+  const existing = p.existing && typeof p.existing === 'object'
+    ? { biomass_lbs: Number(p.existing.biomass_lbs) || 0, trim_lbs: Number(p.existing.trim_lbs) || 0 } : null;
+  return { lines, hours: (h === 1 ? s.closeHours1 : s.closeHours).replace('{n}', h), existing };
+}
+function firstCutOf(groups, g) {
+  const f = groups.find((x) => x.season === g.season && x.cultivar === g.cultivar && x.harvest_type === g.harvest_type);
+  return f && f.cut_number != null ? f.cut_number : '';
+}
+
+// What stops a close before it is sent. The server repeats these checks.
+export function closeDayCheck(bio, trim, s) {
+  const n = (v) => { const t = String(v == null ? '' : v).trim(); const x = Number(t); return t !== '' && isFinite(x) && x >= 0 ? x : null; };
+  const b = n(bio), t = n(trim);
+  if (b == null || t == null) return s.closeNeedBoth;
+  if (t > b) return s.closeSwapped;
+  if (b === 0 && t === 0) return s.closeZero;
+  return null;
+}
+
+// The day's yield as lines to read at the desk: per-sack figures per group,
+// then every gap the allocation reported.
+export function closeDayYieldLines(y, s) {
+  if (!y || typeof y !== 'object') return [];
+  const per = (v, n) => (n ? (Number(v) || 0) / n : 0).toFixed(2);
+  const out = (Array.isArray(y.groups) ? y.groups : []).map((g) => {
+    const n = Number(g.sacks) || 0;
+    const where = [g.cultivar, g.zone, g.cut_number != null ? s.cut + ' ' + g.cut_number : '', g.order ? (g.order.nickname || g.order.id) : s.stock].filter(Boolean).join(' · ');
+    return where + ': ' + countText(n, null, s) + ' — ' + s.closePerSack + ' tops ' + per(g.tops, n) + ', smalls ' + per(g.smalls, n)
+      + ', bio ' + per(g.biomass, n) + ', trim ' + per(g.trim, n);
+  });
+  for (const m of (Array.isArray(y.mismatches) ? y.mismatches : [])) out.push('⚠ ' + (m.cultivar || '') + ': ' + s.closeMismatch);
+  for (const u of (Array.isArray(y.unallocated) ? y.unallocated : [])) {
+    if (u.kind === 'unknown_strain') out.push('⚠ ' + (u.strain || '') + ': ' + s.closeUnknownStrain);
+    else if (u.kind === 'output_without_scans') out.push('⚠ ' + (u.cultivar || '') + ': ' + s.closeOutputNoScans);
+    else if (u.kind === 'scanned_without_output') out.push('⚠ ' + (u.cultivar || '') + ' (' + (u.sacks || 0) + '): ' + s.closeScansNoOutput);
+  }
+  return out;
+}
+
 export function escapeHtml(v) {
   return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -196,4 +251,5 @@ export const LOGIC_SOURCE = logicSource([
   ['busyRetry', busyRetry], ['undoNeedsConfirm', undoNeedsConfirm], ['orderChips', orderChips],
   ['rememberCode', rememberCode], ['queueLoad', queueLoad], ['feedbackFor', feedbackFor],
   ['groupToday', groupToday], ['escapeHtml', escapeHtml], ['embedJson', embedJson],
+  ['closeDayView', closeDayView], ['firstCutOf', firstCutOf], ['closeDayCheck', closeDayCheck], ['closeDayYieldLines', closeDayYieldLines],
 ]);

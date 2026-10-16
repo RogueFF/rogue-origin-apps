@@ -15,7 +15,9 @@
  */
 import { successResponse, errorResponse } from '../lib/response.js';
 import { handleAllocate, pacificDayRange } from './harvest-d1.js';
-import { floorOutputByCultivar, cutFromStrainTitle, harvestTypeFromStrainTitle } from '../lib/floor-output.js';
+import { floorOutputByCultivar, cutFromStrainTitle, harvestTypeFromStrainTitle, resolveCultivars } from '../lib/floor-output.js';
+import { variantTitle } from '../lib/supersack-inventory.js';
+import { fullSackLbs } from '../lib/sack-weight.js';
 
 // Same rule as harvest-d1's isTestMode: test unless explicitly switched off.
 const isTest = (env) => (env.HARVEST_TEST_MODE !== 'false' ? 1 : 0);
@@ -237,4 +239,207 @@ export async function handleDayYield(db, envIn, body) {
     // cuts' bags: those groups show a cultivar average, not each cut's yield.
     pooled_across_cuts: a.pooled_across_cuts || [],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Cerrar día on /salida — design: docs/plans/2026-10-16-salida-close-day-design.md
+//
+//   GET  /api/supersack?action=close_day_preview&date=YYYY-MM-DD
+//   POST /api/supersack?action=close_day   { date, biomass_lbs, trim_lbs }
+//
+// The only end-of-day numbers that exist nowhere else are Biomass #2 and
+// Premium #1. Sacks come from the day's scans, tops and smalls from the hourly
+// log, and the two weights are shared across cultivars by sacks scanned. One
+// supersack_entries row per scanned (season, cultivar, cut, harvest type),
+// then the day's allocation runs so the yield is on screen before the crew
+// goes home. Shopify is never touched: the scans already took the sacks out.
+// ---------------------------------------------------------------------------
+
+const FIRST_SCANNED_SEASON = 2026;
+const harvestTypeOfZone = (zone) => (/^GH/i.test(String(zone || '')) ? 'Greenhouse' : 'Sungrown');
+// The floor's civil day, the one the hourly log and the scans are keyed on.
+const pacificToday = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+/**
+ * Tops and smalls the floor logged that day, per (season, cultivar name,
+ * cut-or-null, harvest-type-or-null). Both lines count. Titles are resolved
+ * through cultivar_aliases, never parsed for the name; a title no alias knows
+ * is listed in `unresolved` so the panel can say so instead of showing 0.
+ */
+async function hourlyOutput(db, day) {
+  const rows = await all(db, `
+    SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, cultivar2, tops_lbs2, smalls_lbs2
+    FROM monthly_production WHERE production_date = ?`, [day]);
+  const lines = [];
+  for (const r of rows) {
+    if (r.cultivar1) lines.push({ title: r.cultivar1, tops: Number(r.tops_lbs1) || 0, smalls: Number(r.smalls_lbs1) || 0 });
+    if (r.cultivar2) lines.push({ title: r.cultivar2, tops: Number(r.tops_lbs2) || 0, smalls: Number(r.smalls_lbs2) || 0 });
+  }
+  const names = await resolveCultivars(db, lines.map(l => l.title));
+  const out = [];
+  const unresolved = new Set();
+  for (const l of lines) {
+    const name = names.get(String(l.title).toLowerCase());
+    const season = seasonOf(l.title);
+    if (!name || !season) { if (l.tops || l.smalls) unresolved.add(l.title); continue; }
+    out.push({ season, cultivar: name, cut: cutFromStrainTitle(l.title),
+      type: harvestTypeFromStrainTitle(l.title), tops: l.tops, smalls: l.smalls });
+  }
+  const slots = new Set(rows.filter(r => r.cultivar1 || r.cultivar2).map(r => r.time_slot));
+  return { lines: out, unresolved: [...unresolved], hours: slots.size };
+}
+
+/** The 2026+ sacks scanned that day, one group per (season, cultivar, cut, type). */
+async function scannedGroups(db, env, day) {
+  const sacks = (await scannedSacks(db, env, day)).filter(s => Number(s.season) >= FIRST_SCANNED_SEASON);
+  const groups = new Map();
+  for (const s of sacks) {
+    const cut = s.cut_number == null ? null : Number(s.cut_number);
+    const type = harvestTypeOfZone(s.zone);
+    const key = `${s.season}|${s.cultivar}|${cut ?? ''}|${type}`;
+    if (!groups.has(key)) {
+      groups.set(key, { season: Number(s.season), cultivar: s.cultivar, cut_number: cut, harvest_type: type,
+        title: variantTitle(s.season, s.cultivar, type, cut), sacks: 0 });
+    }
+    groups.get(key).sacks++;
+  }
+  // First cut first within a cultivar, so the cut-less hourly pounds land on it.
+  return [...groups.values()].sort((a, b) => a.season - b.season || a.cultivar.localeCompare(b.cultivar)
+    || a.harvest_type.localeCompare(b.harvest_type) || (a.cut_number ?? 0) - (b.cut_number ?? 0));
+}
+
+/**
+ * Lay the hourly pounds on the scanned groups. A line that names a cut goes to
+ * that cut; a cut-less line (every hourly title) goes to the cultivar's first
+ * scanned cut, and later cuts point at it with `pounds_on`, exactly as the
+ * form reports "pounds for both cuts are combined on the first row".
+ */
+function layPounds(groups, hourly) {
+  for (const g of groups) { g.tops = 0; g.smalls = 0; g.pounds_on = null; g.alias_missing = false; }
+  const sameLot = (g, l) => g.season === l.season && g.cultivar === l.cultivar && (!l.type || g.harvest_type === l.type);
+  for (const l of hourly.lines) {
+    const target = l.cut != null ? groups.find(g => sameLot(g, l) && g.cut_number === l.cut) : groups.find(g => sameLot(g, l));
+    if (!target) continue;
+    target.tops += l.tops; target.smalls += l.smalls;
+  }
+  for (const g of groups) {
+    const first = groups.find(x => x.season === g.season && x.cultivar === g.cultivar && x.harvest_type === g.harvest_type);
+    if (first !== g && !g.tops && !g.smalls) g.pounds_on = first.title;
+    g.tops = round1(g.tops); g.smalls = round1(g.smalls);
+    // No hourly line resolved to this cultivar while some title went
+    // unresolved: 0 would be a silent lie, so the panel says "sin alias".
+    const anyLine = hourly.lines.some(l => l.season === g.season && l.cultivar === g.cultivar);
+    g.alias_missing = !anyLine && hourly.unresolved.length > 0;
+  }
+  return groups;
+}
+
+async function existingWeights(db, day, groups) {
+  if (!groups.length) return null;
+  const rows = await all(db, `SELECT biomass_lbs, trim_lbs FROM supersack_entries
+    WHERE date = ? AND strain IN (${groups.map(() => '?').join(',')})`, [day, ...groups.map(g => g.title)]);
+  if (!rows.length) return null;
+  const sum = (k) => round1(rows.reduce((n, r) => n + (Number(r[k]) || 0), 0));
+  return { biomass_lbs: sum('biomass_lbs'), trim_lbs: sum('trim_lbs') };
+}
+
+export async function handleCloseDayPreview(db, envIn, params) {
+  const day = String(params?.date || '') || pacificToday();
+  if (!validDay(day)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
+  const env = await modeEnv(envIn);
+  const groups = await scannedGroups(db, env, day);
+  const hourly = await hourlyOutput(db, day);
+  layPounds(groups, hourly);
+  return successResponse({ success: true, date: day, is_test: !!isTest(env), groups, hours_logged: hourly.hours,
+    unresolved_strains: hourly.unresolved, existing: await existingWeights(db, day, groups) });
+}
+
+/** A weight as typed: a finite number, zero or more. Anything else is refused. */
+const lbs = (v) => { const n = Number(v); return v != null && String(v).trim() !== '' && Number.isFinite(n) && n >= 0 ? n : null; };
+
+export async function handleCloseDay(db, envIn, body) {
+  const day = String(body?.date || '') || pacificToday();
+  if (!validDay(day)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
+  const biomass = lbs(body?.biomass_lbs), trim = lbs(body?.trim_lbs);
+  if (biomass == null || trim == null) return errorResponse('biomass_lbs and trim_lbs must be numbers >= 0', 'VALIDATION_ERROR', 400);
+  if (trim > biomass) {
+    return errorResponse('Premium #1 Trim cannot weigh more than Biomass #2 — check which box is which', 'VALIDATION_ERROR', 400);
+  }
+  const env = await modeEnv(envIn);
+  const groups = await scannedGroups(db, env, day);
+  if (!groups.length) return errorResponse('No sacks scanned that day — nothing to close', 'VALIDATION_ERROR', 400);
+  layPounds(groups, await hourlyOutput(db, day));
+  const before = await existingWeights(db, day, groups);
+
+  const totalSacks = groups.reduce((n, g) => n + g.sacks, 0);
+  const written = [];
+  for (const g of groups) {
+    const share = g.sacks / totalSacks;
+    const bio = round1(biomass * share), tr = round1(trim * share);
+    const raw = g.sacks * fullSackLbs(g.season);
+    const waste = round1(Math.max(0, raw - g.tops - g.smalls - bio - tr));
+    await db.prepare(`
+      INSERT INTO supersack_entries (date, strain, sacks_opened, tops_lbs, smalls_lbs, biomass_lbs, trim_lbs, waste_lbs, raw_lbs)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date, strain) DO UPDATE SET
+        sacks_opened = excluded.sacks_opened, tops_lbs = excluded.tops_lbs, smalls_lbs = excluded.smalls_lbs,
+        biomass_lbs = excluded.biomass_lbs, trim_lbs = excluded.trim_lbs, waste_lbs = excluded.waste_lbs,
+        raw_lbs = excluded.raw_lbs, updated_at = datetime('now')
+    `).bind(day, g.title, g.sacks, g.tops, g.smalls, bio, tr, waste, raw).run();
+    written.push({ title: g.title, season: g.season, cultivar: g.cultivar, cut_number: g.cut_number,
+      sacks: g.sacks, tops: g.tops, smalls: g.smalls, biomass: bio, trim: tr, waste, raw });
+  }
+  // The pools move by what changed since the last close of this day, so a
+  // corrected weight is not added twice. The save above stands either way.
+  const pool_errors = await movePools(env, day, {
+    biomass: biomass - (before ? before.biomass_lbs : 0), trim: trim - (before ? before.trim_lbs : 0) });
+
+  const yres = await handleDayYield(db, env, { date: day });
+  const y = await yres.json();
+  if (!yres.ok || y.success === false) {
+    return errorResponse(`saved, but allocation failed: ${y.error || yres.status}`, 'ALLOCATE_FAILED', 500);
+  }
+  return successResponse({ success: true, date: day, rows: written, pool_errors, yield: y });
+}
+
+// The form added the day's biomass and trim to two Shopify pool products in
+// grams, through the same Apps Script proxy; the close does the same. The
+// products are found by title, as the form found them.
+const LBS_TO_GRAMS = 453.592;
+const POOL_PRODUCTS = [
+  { key: 'biomass', label: 'Biomass', match: /CBD Biomass.*Trim/i },
+  { key: 'trim', label: 'Trim', match: /Premium CBD Flower Trim/i },
+];
+async function poolCall(env, body) {
+  const r = await fetch(env.POOL_INVENTORY_API_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' }, redirect: 'follow',
+    body: JSON.stringify({ apiKey: env.POOL_INVENTORY_API_KEY, ...body }),
+  });
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`pool API returned non-JSON: ${text.slice(0, 120)}`); }
+  if (data.error) throw new Error(String(data.error));
+  return data;
+}
+async function movePools(env, day, delta) {
+  const moves = POOL_PRODUCTS.filter(p => Math.abs(delta[p.key]) >= 0.05);
+  if (!moves.length) return [];
+  if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) return ['pool not configured'];
+  const errors = [];
+  let products;
+  try { products = (await poolCall(env, { action: 'list_products', poolType: 'trim' })).products || []; }
+  catch (e) { return moves.map(p => `${p.label}: ${e.message}`); }
+  for (const p of moves) {
+    const product = products.find(x => p.match.test(String(x.title || '')));
+    if (!product) { errors.push(`${p.label}: no pool product`); continue; }
+    const lbsDelta = round1(delta[p.key]);
+    const sign = lbsDelta > 0 ? '+' : '-';
+    try {
+      await poolCall(env, { action: 'update_pool', productId: product.id, operation: lbsDelta > 0 ? 'add' : 'subtract',
+        amount: Math.round(Math.abs(lbsDelta) * LBS_TO_GRAMS * 10) / 10, poolType: 'trim',
+        note: `[Salida] ${p.label} ${sign}${Math.abs(lbsDelta)} lbs (${day})` });
+    } catch (e) { errors.push(`${p.label}: ${e.message}`); }
+  }
+  return errors;
 }

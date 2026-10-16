@@ -73,6 +73,18 @@ const STYLE = `
 .salida .rowundo.arm{background:#c45c4a;color:#fff;border-color:#c45c4a}
 .salida .queue{display:inline-flex;align-items:center;min-height:56px;color:#304e3c;font-weight:700}
 .salida #ssimbox input{width:100%;min-height:48px;font-size:16px}
+/* Cerrar día: under today's list, two weight boxes and one button. */
+.salida .sclose{background:#fff;border:2px solid #668971;border-radius:12px;padding:12px;margin:14px 0 10px}
+.salida .sclose h2{display:flex;align-items:baseline;gap:10px;margin:0 0 4px;flex-wrap:wrap}
+.salida .sclose h2 small{font:600 15px Karla,system-ui,sans-serif;color:#60715d}
+.salida .scline{display:grid;grid-template-columns:minmax(0,1.4fr) auto auto auto;gap:6px 10px;align-items:baseline;font-size:17px;padding:4px 0;border-top:1px solid #eef1e8}
+.salida .scline b{font-size:18px;color:#304e3c}.salida .scline i{grid-column:1/-1;font-style:normal;font-size:14px;color:#60715d}.salida .scline i.warn{color:#c45c4a;font-weight:700}
+.salida .sweights{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 6px}
+.salida .sweights label{display:block;font-weight:800;font-size:17px;color:#304e3c}.salida .sweights .unit{font-weight:600;color:#60715d;font-size:14px;margin-left:4px}
+.salida .sweights input{display:block;width:100%;min-height:64px;margin-top:4px;font:800 32px/1 ui-monospace,Menlo,monospace;text-align:center;border:2px solid #bcc9b2;border-radius:10px}
+.salida .closego{background:#304e3c;color:#fff}
+.salida .sclosemsg{margin:6px 0;font-weight:700;color:#c45c4a}.salida .sclosemsg.ok{color:#2f7a46}
+.salida .syield{margin-top:10px;font-size:15px;white-space:pre-wrap;line-height:1.4;color:#263f32}
 body.flash-ok{animation:sflash-ok .5s} body.flash-warn{animation:sflash-warn .5s} body.flash-bad{animation:sflash-bad .7s}
 @keyframes sflash-ok{0%{background:#4fbf6f}} @keyframes sflash-warn{0%{background:#f2c46b}} @keyframes sflash-bad{0%{background:#e0705c}}
 @media(prefers-reduced-motion:reduce){.salida *{transition:none!important;animation:none!important}body.flash-ok,body.flash-warn,body.flash-bad{animation:none}}
@@ -108,6 +120,19 @@ export function salidaPageBody(ui, boot) {
     <div>
       <h2>${e('today')}</h2>
       <div id="slist"></div>
+      <section id="sclose" class="sclose" hidden aria-labelledby="sclosetitle">
+        <h2 id="sclosetitle">${e('closeTitle')} <small id="sclosehours"></small></h2>
+        <p class="hint">${e('closeHint')}</p>
+        <div id="scloselines"></div>
+        <p id="scloseexisting" class="hint" hidden></p>
+        <div class="sweights">
+          <label>${e('closeBio')} <span class="unit">lbs</span><input id="sbio" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0"></label>
+          <label>${e('closeTrim')} <span class="unit">lbs</span><input id="strim" type="number" min="0" step="0.1" inputmode="decimal" placeholder="0"></label>
+        </div>
+        <p id="sclosemsg" class="sclosemsg" role="status" aria-live="polite" hidden></p>
+        <button type="button" id="sclosego" class="big closego">${e('closeGo')}</button>
+        <div id="scloseyield" class="syield" hidden></div>
+      </section>
       <a class="queue" href="${WHOLESALE_QUEUE_URL}">${e('queue')} →</a>
     </div>
   </div>

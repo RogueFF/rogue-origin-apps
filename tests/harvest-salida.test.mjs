@@ -7,7 +7,7 @@ import vm from 'node:vm';
 import {
   parseTag, isScannerBurst, debounceSeen, queueReduce, feedbackFor,
   groupToday, escapeHtml, embedJson, LOGIC_SOURCE, pacificTime, countText, busyRetry,
-  undoNeedsConfirm, orderChips, rememberCode, queueLoad,
+  undoNeedsConfirm, orderChips, rememberCode, queueLoad, closeDayView, closeDayCheck, closeDayYieldLines,
 } from '../workers/src/handlers/harvest-salida-logic.js';
 import { SALIDA_STRINGS } from '../workers/src/handlers/harvest-salida-strings.js';
 import { salidaPageBody } from '../workers/src/handlers/harvest-salida-page.js';
@@ -274,4 +274,77 @@ this.a = parseTag('x'); this.b = parseTag2('y');`, ctx);
   vm.runInContext(`${logicSource([['f', function f() { return 2; }]])}
 this.r = /* @__PURE__ */ __name(() => 3, "g")();`, kept);
   assert.equal(kept.r, 3);
+});
+
+// ---- Cerrar día (design: docs/plans/2026-10-16-salida-close-day-design.md) ----
+
+const PREVIEW = { date: '2026-10-16', hours_logged: 5, existing: null, unresolved_strains: [], groups: [
+  { season: 2026, cultivar: 'Sour Lifter', cut_number: 1, harvest_type: 'Sungrown', title: '2026 - Sour Lifter / Sungrown / 1st Cut',
+    sacks: 22, tops: 123, smalls: 110, pounds_on: null, alias_missing: false },
+  { season: 2026, cultivar: 'Sour Lifter', cut_number: 2, harvest_type: 'Sungrown', title: '2026 - Sour Lifter / Sungrown / 2nd Cut',
+    sacks: 3, tops: 0, smalls: 0, pounds_on: '2026 - Sour Lifter / Sungrown / 1st Cut', alias_missing: false },
+  { season: 2026, cultivar: 'Lifter', cut_number: 1, harvest_type: 'Sungrown', title: '2026 - Lifter / Sungrown / 1st Cut',
+    sacks: 4, tops: 0, smalls: 0, pounds_on: null, alias_missing: true },
+] };
+
+test('closeDayView: one line per scanned group, hours, notes for pounds-on and missing alias', () => {
+  const v = closeDayView(PREVIEW, S);
+  assert.equal(v.hours, '5 horas registradas');
+  assert.equal(v.existing, null);
+  assert.equal(v.lines.length, 3);
+  assert.equal(v.lines[0].name, 'Sour Lifter · Corte 1');
+  assert.equal(v.lines[0].sacks, '22 bolsas');
+  assert.equal(v.lines[0].tops, 'tops 123');
+  assert.equal(v.lines[0].smalls, 'smalls 110');
+  assert.equal(v.lines[0].note, '');
+  assert.equal(v.lines[0].warn, false);
+  assert.equal(v.lines[1].note, 'libras en Corte 1');
+  assert.equal(v.lines[1].warn, false);
+  assert.equal(v.lines[2].note, 'sin alias — avisa a la oficina');
+  assert.equal(v.lines[2].warn, true);
+  assert.equal(closeDayView(PREVIEW, EN).lines[2].note, 'no alias — tell the office');
+  assert.equal(closeDayView(PREVIEW, EN).hours, '5 hours logged');
+});
+
+test('closeDayView: nothing to close without 2026 scans, saved weights come back, garbage is tolerated', () => {
+  assert.equal(closeDayView({ groups: [] }, S), null);
+  assert.equal(closeDayView(null, S), null);
+  assert.equal(closeDayView({ state: 'out', sack: {} }, S), null);
+  const v = closeDayView({ ...PREVIEW, existing: { biomass_lbs: 330, trim_lbs: 50 } }, S);
+  assert.deepEqual(v.existing, { biomass_lbs: 330, trim_lbs: 50 });
+  assert.equal(closeDayView({ ...PREVIEW, hours_logged: 1 }, S).hours, '1 hora registrada');
+});
+
+test('closeDayCheck: both weights required, premium may not outweigh biomass', () => {
+  assert.equal(closeDayCheck('330', '50', S), null);
+  assert.equal(closeDayCheck('330', '0', S), null);
+  assert.equal(closeDayCheck('', '50', S), S.closeNeedBoth);
+  assert.equal(closeDayCheck('330', '', S), S.closeNeedBoth);
+  assert.equal(closeDayCheck('abc', '1', S), S.closeNeedBoth);
+  assert.equal(closeDayCheck('-5', '1', S), S.closeNeedBoth);
+  assert.equal(closeDayCheck('50', '330', S), S.closeSwapped);
+  assert.equal(closeDayCheck('0', '0', S), S.closeZero);
+});
+
+test('closeDayYieldLines: per group sacks and per-sack figures, plus every gap', () => {
+  const y = { groups: [
+    { season: 2026, cultivar: 'Sour Lifter', zone: 'Z16', cut_number: 1, order: { nickname: 'Swiss' }, sacks: 22, tops: 123, smalls: 110, biomass: 330, trim: 50, waste: 157 },
+    { season: 2026, cultivar: 'Sour Lifter', zone: 'Z4', cut_number: 1, order: null, sacks: 2, tops: 0, smalls: 0, biomass: 0, trim: 0, waste: 70 },
+  ], mismatches: [{ season: 2026, cultivar: 'Sour Lifter' }], unallocated: [{ kind: 'unknown_strain', strain: '2026 - Blurp' }] };
+  const lines = closeDayYieldLines(y, S);
+  assert.equal(lines[0], 'Sour Lifter · Z16 · Corte 1 · Swiss: 22 bolsas — por bolsa tops 5.59, smalls 5.00, bio 15.00, trim 2.27');
+  assert.equal(lines[1], 'Sour Lifter · Z4 · Corte 1 · Inventario: 2 bolsas — por bolsa tops 0.00, smalls 0.00, bio 0.00, trim 0.00');
+  assert.equal(lines[2], '⚠ Sour Lifter: ' + S.closeMismatch);
+  assert.equal(lines[3], '⚠ 2026 - Blurp: ' + S.closeUnknownStrain);
+  assert.deepEqual(closeDayYieldLines(null, S), []);
+});
+
+test('salidaPageBody carries the close-day panel and its strings in both languages', () => {
+  for (const lang of ['es', 'en']) {
+    const html = salidaPageBody({ lang }, realisticBoot(lang));
+    assert.ok(html.includes('id="sclose"'));
+    assert.ok(html.includes('id="sbio"') && html.includes('id="strim"') && html.includes('id="sclosego"'));
+    assert.ok(html.includes(SALIDA_STRINGS[lang].closeTitle));
+    assert.ok(html.includes('Biomass #2') && html.includes('Premium #1'));
+  }
 });

@@ -72,9 +72,15 @@ bucket_name = "sop-media"
 # public internet entirely. lib/whatsapp-mailbox.js uses this binding when
 # present and falls back to a plain fetch() otherwise (unit tests pass their
 # own fetchImpl and never see this binding).
-[[services]]
-binding = "WA_MAILBOX"
-service = "riego-whatsapp-mailbox"
+#
+# 2026-10-16: the riego-whatsapp-mailbox Worker is gone from this account (the
+# farm bots moved to the FERN server on 2026-10-15), and a service binding to a
+# missing Worker makes EVERY deploy of this API fail (Cloudflare code 10143).
+# The binding is therefore off; the code takes the WA_MAILBOX_URL fallback.
+# Re-enable only once a Worker by that name exists again.
+# [[services]]
+# binding = "WA_MAILBOX"
+# service = "riego-whatsapp-mailbox"
 
 # CORS configuration
 [vars]

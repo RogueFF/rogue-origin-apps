@@ -226,7 +226,10 @@ test('page: the submit re-reads the scans for the save date before building the 
   const html = readFileSync(new URL('../src/pages/supersack-entry.html', import.meta.url), 'utf8');
   const sub = html.slice(html.indexOf("submitBtn.addEventListener('click'"));
   const reread = sub.indexOf('await loadScans(saveDate, 6000)');
-  assert.ok(reread > 0 && reread < sub.indexOf('weightsWithoutScans('), 're-read before the save is built');
+  // 2026 rows close on /salida; the save is built from the typed (2025) rows only.
+  assert.ok(reread > 0 && reread < sub.indexOf('const typedRows ='), 're-read before the save is built');
+  assert.match(sub, /strains: Object\.fromEntries\(typedRows\.map\(/);
+  assert.ok(!/strains: Object\.fromEntries\(Object\.entries\(strainData\)\.map\(\[k, v\]\) => \[k, \{ sacks/.test(sub), '2026 rows never reach submit');
   assert.match(html, /scanState\.ok && scanState\.date !== dateInput\.value/);
 });
 
