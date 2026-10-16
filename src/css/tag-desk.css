@@ -450,6 +450,15 @@ details.tech > *:not(summary){margin-top:10px}
 .lt-badge{display:inline-block;padding:1px 9px;border-radius:999px;background:var(--badge-bg);color:var(--badge-ink);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .lt-req{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;font-size:15px;padding:10px 12px;border-radius:10px;background:var(--r-soft)}
 .lt-req.warn{background:var(--d-soft)}.lt-req .warn{color:var(--late);font-weight:600}
+.lt-order{font-size:15px;font-weight:600;padding:8px 12px;border-radius:10px;background:var(--surface-2);color:var(--ink)}
+.lt-order.st-shipped{background:var(--r-soft)}
+.lt-order.st-overdue{background:var(--bad-bg);color:var(--late)}
+.lt-order.st-delivered{color:var(--ink-2);font-weight:500}
+.mail-review{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:var(--d-soft);border:1px solid var(--line)}
+.mail-review h4{margin:0 0 8px;font-size:15px}
+.mail-review ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.mail-review li{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:14px}
+.mail-review li .tb-btn{margin-left:auto}
 .lt-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
 .lt-acts .tb-btn{min-height:44px;font-size:15px}
 .lt-acts .lt-tape{grid-column:1/-1;min-height:36px;font-size:13px;color:var(--ink-2)}

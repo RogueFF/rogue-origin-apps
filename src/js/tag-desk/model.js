@@ -270,6 +270,26 @@ export function laneHeadline(lane, today, es = false) {
   if (lane.status === 'soon') return es ? `Pedir antes del ${fmtMD(lane.orderBy, es)}` : `Order by ${fmtMD(lane.orderBy, es)}`;
   return es ? `Bien hasta ${fmtMD(lane.runOut, es)}` : `OK until ${fmtMD(lane.runOut, es)}`;
 }
+/**
+ * The order-in-flight line under a lane tile, from getBinStatus's `lane.order`
+ * (null when nothing is on order). Pure. `today` is 'YYYY-MM-DD'.
+ *   ordered   → "600 on order · arrives ~Oct 29"
+ *   shipped   → "600 shipped · UPS 1Z999… · arrives ~Oct 17"
+ *   overdue   → "Overdue · 600 expected Oct 17 · UPS 1Z999…"
+ *   delivered → "600 delivered Oct 17 · received automatically"
+ */
+export function laneOrderLine(order, today, es = false) {
+  if (!order) return null;
+  const n = order.qtyOrdered != null ? Number(order.qtyOrdered).toLocaleString('en-US') : null;
+  const qty = n ? `${n} ` : '';
+  const exp = order.expectedAt ? localDay(order.expectedAt) : null;
+  const when = exp ? `${order.expectedEstimated ? '~' : ''}${fmtMD(exp, es)}` : null;
+  const track = order.trackingNo ? `${String(order.carrier || '').toUpperCase()} ${order.trackingNo}`.trim() : null;
+  if (order.stage === 'delivered') { const d = fmtMD(localDay(order.deliveredAt), es); return es ? `${qty}entregado el ${d} · recibido automáticamente` : `${qty}delivered ${d} · received automatically`; }
+  if (order.stage === 'overdue') { const late = exp ? daysBetween(exp, today) : 0; return `${es ? 'ATRASADO' : 'OVERDUE'} · ${qty}${es ? 'se esperaba el' : 'expected'} ${when || '—'}${late > 0 ? ` (${late} ${es ? (late === 1 ? 'día' : 'días') : (late === 1 ? 'day' : 'days')})` : ''}${track ? ` · ${track}` : ''}`; }
+  if (order.stage === 'shipped') return `${qty}${es ? 'enviado' : 'shipped'}${track ? ` · ${track}` : ''}${when ? ` · ${es ? 'llega' : 'arrives'} ${when}` : ''}`;
+  return `${qty}${es ? 'pedido' : 'on order'}${when ? ` · ${es ? 'llega' : 'arrives'} ${when}` : ''}`;
+}
 const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'] };
 /** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. Pure. */
 export function laneRateLine(lane, es = false) {

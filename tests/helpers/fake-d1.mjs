@@ -17,6 +17,7 @@ export function fakeEnv() {
   db.exec(mig('0005-kanban-cart-orders.sql'));
   db.exec(mig('0013-kanban-reorder-requests.sql'));
   db.exec(mig('0046-kanban-bins.sql'));
+  db.exec(mig('0047-grove-mail-intake.sql'));
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
     first: async () => db.prepare(sql).get(...args) ?? null,
@@ -26,9 +27,9 @@ export function fakeEnv() {
   return { db, DB: { prepare: (sql) => stmt(sql), batch: async (list) => { db.exec('BEGIN'); try { for (const s of list) await s.run(); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } } } };
 }
 
-/** Call the kanban router: POST with a JSON body when `body` is given, else GET. */
-export async function call(env, action, body) {
+/** Call the kanban router: POST with a JSON body when `body` is given, else GET. `headers` ride on the request. */
+export async function call(env, action, body, headers = {}) {
   const url = `https://x.test/api/kanban?action=${action}`;
-  const req = body ? new Request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) : new Request(url);
+  const req = body ? new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) }) : new Request(url, { headers });
   return (await handleKanbanD1(req, env)).json();
 }

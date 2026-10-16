@@ -38,6 +38,8 @@ export const setBinConfig = body => apiPost(EP, 'setBinConfig', body).then(ok);
 export const makeLaneKit = cardId => apiPost(EP, 'makeLaneKit', { cardId }).then(ok);
 export const getRecipes = () => apiGet(EP, 'getRecipes').then(ok);
 export const setRecipe = body => apiPost(EP, 'setRecipe', body).then(ok);
+/** A Grove email the parser could not apply, dealt with by hand (email intake, design §9b). */
+export const markMailHandled = (id, by = 'desk') => apiPost(EP, 'markMailHandled', { id, by }).then(ok);
 
 export async function loadAll() {
   // bins: a worker without the bins migration still loads the Desk; the Grove tab says why it is empty.
