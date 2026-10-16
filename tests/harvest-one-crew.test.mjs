@@ -87,12 +87,14 @@ test('a new lot carries the crew the lead tapped, never the phone\'s old tag', a
   assert.equal(openSessions(sqlite)[0].crew, 'A');
 });
 
+// These cut tests run on Z21 (Lifter): Sour Lifter opens as cut 2 from 2026-10-15
+// (see the note above the cut-change tests).
 test('re-scanning the open zone later is a resumption, not a new cut', async () => {
   const { sqlite, env, ctx } = freshDb();
-  await scanZone(env, ctx, 'Z4');
+  await scanZone(env, ctx, 'Z21');
   backdate(sqlite, openSessions(sqlite)[0].id, 90);   // past the refresh debounce
 
-  await scanZone(env, ctx, 'Z4');
+  await scanZone(env, ctx, 'Z21');
   const all = sessions(sqlite);
   assert.equal(all.length, 2);
   assert.deepEqual(all.map(s => s.cut_number), [1, 1], 'a re-scan must not invent cut 2');
@@ -141,10 +143,13 @@ const cutChange = (env, ctx, sessionId, dir = 'next', method = 'POST') => quiet(
       })
     : new Request(`https://x/api/harvest?action=cut_change&session_id=${sessionId}&dir=${dir}&lang=en`), env, ctx));
 
+// These cut tests run on Z21 (Lifter): Sour Lifter opens as cut 2 from 2026-10-15
+// by Koa's rule (tests/harvest-cut-second-sour-lifter.test.mjs), so the generic
+// rule - a re-scan never changes the cut, only "Start cut N" does - is shown on Lifter.
 test('THE 9/30 BUG: the morning scan of a zone closed the night before is still cut 1', async () => {
   const { sqlite, env, ctx } = freshDb();
-  seedSession(sqlite, { zone: 'Z11', opened: minsAgo(60 * 18), closed: minsAgo(60 * 14) });   // closed 14 h ago
-  const html = await (await scanZone(env, ctx, 'Z11')).text();
+  seedSession(sqlite, { zone: 'Z21', cultivar: 'Lifter', opened: minsAgo(60 * 18), closed: minsAgo(60 * 14) });   // closed 14 h ago
+  const html = await (await scanZone(env, ctx, 'Z21')).text();
   assert.equal(openSessions(sqlite)[0].cut_number, 1);
   assert.match(html, /Cut 1/);
   assert.match(html, /<details class="cvfix cutfix">/, 'the "new cut?" question is there, folded shut');
@@ -152,8 +157,8 @@ test('THE 9/30 BUG: the morning scan of a zone closed the night before is still 
 
 test('even weeks later the scan does not decide, and the new-cut question stays closed', async () => {
   const { sqlite, env, ctx } = freshDb();
-  seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
-  const html = await (await scanZone(env, ctx, 'Z4')).text();
+  seedSession(sqlite, { zone: 'Z21', cultivar: 'Lifter', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
+  const html = await (await scanZone(env, ctx, 'Z21')).text();
   assert.equal(openSessions(sqlite)[0].cut_number, 1, 'still cut 1 until someone says otherwise');
   // Koa 2026-10-04: a cut changes only on Koa's word; idle days must not open the question
   assert.match(html, /<details class="cvfix cutfix">/);
@@ -164,8 +169,8 @@ test('even weeks later the scan does not decide, and the new-cut question stays 
 
 test('"Start cut 2" is how a new cut begins, it sticks, and a mis-tap has a way back', async () => {
   const { sqlite, env, ctx } = freshDb();
-  seedSession(sqlite, { zone: 'Z4', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
-  await scanZone(env, ctx, 'Z4');
+  seedSession(sqlite, { zone: 'Z21', cultivar: 'Lifter', opened: minsAgo(60 * 24 * 22), closed: minsAgo(60 * 24 * 21) });
+  await scanZone(env, ctx, 'Z21');
   const id = openSessions(sqlite)[0].id;
 
   const html = await (await cutChange(env, ctx, id)).text();
@@ -175,7 +180,7 @@ test('"Start cut 2" is how a new cut begins, it sticks, and a mis-tap has a way 
 
   // The next morning's scan carries on with cut 2.
   sqlite.prepare("UPDATE harvest_scan_log SET occurred_at = datetime('now','-20 hours'), closed_at = datetime('now','-14 hours') WHERE id = ?").run(id);
-  await scanZone(env, ctx, 'Z4');
+  await scanZone(env, ctx, 'Z21');
   assert.equal(openSessions(sqlite)[0].cut_number, 2);
 
   await cutChange(env, ctx, openSessions(sqlite)[0].id, 'prev');
@@ -185,12 +190,12 @@ test('"Start cut 2" is how a new cut begins, it sticks, and a mis-tap has a way 
 
 test('the cut cannot change by a fetched link, on a closed lot, or once tags are printed', async () => {
   const { sqlite, env, ctx } = freshDb();
-  await scanZone(env, ctx, 'Z4');
+  await scanZone(env, ctx, 'Z21');
   const id = openSessions(sqlite)[0].id;
   assert.ok((await cutChange(env, ctx, id, 'next', 'GET')).status >= 400, 'GET');
 
   sqlite.prepare(`INSERT INTO harvest_sacks (sack_id, season, serial, zone, cultivar, cut_number, zone_session_id, is_test)
-    VALUES ('26-SLIFT-1', ?, 1, 'Z4', 'Sour Lifter', 1, ?, 1)`).run(new Date().getUTCFullYear(), id);
+    VALUES ('26-LIFT-1', ?, 1, 'Z21', 'Lifter', 1, ?, 1)`).run(new Date().getUTCFullYear(), id);
   const tagged = await cutChange(env, ctx, id);
   assert.ok(tagged.status >= 400);
   assert.match(await tagged.text(), /tag\(s\) printed/);
