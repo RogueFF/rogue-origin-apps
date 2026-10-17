@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cycle Time Planner | Rogue Origin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/shared-base.css">
+  <style>
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: var(--space-sm); }
+    header { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
+    h1 { font-family: var(--font-display); font-weight: 400; margin: 0; font-size: 1.6rem; }
+    h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.2rem; margin: 0 0 var(--space-xs); }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-sm); margin-bottom: var(--space-sm); box-shadow: var(--shadow-sm); }
+    .row { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; }
+    .btn { min-height: 44px; min-width: 44px; padding: 0 var(--space-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg-warm); color: var(--text); font: inherit; cursor: pointer; }
+    .btn.primary { background: var(--ro-green); color: #fff; border-color: var(--ro-green); }
+    .btn.danger { color: var(--danger); }
+    input, select { min-height: 44px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text); font: inherit; box-sizing: border-box; max-width: 100%; }
+    input.num { width: 90px; font-family: var(--font-mono); }
+    input.name { min-width: 180px; }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
+    th { color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    td.mono { font-family: var(--font-mono); }
+    .muted { color: var(--text-muted); font-size: 0.85rem; }
+    .chart-wrap { overflow-x: auto; }
+    svg text { fill: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+    svg .label { fill: var(--text); font-family: var(--font-ui); font-size: 12px; }
+    .grid-table td.cell { width: 42px; min-width: 42px; height: 34px; padding: 0; border: 1px solid var(--border-light); text-align: center; font-family: var(--font-mono); font-size: 0.8rem; }
+    .grid-table td.cell.on { background: var(--green-dim); color: var(--text); }
+    .grid-table td.cell.brk { background: var(--gold-dim); }
+    .legend { display: flex; gap: var(--space-sm); flex-wrap: wrap; font-size: 0.85rem; color: var(--text-secondary); }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .warn { color: var(--danger); font-size: 0.85rem; }
+    @media (max-width: 768px) { h1 { font-size: 1.3rem; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="row">
+        <a href="index.html" class="btn" title="Operations Hub">&#8962;</a>
+        <h1 id="title">Cycle Time Planner</h1>
+      </div>
+      <div class="row">
+        <select id="lang" aria-label="Language">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+        <select id="templateSelect" aria-label="Template"></select>
+        <button class="btn" id="loadTemplate" data-i18n="loadTemplate">Load template</button>
+        <button class="btn" id="exportBtn" data-i18n="export">Export</button>
+        <label class="btn" style="display:inline-flex;align-items:center" data-i18n="import">Import
+          <input type="file" id="importFile" accept="application/json" hidden>
+        </label>
+      </div>
+    </header>
+
+    <!-- Project settings -->
+    <section class="card">
+      <div class="row">
+        <label class="muted" data-i18n="projectName">Project</label>
+        <input id="projectName" class="name" type="text">
+        <label class="muted" data-i18n="startTime">Start</label>
+        <input id="startTime" type="time" value="07:00">
+        <label class="muted" data-i18n="unit">Unit</label>
+        <input id="unitLabel" type="text" style="width:120px">
+      </div>
+      <p class="muted" id="howItWorks">
+        Duration = quantity × cycle time per unit ÷ crew size. A step starts when all of its
+        "after" steps finish. Breaks from the shift schedule are skipped on the hourly grid.
+      </p>
+    </section>
+
+    <!-- Steps -->
+    <section class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:var(--space-xs)">
+        <h2 data-i18n="steps">Steps</h2>
+        <button class="btn primary" id="addStep" data-i18n="addStep">+ Add step</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th data-i18n="stepName">Step</th>
+              <th data-i18n="after">After (#)</th>
+              <th data-i18n="qty">Quantity</th>
+              <th data-i18n="cycle">Cycle min/unit</th>
+              <th data-i18n="crew">Min crew</th>
+              <th data-i18n="duration">Duration</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="stepRows"></tbody>
+        </table>
+      </div>
+      <p id="errors" class="warn" role="alert"></p>
+    </section>
+
+    <!-- Bar chart -->
+    <section class="card">
+      <h2 data-i18n="barTitle">Cycle time chart</h2>
+      <div class="chart-wrap"><svg id="barChart" role="img" aria-label="Cycle time bar chart"></svg></div>
+    </section>
+
+    <!-- Hour by hour -->
+    <section class="card">
+      <h2 data-i18n="hourTitle">Hour by hour</h2>
+      <p class="muted" data-i18n="hourNote">Each cell shows the crew working that step during that clock hour. Gold = hour that includes a break.</p>
+      <div class="table-scroll">
+        <table class="grid-table" id="hourGrid"></table>
+      </div>
+      <p class="muted" id="finishLine"></p>
+    </section>
+  </div>
+
+<script>
+  // ---------- Strings ----------
+  const LABELS = {
+    en: {
+      title: 'Cycle Time Planner', loadTemplate: 'Load template', export: 'Export', import: 'Import',
+      projectName: 'Project', startTime: 'Start', unit: 'Unit', howItWorks: 'Duration = quantity × cycle time per unit ÷ crew size. A step starts when all of its "after" steps finish. Breaks from the shift schedule are skipped on the hourly grid.',
+      steps: 'Steps', addStep: '+ Add step', stepName: 'Step', after: 'After (#)', qty: 'Quantity',
+      cycle: 'Cycle min/unit', crew: 'Min crew', duration: 'Duration', remove: 'Remove',
+      barTitle: 'Cycle time chart', hourTitle: 'Hour by hour',
+      hourNote: 'Each cell shows the crew working that step during that clock hour. Gold = hour that includes a break.',
+      crewHeads: 'Crew', total: 'Total', finish: 'Finish', noSteps: 'Add a step to begin.',
+      errCycle: 'Step {n}: cycle time must be greater than 0.', errCrew: 'Step {n}: crew must be at least 1.',
+      errAfter: 'Step {n}: "after" must point to an earlier step.', hours: 'h', minutes: 'min',
+      saved: 'Saved in this browser', hours_: 'Hours', workMin: 'Work minutes', unitDefault: 'units'
+    },
+    es: {
+      title: 'Planificador de tiempos de ciclo', loadTemplate: 'Cargar plantilla', export: 'Exportar', import: 'Importar',
+      projectName: 'Proyecto', startTime: 'Inicio', unit: 'Unidad', howItWorks: 'Duración = cantidad × tiempo de ciclo por unidad ÷ tamaño de cuadrilla. Un paso empieza cuando terminan todos sus pasos "después de". Los descansos del turno se omiten en la vista por hora.',
+      steps: 'Pasos', addStep: '+ Agregar paso', stepName: 'Paso', after: 'Después de (#)', qty: 'Cantidad',
+      cycle: 'Min/unidad', crew: 'Mín. personas', duration: 'Duración', remove: 'Quitar',
+      barTitle: 'Gráfica de tiempos de ciclo', hourTitle: 'Hora por hora',
+      hourNote: 'Cada celda muestra la cuadrilla trabajando en ese paso durante esa hora. Dorado = hora con descanso.',
+      crewHeads: 'Cuadrilla', total: 'Total', finish: 'Termina', noSteps: 'Agrega un paso para empezar.',
+      errCycle: 'Paso {n}: el tiempo de ciclo debe ser mayor que 0.', errCrew: 'Paso {n}: la cuadrilla debe ser de al menos 1.',
+      errAfter: 'Paso {n}: "después de" debe apuntar a un paso anterior.', hours: 'h', minutes: 'min',
+      saved: 'Guardado en este navegador', hours_: 'Horas', workMin: 'Minutos de trabajo', unitDefault: 'unidades'
+    }
+  };
+
+  // Shift schedule from CLAUDE.md: 7:00 to 4:30, breaks in minutes after midnight.
+  const SHIFT_START = 7 * 60;
+  const SHIFT_END = 16 * 60 + 30;
+  const BREAKS = [
+    { start: 9 * 60, len: 10, name: 'Morning' },
+    { start: 12 * 60, len: 30, name: 'Lunch' },
+    { start: 14 * 60 + 30, len: 10, name: 'Afternoon' },
+    { start: 16 * 60 + 20, len: 10, name: 'Cleanup' }
+  ];
+
+  // Placeholder numbers. Replace with your own timed values.
+  const TEMPLATES = {
+    fallPrep: {
+      name: 'Fall field prep (placeholder times)',
+      unit: 'rows',
+      start: '07:00',
+      steps: [
+        { name: 'Chop plants', after: [], qty: 40, cycle: 3, crew: 2 },
+        { name: 'Pull drip tape', after: [1], qty: 40, cycle: 4, crew: 2 },
+        { name: 'Plow soil', after: [2], qty: 40, cycle: 2.5, crew: 1 }
+      ]
+    },
+    blank: { name: 'Blank', unit: 'units', start: '07:00', steps: [] }
+  };
+
+  let lang = localStorage.getItem('ctp-lang') || 'en';
+  let project = { name: '', unit: 'units', start: '07:00', steps: [] };
+  const t = key => LABELS[lang][key] || key;
+
+  // ---------- Model ----------
+  function computeSchedule(steps) {
+    // Work-minute spans per step, in the order steps are listed.
+    const ends = [];
+    const spans = steps.map((s, i) => {
+      const startAt = s.after.length ? Math.max(...s.after.map(n => ends[n - 1] ?? 0)) : 0;
+      const dur = s.qty * s.cycle / s.crew;
+      ends[i + 1] = startAt + dur;
+      return { start: startAt, end: startAt + dur, dur };
+    });
+    return spans;
+  }
+
+  function validate(steps) {
+    const msgs = [];
+    steps.forEach((s, i) => {
+      const n = i + 1;
+      if (!(s.cycle > 0)) msgs.push(t('errCycle').replace('{n}', n));
+      if (!(s.crew >= 1)) msgs.push(t('errCrew').replace('{n}', n));
+      if (s.after.some(a => a >= n || a < 1)) msgs.push(t('errAfter').replace('{n}', n));
+    });
+    return msgs;
+  }
+
+  // Clock minutes available for work, excluding breaks. Index = work minute.
+  function workClock() {
+    const out = [];
+    const start = SHIFT_START;
+    for (let m = start; m < SHIFT_END; m++) {
+      const onBreak = BREAKS.some(b => m >= b.start && m < b.start + b.len);
+      if (!onBreak) out.push(m);
+    }
+    return out;
+  }
+
+  // ---------- Rendering ----------
+  function fmtMin(mins) {
+    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    return h ? `${h}${t('hours')} ${m}${t('minutes')}` : `${m}${t('minutes')}`;
+  }
+  function fmtClock(clockMin) {
+    const h = Math.floor(clockMin / 60), m = clockMin % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function renderSteps() {
+    const body = document.getElementById('stepRows');
+    body.innerHTML = project.steps.map((s, i) => `
+      <tr data-i="${i}">
+        <td class="mono">${i + 1}</td>
+        <td><input class="name" data-f="name" value="${esc(s.name)}"></td>
+        <td><input class="num" data-f="after" value="${esc(s.after.join(', '))}" placeholder="-"></td>
+        <td><input class="num" data-f="qty" type="number" min="0" step="any" value="${s.qty}"></td>
+        <td><input class="num" data-f="cycle" type="number" min="0" step="any" value="${s.cycle}"></td>
+        <td><input class="num" data-f="crew" type="number" min="1" step="1" value="${s.crew}"></td>
+        <td class="mono" data-dur="${i}"></td>
+        <td><button class="btn danger" data-remove="${i}" aria-label="${t('remove')}">×</button></td>
+      </tr>`).join('');
+    document.getElementById('projectName').value = project.name;
+    document.getElementById('unitLabel').value = project.unit;
+    document.getElementById('startTime').value = project.start;
+  }
+
+  function renderAll() {
+    const errs = validate(project.steps);
+    document.getElementById('errors').textContent = errs.join(' · ');
+    const spans = project.steps.length ? computeSchedule(project.steps) : [];
+    project.steps.forEach((s, i) => {
+      const cell = document.querySelector(`[data-dur="${i}"]`);
+      if (cell) cell.textContent = fmtMin(spans[i].dur);
+    });
+    renderBars(spans);
+    renderHours(spans);
+    document.getElementById('title').textContent = project.name || t('title');
+  }
+
+  function renderBars(spans) {
+    const svg = document.getElementById('barChart');
+    if (!spans.length) { svg.innerHTML = `<text x="10" y="20" class="label">${t('noSteps')}</text>`; svg.setAttribute('width', 400); svg.setAttribute('height', 40); return; }
+    const labelW = 170, rowH = 34, pad = 30;
+    const total = Math.max(...spans.map(s => s.end), 1);
+    const plotW = Math.max(480, 900 - labelW);
+    const H = spans.length * rowH + pad * 2;
+    const W = labelW + plotW + 20;
+    const x = m => labelW + (m / total) * plotW;
+
+    let out = '';
+    // Hour ticks in work time (60-minute gridlines).
+    for (let m = 0; m <= total; m += 60) {
+      out += `<line x1="${x(m)}" y1="${pad - 8}" x2="${x(m)}" y2="${H - pad + 4}" stroke="var(--border)" stroke-dasharray="3 3"/>`;
+      out += `<text x="${x(m)}" y="${pad - 12}" text-anchor="middle">${m / 60}${t('hours')}</text>`;
+    }
+    spans.forEach((sp, i) => {
+      const y = pad + i * rowH;
+      const name = project.steps[i].name || `#${i + 1}`;
+      const crew = project.steps[i].crew;
+      out += `<text x="8" y="${y + 20}" class="label">${esc(name)}</text>`;
+      out += `<rect x="${x(sp.start)}" y="${y + 6}" width="${Math.max(2, x(sp.end) - x(sp.start))}" height="${rowH - 12}" rx="4" fill="var(--ro-green)" opacity="0.85"/>`;
+      out += `<text x="${x(sp.end) + 6}" y="${y + 20}">${fmtMin(sp.dur)} · ${crew}p</text>`;
+    });
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.innerHTML = out;
+  }
+
+  function renderHours(spans) {
+    const table = document.getElementById('hourGrid');
+    if (!spans.length) { table.innerHTML = ''; document.getElementById('finishLine').textContent = ''; return; }
+    const clock = workClock();
+    const workNeeded = Math.ceil(Math.max(...spans.map(s => s.end)));
+    if (workNeeded > clock.length) {
+      document.getElementById('finishLine').textContent = `${t('finish')}: > ${fmtClock(SHIFT_END)}`;
+    }
+
+    // Active crew per step per clock hour. A work minute w runs at clock[w].
+    const hours = [];
+    for (let h = Math.floor(SHIFT_START / 60); h < Math.ceil(SHIFT_END / 60); h++) hours.push(h);
+    const perHour = project.steps.map((s, i) => {
+      const counts = {};
+      for (let w = Math.floor(spans[i].start); w < Math.ceil(spans[i].end) && w < clock.length; w++) {
+        const h = Math.floor(clock[w] / 60);
+        counts[h] = (counts[h] || 0) + 1;
+      }
+      return counts;
+    });
+
+    const head = `<tr><th>${t('steps')}</th>${hours.map(h => `<th>${String(h).padStart(2, '0')}</th>`).join('')}</tr>`;
+    const rows = project.steps.map((s, i) => {
+      const cells = hours.map(h => {
+        const n = perHour[i][h] || 0;
+        const isBreakHour = BREAKS.some(b => Math.floor(b.start / 60) === h);
+        const cls = n ? 'cell on' : (isBreakHour ? 'cell brk' : 'cell');
+        return `<td class="${cls}">${n ? s.crew : ''}</td>`;
+      }).join('');
+      return `<tr><td>${esc(s.name || `#${i + 1}`)}</td>${cells}</tr>`;
+    }).join('');
+    const totals = hours.map(h => {
+      const n = project.steps.reduce((acc, s, i) => acc + ((perHour[i][h] || 0) > 0 ? s.crew : 0), 0);
+      return `<td class="cell mono">${n || ''}</td>`;
+    }).join('');
+    table.innerHTML = `<thead>${head}</thead><tbody>${rows}<tr><td><strong>${t('total')} (${t('crewHeads')})</strong></td>${totals}</tr></tbody>`;
+    const finishWork = Math.max(...spans.map(s => s.end));
+    if (workNeeded <= clock.length) {
+      document.getElementById('finishLine').textContent = `${t('finish')}: ${fmtClock(clock[Math.max(0, Math.ceil(finishWork) - 1)] + 1)} · ${fmtMin(finishWork)} ${t('workMin').toLowerCase()}`;
+    }
+  }
+
+  // ---------- Persistence ----------
+  function saveLocal() {
+    try { localStorage.setItem('ctp-project', JSON.stringify(project)); } catch (_) { /* private mode */ }
+  }
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem('ctp-project');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+  function normalize(p) {
+    return {
+      name: String(p.name || ''),
+      unit: String(p.unit || t('unitDefault')),
+      start: p.start || '07:00',
+      steps: (p.steps || []).map(s => ({
+        name: String(s.name || ''),
+        after: (Array.isArray(s.after) ? s.after : String(s.after || '').split(',')).map(Number).filter(n => n > 0),
+        qty: Number(s.qty) || 0,
+        cycle: Number(s.cycle) || 0,
+        crew: Math.max(1, Math.floor(Number(s.crew) || 1))
+      }))
+    };
+  }
+
+  // ---------- Events ----------
+  function applyLabels() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (LABELS[lang][key]) el.textContent = LABELS[lang][key];
+    });
+    document.getElementById('lang').value = lang;
+    document.documentElement.lang = lang;
+    document.getElementById('howItWorks').textContent = LABELS[lang].howItWorks;
+  }
+
+  function fillTemplateSelect() {
+    const sel = document.getElementById('templateSelect');
+    sel.innerHTML = Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+  }
+
+  function bind() {
+    document.getElementById('lang').addEventListener('change', e => {
+      lang = e.target.value;
+      try { localStorage.setItem('ctp-lang', lang); } catch (_) {}
+      applyLabels();
+      fillTemplateSelect();
+      renderSteps();
+      renderAll();
+    });
+
+    document.getElementById('loadTemplate').addEventListener('click', () => {
+      const key = document.getElementById('templateSelect').value;
+      project = normalize(TEMPLATES[key]);
+      renderSteps();
+      renderAll();
+      saveLocal();
+    });
+
+    document.getElementById('addStep').addEventListener('click', () => {
+      project.steps.push({ name: '', after: [], qty: 0, cycle: 0, crew: 1 });
+      renderSteps();
+      renderAll();
+      saveLocal();
+    });
+
+    document.getElementById('stepRows').addEventListener('input', e => {
+      const row = e.target.closest('tr');
+      const i = Number(row.dataset.i);
+      const f = e.target.dataset.f;
+      if (!f) return;
+      const v = e.target.value;
+      if (f === 'name') project.steps[i].name = v;
+      else if (f === 'after') project.steps[i].after = v.split(',').map(Number).filter(n => n > 0);
+      else project.steps[i][f] = Number(v);
+      renderAll();
+      saveLocal();
+    });
+
+    document.getElementById('stepRows').addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      project.steps.splice(Number(btn.dataset.remove), 1);
+      renderSteps();
+      renderAll();
+      saveLocal();
+    });
+
+    ['projectName', 'unitLabel', 'startTime'].forEach(id => {
+      document.getElementById(id).addEventListener('input', e => {
+        if (id === 'projectName') project.name = e.target.value;
+        if (id === 'unitLabel') project.unit = e.target.value;
+        if (id === 'startTime') project.start = e.target.value;
+        renderAll();
+        saveLocal();
+      });
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(project.name || 'cycle-time-plan').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+
+    document.getElementById('importFile').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        project = normalize(JSON.parse(await file.text()));
+        renderSteps();
+        renderAll();
+        saveLocal();
+      } catch (_) {
+        document.getElementById('errors').textContent = 'Could not read that file.';
+      }
+    });
+  }
+
+  // ---------- Init ----------
+  (function init() {
+    project = normalize(loadLocal() || TEMPLATES.fallPrep);
+    fillTemplateSelect();
+    applyLabels();
+    bind();
+    renderSteps();
+    renderAll();
+  })();
+</script>
+</body>
+</html>
