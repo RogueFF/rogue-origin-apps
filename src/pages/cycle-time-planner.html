@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cycle Time Planner | Rogue Origin</title>
+  <title>Flow Planner | Rogue Origin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,9 +13,10 @@
     .wrap { max-width: 1100px; margin: 0 auto; padding: var(--space-sm); }
     header { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; justify-content: space-between; margin-bottom: var(--space-sm); }
     h1 { font-family: var(--font-display); font-weight: 400; margin: 0; font-size: 1.6rem; }
-    h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.2rem; margin: 0 0 var(--space-xs); }
+    h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.25rem; margin: 0 0 4px; }
     h3 { font-family: var(--font-ui); font-weight: 600; font-size: 1rem; margin: 0; }
     .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-sm); margin-bottom: var(--space-sm); box-shadow: var(--shadow-sm); }
+    .step-head { display: flex; align-items: baseline; gap: var(--space-xs); flex-wrap: wrap; justify-content: space-between; margin-bottom: 6px; }
     .row { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; }
     .btn { min-height: 44px; min-width: 44px; padding: 0 var(--space-sm); border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg-warm); color: var(--text); font: inherit; cursor: pointer; }
     .btn.primary { background: var(--ro-green); color: #fff; border-color: var(--ro-green); }
@@ -31,19 +32,17 @@
     td.mono, td.num { font-family: var(--font-mono); }
     td.num { text-align: right; }
     .muted { color: var(--text-muted); font-size: 0.85rem; }
+    .stage-group { border-left: 4px solid var(--ro-green); padding: 6px 12px; margin-bottom: 8px; background: var(--bg-warm); border-radius: var(--radius-sm); }
+    .stage-group.bottleneck { border-left-color: var(--ro-gold); }
     .chart-wrap { overflow-x: auto; }
     svg text { fill: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
     svg .label { fill: var(--text); font-family: var(--font-ui); font-size: 12px; }
-    .grid-table td.cell { width: 42px; min-width: 42px; height: 34px; padding: 0; border: 1px solid var(--border-light); text-align: center; font-family: var(--font-mono); font-size: 0.8rem; }
-    .grid-table td.cell.on { background: var(--green-dim); color: var(--text); }
-    .grid-table td.cell.brk { background: var(--gold-dim); }
-    details.step-block { border-top: 1px solid var(--border-light); padding: var(--space-xs) 0; }
-    details.step-block summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: var(--space-xs); list-style-position: inside; }
-    details.step-block[open] summary { margin-bottom: var(--space-xs); }
-    .tag { font-size: 0.75rem; color: var(--gold-text); background: var(--gold-dim); padding: 2px 6px; border-radius: 999px; }
-    .done-bar { position: relative; height: 8px; border-radius: 4px; background: var(--bg-warm); min-width: 80px; overflow: hidden; }
-    .done-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--ro-green); border-radius: 4px; }
-    .warn { color: var(--danger); font-size: 0.85rem; }
+    .summary { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-xs); }
+    .stat { background: var(--bg-warm); border-radius: var(--radius-sm); padding: 8px 12px; min-width: 150px; }
+    .stat b { display: block; font-family: var(--font-mono); font-size: 1.15rem; }
+    .warn { color: var(--danger); font-size: 0.85rem; min-height: 1em; }
+    .tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 999px; background: var(--gold-dim); color: var(--gold-text); }
+    .tag.over { background: var(--danger-dim); color: var(--danger); }
     @media (max-width: 768px) { h1 { font-size: 1.3rem; } }
   </style>
 </head>
@@ -52,7 +51,7 @@
     <header>
       <div class="row">
         <a href="index.html" class="btn" title="Operations Hub">&#8962;</a>
-        <h1 id="title">Cycle Time Planner</h1>
+        <h1 id="title">Flow Planner</h1>
       </div>
       <div class="row">
         <select id="lang" aria-label="Language">
@@ -60,75 +59,84 @@
           <option value="es">Español</option>
         </select>
         <select id="templateSelect" aria-label="Template"></select>
-        <button class="btn" id="loadTemplate" data-i18n="loadTemplate">Load template</button>
-        <button class="btn" id="exportBtn" data-i18n="export">Export</button>
-        <label class="btn" style="display:inline-flex;align-items:center" data-i18n="import">Import
+        <button class="btn" id="loadTemplate">Load</button>
+        <button class="btn" id="exportBtn">Export</button>
+        <label class="btn" style="display:inline-flex;align-items:center">Import
           <input type="file" id="importFile" accept="application/json" hidden>
         </label>
       </div>
     </header>
 
-    <!-- Project settings -->
     <section class="card">
       <div class="row">
-        <label class="muted" data-i18n="projectName">Project</label>
+        <label class="muted" for="projectName">Project</label>
         <input id="projectName" class="name" type="text">
-        <label class="muted" data-i18n="startTime">Start</label>
-        <input id="startTime" type="time" value="07:00">
-        <label class="muted" data-i18n="unit">Default unit</label>
+        <label class="muted" for="unitLabel">Default unit</label>
         <input id="unitLabel" type="text" style="width:120px">
       </div>
-      <p class="muted" id="howItWorks"></p>
     </section>
 
-    <!-- Steps -->
+    <!-- 1. List the steps -->
     <section class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:var(--space-xs)">
-        <h2 data-i18n="steps">Steps</h2>
-        <button class="btn primary" id="addStep" data-i18n="addStep">+ Add step</button>
+      <div class="step-head">
+        <h2 id="h1"></h2>
+        <button class="btn primary" id="addStep">+</button>
       </div>
+      <p class="muted" id="help1"></p>
       <div class="table-scroll">
         <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th data-i18n="stepName">Step</th>
-              <th data-i18n="after">After (#)</th>
-              <th data-i18n="qty">Quantity</th>
-              <th data-i18n="unitCol">Unit</th>
-              <th data-i18n="cycle">Cycle min/unit</th>
-              <th data-i18n="crew">Min crew</th>
-              <th data-i18n="duration">Duration</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="stepRows"></tbody>
+          <thead><tr>
+            <th>#</th><th id="th1a"></th><th id="th1b"></th><th id="th1c"></th><th></th>
+          </tr></thead>
+          <tbody id="listRows"></tbody>
         </table>
       </div>
-      <p id="errors" class="warn" role="alert"></p>
     </section>
 
-    <!-- Bar chart -->
+    <!-- 2. What can run together -->
     <section class="card">
-      <h2 data-i18n="barTitle">Cycle time chart</h2>
-      <div class="chart-wrap"><svg id="barChart" role="img" aria-label="Cycle time bar chart"></svg></div>
+      <h2 id="h2"></h2>
+      <p class="muted" id="help2"></p>
+      <div id="stageGroups"></div>
     </section>
 
-    <!-- Crew by hour -->
+    <!-- 3. Measure -->
     <section class="card">
-      <h2 data-i18n="crewTitle">Crew by hour</h2>
-      <p class="muted" data-i18n="hourNote">Each cell shows the crew working that step during that clock hour. Gold = hour that includes a break.</p>
+      <h2 id="h3"></h2>
+      <p class="muted" id="help3"></p>
       <div class="table-scroll">
-        <table class="grid-table" id="hourGrid"></table>
+        <table>
+          <thead><tr>
+            <th>#</th><th id="th3a"></th><th id="th3b"></th><th id="th3c"></th><th id="th3d"></th><th id="th3e"></th>
+          </tr></thead>
+          <tbody id="measureRows"></tbody>
+        </table>
       </div>
-      <p class="muted" id="finishLine"></p>
+      <p class="muted" id="measureNote"></p>
     </section>
 
-    <!-- Output by hour, one block per step -->
+    <!-- 4. Chart and flow -->
     <section class="card">
-      <h2 data-i18n="outputTitle">Output by hour</h2>
-      <p class="muted" data-i18n="outputNote">Done counts whole units finished by the end of each hour. Use it to check progress against the target.</p>
-      <div id="stepBlocks"></div>
+      <h2 id="h4"></h2>
+      <p class="muted" id="help4"></p>
+      <div class="row" style="margin-bottom:var(--space-xs)">
+        <label class="muted" for="batch" id="lbBatch"></label>
+        <input id="batch" class="num" type="number" min="1" step="1">
+        <label class="muted" for="target" id="lbTarget"></label>
+        <input id="target" class="num" type="number" min="0.1" step="any">
+      </div>
+      <div class="chart-wrap"><svg id="chart" role="img"></svg></div>
+      <div class="table-scroll" style="margin-top:var(--space-xs)">
+        <table>
+          <thead><tr>
+            <th id="th4a"></th><th id="th4b"></th><th class="num" id="th4c"></th>
+            <th class="num" id="th4d"></th><th class="num" id="th4e"></th><th class="num" id="th4f"></th><th class="num" id="th4g"></th>
+          </tr></thead>
+          <tbody id="flowRows"></tbody>
+        </table>
+      </div>
+      <div class="summary" id="summary"></div>
+      <p class="warn" id="errors" role="alert"></p>
     </section>
   </div>
 
@@ -136,144 +144,126 @@
   // ---------- Strings ----------
   const LABELS = {
     en: {
-      title: 'Cycle Time Planner', loadTemplate: 'Load template', export: 'Export', import: 'Import',
-      projectName: 'Project', startTime: 'Start', unit: 'Default unit', unitCol: 'Unit',
-      howItWorks: 'Duration = quantity × cycle time per unit ÷ crew size. A step starts when all of its "after" steps finish. Breaks from the shift schedule are skipped on the hourly views.',
-      steps: 'Steps', addStep: '+ Add step', stepName: 'Step', after: 'After (#)', qty: 'Quantity',
-      cycle: 'Cycle min/unit', crew: 'Min crew', duration: 'Duration', remove: 'Remove',
-      barTitle: 'Cycle time chart', crewTitle: 'Crew by hour', outputTitle: 'Output by hour',
-      hourNote: 'Each cell shows the crew working that step during that clock hour. Gold = hour that includes a break.',
-      outputNote: 'Done counts whole units finished by the end of each hour. Use it to check progress against the target.',
-      crewHeads: 'Crew', total: 'Total', finish: 'Finish', noSteps: 'Add a step to begin.',
-      hourCol: 'Hour', people: 'People', minWorking: 'Min working', doneHour: 'Done this hour',
-      totalDone: 'Total done', pct: '% done', breakTag: 'break', overrun: 'Runs past shift end. Hours after 4:30 are not shown.',
-      errCycle: 'Step {n}: cycle time must be greater than 0.', errCrew: 'Step {n}: crew must be at least 1.',
-      errAfter: 'Step {n}: "after" must point to an earlier step.', hours: 'h', minutes: 'min',
-      workMin: 'Work minutes', unitDefault: 'units', badFile: 'Could not read that file.', stepFallback: 'Step'
+      title: 'Flow Planner', load: 'Load', export: 'Export', import: 'Import',
+      projectName: 'Project', unit: 'Default unit', stepN: 'Step', stage: 'Stage', unitCol: 'Unit',
+      units: 'Units seen', mins: 'Minutes seen', people: 'People on it', ppm: 'Person-min per unit', crew: 'Crew (blank = auto)',
+      h1: '1 · List the steps', help1: 'Write every step in the order the work moves. Give steps the same stage number when they can run at the same time.',
+      h2: '2 · What runs together', help2: 'Steps in the same stage run at the same time on the same batch. A stage takes as long as its slowest step.',
+      h3: '3 · Measure each step', help3: 'Watch one crew do the step. Count the units, the minutes, and how many people were on it. Person-min per unit = minutes × people ÷ units.',
+      measureNote: 'Measure the full step, not one unit. Use at least three runs, and take the average.',
+      h4: '4 · Cycle time chart', help4: 'Pick a batch size and the pace you want (minutes per batch). Crew sizes fill in so every step fits the pace.',
+      batch: 'Batch size', target: 'Target min per batch',
+      perBatch: 'Min per batch', need: 'People needed', idle: 'Idle', step: 'Step', stageCol: 'Stage',
+      stageLabel: 'Stage', noSteps: 'Add a step to begin.', bottleneck: 'Bottleneck', lineCycle: 'Line cycle', leadTime: 'Lead time per batch',
+      rate: 'Output per hour', maxBatch: 'Largest batch this crew can flow at target', crewTotal: 'Total people',
+      over: 'Over target', ok: 'Fits target', target_: 'target',
+      errMeasure: 'Measure each step: units, minutes and people must be above 0.', errStage: 'Stage must be a whole number, 1 or more.',
+      errBatch: 'Batch size and target must be above 0.', min: 'min', hours: 'h', perHour: '/h', unitDefault: 'units',
+      badFile: 'Could not read that file.', stepFallback: 'Step', auto: 'auto', status: 'Status'
     },
     es: {
-      title: 'Planificador de tiempos de ciclo', loadTemplate: 'Cargar plantilla', export: 'Exportar', import: 'Importar',
-      projectName: 'Proyecto', startTime: 'Inicio', unit: 'Unidad predeterminada', unitCol: 'Unidad',
-      howItWorks: 'Duración = cantidad × tiempo de ciclo por unidad ÷ tamaño de cuadrilla. Un paso empieza cuando terminan todos sus pasos "después de". Los descansos del turno se omiten en las vistas por hora.',
-      steps: 'Pasos', addStep: '+ Agregar paso', stepName: 'Paso', after: 'Después de (#)', qty: 'Cantidad',
-      cycle: 'Min/unidad', crew: 'Mín. personas', duration: 'Duración', remove: 'Quitar',
-      barTitle: 'Gráfica de tiempos de ciclo', crewTitle: 'Personas por hora', outputTitle: 'Producción por hora',
-      hourNote: 'Cada celda muestra la cuadrilla trabajando en ese paso durante esa hora. Dorado = hora con descanso.',
-      outputNote: 'Hecho cuenta las unidades completas terminadas al final de cada hora. Úsalo para revisar el avance contra la meta.',
-      crewHeads: 'Cuadrilla', total: 'Total', finish: 'Termina', noSteps: 'Agrega un paso para empezar.',
-      hourCol: 'Hora', people: 'Personas', minWorking: 'Min trabajando', doneHour: 'Hecho esta hora',
-      totalDone: 'Total hecho', pct: '% hecho', breakTag: 'descanso', overrun: 'Termina después del turno. Las horas después de las 4:30 no se muestran.',
-      errCycle: 'Paso {n}: el tiempo de ciclo debe ser mayor que 0.', errCrew: 'Paso {n}: la cuadrilla debe ser de al menos 1.',
-      errAfter: 'Paso {n}: "después de" debe apuntar a un paso anterior.', hours: 'h', minutes: 'min',
-      workMin: 'Minutos de trabajo', unitDefault: 'unidades', badFile: 'No se pudo leer ese archivo.', stepFallback: 'Paso'
+      title: 'Planificador de flujo', load: 'Cargar', export: 'Exportar', import: 'Importar',
+      projectName: 'Proyecto', unit: 'Unidad predeterminada', stepN: 'Paso', stage: 'Etapa', unitCol: 'Unidad',
+      units: 'Unidades vistas', mins: 'Minutos vistos', people: 'Personas en el paso', ppm: 'Persona-min por unidad', crew: 'Cuadrilla (vacío = auto)',
+      h1: '1 · Lista los pasos', help1: 'Escribe cada paso en el orden en que se mueve el trabajo. Dale el mismo número de etapa a los pasos que pueden hacerse al mismo tiempo.',
+      h2: '2 · Qué se hace junto', help2: 'Los pasos de la misma etapa se hacen al mismo tiempo en el mismo lote. Una etapa tarda lo que tarda su paso más lento.',
+      h3: '3 · Mide cada paso', help3: 'Observa a una cuadrilla haciendo el paso. Cuenta las unidades, los minutos y cuántas personas estaban. Persona-min por unidad = minutos × personas ÷ unidades.',
+      measureNote: 'Mide el paso completo, no una sola unidad. Usa al menos tres corridas y saca el promedio.',
+      h4: '4 · Gráfica de tiempos de ciclo', help4: 'Elige el tamaño de lote y el ritmo que quieres (minutos por lote). Las cuadrillas se calculan para que cada paso quepa en ese ritmo.',
+      batch: 'Tamaño de lote', target: 'Minutos meta por lote',
+      perBatch: 'Min por lote', need: 'Personas necesarias', idle: 'Ocio', step: 'Paso', stageCol: 'Etapa',
+      stageLabel: 'Etapa', noSteps: 'Agrega un paso para empezar.', bottleneck: 'Cuello de botella', lineCycle: 'Ciclo de la línea', leadTime: 'Tiempo total por lote',
+      rate: 'Producción por hora', maxBatch: 'Lote más grande que esta cuadrilla puede fluir a la meta', crewTotal: 'Personas en total',
+      over: 'Arriba de la meta', ok: 'Cumple la meta', target_: 'meta',
+      errMeasure: 'Mide cada paso: unidades, minutos y personas deben ser mayores que 0.', errStage: 'La etapa debe ser un número entero, 1 o más.',
+      errBatch: 'El lote y la meta deben ser mayores que 0.', min: 'min', hours: 'h', perHour: '/h', unitDefault: 'unidades',
+      badFile: 'No se pudo leer ese archivo.', stepFallback: 'Paso', auto: 'auto', status: 'Estado'
     }
   };
 
-  // Shift schedule from CLAUDE.md: 7:00 to 4:30, times in minutes after midnight.
-  const SHIFT_START = 7 * 60;
-  const SHIFT_END = 16 * 60 + 30;
-  const FIRST_HOUR = Math.floor(SHIFT_START / 60);
-  const LAST_HOUR = Math.ceil(SHIFT_END / 60) - 1;
-  const HOURS = Array.from({ length: LAST_HOUR - FIRST_HOUR + 1 }, (_, i) => FIRST_HOUR + i);
-  const BREAKS = [
-    { start: 9 * 60, len: 10, name: 'Morning' },
-    { start: 12 * 60, len: 30, name: 'Lunch' },
-    { start: 14 * 60 + 30, len: 10, name: 'Afternoon' },
-    { start: 16 * 60 + 20, len: 10, name: 'Cleanup' }
-  ];
-
-  // Placeholder numbers. Replace with your own timed values.
+  // Placeholder measurements. Replace with what your crew actually does.
   const TEMPLATES = {
     fallPrep: {
-      name: 'Fall field prep (placeholder times)',
+      name: 'Fall field prep (placeholder numbers)',
       unit: 'rows',
-      start: '07:00',
+      batch: 10,
+      target: 30,
       steps: [
-        { name: 'Chop plants', after: [], unit: 'rows', qty: 40, cycle: 3, crew: 2 },
-        { name: 'Pull drip tape', after: [1], unit: 'rows', qty: 40, cycle: 4, crew: 2 },
-        { name: 'Plow soil', after: [2], unit: 'rows', qty: 40, cycle: 2.5, crew: 1 }
+        { name: 'Chop plants', stage: 1, unit: 'rows', obsUnits: 10, obsMin: 30, obsPeople: 2, crew: 0 },
+        { name: 'Pull drip tape', stage: 2, unit: 'rows', obsUnits: 10, obsMin: 40, obsPeople: 2, crew: 0 },
+        { name: 'Plow soil', stage: 3, unit: 'rows', obsUnits: 10, obsMin: 25, obsPeople: 1, crew: 0 }
       ]
     },
     packing: {
-      name: 'Packing line example (placeholder times)',
+      name: 'Packing line example (placeholder numbers)',
       unit: 'bags',
-      start: '07:00',
+      batch: 50,
+      target: 20,
       steps: [
-        { name: 'Fill bags', after: [], unit: 'bags', qty: 500, cycle: 0.5, crew: 2 },
-        { name: 'Seal and label', after: [1], unit: 'bags', qty: 500, cycle: 0.3, crew: 1 },
-        { name: 'Palletize', after: [2], unit: 'pallets', qty: 20, cycle: 6, crew: 2 }
+        { name: 'Fill bags', stage: 1, unit: 'bags', obsUnits: 50, obsMin: 25, obsPeople: 2, crew: 0 },
+        { name: 'Seal bags', stage: 2, unit: 'bags', obsUnits: 50, obsMin: 15, obsPeople: 1, crew: 0 },
+        { name: 'Label bags', stage: 2, unit: 'bags', obsUnits: 50, obsMin: 12, obsPeople: 1, crew: 0 },
+        { name: 'Stack on pallet', stage: 3, unit: 'bags', obsUnits: 50, obsMin: 20, obsPeople: 1, crew: 0 }
       ]
     },
-    blank: { name: 'Blank', unit: 'units', start: '07:00', steps: [] }
+    blank: { name: 'Blank', unit: 'units', batch: 10, target: 30, steps: [] }
   };
 
-  let lang = localStorage.getItem('ctp-lang') || 'en';
-  let project = { name: '', unit: 'units', start: '07:00', steps: [] };
+  let lang = localStorage.getItem('fp-lang') || 'en';
+  let project = { name: '', unit: 'units', batch: 10, target: 30, steps: [] };
   const t = key => LABELS[lang][key] || key;
 
   // ---------- Model ----------
-  function computeSchedule(steps) {
-    // Work-minute spans per step, in the order steps are listed.
-    const ends = [];
-    return steps.map((s, i) => {
-      // ends is keyed by 1-based step number, so "after: [n]" reads ends[n].
-      const startAt = s.after.length ? Math.max(...s.after.map(n => ends[n] ?? 0)) : 0;
-      const dur = s.cycle > 0 ? s.qty * s.cycle / s.crew : 0;
-      ends[i + 1] = startAt + dur;
-      return { start: startAt, end: startAt + dur, dur };
-    });
+  // Person-minutes to make one unit, from what was observed.
+  function ppmOf(s) {
+    return s.obsUnits > 0 && s.obsMin > 0 && s.obsPeople > 0 ? (s.obsMin * s.obsPeople) / s.obsUnits : 0;
+  }
+  // People needed for a batch to finish within the target.
+  function neededPeople(s, batch, target) {
+    const ppm = ppmOf(s);
+    if (!ppm || !(target > 0)) return 0;
+    return Math.max(1, Math.ceil((batch * ppm) / target));
+  }
+  // Crew actually planned: typed in, or the number needed for the batch.
+  function crewOf(s, batch, target) {
+    return s.crew > 0 ? s.crew : neededPeople(s, batch, target);
+  }
+  // Minutes for one batch through one step with a given crew.
+  function batchMinutes(s, batch, crew) {
+    const ppm = ppmOf(s);
+    return crew > 0 && ppm ? (batch * ppm) / crew : 0;
   }
 
-  function validate(steps) {
-    const msgs = [];
-    steps.forEach((s, i) => {
-      const n = i + 1;
-      if (!(s.cycle > 0)) msgs.push(t('errCycle').replace('{n}', n));
-      if (!(s.crew >= 1)) msgs.push(t('errCrew').replace('{n}', n));
-      if (s.after.some(a => a >= n || a < 1)) msgs.push(t('errAfter').replace('{n}', n));
+  function analyze(batch, target) {
+    const rows = project.steps.map((s, i) => {
+      const crew = crewOf(s, batch, target);
+      return {
+        i, s, crew,
+        need: neededPeople(s, batch, target),
+        minutes: batchMinutes(s, batch, crew),
+        ppm: ppmOf(s)
+      };
     });
-    return msgs;
-  }
-
-  // Clock minutes available for work, excluding breaks. Index = work minute.
-  function workClock() {
-    const out = [];
-    for (let m = SHIFT_START; m < SHIFT_END; m++) {
-      const onBreak = BREAKS.some(b => m >= b.start && m < b.start + b.len);
-      if (!onBreak) out.push(m);
+    const stages = {};
+    rows.forEach(r => {
+      const key = Number(r.s.stage) || 1;
+      stages[key] = Math.max(stages[key] || 0, r.minutes);
+    });
+    const stageKeys = Object.keys(stages).map(Number).sort((a, b) => a - b);
+    const lineCycle = stageKeys.length ? Math.max(...stageKeys.map(k => stages[k])) : 0;
+    const leadTime = stageKeys.reduce((acc, k) => acc + stages[k], 0);
+    const bottleneckStage = stageKeys.find(k => stages[k] === lineCycle);
+    // Largest batch that keeps every step inside the target with this crew.
+    let maxBatch = 0;
+    if (rows.length && rows.every(r => r.ppm > 0 && r.crew > 0) && target > 0) {
+      maxBatch = Math.floor(Math.min(...rows.map(r => (target * r.crew) / r.ppm)));
     }
-    return out;
+    return { rows, stages, stageKeys, lineCycle, leadTime, bottleneckStage, maxBatch };
   }
 
-  // Per step, one row per clock hour: people, working minutes, units done.
-  // Units are fractional here; the display rounds the running total down.
-  function hourlyPlan(steps, spans) {
-    const clock = workClock();
-    return steps.map((s, i) => {
-      const sp = spans[i];
-      const rows = HOURS.map(h => ({ h, crew: 0, minutes: 0, done: 0 }));
-      if (s.cycle > 0) {
-        for (let w = Math.floor(sp.start); w < Math.ceil(sp.end) && w < clock.length; w++) {
-          const weight = Math.min(w + 1, sp.end) - Math.max(w, sp.start);
-          if (weight <= 0) continue;
-          const row = rows[Math.floor(clock[w] / 60) - FIRST_HOUR];
-          row.minutes += weight;
-          row.done += weight * s.crew / s.cycle;
-        }
-      }
-      rows.forEach(r => { r.crew = r.minutes > 0 ? s.crew : 0; });
-      return rows;
-    });
-  }
-
-  // ---------- Rendering ----------
-  function fmtMin(mins) {
-    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
-    return h ? `${h}${t('hours')} ${m}${t('minutes')}` : `${m}${t('minutes')}`;
-  }
-  function fmtClock(clockMin) {
-    const h = Math.floor(clockMin / 60), m = clockMin % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  // ---------- Helpers ----------
+  function fmtNum(n, d = 1) {
+    return Number.isFinite(n) ? (Math.round(n * 10 ** d) / 10 ** d).toString() : '–';
   }
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -281,174 +271,148 @@
   function stepName(i) {
     return project.steps[i].name || `${t('stepFallback')} ${i + 1}`;
   }
-  function stepUnit(i) {
-    return project.steps[i].unit || project.unit;
-  }
-  function breakTagFor(h) {
-    return BREAKS.filter(b => Math.floor(b.start / 60) === h)
-      .map(b => `${t('breakTag')} ${b.len}${t('minutes')}`).join(', ');
-  }
-
-  function renderSteps() {
-    const body = document.getElementById('stepRows');
-    body.innerHTML = project.steps.map((s, i) => `
-      <tr data-i="${i}">
-        <td class="mono">${i + 1}</td>
-        <td><input class="name" data-f="name" value="${esc(s.name)}"></td>
-        <td><input class="num" data-f="after" value="${esc(s.after.join(', '))}" placeholder="-"></td>
-        <td><input class="num" data-f="qty" type="number" min="0" step="any" value="${s.qty}"></td>
-        <td><input class="unit" data-f="unit" value="${esc(s.unit)}" placeholder="${esc(project.unit)}"></td>
-        <td><input class="num" data-f="cycle" type="number" min="0" step="any" value="${s.cycle}"></td>
-        <td><input class="num" data-f="crew" type="number" min="1" step="1" value="${s.crew}"></td>
-        <td class="mono" data-dur="${i}"></td>
-        <td><button class="btn danger" data-remove="${i}" aria-label="${t('remove')}">×</button></td>
-      </tr>`).join('');
-    document.getElementById('projectName').value = project.name;
-    document.getElementById('unitLabel').value = project.unit;
-    document.getElementById('startTime').value = project.start;
-  }
-
-  function renderAll() {
-    const errs = validate(project.steps);
-    document.getElementById('errors').textContent = errs.join(' · ');
-    const spans = project.steps.length ? computeSchedule(project.steps) : [];
+  function validate() {
+    const msgs = [];
     project.steps.forEach((s, i) => {
-      const cell = document.querySelector(`[data-dur="${i}"]`);
-      if (cell) cell.textContent = fmtMin(spans[i].dur);
+      if (!(s.obsUnits > 0 && s.obsMin > 0 && s.obsPeople > 0)) msgs.push(`${stepName(i)}: ${t('errMeasure')}`);
+      if (!(Number.isInteger(Number(s.stage)) && Number(s.stage) >= 1)) msgs.push(`${stepName(i)}: ${t('errStage')}`);
     });
-    renderBars(spans);
-    renderCrewGrid(spans);
-    renderStepBlocks(spans);
-    document.getElementById('title').textContent = project.name || t('title');
+    if (!(project.batch > 0 && project.target > 0)) msgs.push(t('errBatch'));
+    return [...new Set(msgs)];
   }
 
-  function renderBars(spans) {
-    const svg = document.getElementById('barChart');
-    if (!spans.length) {
-      svg.innerHTML = `<text x="10" y="20" class="label">${t('noSteps')}</text>`;
-      svg.setAttribute('width', 400); svg.setAttribute('height', 40);
-      return;
-    }
-    const labelW = 170, rowH = 34, pad = 30;
-    const total = Math.max(...spans.map(s => s.end), 1);
-    const plotW = Math.max(480, 900 - labelW);
-    const H = spans.length * rowH + pad * 2;
-    const W = labelW + plotW + 20;
-    const x = m => labelW + (m / total) * plotW;
+  // ---------- Step 1: list ----------
+  function renderList() {
+    document.getElementById('listRows').innerHTML = project.steps.map((s, i) => `
+      <tr>
+        <td class="mono">${i + 1}</td>
+        <td><input class="name" data-i="${i}" data-f="name" value="${esc(s.name)}"></td>
+        <td><input class="num" type="number" min="1" step="1" data-i="${i}" data-f="stage" value="${s.stage}" aria-label="${t('stage')}"></td>
+        <td><input class="unit" data-i="${i}" data-f="unit" value="${esc(s.unit)}" placeholder="${esc(project.unit)}"></td>
+        <td><button class="btn danger" data-remove="${i}" aria-label="remove">×</button></td>
+      </tr>`).join('');
+  }
+
+  // ---------- Step 2: grouping ----------
+  function renderGroups() {
+    const wrap = document.getElementById('stageGroups');
+    const plan = analyze(project.batch, project.target);
+    if (!project.steps.length) { wrap.innerHTML = `<p class="muted">${t('noSteps')}</p>`; return; }
+    wrap.innerHTML = plan.stageKeys.map(k => {
+      const names = project.steps
+        .map((s, i) => ({ s, i }))
+        .filter(x => (Number(x.s.stage) || 1) === k)
+        .map(x => `${esc(stepName(x.i))}`);
+      const isBottleneck = k === plan.bottleneckStage;
+      return `
+        <div class="stage-group ${isBottleneck ? 'bottleneck' : ''}">
+          <strong>${t('stageLabel')} ${k}</strong>
+          ${isBottleneck ? `<span class="tag">${t('bottleneck')}</span>` : ''}
+          <div>${names.join(' + ')}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ---------- Step 3: measure ----------
+  function renderMeasure() {
+    document.getElementById('measureRows').innerHTML = project.steps.map((s, i) => `
+      <tr>
+        <td class="mono">${i + 1}</td>
+        <td>${esc(stepName(i))}</td>
+        <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsUnits" value="${s.obsUnits}" aria-label="${t('units')}"></td>
+        <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsMin" value="${s.obsMin}" aria-label="${t('mins')}"></td>
+        <td><input class="num" type="number" min="0" step="1" data-i="${i}" data-f="obsPeople" value="${s.obsPeople}" aria-label="${t('people')}"></td>
+        <td class="num mono" data-ppm="${i}"></td>
+      </tr>`).join('');
+    updatePpm();
+  }
+  function updatePpm() {
+    project.steps.forEach((s, i) => {
+      const cell = document.querySelector(`[data-ppm="${i}"]`);
+      if (cell) cell.textContent = fmtNum(ppmOf(s), 2);
+    });
+  }
+
+  // ---------- Step 4: chart and flow ----------
+  function renderChart(plan) {
+    const svg = document.getElementById('chart');
+    if (!plan.rows.length) { svg.innerHTML = ''; svg.setAttribute('width', 0); svg.setAttribute('height', 0); return; }
+    const labelW = 190, rowH = 34, pad = 28, plotW = 620;
+    const C = project.target;
+    const maxT = Math.max(C, ...plan.rows.map(r => r.minutes), 1) * 1.1;
+    const x = m => labelW + (m / maxT) * plotW;
+    const H = plan.rows.length * rowH + pad * 2;
+    const W = labelW + plotW + 60;
 
     let out = '';
-    // Hour gridlines in work time.
-    for (let m = 0; m <= total; m += 60) {
-      out += `<line x1="${x(m)}" y1="${pad - 8}" x2="${x(m)}" y2="${H - pad + 4}" stroke="var(--border)" stroke-dasharray="3 3"/>`;
-      out += `<text x="${x(m)}" y="${pad - 12}" text-anchor="middle">${m / 60}${t('hours')}</text>`;
+    for (let m = 0; m <= maxT; m += 10) {
+      out += `<line x1="${x(m)}" y1="${pad - 6}" x2="${x(m)}" y2="${H - pad + 6}" stroke="var(--border-light)"/>`;
+      out += `<text x="${x(m)}" y="${pad - 10}" text-anchor="middle">${m}</text>`;
     }
-    spans.forEach((sp, i) => {
-      const y = pad + i * rowH;
-      const s = project.steps[i];
-      out += `<text x="8" y="${y + 20}" class="label">${esc(stepName(i))}</text>`;
-      out += `<rect x="${x(sp.start)}" y="${y + 6}" width="${Math.max(2, x(sp.end) - x(sp.start))}" height="${rowH - 12}" rx="4" fill="var(--ro-green)" opacity="0.85"/>`;
-      out += `<text x="${x(sp.end) + 6}" y="${y + 20}">${fmtMin(sp.dur)} · ${s.crew}p</text>`;
+    plan.rows.forEach((r, row) => {
+      const y = pad + row * rowH;
+      const isBottleneck = Number(r.s.stage) === plan.bottleneckStage;
+      const fill = r.minutes > C * 1.001 ? 'var(--danger)' : (isBottleneck ? 'var(--ro-gold)' : 'var(--ro-green)');
+      out += `<text x="8" y="${y + 21}" class="label">${esc(stepName(r.i))} · ${t('stageLabel')} ${r.s.stage}</text>`;
+      out += `<rect x="${labelW}" y="${y + 6}" width="${Math.max(2, x(r.minutes) - labelW)}" height="${rowH - 12}" rx="4" fill="${fill}" opacity="0.9"/>`;
+      out += `<text x="${x(r.minutes) + 6}" y="${y + 21}">${fmtNum(r.minutes)} ${t('min')} · ${r.crew}p</text>`;
     });
+    out += `<line x1="${x(C)}" y1="${pad - 6}" x2="${x(C)}" y2="${H - pad + 6}" stroke="var(--info)" stroke-width="2" stroke-dasharray="5 3"/>`;
+    out += `<text x="${x(C)}" y="${H - 6}" text-anchor="middle" style="fill:var(--info)">${t('target_')} ${fmtNum(C)}</text>`;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('width', W);
     svg.setAttribute('height', H);
     svg.innerHTML = out;
   }
 
-  // Matrix: step × clock hour, showing how many people are on each step.
-  function renderCrewGrid(spans) {
-    const table = document.getElementById('hourGrid');
-    if (!spans.length) { table.innerHTML = ''; document.getElementById('finishLine').textContent = ''; return; }
-    const plan = hourlyPlan(project.steps, spans);
-    const head = `<tr><th>${t('steps')}</th>${HOURS.map(h => `<th>${String(h).padStart(2, '0')}</th>`).join('')}</tr>`;
-    const rows = project.steps.map((s, i) => {
-      const cells = HOURS.map((h, k) => {
-        const crew = plan[i][k].crew;
-        const isBreakHour = BREAKS.some(b => Math.floor(b.start / 60) === h);
-        const cls = crew ? 'cell on' : (isBreakHour ? 'cell brk' : 'cell');
-        return `<td class="${cls}">${crew || ''}</td>`;
-      }).join('');
-      return `<tr><td>${esc(stepName(i))}</td>${cells}</tr>`;
+  function renderFlow(plan) {
+    const C = project.target;
+    document.getElementById('flowRows').innerHTML = plan.rows.map(r => {
+      const idle = plan.lineCycle > 0 ? 1 - r.minutes / plan.lineCycle : 0;
+      const over = r.minutes > C * 1.001;
+      return `
+        <tr>
+          <td>${esc(stepName(r.i))}</td>
+          <td>${t('stageLabel')} ${r.s.stage}</td>
+          <td class="num mono">${fmtNum(r.minutes)}</td>
+          <td class="num mono"><input class="num" type="number" min="0" step="1" data-crew="${r.i}" value="${r.s.crew || ''}" placeholder="${r.need}" aria-label="${t('crew')}"></td>
+          <td class="num mono">${r.need}</td>
+          <td class="num mono">${fmtNum(idle * 100, 0)}%</td>
+          <td><span class="tag ${over ? 'over' : ''}">${over ? t('over') : t('ok')}</span></td>
+        </tr>`;
     }).join('');
-    const totals = HOURS.map((h, k) => {
-      const n = project.steps.reduce((acc, s, i) => acc + plan[i][k].crew, 0);
-      return `<td class="cell mono">${n || ''}</td>`;
-    }).join('');
-    table.innerHTML = `<thead>${head}</thead><tbody>${rows}<tr><td><strong>${t('total')} (${t('crewHeads')})</strong></td>${totals}</tr></tbody>`;
-
-    const clock = workClock();
-    const workNeeded = Math.ceil(Math.max(...spans.map(s => s.end)));
-    const finishLine = document.getElementById('finishLine');
-    if (workNeeded > clock.length) {
-      finishLine.textContent = `${t('finish')}: > ${fmtClock(SHIFT_END)} · ${t('overrun')}`;
-    } else {
-      const finishWork = Math.max(...spans.map(s => s.end));
-      finishLine.textContent = `${t('finish')}: ${fmtClock(clock[Math.max(0, Math.ceil(finishWork) - 1)] + 1)} · ${fmtMin(finishWork)} ${t('workMin').toLowerCase()}`;
-    }
+    document.getElementById('summary').innerHTML = plan.rows.length ? `
+      <div class="stat"><span class="muted">${t('lineCycle')}</span><b>${fmtNum(plan.lineCycle)} ${t('min')}</b></div>
+      <div class="stat"><span class="muted">${t('rate')}</span><b>${fmtNum(plan.lineCycle > 0 ? project.batch * 60 / plan.lineCycle : 0, 0)} ${esc(project.unit)}${t('perHour')}</b></div>
+      <div class="stat"><span class="muted">${t('leadTime')}</span><b>${fmtNum(plan.leadTime)} ${t('min')}</b></div>
+      <div class="stat"><span class="muted">${t('crewTotal')}</span><b>${plan.rows.reduce((a, r) => a + r.crew, 0)}</b></div>
+      <div class="stat"><span class="muted">${t('maxBatch')}</span><b>${plan.maxBatch || '–'} ${esc(project.unit)}</b></div>` : '';
   }
 
-  // One expandable block per step: people, time, and units done each hour.
-  function renderStepBlocks(spans) {
-    const wrap = document.getElementById('stepBlocks');
-    if (!spans.length) { wrap.innerHTML = ''; return; }
-    const plan = hourlyPlan(project.steps, spans);
-
-    wrap.innerHTML = project.steps.map((s, i) => {
-      const unit = stepUnit(i);
-      let cumPrev = 0;
-      const rows = HOURS.map((h, k) => {
-        const r = plan[i][k];
-        const cumExact = plan[i].slice(0, k + 1).reduce((acc, x) => acc + x.done, 0);
-        const cum = Math.min(s.qty, Math.floor(cumExact + 1e-9));
-        const doneHour = cum - cumPrev;
-        cumPrev = cum;
-        const pct = s.qty > 0 ? Math.round((cum / s.qty) * 100) : 0;
-        const brk = breakTagFor(h);
-        return `
-          <tr>
-            <td class="mono">${String(h).padStart(2, '0')}:00${brk ? ` <span class="tag">${esc(brk)}</span>` : ''}</td>
-            <td class="num">${r.crew || ''}</td>
-            <td class="num">${r.minutes ? Math.round(r.minutes) : ''}</td>
-            <td class="num">${r.minutes ? doneHour : ''}</td>
-            <td class="num">${r.minutes || cum ? cum : ''}</td>
-            <td><div class="done-bar" aria-label="${pct}%"><span style="width:${Math.min(100, pct)}%"></span></div></td>
-            <td class="num">${pct}%</td>
-          </tr>`;
-      }).join('');
-      const total = Math.floor(spans[i].end + 1e-9);
-      return `
-        <details class="step-block" open>
-          <summary>
-            <h3>${esc(stepName(i))}</h3>
-            <span class="muted">${s.crew}p · ${fmtMin(spans[i].dur)} · ${s.qty} ${esc(unit)}</span>
-          </summary>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>${t('hourCol')}</th>
-                  <th class="num">${t('people')}</th>
-                  <th class="num">${t('minWorking')}</th>
-                  <th class="num">${t('doneHour')} (${esc(unit)})</th>
-                  <th class="num">${t('totalDone')}</th>
-                  <th>${t('pct')}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </details>`;
-    }).join('');
+  // Rebuilds everything, including the input rows. Used on structural changes.
+  function renderAll() {
+    renderList();
+    renderMeasure();
+    updateDerived();
+  }
+  // Refreshes the outputs only, so the input being typed in keeps focus.
+  function updateDerived() {
+    document.getElementById('errors').textContent = validate().join(' · ');
+    const plan = analyze(project.batch, project.target);
+    renderGroups();
+    updatePpm();
+    renderChart(plan);
+    renderFlow(plan);
+    document.getElementById('title').textContent = project.name || t('title');
   }
 
   // ---------- Persistence ----------
   function saveLocal() {
-    try { localStorage.setItem('ctp-project', JSON.stringify(project)); } catch (_) { /* private mode */ }
+    try { localStorage.setItem('fp-project', JSON.stringify(project)); } catch (_) { /* private mode */ }
   }
   function loadLocal() {
     try {
-      const raw = localStorage.getItem('ctp-project');
+      const raw = localStorage.getItem('fp-project');
       return raw ? JSON.parse(raw) : null;
     } catch (_) { return null; }
   }
@@ -456,95 +420,138 @@
     return {
       name: String(p.name || ''),
       unit: String(p.unit || t('unitDefault')),
-      start: p.start || '07:00',
+      batch: Number(p.batch) || 10,
+      target: Number(p.target) || 30,
       steps: (p.steps || []).map(s => ({
         name: String(s.name || ''),
-        after: (Array.isArray(s.after) ? s.after : String(s.after || '').split(',')).map(Number).filter(n => n > 0),
+        stage: Math.max(1, Math.floor(Number(s.stage) || 1)),
         unit: String(s.unit || ''),
-        qty: Number(s.qty) || 0,
-        cycle: Number(s.cycle) || 0,
-        crew: Math.max(1, Math.floor(Number(s.crew) || 1))
+        obsUnits: Number(s.obsUnits) || 0,
+        obsMin: Number(s.obsMin) || 0,
+        obsPeople: Number(s.obsPeople) || 0,
+        crew: Math.max(0, Math.floor(Number(s.crew) || 0))
       }))
     };
   }
 
-  // ---------- Events ----------
+  // ---------- Labels and events ----------
   function applyLabels() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (LABELS[lang][key]) el.textContent = LABELS[lang][key];
-    });
+    const l = LABELS[lang];
     document.getElementById('lang').value = lang;
     document.documentElement.lang = lang;
-    document.getElementById('howItWorks').textContent = LABELS[lang].howItWorks;
+    document.getElementById('projectName').previousElementSibling.textContent = l.projectName;
+    document.getElementById('unitLabel').previousElementSibling.textContent = l.unit;
+    document.getElementById('loadTemplate').textContent = l.load;
+    document.getElementById('exportBtn').textContent = l.export;
+    document.getElementById('h1').textContent = l.h1;
+    document.getElementById('help1').textContent = l.help1;
+    document.getElementById('h2').textContent = l.h2;
+    document.getElementById('help2').textContent = l.help2;
+    document.getElementById('h3').textContent = l.h3;
+    document.getElementById('help3').textContent = l.help3;
+    document.getElementById('measureNote').textContent = l.measureNote;
+    document.getElementById('h4').textContent = l.h4;
+    document.getElementById('help4').textContent = l.help4;
+    document.getElementById('th1a').textContent = l.stepN;
+    document.getElementById('th1b').textContent = l.stage;
+    document.getElementById('th1c').textContent = l.unitCol;
+    document.getElementById('th3a').textContent = l.stepN;
+    document.getElementById('th3b').textContent = l.step;
+    document.getElementById('th3c').textContent = l.units;
+    document.getElementById('th3d').textContent = l.mins;
+    document.getElementById('th3e').textContent = l.people;
+    document.getElementById('lbBatch').textContent = l.batch;
+    document.getElementById('lbTarget').textContent = l.target;
+    document.getElementById('th4a').textContent = l.step;
+    document.getElementById('th4b').textContent = l.stageCol;
+    document.getElementById('th4c').textContent = l.perBatch;
+    document.getElementById('th4d').textContent = l.crew;
+    document.getElementById('th4e').textContent = l.need;
+    document.getElementById('th4f').textContent = l.idle;
+    document.getElementById('th4g').textContent = l.status;
   }
 
   function fillTemplateSelect() {
-    const sel = document.getElementById('templateSelect');
-    sel.innerHTML = Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
+    document.getElementById('templateSelect').innerHTML =
+      Object.entries(TEMPLATES).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('');
   }
 
   function refresh() {
-    renderSteps();
+    document.getElementById('projectName').value = project.name;
+    document.getElementById('unitLabel').value = project.unit;
+    document.getElementById('batch').value = project.batch;
+    document.getElementById('target').value = project.target;
     renderAll();
+    saveLocal();
+  }
+  // Called on every keystroke: updates outputs and saves, without rebuilding inputs.
+  function touch() {
+    updateDerived();
     saveLocal();
   }
 
   function bind() {
     document.getElementById('lang').addEventListener('change', e => {
       lang = e.target.value;
-      try { localStorage.setItem('ctp-lang', lang); } catch (_) {}
+      try { localStorage.setItem('fp-lang', lang); } catch (_) {}
       applyLabels();
       fillTemplateSelect();
       refresh();
     });
 
     document.getElementById('loadTemplate').addEventListener('click', () => {
-      const key = document.getElementById('templateSelect').value;
-      project = normalize(TEMPLATES[key]);
+      project = normalize(TEMPLATES[document.getElementById('templateSelect').value]);
       refresh();
     });
 
     document.getElementById('addStep').addEventListener('click', () => {
-      project.steps.push({ name: '', after: [], unit: '', qty: 0, cycle: 0, crew: 1 });
+      const next = project.steps.length ? Math.max(...project.steps.map(s => Number(s.stage) || 1)) + 1 : 1;
+      project.steps.push({ name: '', stage: next, unit: '', obsUnits: 0, obsMin: 0, obsPeople: 0, crew: 0 });
       refresh();
     });
 
-    document.getElementById('stepRows').addEventListener('input', e => {
-      const row = e.target.closest('tr');
-      const i = Number(row.dataset.i);
+    document.getElementById('listRows').addEventListener('input', e => {
+      const i = Number(e.target.dataset.i);
       const f = e.target.dataset.f;
-      if (!f) return;
-      const v = e.target.value;
-      if (f === 'name' || f === 'unit') project.steps[i][f] = v;
-      else if (f === 'after') project.steps[i].after = v.split(',').map(Number).filter(n => n > 0);
-      else project.steps[i][f] = Number(v);
-      renderAll();
-      saveLocal();
+      if (f === 'name' || f === 'unit') project.steps[i][f] = e.target.value;
+      if (f === 'stage') project.steps[i].stage = Math.max(1, Math.floor(Number(e.target.value) || 1));
+      touch();
     });
+    document.getElementById('listRows').addEventListener('change', renderAll);
 
-    document.getElementById('stepRows').addEventListener('click', e => {
+    document.getElementById('listRows').addEventListener('click', e => {
       const btn = e.target.closest('[data-remove]');
       if (!btn) return;
       project.steps.splice(Number(btn.dataset.remove), 1);
       refresh();
     });
 
-    ['projectName', 'unitLabel', 'startTime'].forEach(id => {
-      document.getElementById(id).addEventListener('input', e => {
-        if (id === 'projectName') project.name = e.target.value;
-        if (id === 'unitLabel') project.unit = e.target.value;
-        if (id === 'startTime') project.start = e.target.value;
-        renderAll();
-        saveLocal();
-      });
+    document.getElementById('measureRows').addEventListener('input', e => {
+      const i = Number(e.target.dataset.i);
+      const f = e.target.dataset.f;
+      if (!f) return;
+      project.steps[i][f] = Number(e.target.value);
+      touch();
     });
+
+    // Crew is typed in step 4; change (on blur or Enter) avoids rebuilding the field mid-typing.
+    document.getElementById('flowRows').addEventListener('change', e => {
+      const i = Number(e.target.dataset.crew);
+      if (Number.isNaN(i)) return;
+      project.steps[i].crew = Math.max(0, Math.floor(Number(e.target.value) || 0));
+      refresh();
+    });
+
+    document.getElementById('batch').addEventListener('input', e => { project.batch = Number(e.target.value); touch(); });
+    document.getElementById('target').addEventListener('input', e => { project.target = Number(e.target.value); touch(); });
+    document.getElementById('projectName').addEventListener('input', e => { project.name = e.target.value; touch(); });
+    document.getElementById('unitLabel').addEventListener('input', e => { project.unit = e.target.value; touch(); });
 
     document.getElementById('exportBtn').addEventListener('click', () => {
       const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${(project.name || 'cycle-time-plan').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`;
+      a.download = `${(project.name || 'flow-plan').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     });
@@ -567,8 +574,7 @@
     fillTemplateSelect();
     applyLabels();
     bind();
-    renderSteps();
-    renderAll();
+    refresh();
   })();
 </script>
 </body>
