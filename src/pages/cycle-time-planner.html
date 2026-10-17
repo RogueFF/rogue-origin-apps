@@ -24,7 +24,8 @@
     input, select { min-height: 44px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text); font: inherit; box-sizing: border-box; max-width: 100%; }
     input.num { width: 90px; font-family: var(--font-mono); }
     input.unit { width: 90px; }
-    input.name { min-width: 180px; }
+    input.name { min-width: 170px; }
+    input.impl { width: 130px; }
     .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
     th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
@@ -43,6 +44,7 @@
     .warn { color: var(--danger); font-size: 0.85rem; min-height: 1em; }
     .tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 999px; background: var(--gold-dim); color: var(--gold-text); }
     .tag.over { background: var(--danger-dim); color: var(--danger); }
+    .tag.machine { background: var(--info); color: #fff; }
     @media (max-width: 768px) { h1 { font-size: 1.3rem; } }
   </style>
 </head>
@@ -71,7 +73,7 @@
       <div class="row">
         <label class="muted" for="projectName">Project</label>
         <input id="projectName" class="name" type="text">
-        <label class="muted" for="unitLabel">Default unit</label>
+        <label class="muted" for="unitLabel">Batch unit</label>
         <input id="unitLabel" type="text" style="width:120px">
       </div>
     </section>
@@ -86,7 +88,8 @@
       <div class="table-scroll">
         <table>
           <thead><tr>
-            <th>#</th><th id="th1a"></th><th id="th1b"></th><th id="th1c"></th><th></th>
+            <th>#</th><th id="th1a"></th><th id="th1b"></th><th id="th1c"></th>
+            <th id="th1d"></th><th id="th1e"></th><th id="th1f"></th><th></th>
           </tr></thead>
           <tbody id="listRows"></tbody>
         </table>
@@ -107,7 +110,7 @@
       <div class="table-scroll">
         <table>
           <thead><tr>
-            <th>#</th><th id="th3a"></th><th id="th3b"></th><th id="th3c"></th><th id="th3d"></th><th id="th3e"></th>
+            <th>#</th><th id="th3a"></th><th id="th3b"></th><th id="th3c"></th><th id="th3d"></th><th id="th3e"></th><th id="th3f"></th>
           </tr></thead>
           <tbody id="measureRows"></tbody>
         </table>
@@ -121,7 +124,7 @@
       <p class="muted" id="help4"></p>
       <div class="row" style="margin-bottom:var(--space-xs)">
         <label class="muted" for="batch" id="lbBatch"></label>
-        <input id="batch" class="num" type="number" min="1" step="1">
+        <input id="batch" class="num" type="number" min="0.1" step="any">
         <label class="muted" for="target" id="lbTarget"></label>
         <input id="target" class="num" type="number" min="0.1" step="any">
       </div>
@@ -130,7 +133,7 @@
         <table>
           <thead><tr>
             <th id="th4a"></th><th id="th4b"></th><th class="num" id="th4c"></th>
-            <th class="num" id="th4d"></th><th class="num" id="th4e"></th><th class="num" id="th4f"></th><th class="num" id="th4g"></th>
+            <th class="num" id="th4d"></th><th class="num" id="th4e"></th><th class="num" id="th4f"></th><th id="th4g"></th>
           </tr></thead>
           <tbody id="flowRows"></tbody>
         </table>
@@ -145,53 +148,69 @@
   const LABELS = {
     en: {
       title: 'Flow Planner', load: 'Load', export: 'Export', import: 'Import',
-      projectName: 'Project', unit: 'Default unit', stepN: 'Step', stage: 'Stage', unitCol: 'Unit',
-      units: 'Units seen', mins: 'Minutes seen', people: 'People on it', ppm: 'Person-min per unit', crew: 'Crew (blank = auto)',
-      h1: '1 · List the steps', help1: 'Write every step in the order the work moves. Give steps the same stage number when they can run at the same time.',
+      projectName: 'Project', batchUnit: 'Batch unit', stepN: 'Step', stage: 'Stage', type: 'Type',
+      unitCol: 'Unit', perBatch: 'Per batch unit', implement: 'Implement',
+      typePeople: 'People', typeMachine: 'Machine',
+      h1: '1 · List the steps',
+      help1: 'Write every step in the order the work moves. Same stage number = runs at the same time. Per batch unit = how many of this step\'s unit make one batch (for example, 40 rows per acre).',
       h2: '2 · What runs together', help2: 'Steps in the same stage run at the same time on the same batch. A stage takes as long as its slowest step.',
-      h3: '3 · Measure each step', help3: 'Watch one crew do the step. Count the units, the minutes, and how many people were on it. Person-min per unit = minutes × people ÷ units.',
-      measureNote: 'Measure the full step, not one unit. Use at least three runs, and take the average.',
-      h4: '4 · Cycle time chart', help4: 'Pick a batch size and the pace you want (minutes per batch). Crew sizes fill in so every step fits the pace.',
+      h3: '3 · Measure each step',
+      help3: 'People steps: count units, minutes, and people. Machine steps: measure the speed in mph, the working width of the implement in feet, field efficiency, and how many people run each machine.',
+      measureNote: 'Measure the full step, not one unit. Use at least three runs and average them. Field efficiency is the share of the time actually working the ground (turns, fills, and stops take the rest). 75% is a common starting point.',
+      units: 'Units', mins: 'Minutes', people: 'People', mph: 'mph', width: 'Width (ft)', operators: 'Operators per machine',
+      eff: 'Efficiency %', result: 'Result', ppm: 'person-min/unit', aph: 'acres/hr',
+      h4: '4 · Cycle time chart',
+      help4: 'Pick a batch size in the batch unit and the pace you want (minutes per batch). Crew sizes fill in so every step fits the pace.',
       batch: 'Batch size', target: 'Target min per batch',
-      perBatch: 'Min per batch', need: 'People needed', idle: 'Idle', step: 'Step', stageCol: 'Stage',
-      stageLabel: 'Stage', noSteps: 'Add a step to begin.', bottleneck: 'Bottleneck', lineCycle: 'Line cycle', leadTime: 'Lead time per batch',
-      rate: 'Output per hour', maxBatch: 'Largest batch this crew can flow at target', crewTotal: 'Total people',
-      over: 'Over target', ok: 'Fits target', target_: 'target',
-      errMeasure: 'Measure each step: units, minutes and people must be above 0.', errStage: 'Stage must be a whole number, 1 or more.',
-      errBatch: 'Batch size and target must be above 0.', min: 'min', hours: 'h', perHour: '/h', unitDefault: 'units',
-      badFile: 'Could not read that file.', stepFallback: 'Step', auto: 'auto', status: 'Status'
+      minPerBatch: 'Min per batch', crew: 'Crew (people or machines)', need: 'Needed', idle: 'Idle', status: 'Status',
+      stageLabel: 'Stage', stageCol: 'Stage', noSteps: 'Add a step to begin.', bottleneck: 'Bottleneck',
+      lineCycle: 'Line cycle', leadTime: 'Lead time per batch', rate: 'Output per hour', maxBatch: 'Largest batch the current crew can flow at target',
+      crewTotal: 'Total people', machines: 'machines',
+      over: 'Over target', ok: 'Fits target', targetShort: 'target',
+      errMeasure: 'Each people step needs units, minutes and people above 0. Each machine step needs mph, width and efficiency above 0.',
+      errStage: 'Stage must be a whole number, 1 or more.', errBatch: 'Batch size and target must be above 0.',
+      errPerBatch: 'Per batch unit must be above 0.',
+      min: 'min', perHour: '/h', unitDefault: 'units', machineStep: 'machine', badFile: 'Could not read that file.', stepFallback: 'Step'
     },
     es: {
       title: 'Planificador de flujo', load: 'Cargar', export: 'Exportar', import: 'Importar',
-      projectName: 'Proyecto', unit: 'Unidad predeterminada', stepN: 'Paso', stage: 'Etapa', unitCol: 'Unidad',
-      units: 'Unidades vistas', mins: 'Minutos vistos', people: 'Personas en el paso', ppm: 'Persona-min por unidad', crew: 'Cuadrilla (vacío = auto)',
-      h1: '1 · Lista los pasos', help1: 'Escribe cada paso en el orden en que se mueve el trabajo. Dale el mismo número de etapa a los pasos que pueden hacerse al mismo tiempo.',
+      projectName: 'Proyecto', batchUnit: 'Unidad de lote', stepN: 'Paso', stage: 'Etapa', type: 'Tipo',
+      unitCol: 'Unidad', perBatch: 'Por unidad de lote', implement: 'Implemento',
+      typePeople: 'Personas', typeMachine: 'Máquina',
+      h1: '1 · Lista los pasos',
+      help1: 'Escribe cada paso en el orden en que se mueve el trabajo. Mismo número de etapa = se hace al mismo tiempo. Por unidad de lote = cuántas de las unidades de este paso forman un lote (por ejemplo, 40 surcos por acre).',
       h2: '2 · Qué se hace junto', help2: 'Los pasos de la misma etapa se hacen al mismo tiempo en el mismo lote. Una etapa tarda lo que tarda su paso más lento.',
-      h3: '3 · Mide cada paso', help3: 'Observa a una cuadrilla haciendo el paso. Cuenta las unidades, los minutos y cuántas personas estaban. Persona-min por unidad = minutos × personas ÷ unidades.',
-      measureNote: 'Mide el paso completo, no una sola unidad. Usa al menos tres corridas y saca el promedio.',
-      h4: '4 · Gráfica de tiempos de ciclo', help4: 'Elige el tamaño de lote y el ritmo que quieres (minutos por lote). Las cuadrillas se calculan para que cada paso quepa en ese ritmo.',
+      h3: '3 · Mide cada paso',
+      help3: 'Pasos de personas: cuenta unidades, minutos y personas. Pasos de máquina: mide la velocidad en mph, el ancho de trabajo del implemento en pies, la eficiencia en campo y cuántas personas operan cada máquina.',
+      measureNote: 'Mide el paso completo, no una sola unidad. Usa al menos tres corridas y saca el promedio. La eficiencia en campo es la parte del tiempo que realmente se trabaja la tierra (vueltas, llenados y paradas ocupan el resto). 75% es un punto de partida común.',
+      units: 'Unidades', mins: 'Minutos', people: 'Personas', mph: 'mph', width: 'Ancho (pies)', operators: 'Operadores por máquina',
+      eff: 'Eficiencia %', result: 'Resultado', ppm: 'persona-min/unidad', aph: 'acres/h',
+      h4: '4 · Gráfica de tiempos de ciclo',
+      help4: 'Elige el tamaño de lote en la unidad de lote y el ritmo que quieres (minutos por lote). Las cuadrillas se calculan para que cada paso quepa en ese ritmo.',
       batch: 'Tamaño de lote', target: 'Minutos meta por lote',
-      perBatch: 'Min por lote', need: 'Personas necesarias', idle: 'Ocio', step: 'Paso', stageCol: 'Etapa',
-      stageLabel: 'Etapa', noSteps: 'Agrega un paso para empezar.', bottleneck: 'Cuello de botella', lineCycle: 'Ciclo de la línea', leadTime: 'Tiempo total por lote',
-      rate: 'Producción por hora', maxBatch: 'Lote más grande que esta cuadrilla puede fluir a la meta', crewTotal: 'Personas en total',
-      over: 'Arriba de la meta', ok: 'Cumple la meta', target_: 'meta',
-      errMeasure: 'Mide cada paso: unidades, minutos y personas deben ser mayores que 0.', errStage: 'La etapa debe ser un número entero, 1 o más.',
-      errBatch: 'El lote y la meta deben ser mayores que 0.', min: 'min', hours: 'h', perHour: '/h', unitDefault: 'unidades',
-      badFile: 'No se pudo leer ese archivo.', stepFallback: 'Paso', auto: 'auto', status: 'Estado'
+      minPerBatch: 'Min por lote', crew: 'Cuadrilla (personas o máquinas)', need: 'Necesarias', idle: 'Ocio', status: 'Estado',
+      stageLabel: 'Etapa', stageCol: 'Etapa', noSteps: 'Agrega un paso para empezar.', bottleneck: 'Cuello de botella',
+      lineCycle: 'Ciclo de la línea', leadTime: 'Tiempo total por lote', rate: 'Producción por hora', maxBatch: 'Lote más grande que la cuadrilla actual puede fluir a la meta',
+      crewTotal: 'Personas en total', machines: 'máquinas',
+      over: 'Arriba de la meta', ok: 'Cumple la meta', targetShort: 'meta',
+      errMeasure: 'Cada paso de personas necesita unidades, minutos y personas mayores que 0. Cada paso de máquina necesita mph, ancho y eficiencia mayores que 0.',
+      errStage: 'La etapa debe ser un número entero, 1 o más.', errBatch: 'El lote y la meta deben ser mayores que 0.',
+      errPerBatch: 'Por unidad de lote debe ser mayor que 0.',
+      min: 'min', perHour: '/h', unitDefault: 'unidades', machineStep: 'máquina', badFile: 'No se pudo leer ese archivo.', stepFallback: 'Paso'
     }
   };
 
-  // Placeholder measurements. Replace with what your crew actually does.
+  // Placeholder numbers. Replace with what the crew actually measures.
   const TEMPLATES = {
     fallPrep: {
       name: 'Fall field prep (placeholder numbers)',
-      unit: 'rows',
-      batch: 10,
-      target: 30,
+      unit: 'acre',
+      batch: 2,
+      target: 120,
       steps: [
-        { name: 'Chop plants', stage: 1, unit: 'rows', obsUnits: 10, obsMin: 30, obsPeople: 2, crew: 0 },
-        { name: 'Pull drip tape', stage: 2, unit: 'rows', obsUnits: 10, obsMin: 40, obsPeople: 2, crew: 0 },
-        { name: 'Plow soil', stage: 3, unit: 'rows', obsUnits: 10, obsMin: 25, obsPeople: 1, crew: 0 }
+        { name: 'Chop plants', type: 'people', stage: 1, unit: 'rows', perBatch: 40, obsUnits: 10, obsMin: 30, obsPeople: 2 },
+        { name: 'Pull drip tape', type: 'people', stage: 2, unit: 'rows', perBatch: 40, obsUnits: 10, obsMin: 40, obsPeople: 2 },
+        { name: 'Plow soil', type: 'machine', stage: 3, unit: 'acres', perBatch: 1, implement: 'Chisel plow', mph: 4, widthFt: 8, effPct: 75, operators: 1, crew: 0 }
       ]
     },
     packing: {
@@ -200,10 +219,10 @@
       batch: 50,
       target: 20,
       steps: [
-        { name: 'Fill bags', stage: 1, unit: 'bags', obsUnits: 50, obsMin: 25, obsPeople: 2, crew: 0 },
-        { name: 'Seal bags', stage: 2, unit: 'bags', obsUnits: 50, obsMin: 15, obsPeople: 1, crew: 0 },
-        { name: 'Label bags', stage: 2, unit: 'bags', obsUnits: 50, obsMin: 12, obsPeople: 1, crew: 0 },
-        { name: 'Stack on pallet', stage: 3, unit: 'bags', obsUnits: 50, obsMin: 20, obsPeople: 1, crew: 0 }
+        { name: 'Fill bags', type: 'people', stage: 1, unit: 'bags', perBatch: 1, obsUnits: 50, obsMin: 25, obsPeople: 2 },
+        { name: 'Seal bags', type: 'people', stage: 2, unit: 'bags', perBatch: 1, obsUnits: 50, obsMin: 15, obsPeople: 1 },
+        { name: 'Label bags', type: 'people', stage: 2, unit: 'bags', perBatch: 1, obsUnits: 50, obsMin: 12, obsPeople: 1 },
+        { name: 'Stack on pallet', type: 'people', stage: 3, unit: 'bags', perBatch: 1, obsUnits: 50, obsMin: 20, obsPeople: 1 }
       ]
     },
     blank: { name: 'Blank', unit: 'units', batch: 10, target: 30, steps: [] }
@@ -214,24 +233,44 @@
   const t = key => LABELS[lang][key] || key;
 
   // ---------- Model ----------
-  // Person-minutes to make one unit, from what was observed.
-  function ppmOf(s) {
+  // Every step reduces to one number: k = minutes of work for one batch unit by one crew member
+  // (one person, or one machine). Then:
+  //   minutes per batch = batch × k ÷ crew
+  //   crew needed       = batch × k ÷ target
+  //   largest batch     = target × crew ÷ k
+  function isMachine(s) {
+    return s.type === 'machine';
+  }
+  // Acres per hour for one machine: mph × width ÷ 8.25 × efficiency.
+  // (5,280 ft × width ft ÷ 43,560 sq ft per acre = width ÷ 8.25 acres per mile.)
+  function acresPerHour(s) {
+    return s.mph > 0 && s.widthFt > 0 && s.effPct > 0 ? (s.mph * s.widthFt / 8.25) * (s.effPct / 100) : 0;
+  }
+  function personMinPerUnit(s) {
     return s.obsUnits > 0 && s.obsMin > 0 && s.obsPeople > 0 ? (s.obsMin * s.obsPeople) / s.obsUnits : 0;
   }
-  // People needed for a batch to finish within the target.
-  function neededPeople(s, batch, target) {
-    const ppm = ppmOf(s);
-    if (!ppm || !(target > 0)) return 0;
-    return Math.max(1, Math.ceil((batch * ppm) / target));
+  function kOf(s) {
+    if (isMachine(s)) {
+      const aph = acresPerHour(s);
+      return aph > 0 && s.perBatch > 0 ? (s.perBatch / aph) * 60 : 0;
+    }
+    return s.perBatch > 0 ? s.perBatch * personMinPerUnit(s) : 0;
   }
-  // Crew actually planned: typed in, or the number needed for the batch.
+  // People per crew member: a machine needs its operators.
+  function peoplePerCrew(s) {
+    return isMachine(s) ? Math.max(1, s.operators || 1) : 1;
+  }
+  function neededCrew(s, batch, target) {
+    const k = kOf(s);
+    if (!k || !(target > 0)) return 0;
+    return Math.max(1, Math.ceil((batch * k) / target));
+  }
   function crewOf(s, batch, target) {
-    return s.crew > 0 ? s.crew : neededPeople(s, batch, target);
+    return s.crew > 0 ? s.crew : neededCrew(s, batch, target);
   }
-  // Minutes for one batch through one step with a given crew.
-  function batchMinutes(s, batch, crew) {
-    const ppm = ppmOf(s);
-    return crew > 0 && ppm ? (batch * ppm) / crew : 0;
+  function minutesPerBatch(s, batch, crew) {
+    const k = kOf(s);
+    return crew > 0 && k ? (batch * k) / crew : 0;
   }
 
   function analyze(batch, target) {
@@ -239,9 +278,10 @@
       const crew = crewOf(s, batch, target);
       return {
         i, s, crew,
-        need: neededPeople(s, batch, target),
-        minutes: batchMinutes(s, batch, crew),
-        ppm: ppmOf(s)
+        people: crew * peoplePerCrew(s),
+        need: neededCrew(s, batch, target),
+        k: kOf(s),
+        minutes: minutesPerBatch(s, batch, crew)
       };
     });
     const stages = {};
@@ -253,10 +293,9 @@
     const lineCycle = stageKeys.length ? Math.max(...stageKeys.map(k => stages[k])) : 0;
     const leadTime = stageKeys.reduce((acc, k) => acc + stages[k], 0);
     const bottleneckStage = stageKeys.find(k => stages[k] === lineCycle);
-    // Largest batch that keeps every step inside the target with this crew.
     let maxBatch = 0;
-    if (rows.length && rows.every(r => r.ppm > 0 && r.crew > 0) && target > 0) {
-      maxBatch = Math.floor(Math.min(...rows.map(r => (target * r.crew) / r.ppm)));
+    if (rows.length && rows.every(r => r.k > 0 && r.crew > 0) && target > 0) {
+      maxBatch = Math.floor(Math.min(...rows.map(r => (target * r.crew) / r.k)));
     }
     return { rows, stages, stageKeys, lineCycle, leadTime, bottleneckStage, maxBatch };
   }
@@ -271,10 +310,17 @@
   function stepName(i) {
     return project.steps[i].name || `${t('stepFallback')} ${i + 1}`;
   }
+  function stepUnit(s) {
+    return isMachine(s) ? (s.unit || 'acres') : (s.unit || project.unit);
+  }
   function validate() {
     const msgs = [];
     project.steps.forEach((s, i) => {
-      if (!(s.obsUnits > 0 && s.obsMin > 0 && s.obsPeople > 0)) msgs.push(`${stepName(i)}: ${t('errMeasure')}`);
+      const ok = isMachine(s)
+        ? s.mph > 0 && s.widthFt > 0 && s.effPct > 0 && s.effPct <= 100
+        : s.obsUnits > 0 && s.obsMin > 0 && s.obsPeople > 0;
+      if (!ok) msgs.push(`${stepName(i)}: ${t('errMeasure')}`);
+      if (!(s.perBatch > 0)) msgs.push(`${stepName(i)}: ${t('errPerBatch')}`);
       if (!(Number.isInteger(Number(s.stage)) && Number(s.stage) >= 1)) msgs.push(`${stepName(i)}: ${t('errStage')}`);
     });
     if (!(project.batch > 0 && project.target > 0)) msgs.push(t('errBatch'));
@@ -288,21 +334,36 @@
         <td class="mono">${i + 1}</td>
         <td><input class="name" data-i="${i}" data-f="name" value="${esc(s.name)}"></td>
         <td><input class="num" type="number" min="1" step="1" data-i="${i}" data-f="stage" value="${s.stage}" aria-label="${t('stage')}"></td>
-        <td><input class="unit" data-i="${i}" data-f="unit" value="${esc(s.unit)}" placeholder="${esc(project.unit)}"></td>
+        <td>
+          <select data-i="${i}" data-f="type" aria-label="${t('type')}">
+            <option value="people" ${isMachine(s) ? '' : 'selected'}>${t('typePeople')}</option>
+            <option value="machine" ${isMachine(s) ? 'selected' : ''}>${t('typeMachine')}</option>
+          </select>
+        </td>
+        <td><input class="unit" data-i="${i}" data-f="unit" value="${esc(s.unit)}" placeholder="${isMachine(s) ? 'acres' : esc(project.unit)}"></td>
+        <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="perBatch" value="${s.perBatch}" aria-label="${t('perBatch')}"></td>
+        <td>${isMachine(s) ? `<input class="impl" data-i="${i}" data-f="implement" value="${esc(s.implement || '')}" aria-label="${t('implement')}">` : ''}</td>
         <td><button class="btn danger" data-remove="${i}" aria-label="remove">×</button></td>
       </tr>`).join('');
+    // Column headers depend on the language only; set them here so they stay in sync.
+    const l = LABELS[lang];
+    document.getElementById('th1a').textContent = l.stepN;
+    document.getElementById('th1b').textContent = l.stage;
+    document.getElementById('th1c').textContent = l.type;
+    document.getElementById('th1d').textContent = l.unitCol;
+    document.getElementById('th1e').textContent = l.perBatch;
+    document.getElementById('th1f').textContent = l.implement;
   }
 
   // ---------- Step 2: grouping ----------
-  function renderGroups() {
+  function renderGroups(plan) {
     const wrap = document.getElementById('stageGroups');
-    const plan = analyze(project.batch, project.target);
     if (!project.steps.length) { wrap.innerHTML = `<p class="muted">${t('noSteps')}</p>`; return; }
     wrap.innerHTML = plan.stageKeys.map(k => {
       const names = project.steps
         .map((s, i) => ({ s, i }))
         .filter(x => (Number(x.s.stage) || 1) === k)
-        .map(x => `${esc(stepName(x.i))}`);
+        .map(x => `${esc(stepName(x.i))}${isMachine(x.s) ? ` <span class="tag machine">${esc(x.s.implement || t('machineStep'))}</span>` : ''}`);
       const isBottleneck = k === plan.bottleneckStage;
       return `
         <div class="stage-group ${isBottleneck ? 'bottleneck' : ''}">
@@ -315,21 +376,46 @@
 
   // ---------- Step 3: measure ----------
   function renderMeasure() {
-    document.getElementById('measureRows').innerHTML = project.steps.map((s, i) => `
-      <tr>
-        <td class="mono">${i + 1}</td>
-        <td>${esc(stepName(i))}</td>
-        <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsUnits" value="${s.obsUnits}" aria-label="${t('units')}"></td>
-        <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsMin" value="${s.obsMin}" aria-label="${t('mins')}"></td>
-        <td><input class="num" type="number" min="0" step="1" data-i="${i}" data-f="obsPeople" value="${s.obsPeople}" aria-label="${t('people')}"></td>
-        <td class="num mono" data-ppm="${i}"></td>
-      </tr>`).join('');
-    updatePpm();
+    document.getElementById('measureRows').innerHTML = project.steps.map((s, i) => {
+      if (isMachine(s)) {
+        return `
+          <tr>
+            <td class="mono">${i + 1}</td>
+            <td>${esc(stepName(i))} <span class="tag machine">${esc(s.implement || t('machineStep'))}</span></td>
+            <td><input class="num" type="number" min="0" step="0.1" data-i="${i}" data-f="mph" value="${s.mph || ''}" aria-label="${t('mph')}"></td>
+            <td><input class="num" type="number" min="0" step="0.5" data-i="${i}" data-f="widthFt" value="${s.widthFt || ''}" aria-label="${t('width')}"></td>
+            <td><input class="num" type="number" min="1" step="1" data-i="${i}" data-f="operators" value="${s.operators || ''}" aria-label="${t('operators')}"></td>
+            <td><input class="num" type="number" min="1" max="100" step="1" data-i="${i}" data-f="effPct" value="${s.effPct || ''}" aria-label="${t('eff')}"></td>
+            <td class="num mono" data-result="${i}"></td>
+          </tr>`;
+      }
+      return `
+        <tr>
+          <td class="mono">${i + 1}</td>
+          <td>${esc(stepName(i))}</td>
+          <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsUnits" value="${s.obsUnits}" aria-label="${t('units')}"></td>
+          <td><input class="num" type="number" min="0" step="any" data-i="${i}" data-f="obsMin" value="${s.obsMin}" aria-label="${t('mins')}"></td>
+          <td><input class="num" type="number" min="0" step="1" data-i="${i}" data-f="obsPeople" value="${s.obsPeople}" aria-label="${t('people')}"></td>
+          <td class="muted">–</td>
+          <td class="num mono" data-result="${i}"></td>
+        </tr>`;
+    }).join('');
+    const l = LABELS[lang];
+    document.getElementById('th3a').textContent = l.stepN;
+    document.getElementById('th3b').textContent = `${l.units} / ${l.mph}`;
+    document.getElementById('th3c').textContent = `${l.mins} / ${l.width}`;
+    document.getElementById('th3d').textContent = `${l.people} / ${l.operators}`;
+    document.getElementById('th3e').textContent = l.eff;
+    document.getElementById('th3f').textContent = l.result;
+    updateResults();
   }
-  function updatePpm() {
+  function updateResults() {
     project.steps.forEach((s, i) => {
-      const cell = document.querySelector(`[data-ppm="${i}"]`);
-      if (cell) cell.textContent = fmtNum(ppmOf(s), 2);
+      const cell = document.querySelector(`[data-result="${i}"]`);
+      if (!cell) return;
+      cell.textContent = isMachine(s)
+        ? `${fmtNum(acresPerHour(s), 2)} ${t('aph')}`
+        : `${fmtNum(personMinPerUnit(s), 2)} ${t('ppm')}`;
     });
   }
 
@@ -337,15 +423,16 @@
   function renderChart(plan) {
     const svg = document.getElementById('chart');
     if (!plan.rows.length) { svg.innerHTML = ''; svg.setAttribute('width', 0); svg.setAttribute('height', 0); return; }
-    const labelW = 190, rowH = 34, pad = 28, plotW = 620;
+    const labelW = 230, rowH = 34, pad = 28, plotW = 600;
     const C = project.target;
     const maxT = Math.max(C, ...plan.rows.map(r => r.minutes), 1) * 1.1;
     const x = m => labelW + (m / maxT) * plotW;
     const H = plan.rows.length * rowH + pad * 2;
-    const W = labelW + plotW + 60;
+    const W = labelW + plotW + 90;
+    const step = maxT > 200 ? 30 : 10;
 
     let out = '';
-    for (let m = 0; m <= maxT; m += 10) {
+    for (let m = 0; m <= maxT; m += step) {
       out += `<line x1="${x(m)}" y1="${pad - 6}" x2="${x(m)}" y2="${H - pad + 6}" stroke="var(--border-light)"/>`;
       out += `<text x="${x(m)}" y="${pad - 10}" text-anchor="middle">${m}</text>`;
     }
@@ -353,12 +440,13 @@
       const y = pad + row * rowH;
       const isBottleneck = Number(r.s.stage) === plan.bottleneckStage;
       const fill = r.minutes > C * 1.001 ? 'var(--danger)' : (isBottleneck ? 'var(--ro-gold)' : 'var(--ro-green)');
+      const who = isMachine(r.s) ? `${r.crew} ${t('machines')}` : `${r.crew}p`;
       out += `<text x="8" y="${y + 21}" class="label">${esc(stepName(r.i))} · ${t('stageLabel')} ${r.s.stage}</text>`;
       out += `<rect x="${labelW}" y="${y + 6}" width="${Math.max(2, x(r.minutes) - labelW)}" height="${rowH - 12}" rx="4" fill="${fill}" opacity="0.9"/>`;
-      out += `<text x="${x(r.minutes) + 6}" y="${y + 21}">${fmtNum(r.minutes)} ${t('min')} · ${r.crew}p</text>`;
+      out += `<text x="${x(r.minutes) + 6}" y="${y + 21}">${fmtNum(r.minutes)} ${t('min')} · ${who}</text>`;
     });
     out += `<line x1="${x(C)}" y1="${pad - 6}" x2="${x(C)}" y2="${H - pad + 6}" stroke="var(--info)" stroke-width="2" stroke-dasharray="5 3"/>`;
-    out += `<text x="${x(C)}" y="${H - 6}" text-anchor="middle" style="fill:var(--info)">${t('target_')} ${fmtNum(C)}</text>`;
+    out += `<text x="${x(C)}" y="${H - 6}" text-anchor="middle" style="fill:var(--info)">${t('targetShort')} ${fmtNum(C)}</text>`;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('width', W);
     svg.setAttribute('height', H);
@@ -370,10 +458,11 @@
     document.getElementById('flowRows').innerHTML = plan.rows.map(r => {
       const idle = plan.lineCycle > 0 ? 1 - r.minutes / plan.lineCycle : 0;
       const over = r.minutes > C * 1.001;
+      const label = isMachine(r.s) ? t('typeMachine') : t('typePeople');
       return `
         <tr>
           <td>${esc(stepName(r.i))}</td>
-          <td>${t('stageLabel')} ${r.s.stage}</td>
+          <td>${t('stageLabel')} ${r.s.stage} · ${label}</td>
           <td class="num mono">${fmtNum(r.minutes)}</td>
           <td class="num mono"><input class="num" type="number" min="0" step="1" data-crew="${r.i}" value="${r.s.crew || ''}" placeholder="${r.need}" aria-label="${t('crew')}"></td>
           <td class="num mono">${r.need}</td>
@@ -381,11 +470,13 @@
           <td><span class="tag ${over ? 'over' : ''}">${over ? t('over') : t('ok')}</span></td>
         </tr>`;
     }).join('');
+    const people = plan.rows.reduce((a, r) => a + r.people, 0);
+    const machines = plan.rows.filter(r => isMachine(r.s)).reduce((a, r) => a + r.crew, 0);
     document.getElementById('summary').innerHTML = plan.rows.length ? `
       <div class="stat"><span class="muted">${t('lineCycle')}</span><b>${fmtNum(plan.lineCycle)} ${t('min')}</b></div>
-      <div class="stat"><span class="muted">${t('rate')}</span><b>${fmtNum(plan.lineCycle > 0 ? project.batch * 60 / plan.lineCycle : 0, 0)} ${esc(project.unit)}${t('perHour')}</b></div>
+      <div class="stat"><span class="muted">${t('rate')}</span><b>${fmtNum(plan.lineCycle > 0 ? project.batch * 60 / plan.lineCycle : 0)} ${esc(project.unit)}${t('perHour')}</b></div>
       <div class="stat"><span class="muted">${t('leadTime')}</span><b>${fmtNum(plan.leadTime)} ${t('min')}</b></div>
-      <div class="stat"><span class="muted">${t('crewTotal')}</span><b>${plan.rows.reduce((a, r) => a + r.crew, 0)}</b></div>
+      <div class="stat"><span class="muted">${t('crewTotal')}</span><b>${people}${machines ? ` + ${machines} ${t('machines')}` : ''}</b></div>
       <div class="stat"><span class="muted">${t('maxBatch')}</span><b>${plan.maxBatch || '–'} ${esc(project.unit)}</b></div>` : '';
   }
 
@@ -399,8 +490,8 @@
   function updateDerived() {
     document.getElementById('errors').textContent = validate().join(' · ');
     const plan = analyze(project.batch, project.target);
-    renderGroups();
-    updatePpm();
+    renderGroups(plan);
+    updateResults();
     renderChart(plan);
     renderFlow(plan);
     document.getElementById('title').textContent = project.name || t('title');
@@ -417,19 +508,27 @@
     } catch (_) { return null; }
   }
   function normalize(p) {
+    const num = v => Number(v) || 0;
     return {
       name: String(p.name || ''),
       unit: String(p.unit || t('unitDefault')),
-      batch: Number(p.batch) || 10,
-      target: Number(p.target) || 30,
+      batch: num(p.batch) || 10,
+      target: num(p.target) || 30,
       steps: (p.steps || []).map(s => ({
         name: String(s.name || ''),
-        stage: Math.max(1, Math.floor(Number(s.stage) || 1)),
+        type: s.type === 'machine' ? 'machine' : 'people',
+        stage: Math.max(1, Math.floor(num(s.stage) || 1)),
         unit: String(s.unit || ''),
-        obsUnits: Number(s.obsUnits) || 0,
-        obsMin: Number(s.obsMin) || 0,
-        obsPeople: Number(s.obsPeople) || 0,
-        crew: Math.max(0, Math.floor(Number(s.crew) || 0))
+        perBatch: num(s.perBatch) || 1,
+        crew: Math.max(0, Math.floor(num(s.crew))),
+        obsUnits: num(s.obsUnits),
+        obsMin: num(s.obsMin),
+        obsPeople: num(s.obsPeople),
+        implement: String(s.implement || ''),
+        mph: num(s.mph),
+        widthFt: num(s.widthFt),
+        effPct: num(s.effPct),
+        operators: Math.max(0, Math.floor(num(s.operators)))
       }))
     };
   }
@@ -440,7 +539,7 @@
     document.getElementById('lang').value = lang;
     document.documentElement.lang = lang;
     document.getElementById('projectName').previousElementSibling.textContent = l.projectName;
-    document.getElementById('unitLabel').previousElementSibling.textContent = l.unit;
+    document.getElementById('unitLabel').previousElementSibling.textContent = l.batchUnit;
     document.getElementById('loadTemplate').textContent = l.load;
     document.getElementById('exportBtn').textContent = l.export;
     document.getElementById('h1').textContent = l.h1;
@@ -452,19 +551,11 @@
     document.getElementById('measureNote').textContent = l.measureNote;
     document.getElementById('h4').textContent = l.h4;
     document.getElementById('help4').textContent = l.help4;
-    document.getElementById('th1a').textContent = l.stepN;
-    document.getElementById('th1b').textContent = l.stage;
-    document.getElementById('th1c').textContent = l.unitCol;
-    document.getElementById('th3a').textContent = l.stepN;
-    document.getElementById('th3b').textContent = l.step;
-    document.getElementById('th3c').textContent = l.units;
-    document.getElementById('th3d').textContent = l.mins;
-    document.getElementById('th3e').textContent = l.people;
     document.getElementById('lbBatch').textContent = l.batch;
     document.getElementById('lbTarget').textContent = l.target;
-    document.getElementById('th4a').textContent = l.step;
+    document.getElementById('th4a').textContent = l.stepN;
     document.getElementById('th4b').textContent = l.stageCol;
-    document.getElementById('th4c').textContent = l.perBatch;
+    document.getElementById('th4c').textContent = l.minPerBatch;
     document.getElementById('th4d').textContent = l.crew;
     document.getElementById('th4e').textContent = l.need;
     document.getElementById('th4f').textContent = l.idle;
@@ -506,19 +597,26 @@
 
     document.getElementById('addStep').addEventListener('click', () => {
       const next = project.steps.length ? Math.max(...project.steps.map(s => Number(s.stage) || 1)) + 1 : 1;
-      project.steps.push({ name: '', stage: next, unit: '', obsUnits: 0, obsMin: 0, obsPeople: 0, crew: 0 });
+      project.steps.push(normalize({ steps: [{ stage: next }] }).steps[0]);
       refresh();
     });
 
+    // Typing updates outputs only. Changing type or removing a step rebuilds the rows.
     document.getElementById('listRows').addEventListener('input', e => {
       const i = Number(e.target.dataset.i);
       const f = e.target.dataset.f;
-      if (f === 'name' || f === 'unit') project.steps[i][f] = e.target.value;
-      if (f === 'stage') project.steps[i].stage = Math.max(1, Math.floor(Number(e.target.value) || 1));
+      if (!f || f === 'type') return;
+      const v = e.target.value;
+      if (f === 'name' || f === 'unit' || f === 'implement') project.steps[i][f] = v;
+      else if (f === 'stage') project.steps[i].stage = Math.max(1, Math.floor(Number(v) || 1));
+      else if (f === 'perBatch') project.steps[i].perBatch = Number(v) || 0;
       touch();
     });
-    document.getElementById('listRows').addEventListener('change', renderAll);
-
+    document.getElementById('listRows').addEventListener('change', e => {
+      if (e.target.dataset.f !== 'type') return;
+      project.steps[Number(e.target.dataset.i)].type = e.target.value;
+      refresh();
+    });
     document.getElementById('listRows').addEventListener('click', e => {
       const btn = e.target.closest('[data-remove]');
       if (!btn) return;
@@ -530,7 +628,7 @@
       const i = Number(e.target.dataset.i);
       const f = e.target.dataset.f;
       if (!f) return;
-      project.steps[i][f] = Number(e.target.value);
+      project.steps[i][f] = Number(e.target.value) || 0;
       touch();
     });
 
@@ -542,8 +640,8 @@
       refresh();
     });
 
-    document.getElementById('batch').addEventListener('input', e => { project.batch = Number(e.target.value); touch(); });
-    document.getElementById('target').addEventListener('input', e => { project.target = Number(e.target.value); touch(); });
+    document.getElementById('batch').addEventListener('input', e => { project.batch = Number(e.target.value) || 0; touch(); });
+    document.getElementById('target').addEventListener('input', e => { project.target = Number(e.target.value) || 0; touch(); });
     document.getElementById('projectName').addEventListener('input', e => { project.name = e.target.value; touch(); });
     document.getElementById('unitLabel').addEventListener('input', e => { project.unit = e.target.value; touch(); });
 
