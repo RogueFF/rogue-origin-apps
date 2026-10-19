@@ -66,7 +66,27 @@ test('theme markers are whole words and a negation in the same clause cancels th
   assert.deepEqual(themes('no hay mold, pero trae gusanos'), ['worms']);
   assert.deepEqual(themes('trae gusanos, no hay mold'), ['worms']);
   assert.deepEqual(themes('gusanos y hoja; sin mold'), ['worms', 'leaf']);
-  assert.deepEqual(themes('no hay mold y tiene gusanos'), [], 'one clause: the negation covers both');
+});
+
+test('humedad is moisture unless its clause says it is fine or negates it', () => {
+  assert.deepEqual(classifyNote('tiene mucha humedad'), { kind: 'warn', text: 'Has a lot of humedad' });
+  assert.deepEqual(themes('tiene mucha humedad'), ['moisture']);
+  for (const note of ['la humedad del cuarto esta bien', 'la humedad del cuarto está bien', 'humedad normal', 'humedad ok', 'el cuarto esta seco', 'ya no trae mold', 'ya no hay humedad']) {
+    assert.equal(classifyNote(note), null, note);
+    assert.deepEqual(themes(note), [], note);
+  }
+  // a reassurance that is itself negated is a complaint
+  assert.deepEqual(themes('la humedad no esta bien'), ['moisture']);
+  assert.deepEqual(themes('la humedad no es normal'), ['moisture']);
+});
+
+test('y / pero / e split clauses, so a negation or reassurance stays in its own clause', () => {
+  assert.deepEqual(classifyNote('no hay mold y tiene gusanos'), { kind: 'warn', text: 'No hay mold and has worms' });
+  assert.deepEqual(themes('no hay mold y tiene gusanos'), ['worms']);
+  assert.deepEqual(themes('trae mold y gusanos'), ['mold', 'worms']);
+  assert.deepEqual(themes('sin mold pero mucha humedad'), ['moisture']);
+  assert.deepEqual(themes('la humedad esta bien e hojas'), ['leaf']);
+  assert.deepEqual(themes('mucha humedad, el cuarto esta bien'), ['moisture']);
 });
 
 test('accents: composed and decomposed forms match the same unaccented table row', () => {
