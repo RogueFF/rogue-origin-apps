@@ -112,23 +112,35 @@ export function translate(input) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Theme markers, matched as whole words on folded text: "moldura", "deshojando"
-// and "humedad" (the room's humidity, not wet product) are not markers.
+// Theme markers, matched as whole words on folded text, so "moldura" and
+// "deshojando" are not markers.
 const THEMES = [
   ['mold', words('molds?|moldy')],
   ['worms', words('gusanos?|gusanitos?|worms?')],
-  ['moisture', words('humed[oa]s?|wet')],
+  ['moisture', words('humed[oa]s?|humedad|wet')],
   ['leaf', words('hojas?|leaf|leaves')],
 ];
 
-// A marker after one of these, in the same clause, is a report of its absence.
-const NEGATION = new RegExp(`(?<!\\p{L})(?:no hay|sin|no tiene|no trae)(?!\\p{L})`, 'iu');
+// A note is read clause by clause: punctuation and the conjunctions y / pero / e
+// end a clause, and a negation or reassurance only speaks for its own clause.
+const CLAUSE_BREAK = /[,.;]|\s(?:y|pero|e)\s/iu;
 
-const liveMarker = (clause, re) => [...clause.matchAll(re)].some((m) => !NEGATION.test(clause.slice(0, m.index)));
+// A marker after one of these, in the same clause, is a report of its absence.
+const NEGATION = new RegExp(`(?<!\\p{L})(?:no hay|sin|no tiene|no trae|ya no)(?!\\p{L})`, 'iu');
+
+// Anywhere in the clause, one of these says the thing is fine ("la humedad del
+// cuarto esta bien") — unless it is itself negated ("no esta bien", "no es normal").
+const REASSURANCE = new RegExp(
+  `(?<!\\p{L})(?<!(?<!\\p{L})no (?:(?:esta|estan|es|son) )?)(?:bien|normal|ok|sec[oa]s?)(?!\\p{L})`,
+  'iu',
+);
+
+const liveMarker = (clause, re) =>
+  !REASSURANCE.test(clause) && [...clause.matchAll(re)].some((m) => !NEGATION.test(clause.slice(0, m.index)));
 
 /** The themes a note touches, always in the order mold, worms, moisture, leaf. */
 export function themes(text) {
-  const clauses = fold(squash(text)).split(/[,.;]/);
+  const clauses = fold(squash(text)).split(CLAUSE_BREAK);
   return THEMES.filter(([, re]) => clauses.some((clause) => liveMarker(clause, re))).map(([name]) => name);
 }
 
