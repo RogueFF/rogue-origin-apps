@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { costsLocked, deltaChip, pctChip, hourTarget, fmtInt, fmtMoney, fmt1, fmt2, cultivarShort } from '../src/model.js';
+import { costsLocked, deltaChip, pctChip, pctKind, hourTarget, fmtInt, fmtMoney, fmt1, fmt2, cultivarShort } from '../src/model.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 const fmtMoney2 = (v) => '$' + fmt2(v);
@@ -72,6 +72,49 @@ test('formatters', () => {
   assert.equal(fmtMoney(20530.26), '$20,530');
   assert.equal(fmt1(5.58), '5.6');
   assert.equal(fmt2(1.3399), '1.34');
+});
+
+test('formatters never print a negative zero', () => {
+  assert.equal(fmt1(-0.04), '0.0');
+  assert.equal(fmt1(-0), '0.0');
+  assert.equal(fmt2(-0.004), '0.00');
+  assert.equal(fmtInt(-0.4), '0');
+  assert.equal(fmtMoney(-0.4), '$0');
+});
+
+test('negative numbers use the U+2212 minus in every formatter', () => {
+  assert.equal(fmtInt(-20530.26), '−20,530');
+  assert.equal(fmtMoney(-5), '−$5');
+  assert.equal(fmtMoney(-1234.6), '−$1,235');
+  assert.equal(fmt1(-5.58), '−5.6');
+  assert.equal(fmt2(-1.3399), '−1.34');
+  for (const s of [fmtInt(-3), fmtMoney(-3), fmt1(-3), fmt2(-3)]) assert.doesNotMatch(s, /-/);
+});
+
+test('formatters print — for a missing value', () => {
+  for (const f of [fmtInt, fmtMoney, fmt1, fmt2]) {
+    assert.equal(f(null), '—');
+    assert.equal(f(undefined), '—');
+    assert.equal(f(NaN), '—');
+  }
+});
+
+test('deltaChip needs a fmt unless pct is set', () => {
+  assert.throws(() => deltaChip(1.34, 1.2, { upIsGood: true, vs: 'W41' }), /fmt/);
+  assert.throws(() => deltaChip(1.34, null, {}), /fmt/);
+  assert.throws(() => deltaChip(1.34, 1.2), /fmt/);
+  assert.deepEqual(deltaChip(1.34, 1.2, { pct: true, vs: 'W41' }), { kind: 'good', text: '▲ +12% vs W41' });
+});
+
+test('pctKind bands: good ≥100, warn ≥90, else bad', () => {
+  assert.equal(pctKind(112), 'good');
+  assert.equal(pctKind(100), 'good');
+  assert.equal(pctKind(99.9), 'warn');
+  assert.equal(pctKind(90), 'warn');
+  assert.equal(pctKind(89.9), 'bad');
+  assert.equal(pctKind(0), 'bad');
+  assert.equal(pctKind(null), null);
+  assert.equal(pctKind(NaN), null);
 });
 
 test('cultivarShort', () => {

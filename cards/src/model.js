@@ -7,6 +7,7 @@
 // fmt1, fmt2, cultivarShort) turn a missing value into "—".
 
 const MINUS = '−';
+const DASH = '—';
 
 /**
  * True when cost figures are missing. The API strips every cost key for callers
@@ -24,12 +25,14 @@ export function costsLocked(dayOrDashboard) {
 
 /**
  * Change chip versus a prior period: `{ kind: 'good' | 'bad' | 'neutral', text }`,
- * e.g. "▲ +0.14 vs W41". `fmt` formats the size of the change; with `pct: true`
- * the change is shown as a whole percent of the prior value instead. A change
- * that rounds to nothing on screen is neutral ("= vs W41"). null when either
- * value is missing, or when a percent change has a zero base.
+ * e.g. "▲ +0.14 vs W41". `fmt` (required unless `pct`) formats the size of the
+ * change; with `pct: true` the change is shown as a whole percent of the prior
+ * value instead. A change that rounds to nothing on screen is neutral
+ * ("= vs W41"). null when either value is missing, or when a percent change
+ * has a zero base.
  */
-export function deltaChip(value, prior, { fmt = String, upIsGood = true, vs, pct = false } = {}) {
+export function deltaChip(value, prior, { fmt, upIsGood = true, vs, pct = false } = {}) {
+  if (!pct && typeof fmt !== 'function') throw new Error('deltaChip needs a fmt function to format the change, or pct: true');
   if (!Number.isFinite(value) || !Number.isFinite(prior)) return null;
   let change;
   let magnitude;
@@ -51,11 +54,17 @@ export function deltaChip(value, prior, { fmt = String, upIsGood = true, vs, pct
   };
 }
 
-/** Percent-of-target chip: ≥100 good, 90–99 warn, below 90 bad. null without a positive target. */
+/** Band of a percent of target: 'good' at 100 or more, 'warn' from 90, else 'bad'; null when missing. */
+export function pctKind(pct) {
+  if (!Number.isFinite(pct)) return null;
+  return pct >= 100 ? 'good' : pct >= 90 ? 'warn' : 'bad';
+}
+
+/** Percent-of-target chip, banded by pctKind on the rounded percent. null without a positive target. */
 export function pctChip(value, target) {
   if (!Number.isFinite(value) || !Number.isFinite(target) || target <= 0) return null;
   const pct = Math.round((value / target) * 100);
-  return { kind: pct >= 100 ? 'good' : pct >= 90 ? 'warn' : 'bad', text: `${pct}% target` };
+  return { kind: pctKind(pct), text: `${pct}% target` };
 }
 
 /**
@@ -69,16 +78,26 @@ export function hourTarget(row) {
 }
 
 const intFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const DASH = '—';
 
-/** 20530.26 → "20,530". */
-export const fmtInt = (v) => (Number.isFinite(v) ? intFormat.format(Math.round(v) + 0) : DASH);
-/** 20530.26 → "$20,530". */
-export const fmtMoney = (v) => (Number.isFinite(v) ? '$' + fmtInt(v) : DASH);
+/**
+ * Every number formatter has the same shape: "—" for a missing value, the
+ * magnitude formatted by `body`, and a U+2212 minus in front only when the
+ * text shown is not zero (so -0.004 prints "0.00", never "-0.00").
+ */
+const signed = (body) => (v) => {
+  if (!Number.isFinite(v)) return DASH;
+  const text = body(Math.abs(v));
+  return v < 0 && /[1-9]/.test(text) ? MINUS + text : text;
+};
+
+/** 20530.26 → "20,530"; -20530.26 → "−20,530". */
+export const fmtInt = signed((v) => intFormat.format(Math.round(v)));
+/** 20530.26 → "$20,530"; -5 → "−$5". */
+export const fmtMoney = signed((v) => `$${intFormat.format(Math.round(v))}`);
 /** 5.58 → "5.6". */
-export const fmt1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : DASH);
+export const fmt1 = signed((v) => v.toFixed(1));
 /** 1.3399 → "1.34". */
-export const fmt2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : DASH);
+export const fmt2 = signed((v) => v.toFixed(2));
 
 /** "2026 - Sour Lifter / Sungrown" → "Sour Lifter '26". Empty → "—". */
 export function cultivarShort(name) {
