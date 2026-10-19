@@ -8,9 +8,9 @@
 
 import {
   weekRange, weekDates, lastCompleteWeek, rangeLabel, weekdayName, shortWeekday, monthDay, pacificDate, pacificClock,
-  slotLabel, slotSpan, slotClock, slotMinutes,
+  slotLabel, slotSpan, slotClock, slotMinutes, slotEnd,
 } from './periods.js';
-import { classifyNote, themes } from './notes.js';
+import { classifyNote, themes, translate } from './notes.js';
 
 const MINUS = '−';
 const DASH = '—';
@@ -80,7 +80,12 @@ export function pctChip(value, target) {
  * per row because the strain can change mid-day (a blank strain grades at 0.85).
  */
 export function hourTarget(row) {
-  return (row?.effectiveTrimmers ?? row?.trimmers ?? 0) * (row?.target ?? 0) * (row?.multiplier ?? 1);
+  return crewHours(row) * (row?.target ?? 0);
+}
+
+/** Trimmer-hours one hourly row stands for: effective trimmers × the slot multiplier. */
+function crewHours(row) {
+  return (row?.effectiveTrimmers ?? row?.trimmers ?? 0) * (row?.multiplier ?? 1);
 }
 
 const intFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -446,5 +451,92 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
       best && flag('good', `Best hour ${slotSpan(best.timeSlot) ?? slotLabel(best.timeSlot) ?? DASH} at ${fmt2(best.rate)}`),
     ]),
     foot: foot('cards/eod · dashboard allocation · $/lb tops', generatedAt),
+  };
+}
+
+const SHIFT_HOURS = '8.5';
+const BUCKER_BAND = 'band 0.70–0.75';
+
+/** "▲ target 1.58": good when the rate so far (as shown) is at or above the target rate. */
+function rateTargetChip(rate, target) {
+  if (!Number.isFinite(rate) || !Number.isFinite(target)) return null;
+  const up = shown2(rate) >= shown2(target);
+  return { kind: up ? 'good' : 'bad', text: `${up ? '▲' : '▼'} target ${fmt2(target)}` };
+}
+
+/** Buckers per trimmer in the last hour against the 0.70–0.75 band: fed from 0.65 to 0.85, short below, idle above. */
+function buckerMini(row) {
+  const perTrimmer = shown2(ratio(row.buckers, row.trimmers));
+  if (perTrimmer === null) return mini('Buckers per trimmer', DASH, '', BUCKER_BAND);
+  const word = perTrimmer < 0.65 ? 'short' : perTrimmer > 0.85 ? 'idle' : 'fed';
+  return mini('Buckers per trimmer', fmt2(perTrimmer), '', `${BUCKER_BAND}, ${word}`);
+}
+
+/** The first floor note from row `from` on that is not a flag of its own, translated: why the crew moved. */
+function crewNote(rows, from) {
+  const note = rows.slice(from).flatMap((row) => notePieces(row.notes)).find((piece) => /\p{L}/u.test(piece) && !classifyNote(piece));
+  return note ? translate(note) : null;
+}
+
+/** Good line for the day so far: every hour above target, or a morning of at least three hours above it. */
+function middayGood(rows) {
+  const firstUnder = rows.findIndex((row) => row.lbs < hourTarget(row));
+  if (firstUnder !== -1 && firstUnder < 3) return null;
+  const best = bestHour(firstUnder === -1 ? rows : rows.slice(0, firstUnder));
+  if (!best) return null;
+  const lead = firstUnder === -1 ? 'Every hour above target so far' : 'Morning above target every hour';
+  return flag('good', `${lead}, best ${fmt2(best.rate)} at ${slotLabel(best.timeSlot) ?? DASH}`);
+}
+
+/**
+ * Midday card for `date` (today, so far). `scoreboard` is today's scoreboard
+ * JSON, `dashboardToday` today's dashboard (cultivar and T-Zero count),
+ * `priorDay` the previous weekday's dashboard, `sacks` today's supersack
+ * summary. null while no hour is logged.
+ */
+export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks, generatedAt }) {
+  const sb = scoreboard?.scoreboard;
+  const rows = hourRows(sb);
+  if (!rows.length) return null;
+  const today = dayRow(dashboardToday, date);
+  const prior = lastDayBefore(priorDay, date);
+  const last = rows.at(-1);
+  const tops = sum(rows, (row) => row.lbs);
+  const rate = ratio(tops, sum(rows, crewHours));
+  const sackCount = sum(sacks?.periods ?? [], (p) => p.total_sacks);
+  const under = rows.filter((row) => row.lbs < hourTarget(row)).length;
+  const drop = crewDrop(rows);
+  const why = drop && crewNote(rows, drop.from);
+  const now = sb.currentHourTarget > 0
+    ? { label: slotLabel(sb.currentTimeSlot) ?? DASH, rate: DASH, lbs: 0, target: sb.currentHourTarget, kind: 'now' }
+    : null;
+  return {
+    kind: 'midday',
+    costsLocked: costsLocked(today),
+    eyebrow: 'Rogue Origin · Midday check',
+    title: weekdayName(date),
+    sub: `${monthDay(date)} · ${today ? cultivarName([today]) : cultivarShort(sb.strain)} · through ${slotEnd(last.timeSlot) ?? DASH}`,
+    pill: `Line crew ${last.trimmers ?? 0} T · ${last.buckers ?? 0} B · ${dashboardToday?.today?.tzero || 1} TZ`,
+    tiles: [
+      tile('Tops so far', fmtInt(tops), 'lb', [targetChip(sb.todayPercentage)]),
+      tile('Rate', fmt2(rate), 'lb/hr', [rateTargetChip(rate, sb.targetRate)]),
+      tile('Projected end of day', fmtInt(sb.projectedTotal), 'lb', [
+        prior ? { kind: 'neutral', text: `${shortWeekday(prior.date)} closed at ${fmtInt(prior.totalTops)}` } : null,
+      ]),
+    ],
+    chart: { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: [...rows.map(hourCol), ...(now ? [now] : [])] },
+    minis: [
+      mini('Smalls so far', fmtInt(sum(rows, (row) => row.smalls)), 'lb', ''),
+      buckerMini(last),
+      mini('Hours logged', fmt1(sb.effectiveHours), `of ${SHIFT_HOURS}`, `sacks logged: ${fmtInt(sackCount)}`),
+    ],
+    flags: pickFlags([
+      ...noteFlags(rows),
+      drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotLabel(rows[drop.from].timeSlot) ?? DASH}`
+        + `${why ? `: ${why}` : ''}${under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : ''}`),
+      sackCount === 0 && slotMinutes(last.timeSlot)?.end >= 600 ? flag('warn', 'No supersacks logged on the tracker yet today') : null,
+      middayGood(rows),
+    ]),
+    foot: foot('cards/midday · scoreboard target · $/lb at close', generatedAt),
   };
 }
