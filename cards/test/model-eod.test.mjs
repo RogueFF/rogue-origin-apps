@@ -85,13 +85,13 @@ test('end-of-day flags: Act from the note with its hour, crew drop, best full ho
   ]);
 });
 
-test('end-of-day: a warn note takes the Watch slot ahead of the crew drop', () => {
+test('end-of-day has one Watch line: a warn note takes it over the crew drop, and Good still shows', () => {
   const noted = structuredClone(args.scoreboard);
   noted.scoreboard.hourlyRates[3].notes = 'El producto esta muy humedo y tiene mucha hoja ';
   assert.deepEqual(eodModel({ ...args, scoreboard: noted }).flags, [
     { kind: 'bad', tag: 'Act', text: '2 PM: Bags stored below are very wet, spoilage risk, need a plan' },
     { kind: 'warn', tag: 'Watch', text: '10 AM: Product is very wet and has a lot of leaf' },
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM' },
+    { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.21' },
   ]);
 });
 

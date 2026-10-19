@@ -377,7 +377,11 @@ function targetChip(percent) {
   return { kind: pctKind(pct), text: `${pct >= 100 ? '▲' : '▼'} ${pct}% of target` };
 }
 
-/** The latest Act note and the latest Watch note of the hourly rows, each led by its hour ("2 PM: …"). */
+/**
+ * The latest Act note and the latest Watch note of the hourly rows, each led
+ * by its hour ("2 PM: …"), as [act, watch]. A Watch note outranks the
+ * crew-drop line: the two share one Watch slot on the hourly cards.
+ */
 function noteFlags(rows) {
   const notes = rows.flatMap((row) => notePieces(row.notes).map((text) => ({ row, flag: classifyNote(text) })));
   return ['bad', 'warn'].map((kind) => {
@@ -429,6 +433,7 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
   const before = prior ? periodFigures([prior]) : null;
   const locked = costsLocked(day);
   const most = (key) => Math.max(...rows.map((row) => row[key] ?? 0));
+  const [act, noteWatch] = noteFlags(rows);
   const drop = crewDrop(rows);
   const best = bestHour(rows);
   return {
@@ -446,8 +451,8 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
     chart: { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: rows.map(hourCol) },
     minis: closeMinis(now, sacks, locked),
     flags: pickFlags([
-      ...noteFlags(rows),
-      drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotClock(rows[drop.from].timeSlot) ?? DASH}`),
+      act,
+      noteWatch ?? (drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotClock(rows[drop.from].timeSlot) ?? DASH}`)),
       best && flag('good', `Best hour ${slotSpan(best.timeSlot) ?? slotLabel(best.timeSlot) ?? DASH} at ${fmt2(best.rate)}`),
     ]),
     foot: foot('cards/eod · dashboard allocation · $/lb tops', generatedAt),
@@ -505,6 +510,7 @@ export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks,
   const rate = ratio(tops, sum(rows, crewHours));
   const sackCount = sum(sacks?.periods ?? [], (p) => p.total_sacks);
   const under = rows.filter((row) => row.lbs < hourTarget(row)).length;
+  const [act, noteWatch] = noteFlags(rows);
   const drop = crewDrop(rows);
   const why = drop && crewNote(rows, drop.from);
   const now = sb.currentHourTarget > 0
@@ -531,9 +537,9 @@ export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks,
       mini('Hours logged', fmt1(sb.effectiveHours), `of ${SHIFT_HOURS}`, `sacks logged: ${fmtInt(sackCount)}`),
     ],
     flags: pickFlags([
-      ...noteFlags(rows),
-      drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotLabel(rows[drop.from].timeSlot) ?? DASH}`
-        + `${why ? `: ${why}` : ''}${under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : ''}`),
+      act,
+      noteWatch ?? (drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotLabel(rows[drop.from].timeSlot) ?? DASH}`
+        + `${why ? `: ${why}` : ''}${under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : ''}`)),
       sackCount === 0 && slotMinutes(last.timeSlot)?.end >= 600 ? flag('warn', 'No supersacks logged on the tracker yet today') : null,
       middayGood(rows),
     ]),
