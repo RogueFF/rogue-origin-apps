@@ -13,6 +13,7 @@
 const PHRASES = {
   'piensen que se va aser porque se pueden echar a perder': ', spoilage risk, need a plan',
   'piensen que se va a hacer porque se pueden echar a perder': ', spoilage risk, need a plan',
+  'hubo movimiento de personal a ultima hora': 'staff moved at the last minute',
   'no se esta pasando por el costal': 'not going through the sack',
   'porque se pueden echar a perder': ', spoilage risk',
   'se pueden echar a perder': ', spoilage risk',

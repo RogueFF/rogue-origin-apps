@@ -164,3 +164,9 @@ test('themes lists the matched themes in a fixed order', () => {
   assert.deepEqual(themes('mucha hoja y está HÚMEDO'), ['moisture', 'leaf']);
   assert.deepEqual(themes('tenemos la meta un poco alta'), []);
 });
+
+test('a staff move note translates (the midday crew-drop line quotes it)', () => {
+  assert.equal(translate('Hubo movimiento de personal a ultima hora '), 'Staff moved at the last minute');
+  assert.equal(translate('hubo movimiento de personal a última hora'), 'Staff moved at the last minute');
+  assert.equal(classifyNote('Hubo movimiento de personal a ultima hora '), null);
+});
