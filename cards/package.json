@@ -5,13 +5,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "size": "wrangler deploy --dry-run --outdir dist && node -e \"const fs=require('fs');let t=0;for(const f of fs.readdirSync('dist'))t+=fs.statSync('dist/'+f).size;console.log('bundle bytes',t)\"",
+    "size": "wrangler deploy --dry-run --outdir dist && node -e \"const fs=require('fs'),z=require('zlib');let raw=0,gz=0;for(const f of fs.readdirSync('dist')){const b=fs.readFileSync('dist/'+f);raw+=b.length;gz+=z.gzipSync(b).length}console.log('raw',raw,'gzip',gz)\"",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "2.6.2",
-    "satori": "0.63.0",
-    "yoga-wasm-web": "0.3.3"
+    "satori": "0.63.0"
   },
   "devDependencies": {
     "wrangler": "^4"
