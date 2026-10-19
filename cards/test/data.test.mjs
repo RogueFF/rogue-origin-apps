@@ -66,6 +66,17 @@ test('upstream non-200 throws UpstreamError with the status and url', async () =
   });
 });
 
+test('a 2xx other than 200 (204 No Content) is an UpstreamError, not a JSON parse error', async () => {
+  const { fetchFn } = recorder(null, 204);
+  const api = makeApi({ base: 'https://api.example/api', fetchFn });
+  await assert.rejects(api.dashboard('2026-10-12', '2026-10-16'), (err) => {
+    assert.ok(err instanceof UpstreamError, `expected UpstreamError, got ${err?.name}`);
+    assert.equal(err.status, 204);
+    assert.equal(err.url, 'https://api.example/api/production?action=dashboard&start=2026-10-12&end=2026-10-16');
+    return true;
+  });
+});
+
 test('fetch aborts after the timeout', async () => {
   let seenSignal;
   const fetchFn = (url, init) => new Promise((resolve, reject) => {
