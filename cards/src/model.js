@@ -7,7 +7,8 @@
 // fmt1, fmt2, cultivarShort) turn a missing value into "—".
 
 import {
-  weekRange, weekDates, lastCompleteWeek, rangeLabel, shortWeekday, monthDay, pacificDate, pacificClock,
+  weekRange, weekDates, lastCompleteWeek, rangeLabel, weekdayName, shortWeekday, monthDay, pacificDate, pacificClock,
+  slotLabel, slotSpan, slotClock, slotMinutes,
 } from './periods.js';
 import { classifyNote, themes } from './notes.js';
 
@@ -331,5 +332,119 @@ export function weeklyModel({ week, dashboard, prior, scoreboards, sacks, genera
     minis: closeMinis(now, sacks, locked),
     flags: pickFlags(weeklyFlags(worked)),
     foot: foot('cards/weekly · dashboard allocation · $/lb tops', generatedAt),
+  };
+}
+
+// --- Hourly cards (end of day, midday) -------------------------------------
+
+/** The dashboard row for `date`; null for a missing day or the API's fallback shape. */
+function dayRow(dashboard, date) {
+  if (dashboard?.fallback?.active) return null;
+  return (dashboard?.daily ?? []).find((day) => day.date === date) ?? null;
+}
+
+/** The latest day before `date` that logged tops (the prior day a card compares with), or null. */
+function lastDayBefore(dashboard, date) {
+  if (dashboard?.fallback?.active) return null;
+  return (dashboard?.daily ?? [])
+    .filter((day) => day.date < date && day.totalTops > 0)
+    .reduce((latest, day) => (!latest || day.date > latest.date ? day : latest), null);
+}
+
+/** The scoreboard's hourly rows sorted by slot start; an unreadable slot sorts last. */
+function hourRows(scoreboard) {
+  const start = (row) => slotMinutes(row.timeSlot)?.start ?? Number.MAX_SAFE_INTEGER;
+  return [...(scoreboard?.hourlyRates ?? [])].sort((a, b) => start(a) - start(b));
+}
+
+const hourCol = (row) => ({
+  label: slotLabel(row.timeSlot) ?? DASH,
+  rate: fmt2(row.rate),
+  lbs: row.lbs,
+  target: hourTarget(row),
+  kind: 'bar',
+});
+
+/** "▲ 113% of target" from the scoreboard's own percent, banded like pctChip. */
+function targetChip(percent) {
+  if (!Number.isFinite(percent)) return null;
+  const pct = Math.round(percent);
+  return { kind: pctKind(pct), text: `${pct >= 100 ? '▲' : '▼'} ${pct}% of target` };
+}
+
+/** The latest Act note and the latest Watch note of the hourly rows, each led by its hour ("2 PM: …"). */
+function noteFlags(rows) {
+  const notes = rows.flatMap((row) => notePieces(row.notes).map((text) => ({ row, flag: classifyNote(text) })));
+  return ['bad', 'warn'].map((kind) => {
+    const note = notes.filter((n) => n.flag?.kind === kind).at(-1);
+    return note ? flag(kind, `${slotClock(note.row.timeSlot) ?? DASH}: ${note.flag.text}`) : null;
+  });
+}
+
+/**
+ * The line ending under 70% of its peak trimmers: `{ peak, last, from }`, where
+ * `from` is the index of the first row of that final stretch under 70%. null
+ * while the last row still holds 70% of the peak.
+ */
+function crewDrop(rows) {
+  const trimmers = rows.map((row) => row.trimmers ?? 0);
+  const peak = Math.max(...trimmers);
+  const floor = 0.7 * peak;
+  if (!(trimmers.at(-1) < floor)) return null;
+  let from = trimmers.length - 1;
+  while (from > 0 && trimmers[from - 1] < floor) from -= 1;
+  return { peak, last: trimmers.at(-1), from };
+}
+
+/** The fastest full-hour row (a half slot is not an hour), or the fastest row when none is a full hour. */
+function bestHour(rows) {
+  const minutes = (row) => {
+    const slot = slotMinutes(row.timeSlot);
+    return slot && slot.end !== null ? slot.end - slot.start : 0;
+  };
+  const timed = rows.filter((row) => Number.isFinite(row.rate));
+  const hours = timed.filter((row) => minutes(row) >= 60);
+  return (hours.length ? hours : timed).reduce((best, row) => (!best || row.rate > best.rate ? row : best), null);
+}
+
+/**
+ * End-of-day card for `date`. `dashboard` is the dashboard JSON for date..date,
+ * `priorDay` the dashboard of the previous weekday, `scoreboard` and `sacks`
+ * that day's scoreboard JSON and supersack summary. null when the day has no
+ * hourly rows or the dashboard is the API's fallback shape.
+ */
+export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generatedAt }) {
+  const sb = scoreboard?.scoreboard;
+  const rows = hourRows(sb);
+  const day = dayRow(dashboard, date);
+  if (!rows.length || !day) return null;
+  const prior = lastDayBefore(priorDay, date);
+  const vs = prior ? shortWeekday(prior.date) : undefined;
+  const now = periodFigures([day]);
+  const before = prior ? periodFigures([prior]) : null;
+  const locked = costsLocked(day);
+  const most = (key) => Math.max(...rows.map((row) => row[key] ?? 0));
+  const drop = crewDrop(rows);
+  const best = bestHour(rows);
+  return {
+    kind: 'eod',
+    costsLocked: locked,
+    eyebrow: 'Rogue Origin · End of day',
+    title: weekdayName(date),
+    sub: `${monthDay(date)} · ${cultivarName([day])} · ${fmt1(sb.effectiveHours)} h logged`,
+    pill: `Line crew peak ${fmtInt(day.totalCrew)} · ${most('trimmers')} T · ${most('buckers')} B`,
+    tiles: [
+      tile('Tops', fmtInt(now.tops), 'lb', [targetChip(sb.todayPercentage)]),
+      tile('Rate', fmt2(now.rate), 'lb/hr', [deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })]),
+      costTile(now, before, vs, locked),
+    ],
+    chart: { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: rows.map(hourCol) },
+    minis: closeMinis(now, sacks, locked),
+    flags: pickFlags([
+      ...noteFlags(rows),
+      drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotClock(rows[drop.from].timeSlot) ?? DASH}`),
+      best && flag('good', `Best hour ${slotSpan(best.timeSlot) ?? slotLabel(best.timeSlot) ?? DASH} at ${fmt2(best.rate)}`),
+    ]),
+    foot: foot('cards/eod · dashboard allocation · $/lb tops', generatedAt),
   };
 }

@@ -151,19 +151,40 @@ function slotTimes(slot) {
   }));
 }
 
+const minutesOf = (t) => ((t.hour % 12) + (t.pm ? 12 : 0)) * 60 + t.minute;
+const shortHour = (t) => `${t.hour}${t.minute === 30 ? '½' : ''}`;
+
 /** "12:30 PM – 1:00 PM" → "12½"; "7:00 AM – 8:00 AM" → "7". null when unreadable. */
 export function slotLabel(slot) {
   const [start] = slotTimes(slot);
+  return start ? shortHour(start) : null;
+}
+
+/** "3:00 PM – 4:00 PM" → "3–4"; "12:30 PM – 1:00 PM" → "12½–1". null without both ends. */
+export function slotSpan(slot) {
+  const [start, end] = slotTimes(slot);
+  return start && end ? `${shortHour(start)}–${shortHour(end)}` : null;
+}
+
+/** "2:00 PM – 3:00 PM" → "2 PM"; "12:30 PM – 1:00 PM" → "12:30 PM" (12-hour start). null when unreadable. */
+export function slotClock(slot) {
+  const [start] = slotTimes(slot);
   if (!start) return null;
-  return `${start.hour}${start.minute === 30 ? '½' : ''}`;
+  return `${start.hour}${start.minute ? `:${pad2(start.minute)}` : ''} ${start.pm ? 'PM' : 'AM'}`;
+}
+
+/** "3:00 PM – 4:00 PM" → { start: 900, end: 960 } in minutes since midnight; end null when the slot has none. null when unreadable. */
+export function slotMinutes(slot) {
+  const [start, end] = slotTimes(slot);
+  return start ? { start: minutesOf(start), end: end ? minutesOf(end) : null } : null;
 }
 
 /** "12:30 PM – 1:00 PM" → "13:00" (24-hour end of the slot). null when unreadable. */
 export function slotEnd(slot) {
   const end = slotTimes(slot)[1];
   if (!end) return null;
-  const hour24 = (end.hour % 12) + (end.pm ? 12 : 0);
-  return `${pad2(hour24)}:${pad2(end.minute)}`;
+  const minutes = minutesOf(end);
+  return `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`;
 }
 
 /** Full English weekday of a calendar date: "2026-10-16" → "Friday". */
