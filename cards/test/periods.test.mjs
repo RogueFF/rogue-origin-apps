@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { pacificDate, lastCompleteWeek, weekRange, slotLabel, slotEnd, weekdayName } from '../src/periods.js';
+import {
+  pacificDate, pacificClock, lastCompleteWeek, weekRange, weekDates, slotLabel, slotEnd, weekdayName, shortWeekday,
+  isYmd, addDaysYmd, priorWeekday, rangeLabel,
+} from '../src/periods.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
@@ -55,4 +58,67 @@ test('slot helpers parse the exact API strings (en dash) and hyphens alike', () 
 test('weekdayName', () => {
   assert.equal(weekdayName('2026-10-16'), 'Friday');
   assert.equal(weekdayName('2026-10-19'), 'Monday');
+});
+
+test('weekRange accepts a lowercase w', () => {
+  assert.deepEqual(weekRange('2026-w42'), { start: '2026-10-12', end: '2026-10-16', week: 42, year: 2026 });
+});
+
+test('slotLabel and slotEnd return null for an unreadable slot', () => {
+  for (const bad of ['', 'garbage', null, undefined]) {
+    assert.equal(slotLabel(bad), null);
+    assert.equal(slotEnd(bad), null);
+  }
+  assert.equal(slotEnd('7:00 AM'), null); // a start with no end
+});
+
+test('isYmd is true only for a real calendar date in YYYY-MM-DD', () => {
+  assert.equal(isYmd('2026-10-16'), true);
+  assert.equal(isYmd('2028-02-29'), true);
+  for (const bad of ['2026-02-29', '2026-13-01', '2026-10-32', '2026-1-16', '20261016', '2026-10-16T00:00', '', null, undefined, 20261016]) {
+    assert.equal(isYmd(bad), false, String(bad));
+  }
+});
+
+test('addDaysYmd moves by calendar days across months, years and DST', () => {
+  assert.equal(addDaysYmd('2026-10-16', 3), '2026-10-19');
+  assert.equal(addDaysYmd('2026-10-01', -1), '2026-09-30');
+  assert.equal(addDaysYmd('2026-12-31', 1), '2027-01-01');
+  assert.equal(addDaysYmd('2026-10-31', 2), '2026-11-02'); // over the Nov 1 DST change
+  assert.equal(addDaysYmd('2026-10-16', 0), '2026-10-16');
+  assert.throws(() => addDaysYmd('garbage', 1), /date/);
+});
+
+test('priorWeekday is the previous Mon–Fri date', () => {
+  assert.equal(priorWeekday('2026-10-19'), '2026-10-16'); // Monday → the Friday before
+  assert.equal(priorWeekday('2026-10-16'), '2026-10-15'); // Friday → Thursday
+  assert.equal(priorWeekday('2026-10-13'), '2026-10-12'); // Tuesday → Monday
+  assert.equal(priorWeekday('2026-10-17'), '2026-10-16'); // Saturday → Friday
+  assert.equal(priorWeekday('2026-10-18'), '2026-10-16'); // Sunday → Friday
+});
+
+test('weekDates lists the five Mon–Fri dates of an ISO week', () => {
+  assert.deepEqual(weekDates('2026-W42'), ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+  assert.deepEqual(weekDates('2026-W01'), ['2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01', '2026-01-02']);
+  assert.throws(() => weekDates('2026-W99'), /week/);
+});
+
+test('rangeLabel', () => {
+  assert.equal(rangeLabel('2026-10-12', '2026-10-16'), 'Oct 12–16, 2026');
+  assert.equal(rangeLabel('2026-09-28', '2026-10-02'), 'Sep 28–Oct 2, 2026');
+  assert.equal(rangeLabel('2025-12-29', '2026-01-02'), 'Dec 29, 2025–Jan 2, 2026');
+  assert.equal(rangeLabel('2026-10-16', '2026-10-16'), 'Oct 16, 2026');
+});
+
+test('shortWeekday', () => {
+  assert.equal(shortWeekday('2026-10-15'), 'Thu');
+  assert.equal(shortWeekday('2026-10-19'), 'Mon');
+  assert.equal(shortWeekday('2026-10-18'), 'Sun');
+});
+
+test('pacificClock renders an instant as 24-hour HH:MM in America/Los_Angeles', () => {
+  assert.equal(pacificClock(new Date('2026-10-19T13:05:00Z')), '06:05'); // PDT, UTC−7
+  assert.equal(pacificClock(new Date('2026-11-02T14:05:00Z')), '06:05'); // PST, UTC−8
+  assert.equal(pacificClock(new Date('2026-10-20T07:00:00Z')), '00:00'); // midnight is 00, not 24
+  assert.equal(pacificClock(new Date('2026-10-20T00:30:00Z')), '17:30');
 });

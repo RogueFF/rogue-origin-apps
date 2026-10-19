@@ -1,6 +1,10 @@
 // Card models: API JSON → the plain object a card layout draws. Pure functions.
 // This file starts with the helpers every card shares; the weekly, end-of-day
 // and midday model builders are added below them.
+//
+// Missing values: parsers and helpers (here and in periods.js) return null for
+// a value that is not there; only the display formatters (fmtInt, fmtMoney,
+// fmt1, fmt2, cultivarShort) turn a missing value into "—".
 
 const MINUS = '−';
 
