@@ -48,10 +48,22 @@ test('pctChip bands', () => {
   assert.equal(pctChip(null, 100), null);
 });
 
-test('hourTarget = trimmers × rate × multiplier', () => {
-  assert.equal(hourTarget({ trimmers: 8, multiplier: 0.83 }, 1.59), 8 * 1.59 * 0.83);
-  const slot = fixture('scoreboard-2026-10-16.json').scoreboard.hourlyRates[0];
-  assert.equal(hourTarget(slot, 1.5834653806407168), 8 * 1.5834653806407168 * 1);
+test('hourTarget is the scoreboard method: the hourly targets add up to todayTarget in every fixture', () => {
+  const files = fs.readdirSync(new URL('./fixtures/', import.meta.url)).filter((f) => /^scoreboard-.*\.json$/.test(f));
+  assert.equal(files.length, 5);
+  for (const file of files) {
+    const { scoreboard } = fixture(file);
+    const sum = scoreboard.hourlyRates.reduce((total, row) => total + hourTarget(row), 0);
+    assert.ok(Math.abs(sum - scoreboard.todayTarget) < 0.01, `${file}: ${sum} vs todayTarget ${scoreboard.todayTarget}`);
+  }
+});
+
+test('hourTarget = effective trimmers × the row target rate × multiplier, falling back to trimmers', () => {
+  assert.equal(hourTarget({ trimmers: 8, effectiveTrimmers: 9.1, target: 1.59, multiplier: 0.83 }), 9.1 * 1.59 * 0.83);
+  assert.equal(hourTarget({ trimmers: 8, target: 1.59, multiplier: 0.83 }), 8 * 1.59 * 0.83);
+  assert.equal(hourTarget({ trimmers: 8, target: 0.85 }), 8 * 0.85 * 1);
+  assert.equal(hourTarget({ trimmers: 8 }), 0);
+  assert.equal(hourTarget(null), 0);
 });
 
 test('formatters', () => {
