@@ -1,0 +1,151 @@
+{
+ "today": {
+  "totalTops": 110.8,
+  "totalSmalls": 108,
+  "totalLbs": 218.8,
+  "avgRate": 1.0757281553398057,
+  "trimmers": 14,
+  "buckers": 0,
+  "tzero": 0,
+  "operatorHours": 199,
+  "laborCost": 4588.5,
+  "costPerLb": 21.84,
+  "topsCostPerLb": 27.51,
+  "smallsCostPerLb": 14.27
+ },
+ "current": {
+  "strain": "",
+  "todayPercentage": 0,
+  "todayTarget": 0,
+  "projectedTotal": 0,
+  "effectiveHours": 0
+ },
+ "targets": {
+  "totalTops": 0
+ },
+ "bagTimer": {
+  "bagsToday": 10,
+  "avgTime": "48 min",
+  "vsTarget": "--"
+ },
+ "hourly": [],
+ "rollingAverage": {
+  "totalTops": 86.2,
+  "totalSmalls": 75.61428571428571,
+  "avgRate": 1.2627086465602206
+ },
+ "strainSnapshot": [
+  {
+   "strain": "2026 - Sour Lifter / Sungrown",
+   "totalLbs": 1053.6,
+   "tops": 574.6,
+   "smalls": 479,
+   "avgRate": 1.33,
+   "daysWorked": 5,
+   "topsCostPerLb": 30.25,
+   "smallsCostPerLb": 10.52
+  }
+ ],
+ "isHistorical": true,
+ "viewingDate": "2026-10-16",
+ "daily": [
+  {
+   "date": "2026-10-13",
+   "label": "2026-10-13",
+   "totalTops": 110.8,
+   "totalSmalls": 108,
+   "totalLbs": 218.8,
+   "avgRate": 1.08,
+   "trimmerHours": 103,
+   "operatorHours": 199,
+   "cultivar": "2026 - Sour Lifter / Sungrown",
+   "cultivars": [
+    {
+     "cultivar": "2026 - Sour Lifter / Sungrown",
+     "tops": 101.7,
+     "smalls": 78
+    }
+   ],
+   "totalCrew": 21,
+   "notes": "\n,trae un poquito de mold  y algunos gusanos ,tenemos la meta un poco alta ,problemas para incrementar la volsa   ",
+   "laborCost": 5217.78,
+   "costPerLb": 23.85,
+   "topsCostPerLb": 34.8,
+   "smallsCostPerLb": 12.61
+  },
+  {
+   "date": "2026-10-14",
+   "label": "2026-10-14",
+   "totalTops": 139.8,
+   "totalSmalls": 121,
+   "totalLbs": 260.8,
+   "avgRate": 1.38,
+   "trimmerHours": 101,
+   "operatorHours": 206,
+   "cultivar": "2026 - Sour Lifter / Sungrown",
+   "cultivars": [
+    {
+     "cultivar": "2026 - Sour Lifter / Sungrown",
+     "tops": 139.8,
+     "smalls": 121
+    }
+   ],
+   "totalCrew": 27,
+   "notes": "",
+   "laborCost": 5401.32,
+   "costPerLb": 20.71,
+   "topsCostPerLb": 28.49,
+   "smallsCostPerLb": 11.72
+  },
+  {
+   "date": "2026-10-15",
+   "label": "2026-10-15",
+   "totalTops": 126.5,
+   "totalSmalls": 110,
+   "totalLbs": 236.5,
+   "avgRate": 1.28,
+   "trimmerHours": 99,
+   "operatorHours": 203,
+   "cultivar": "2026 - Sour Lifter / Sungrown",
+   "cultivars": [
+    {
+     "cultivar": "2026 - Sour Lifter / Sungrown",
+     "tops": 126.5,
+     "smalls": 110
+    }
+   ],
+   "totalCrew": 22,
+   "notes": "El producto esta muy humedo y tiene mucha hoja ,Tiene mucho gusano ",
+   "laborCost": 5322.66,
+   "costPerLb": 22.51,
+   "topsCostPerLb": 30.94,
+   "smallsCostPerLb": 12.81
+  },
+  {
+   "date": "2026-10-16",
+   "label": "2026-10-16",
+   "totalTops": 120.1,
+   "totalSmalls": 90,
+   "totalLbs": 210.1,
+   "avgRate": 1.62,
+   "trimmerHours": 74,
+   "operatorHours": 175,
+   "cultivar": "2026 - Sour Lifter / Sungrown",
+   "cultivars": [
+    {
+     "cultivar": "2026 - Sour Lifter / Sungrown",
+     "tops": 120.1,
+     "smalls": 90
+    }
+   ],
+   "totalCrew": 18,
+   "notes": "las volsas  que quedaron a vajo estan muy humedas  piensen que se va aser  porque se pueden echar a perder ",
+   "laborCost": 4588.5,
+   "costPerLb": 21.84,
+   "topsCostPerLb": 27.51,
+   "smallsCostPerLb": 14.27
+  }
+ ],
+ "fallback": null,
+ "costsLocked": true
+}

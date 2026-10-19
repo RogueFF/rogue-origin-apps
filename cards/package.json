@@ -1,0 +1,19 @@
+{
+  "name": "rogue-origin-cards",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "size": "wrangler deploy --dry-run --outdir dist && node -e \"const fs=require('fs');let t=0;for(const f of fs.readdirSync('dist'))t+=fs.statSync('dist/'+f).size;console.log('bundle bytes',t)\"",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2",
+    "satori": "0.63.0",
+    "yoga-wasm-web": "0.3.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
