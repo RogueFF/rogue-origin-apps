@@ -115,7 +115,16 @@ test('midday: no "no supersacks" line once sacks are logged, or before 10:00', (
   assert.ok(!early.flags.some((f) => /supersacks/.test(f.text)));
 });
 
-test('midday: floor notes flag with their hour, Act and Watch ahead of Good', () => {
+test('midday: a warn note takes the first Watch slot over the crew drop; the sacks line is the second', () => {
+  const warned = withRows((sb) => { sb.hourlyRates[2].notes = 'trae un poquito de mold  y algunos gusanos '; });
+  assert.deepEqual(warned.flags, [
+    { kind: 'warn', tag: 'Watch', text: '9 AM: A bit of mold and some worms' },
+    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
+    { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9' },
+  ]);
+});
+
+test('midday: floor notes flag with their hour, Act first, then the two Watch lines', () => {
   const noted = withRows((sb) => {
     sb.hourlyRates[2].notes = 'trae un poquito de mold  y algunos gusanos ';
     sb.hourlyRates[3].notes = 'se pueden echar a perder';
@@ -123,7 +132,7 @@ test('midday: floor notes flag with their hour, Act and Watch ahead of Good', ()
   assert.deepEqual(noted.flags, [
     { kind: 'bad', tag: 'Act', text: '10 AM: Spoilage risk' },
     { kind: 'warn', tag: 'Watch', text: '9 AM: A bit of mold and some worms' },
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12½: Staff moved at the last minute, 3 hours under target' },
+    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
   ]);
 });
 
