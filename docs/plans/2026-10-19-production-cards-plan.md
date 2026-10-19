@@ -438,10 +438,10 @@ test('caption is cut to 1024 chars', ...);
 ### Task B2: `cards.ts` — fetch a card URL safely
 
 **Files:**
-- Create: `src/cards.ts` → `export async function fetchCard(url: string, env: Env, fetchFn = fetch): Promise<{ status: 'ok'; bytes: Uint8Array; contentType: string } | { status: 'empty' } | { status: 'error'; message: string }>`
+- Create: `src/cards.ts` → `export async function fetchCard(url: string, env: Env, fetchFn = fetch): Promise<{ status: 'ok'; bytes: Uint8Array; contentType: PhotoType } | { status: 'empty' } | { status: 'error'; message: string }>  // PhotoType = 'image/png' | 'image/jpeg' | 'image/webp'`
 - Test: `test/cards.test.ts`
 
-Rules (one test each): only `https:`; the `Authorization: Bearer ${env.ORDERS_PASSWORD}` header is added only when the parsed hostname equals the cards worker host exactly (`new URL(env.CARDS_URL || DEFAULT_CARDS_URL).hostname`) — never on a suffix match, because the API worker on the same suffix accepts the same password for write actions; with a bearer the fetch uses `redirect: "manual"`; the body is read as a stream and cancelled past 10 MB; only image/png, image/jpeg, image/webp are accepted; 204 → `empty`; non-2xx → `error` with status; `content-type` not starting with `image/` → `error`; body over 10 MB (check `content-length` first, then the byte length) → `error`; `export function cardUrl(env, kind: 'weekly'|'eod'|'midday', params: Record<string,string>)` builds `${env.CARDS_URL ?? 'https://rogue-origin-cards.roguefamilyfarms.workers.dev'}/${kind}?${query}`.
+Rules (one test each): only `https:`; the `Authorization: Bearer ${env.ORDERS_PASSWORD}` header is added only when the parsed hostname equals the cards worker host exactly (`new URL(env.CARDS_URL || DEFAULT_CARDS_URL).hostname`) — never on a suffix match, because the API worker on the same suffix accepts the same password for write actions; with a bearer the fetch uses `redirect: "manual"`; the body is read as a stream and cancelled past 10 MB; only image/png, image/jpeg, image/webp are accepted; 204 → `empty`; non-2xx → `error` with status; `content-type` not starting with `image/` → `error`; body over 10 MB (check `content-length` first, then the byte length) → `error`; `export function cardUrl(env, kind: 'weekly'|'eod'|'midday', params: Record<string,string>)` builds `${env.CARDS_URL || 'https://rogue-origin-cards.roguefamilyfarms.workers.dev'}/${kind}?${query}`.
 
 Commit `feat(telegram): fetchCard with bearer-for-our-host and size guards`.
 
@@ -467,7 +467,7 @@ this.server.registerTool(
     const card = await fetchCard(url, this.env);
     if (card.status === "empty") return { content: [{ type: "text" as const, text: "No card for that period (no production logged)." }] };
     if (card.status === "error") return { content: [{ type: "text" as const, text: `Could not fetch image: ${card.message}` }] };
-    const r = await sendPhoto(this.env, card.bytes, { caption, filename: "card.png" });
+    const r = await sendPhoto(this.env, card.bytes, { caption, contentType: card.contentType });
     return { content: [{ type: "text" as const, text: r.ok ? "Photo sent." : `Telegram rejected the photo: ${r.error}` }] };
   }
 );
@@ -482,7 +482,7 @@ Commit `feat(telegram): telegram_send_photo tool`.
 ### Task B4: midday / EOD crons
 
 **Files:**
-- Modify: `wrangler.jsonc` → add `"triggers": { "crons": ["35 19 * * 1-5", "35 20 * * 1-5", "5 0 * * 2-6", "5 1 * * 2-6"] }` and `"vars": { "CARDS_URL": "https://rogue-origin-cards.roguefamilyfarms.workers.dev" }` (merge with existing vars if any).
+- Modify: `wrangler.jsonc` → add `"triggers": { "crons": ["35 19 * * MON-FRI", "35 20 * * MON-FRI", "5 0 * * TUE-SAT", "5 1 * * TUE-SAT"] }` (Cloudflare numbers weekdays 1 = Sunday … 7 = Saturday, so numeric `1-5` would be Sun–Thu; use names) and `"vars": { "CARDS_URL": "https://rogue-origin-cards.roguefamilyfarms.workers.dev" }` (merge with existing vars if any).
 - Create: `src/scheduled.ts` → `export function pickCard(nowUtc: Date): { kind: 'midday'|'eod'; date: string } | null` — Pacific wall clock via `Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false, weekday: 'short' })` plus the `en-CA` date trick: returns `midday` when the Pacific hour is 12 and weekday Mon–Fri, `eod` when the hour is 17 and weekday Mon–Fri, else `null`. `export async function runScheduled(env, nowUtc, deps)` → `pickCard` → `fetchCard(cardUrl(env, kind, { date }))` → empty → log + return; ok → `sendPhoto` with caption `Midday · <Weekday Mon D>` / `End of day · <Weekday Mon D>`.
 - Modify: `src/index.ts` → `export default { fetch: …existing…, async scheduled(event, env, ctx) { ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime))); } }`.
 - Test: `test/scheduled.test.ts`: `pickCard(new Date('2026-10-20T19:35:00Z'))` → midday 2026-10-20 (PDT); `pickCard(new Date('2026-11-03T20:35:00Z'))` → midday 2026-11-03 (PST, the other cron fires); `pickCard(new Date('2026-11-03T19:35:00Z'))` → null; `pickCard(new Date('2026-10-21T00:05:00Z'))` → eod 2026-10-20; Saturday → null; `runScheduled` with a fake fetchCard returning empty never calls sendPhoto; ok path sends once with the right caption.
