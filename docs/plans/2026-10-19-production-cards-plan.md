@@ -194,7 +194,7 @@ test('delta chip: direction, sign, good/bad polarity', () => {
   assert.equal(deltaChip(5, null, {...}), null);
 });
 test('pctChip', () => assert.deepEqual(pctChip(497.2, 508.3), { kind: 'warn', text: '98% target' }));   // ≥100 good, 90–99 warn, <90 bad
-test('hourTarget = trimmers × rate × multiplier', () => assert.equal(hourTarget({ trimmers: 8, multiplier: 0.83 }, 1.59), 8 * 1.59 * 0.83));
+test('hourTarget is the scoreboard method: effectiveTrimmers × row.target × multiplier, summing to todayTarget', () => { /* for each scoreboard fixture: Σ hourTarget(row) over hourlyRates ≈ scoreboard.todayTarget within 0.01 */ });
 ```
 
 Phrase table (minimum): mold→mold, gusano(s)→worm(s), húmedo/humedo/humedas→wet, hoja→leaf, costal→sack, volsa/bolsa→bag, colgar→hang, echar a perder→spoil, no se está pasando por el costal→not going through the sack, trae→has, mucho/mucha→a lot of. The translation is a word/phrase substitution plus capitalising the first letter; it does not need to be grammatical, it needs to be readable. `classifyNote` rules: contains "echar a perder"/"spoil" → `bad`; contains mold/gusano/humed/hoja → `warn`; otherwise `null` (the card only shows flags it can classify; Good flags come from numbers, not notes).
@@ -273,7 +273,7 @@ Rules the implementation must follow (they are the approved mock):
 **Tests (same shape as A5):**
 - title `Friday`, sub `Oct 16 · Sour Lifter '26 · 8.5 h logged` (hours = scoreboard `effectiveHours` to 1 decimal), pill `Line crew peak 18 · 8 T · 9 B` (peak = `totalCrew`; T/B = the max trimmers / max buckers across hourlyRates).
 - tiles: Tops `120` lb chip `▲ 112% of target` (todayPercentage, kind by the same bands); Rate `1.62` chip `▲ +0.34 vs Thu`; `$ per lb tops` `$27.51` chip `▼ −$3.43 vs Thu`.
-- chart: one column per `hourlyRates` row sorted by slot start; `lbs`, `rate` 2 decimals, `target = hourTarget(row, scoreboard.targetRate)`, `label = slotLabel`.
+- chart: one column per `hourlyRates` row sorted by slot start; `lbs`, `rate` 2 decimals, `target = hourTarget(row)` (effectiveTrimmers × row.target × multiplier, the scoreboard method), `label = slotLabel`.
 - minis: Smalls `90` lb `$14.27/lb`; Supersacks `20` opened `700 lb raw · 6.0 tops/sack`; Labor `$4,589` `all-in $38.21/lb`.
 - flags: Act from the day's bad note with the slot start prefix ("2 PM: …"), Good = `Best hour 3–4 at 2.21` or, when the day's rate beats the prior day, `Best rate since <prior day>` — keep it simple: Good = best hour line; Watch = warn note or, if none, a crew drop ("Crew fell 8 → 5 trimmers after 2 PM") when the last hour's trimmers are < 70% of the peak.
 - no rows (`hourlyRates` empty) → the function returns `null` (the route turns that into 204).
@@ -369,7 +369,7 @@ test('renders the locked weekly card', ...);
 ### Task A10: `index.js` — routes, defaults, cache, 204/400/502, Workers runtime
 
 **Files:**
-- Create: `cards/src/runtime-workers.js` → `export async function workersRuntime()`: `import satori, { init as initSatori } from 'satori/wasm'; import initYoga from 'yoga-wasm-web'; import yogaWasm from 'yoga-wasm-web/dist/yoga.wasm'; import { Resvg, initWasm } from '@resvg/resvg-wasm'; import resvgWasm from '@resvg/resvg-wasm/index_bg.wasm';` + the four font imports (`import outfitMedium from '../fonts/Outfit-Medium.ttf'` → ArrayBuffer via the Data rule). Initialise once per isolate behind a module-level promise; `initWasm` throws if called twice — catch "already initialized".
+- Create: `cards/src/runtime-workers.js` → `export async function workersRuntime()`: `import satori, { init as initSatori } from 'satori/standalone'; import layoutWasm from 'satori/layout.wasm'; import { Resvg, initWasm } from '@resvg/resvg-wasm'; import resvgWasm from '@resvg/resvg-wasm/index_bg.wasm';` — satori 0.63 ships `./standalone` + `./layout.wasm` (no `./wasm`, no yoga-wasm-web); `initSatori(layoutWasm)` takes the compiled module from the CompiledWasm rule. Workers refuse to compile wasm from bytes at runtime, so a `wrangler dev` spike (one text node → PNG) is Task A8 step 0, and a deploy probe of that spike shows whether the account's CPU limit (10 ms on Workers Free) kills the render; if it does, Koa decides on the Workers Paid plan before A8 continues. + the four font imports (`import outfitMedium from '../fonts/Outfit-Medium.ttf'` → ArrayBuffer via the Data rule). Initialise once per isolate behind a module-level promise; `initWasm` throws if called twice — catch "already initialized".
 - Create: `cards/src/app.js` → `export function makeApp({ api, runtime, now = () => new Date(), cache })` returning `{ fetch(request) }` — all logic here, pure of globals, so tests can drive it.
 - Create: `cards/src/index.js` → `export default { async fetch(request, env, ctx) { const app = makeApp({ api: makeApi({ base: env.API_BASE, bearer: bearerOf(request) }), runtime: await workersRuntime(), cache: caches.default }); return app.fetch(request); } }` (build the api per request because the bearer is per request).
 - Test: `cards/test/routes.test.mjs` — drive `makeApp` with the Node runtime and a fake api/fetch; a fake `cache` object `{ match, put }` recording keys.
@@ -393,7 +393,7 @@ test('renders the locked weekly card', ...);
 
 ### Task A11: Bundle, dev run, visual check, deploy
 
-**Step 1:** `cd cards && npm run size` → bundle bytes must be < 2,800,000 (compressed limit is 3 MB; wrangler reports the gzipped size in the dry-run output — read that line too). If over: drop `Outfit-Medium.ttf` (use 600 everywhere) before anything else.
+**Step 1:** `cd cards && npm run size` → the script gzips the dry-run output; the gzip total must be < 2,800,000 (the 3 MB Workers limit is on the compressed size; raw will be ~4 MB and is irrelevant). Expected ≈1.7 MB gzipped.
 
 **Step 2:** `npx wrangler dev --port 8790` in the background, then `curl -s -o /tmp/w.png -w "%{http_code} %{content_type}\n" "http://localhost:8790/weekly?week=2026-W42"` → `200 image/png`; same for `/eod?date=2026-10-16` and `/midday?date=2026-10-19`; `curl -s "http://localhost:8790/eod?date=2026-10-10" -w "%{http_code}"` → `204` (a Saturday, no rows); with a bearer header `-H "Authorization: Bearer <the ops password, typed by Koa, never stored>"` → `X-Costs: unlocked`. Open the three PNGs and compare with the approved mocks. The Workers runtime is the only path not covered by node tests — this is the step that proves wasm + fonts load in the real runtime.
 
