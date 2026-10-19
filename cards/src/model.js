@@ -6,6 +6,11 @@
 // a value that is not there; only the display formatters (fmtInt, fmtMoney,
 // fmt1, fmt2, cultivarShort) turn a missing value into "—".
 
+import {
+  weekRange, weekDates, lastCompleteWeek, rangeLabel, shortWeekday, monthDay, pacificDate, pacificClock,
+} from './periods.js';
+import { classifyNote, themes } from './notes.js';
+
 const MINUS = '−';
 const DASH = '—';
 
@@ -106,4 +111,225 @@ export function cultivarShort(name) {
   const rest = (year ? s.slice(year[0].length) : s).replace(/\s*\/[^/]*$/, '').trim();
   if (!rest) return DASH;
   return year ? `${rest} '${year[1].slice(2)}` : rest;
+}
+
+// ---------------------------------------------------------------------------
+// Card builders. Each returns the shape a card layout draws:
+//   { kind, costsLocked, eyebrow, title, sub, pill,
+//     tiles: [{ label, value, unit, chips: [{ kind, text }] }] × 3,
+//     chart: { title, legend, sub, cols: [{ label, rate, lbs, target, kind: 'bar' | 'off' | 'now' }] },
+//     minis: [{ label, value, unit, sub }] × 3,
+//     flags: [{ kind: 'bad' | 'warn' | 'good', tag: 'Act' | 'Watch' | 'Good', text }] (0–3, in that order),
+//     foot: { left, right } }
+// Locked costs turn every money value into 🔒 with no chips and a "locked" sub;
+// nothing else on the card changes.
+
+const LOCK = '🔒';
+const LEGEND = 'target, crew-adjusted';
+const FLAG_TAGS = { bad: 'Act', warn: 'Watch', good: 'Good' };
+const THEME_ORDER = ['mold', 'worms', 'moisture', 'leaf'];
+
+/** Σ fn(item) over the items where it is a number, float dust trimmed so 86.4999… cannot round down. */
+function sum(items, fn) {
+  const total = items.reduce((t, item) => {
+    const v = fn(item);
+    return Number.isFinite(v) ? t + v : t;
+  }, 0);
+  return Math.round(total * 1e9) / 1e9;
+}
+
+const ratio = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && b > 0 ? a / b : null);
+
+/** Σ(value × weight) ÷ Σ weight over the items that carry the value; null when there is no weight. */
+function weighted(items, valueOf, weightOf) {
+  const carrying = items.filter((item) => Number.isFinite(valueOf(item)));
+  return ratio(sum(carrying, (item) => valueOf(item) * weightOf(item)), sum(carrying, weightOf));
+}
+
+/** A 2-decimal figure at display precision, so a change chip is the difference of the numbers as shown. */
+const shown2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
+/** 27.514 → "$27.51". */
+const perLb = (v) => (Number.isFinite(v) ? `$${fmt2(v)}` : DASH);
+
+const dayRate = (day) => ratio(day.totalTops, day.trimmerHours);
+
+/**
+ * What a set of dashboard days adds up to. Every average is weighted, never a
+ * mean of daily means: rate = Σ tops ÷ Σ trimmer hours, $/lb tops =
+ * Σ(topsCostPerLb × tops) ÷ Σ tops (smalls likewise), all-in = Σ labor ÷ Σ tops.
+ */
+function periodFigures(days) {
+  const costed = days.filter((day) => !costsLocked(day));
+  const tops = sum(days, (d) => d.totalTops);
+  const labor = costed.length ? sum(costed, (d) => d.laborCost) : null;
+  return {
+    tops,
+    smalls: sum(days, (d) => d.totalSmalls),
+    rate: ratio(tops, sum(days, (d) => d.trimmerHours)),
+    topsCost: weighted(days, (d) => d.topsCostPerLb, (d) => d.totalTops),
+    smallsCost: weighted(days, (d) => d.smallsCostPerLb, (d) => d.totalSmalls),
+    labor,
+    allIn: labor === null ? null : ratio(labor, sum(costed, (d) => d.totalTops)),
+  };
+}
+
+/** The dashboard days on `dates` that logged tops, oldest first. None for the API's fallback shape. */
+function workedDays(dashboard, dates) {
+  if (dashboard?.fallback?.active) return [];
+  const wanted = new Set(dates);
+  return (dashboard?.daily ?? [])
+    .filter((day) => wanted.has(day.date) && day.totalTops > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The main cultivar (most tops) as a short name, + N for the others that logged tops. */
+function cultivarName(days) {
+  const tops = new Map();
+  for (const day of days) {
+    const list = day.cultivars?.length ? day.cultivars : [{ cultivar: day.cultivar, tops: day.totalTops }];
+    for (const { cultivar, tops: lbs } of list) {
+      if (cultivar) tops.set(cultivar, (tops.get(cultivar) ?? 0) + (Number.isFinite(lbs) ? lbs : 0));
+    }
+  }
+  const [main, ...others] = [...tops].sort((a, b) => b[1] - a[1]);
+  const extra = others.filter(([, lbs]) => lbs > 0).length;
+  return `${cultivarShort(main?.[0])}${extra ? ` +${extra}` : ''}`;
+}
+
+const tile = (label, value, unit, chips = []) => ({ label, value, unit, chips: chips.filter(Boolean) });
+const mini = (label, value, unit, sub) => ({ label, value, unit, sub });
+
+/** "$ per lb tops" with its change vs the prior period; 🔒 and no chip when costs are locked. */
+function costTile(figures, prior, vs, locked) {
+  if (locked) return tile('$ per lb tops', LOCK, '');
+  return tile('$ per lb tops', perLb(figures.topsCost), '', [
+    deltaChip(shown2(figures.topsCost), shown2(prior?.topsCost), { fmt: perLb, upIsGood: false, vs }),
+  ]);
+}
+
+/** Supersacks opened, with the tracker's own raw pounds and tops (not the dashboard's). */
+function sackMini(summary) {
+  const periods = summary?.periods ?? [];
+  if (!periods.length) return mini('Supersacks', DASH, '', 'tracker empty');
+  const sacks = sum(periods, (p) => p.total_sacks);
+  const topsPerSack = ratio(sum(periods, (p) => p.total_tops), sacks);
+  return mini('Supersacks', fmtInt(sacks), 'opened', `${fmtInt(sum(periods, (p) => p.total_raw))} lb raw · ${fmt1(topsPerSack)} tops/sack`);
+}
+
+/** The mini row of a closed period (weekly, end of day): smalls + $/lb, supersacks, labor + all-in. */
+function closeMinis(figures, sacks, locked) {
+  return [
+    mini('Smalls', fmtInt(figures.smalls), 'lb', locked ? 'locked' : `${perLb(figures.smallsCost)}/lb`),
+    sackMini(sacks),
+    locked ? mini('Labor', LOCK, '', 'locked') : mini('Labor', fmtMoney(figures.labor), '', `all-in ${perLb(figures.allIn)}/lb`),
+  ];
+}
+
+/** A notes blob → its single notes; the API joins them with newlines and crew-change markers. */
+const notePieces = (text) => String(text ?? '').split(/\n|\[Crew change[^\]]*\]/i).filter((piece) => piece.trim());
+
+const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text });
+
+/** At most three flags: Act first, then Watch, then Good. */
+const pickFlags = (flags) => ['bad', 'warn', 'good'].flatMap((kind) => flags.filter((f) => f?.kind === kind)).slice(0, 3);
+
+/** ['mold', 'worms', 'moisture'] → "Mold, worms and moisture". */
+function themeList(names) {
+  const text = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const span = (first, last) => (first === last ? first : `${first}–${last}`);
+
+function foot(left, generatedAt) {
+  const ymd = pacificDate(generatedAt);
+  return { left, right: `generated ${shortWeekday(ymd)} ${monthDay(ymd)} · ${pacificClock(generatedAt)} PT` };
+}
+
+function crewRange(crews) {
+  if (!crews.length) return `Line crew ${DASH}`;
+  const lo = Math.min(...crews);
+  const hi = Math.max(...crews);
+  const avg = Math.round(crews.reduce((t, c) => t + c, 0) / crews.length);
+  return `Line crew ${span(lo, hi)} · avg ${avg}`;
+}
+
+/**
+ * Weekly flags: the latest Act note (with its weekday), one Watch line naming
+ * the warn themes and the days they span, and a Good line: "Rate rose all
+ * week" when every worked day's rate is at or above the day before (and the
+ * week ends higher than it started), else the day with the most tops.
+ */
+function weeklyFlags(worked) {
+  const notes = worked.flatMap((day) => notePieces(day.notes).map((text) => ({ day, text, flag: classifyNote(text) })));
+  const bad = notes.filter((n) => n.flag?.kind === 'bad').at(-1);
+  const warns = notes.filter((n) => n.flag?.kind === 'warn');
+  const found = new Set(warns.flatMap((n) => themes(n.text)));
+  const rates = worked.map(dayRate);
+  const rose = worked.length > 1
+    && rates.every((r, i) => Number.isFinite(r) && (i === 0 || r >= rates[i - 1]))
+    && rates.at(-1) > rates[0];
+  const best = worked.reduce((a, b) => (b.totalTops > a.totalTops ? b : a));
+  const day = (note) => shortWeekday(note.day.date);
+  return [
+    bad ? flag('bad', `${day(bad)}: ${bad.flag.text}`) : null,
+    warns.length
+      ? flag('warn', `${themeList(THEME_ORDER.filter((t) => found.has(t)))} flagged ${span(day(warns[0]), day(warns.at(-1)))}`)
+      : null,
+    flag('good', rose
+      ? 'Rate rose all week'
+      : `Best day ${shortWeekday(best.date)}, ${fmtInt(best.totalTops)} lb at ${fmt2(dayRate(best))}`),
+  ];
+}
+
+/**
+ * Weekly card for ISO week `week` ("2026-W42"). `dashboard` and `prior` are
+ * the dashboard JSON for this week and the week before, `scoreboards` the
+ * scoreboard JSON of each worked day keyed by date (their todayTarget is the
+ * day's target), `sacks` the week's supersack summary. null when no day of the
+ * week logged tops.
+ */
+export function weeklyModel({ week, dashboard, prior, scoreboards, sacks, generatedAt }) {
+  const { start, end, week: number } = weekRange(week);
+  const dates = weekDates(week);
+  const worked = workedDays(dashboard, dates);
+  if (!worked.length) return null;
+  const priorWeek = lastCompleteWeek(start);
+  const priorDays = workedDays(prior, weekDates(priorWeek));
+  const vs = `W${weekRange(priorWeek).week}`;
+  const now = periodFigures(worked);
+  const before = priorDays.length ? periodFigures(priorDays) : null;
+  const locked = costsLocked({ daily: worked });
+  const target = (ymd) => scoreboards?.[ymd]?.scoreboard?.todayTarget;
+  const targeted = worked.filter((day) => Number.isFinite(target(day.date)));
+  return {
+    kind: 'weekly',
+    costsLocked: locked,
+    eyebrow: 'Rogue Origin · Weekly production',
+    title: `Week ${number}`,
+    sub: `${rangeLabel(start, end)} · ${cultivarName(worked)} · ${worked.length} ${worked.length === 1 ? 'day' : 'days'}`,
+    pill: crewRange(worked.map((day) => day.totalCrew).filter(Number.isFinite)),
+    tiles: [
+      tile('Tops', fmtInt(now.tops), 'lb', [
+        deltaChip(now.tops, before?.tops, { pct: true, upIsGood: true, vs }),
+        pctChip(sum(targeted, (day) => day.totalTops), sum(targeted, (day) => target(day.date))),
+      ]),
+      tile('Rate', fmt2(now.rate), 'lb/hr', [deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })]),
+      costTile(now, before, vs, locked),
+    ],
+    chart: {
+      title: 'Tops by day',
+      legend: LEGEND,
+      sub: 'lb · rate under the day',
+      cols: dates.map((ymd) => {
+        const day = worked.find((d) => d.date === ymd);
+        const label = shortWeekday(ymd);
+        if (!day) return { label, rate: DASH, lbs: 0, target: 0, kind: 'off' };
+        return { label, rate: fmt2(dayRate(day)), lbs: day.totalTops, target: target(ymd) ?? 0, kind: 'bar' };
+      }),
+    },
+    minis: closeMinis(now, sacks, locked),
+    flags: pickFlags(weeklyFlags(worked)),
+    foot: foot('cards/weekly · dashboard allocation · $/lb tops', generatedAt),
+  };
 }

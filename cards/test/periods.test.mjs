@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   pacificDate, pacificClock, lastCompleteWeek, weekRange, weekDates, slotLabel, slotEnd, weekdayName, shortWeekday,
-  isYmd, addDaysYmd, priorWeekday, rangeLabel,
+  isYmd, addDaysYmd, priorWeekday, rangeLabel, monthDay,
 } from '../src/periods.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -126,4 +126,10 @@ test('pacificClock renders an instant as 24-hour HH:MM in America/Los_Angeles', 
   assert.equal(pacificClock(new Date('2026-11-02T14:05:00Z')), '06:05'); // PST, UTC−8
   assert.equal(pacificClock(new Date('2026-10-20T07:00:00Z')), '00:00'); // midnight is 00, not 24
   assert.equal(pacificClock(new Date('2026-10-20T00:30:00Z')), '17:30');
+});
+
+test('monthDay is the short month and day of a date', () => {
+  assert.equal(monthDay('2026-10-19'), 'Oct 19');
+  assert.equal(monthDay('2026-01-02'), 'Jan 2');
+  assert.throws(() => monthDay('2026-13-01'), /date/);
 });

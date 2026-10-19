@@ -122,6 +122,12 @@ export function lastCompleteWeek(ymd) {
   return weekId(isoWeekOf(isoDay(date) >= 6 ? monday : addDays(monday, -7)));
 }
 
+/** Short month and day of a calendar date: "2026-10-19" → "Oct 19". */
+export function monthDay(ymd) {
+  const date = parseYmd(ymd);
+  return `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
+}
+
 /** "Oct 12–16, 2026", "Sep 28–Oct 2, 2026", "Dec 29, 2025–Jan 2, 2026"; one day → "Oct 16, 2026". */
 export function rangeLabel(start, end) {
   const a = parseYmd(start);
