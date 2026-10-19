@@ -12,8 +12,8 @@ test('costsLocked reads the day keys, for one day or a whole dashboard', () => {
   assert.equal(costsLocked(locked.daily[0]), true);
   assert.equal(costsLocked(unlocked.daily[0]), false);
   assert.equal(costsLocked(locked), true);
-  // The unlocked fixture still carries a top-level costsLocked: true; the day keys decide.
-  assert.equal(unlocked.costsLocked, true);
+  // The day keys decide, whatever the top-level flag says.
+  assert.equal(unlocked.costsLocked, false);
   assert.equal(costsLocked(unlocked), false);
   assert.equal(costsLocked({ daily: [] }), true);
   assert.equal(costsLocked(null), true);
