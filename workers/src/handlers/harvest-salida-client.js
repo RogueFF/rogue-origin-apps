@@ -9,6 +9,7 @@
  */
 /* global parseTag, isScannerBurst, debounceSeen, queueReduce, pacificTime, countText, busyRetry,
           undoNeedsConfirm, orderChips, rememberCode, queueLoad, feedbackFor, groupToday, escapeHtml, embedJson,
+          closeDayView, firstCutOf, closeDayCheck, closeDayYieldLines,
           BarcodeDetector */
 // The names above are the LOGIC_SOURCE functions inlined ahead of this code in
 // the page (same order as harvest-salida-logic.js), plus the browser's QR API.
