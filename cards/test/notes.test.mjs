@@ -40,6 +40,15 @@ test('translate keeps unknown words and maps the floor vocabulary', () => {
   assert.equal(translate('esta humedo porque'), 'Esta wet');
 });
 
+test('standalone mucho/mucha/muchos/muchas → "a lot of", while longer phrases still win', () => {
+  assert.equal(translate('tiene mucha humedad'), 'Has a lot of humedad');
+  assert.equal(translate('mucho trabajo'), 'A lot of trabajo');
+  assert.equal(translate('muchos tallos y muchas ramas'), 'A lot of tallos and a lot of ramas');
+  assert.equal(translate('tiene mucha hoja'), 'Has a lot of leaf');
+  assert.equal(translate('muchos gusanos'), 'A lot of worms');
+  assert.equal(translate('mucho mold'), 'A lot of mold');
+});
+
 test('themes lists the matched themes in a fixed order', () => {
   assert.deepEqual(themes('trae mold y gusanos, esta humedo'), ['mold', 'worms', 'moisture']);
   assert.deepEqual(themes('mucha hoja y está HÚMEDO'), ['moisture', 'leaf']);
