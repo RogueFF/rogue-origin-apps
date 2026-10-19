@@ -30,10 +30,20 @@ Walk it top to bottom. Design: `docs/plans/2026-10-14-grove-bins-design.md`.
 - [ ] Compare the ledger against the Shopify counters (SQL in the Flow guide).
 - [ ] If they match, Nathan turns off the old Flow and archives the "Grove Bags" product.
 
+## 5b. Email intake (so Receive stops being a manual step)
+Full steps: `docs/guides/grove-email-intake.md`.
+- [ ] Migration 0047 on remote, `TRACK17_KEY` + `TELEGRAM_KOA_CHAT_ID` bound, worker deployed.
+- [ ] Gmail filter: Grove's order address → label **Grove/Orders**.
+- [ ] Apps Script `RO Grove Mail Poller` with `WORKER_URL` + `WEBHOOK_SECRET`, trigger every 5 minutes.
+- [ ] 17TRACK account; webhook URL set to `…/api/kanban?action=trackingEvent`.
+- [ ] Drag one real Grove order email onto the label → the lane tile reads "N on order · arrives ~date". Then the shipping email → "shipped · UPS 1Z…". Then the delivery → Koa gets the "delivered · lane now ~N bags" line and the lane re-baselines by itself.
+- [ ] If a mail lands in **Grove/Review**: Receive by hand on the Desk, then **Mark as handled** in the strip. Drop the email into `tests/fixtures/grove-mail/` so the parser learns it.
+
 ## 6. Questions to settle on day one
 - [ ] Bags per box for the custom sizes.
 - [ ] Where the open bin lives: rack or bench (default: **bench**).
 - [ ] Do 1/4 lb and 1/2 lb really use the **1 LB** bag? The recipe seed assumes they do.
+- [ ] **Where else are 10 lb bags consumed, outside the barn scans?** The 10 lb lane only counts `MANUAL-10LB-BAG` rows from the barn (`usageSum` in `kanban-d1.js`). Koa orders 6 cases × 100 = 600 every ~2 weeks and still runs out, so either the barn scans miss some bags or another use exists (wholesale packing, samples, waste). Until Koa answers, the usage source stays as is; the email intake only adds the deliveries side.
 
 ## 7. Wiki
 - [ ] Log the go-live in the farm wiki `wiki/log.md` and close the Grove todo.

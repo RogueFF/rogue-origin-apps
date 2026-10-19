@@ -6,7 +6,7 @@
  */
 import { t, ES } from './labels.js';
 import * as api from './api.js';
-import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure, laneHeadline, laneRateLine } from './model.js';
+import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure, laneHeadline, laneRateLine, laneOrderLine } from './model.js';
 
 // ---------- context (set by init) ----------
 let M = null, L = null, saveL = () => {}, reload = async () => {}, RAW = {}, PAGE_URL = '';
@@ -294,9 +294,13 @@ function binDialog(title, body, saveTxt, onSave, onOpen) { $('#rvTitle').textCon
 const needNum = () => { toast(ES() ? 'Escribe un número entero' : 'Enter a whole number'); return false; };
 
 function openReceive(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const cfg = ln.config || {}; const { size } = laneSize(ln);
-  const body = `<div class="f2"><div class="f"><label>${es ? 'Bins aún sellados en el estante' : 'Bins still sealed on the rack'}</label><input id="rvLeft" type="number" min="0" inputmode="numeric" placeholder="${numAttr(ln.bins)}" style="font-size:22px;height:52px"></div><div class="f"><label>${es ? 'Cajas que llegaron' : 'Boxes arrived'}</label><input id="rvBoxes" type="number" min="0" inputmode="numeric" style="font-size:22px;height:52px"></div></div>
+  // An order in flight prefills what the Grove email said: boxes from the quantity ordered, lot from Grove's order number.
+  const od = ln.order && ln.order.stage !== 'delivered' ? ln.order : null;
+  const preBoxes = od?.qtyOrdered && cfg.bagsPerBox ? Math.ceil(od.qtyOrdered / cfg.bagsPerBox) : null;
+  const preLot = od?.vendorRef ? `GRV-${od.vendorRef}` : `GRV-${id}-${M.today.slice(5).replace('-', '')}`;
+  const body = `<div class="f2"><div class="f"><label>${es ? 'Bins aún sellados en el estante' : 'Bins still sealed on the rack'}</label><input id="rvLeft" type="number" min="0" inputmode="numeric" placeholder="${numAttr(ln.bins)}" style="font-size:22px;height:52px"></div><div class="f"><label>${es ? 'Cajas que llegaron' : 'Boxes arrived'}</label><input id="rvBoxes" type="number" min="0" inputmode="numeric" value="${numAttr(preBoxes)}" style="font-size:22px;height:52px"></div></div>
     <div class="f2"><div class="f"><label>${es ? 'Bolsas por caja' : 'Bags per box'}</label><input id="rvPerBox" type="number" min="1" value="${numAttr(cfg.bagsPerBox)}"></div><div class="f"><label>${es ? 'Bolsas por bin' : 'Bags per bin'}</label><input id="rvPerBin" type="number" min="1" value="${numAttr(cfg.bagsPerBin)}"></div></div>
-    <div class="f"><label>${es ? 'Lote / referencia Grove' : 'Lot / Grove reference'}</label><input id="rvLot" value="GRV-${id}-${M.today.slice(5).replace('-', '')}"></div><div class="live" id="rvLive"></div>`;
+    <div class="f"><label>${es ? 'Lote / referencia Grove' : 'Lot / Grove reference'}</label><input id="rvLot" value="${esc(preLot)}"></div>${preBoxes ? `<p class="muted" style="margin:4px 0 0;font-size:13px">${es ? `Del correo de Grove: ${Number(od.qtyOrdered).toLocaleString('en-US')} bolsas pedidas` : `From the Grove email: ${Number(od.qtyOrdered).toLocaleString('en-US')} bags ordered`}</p>` : ''}<div class="live" id="rvLive"></div>`;
   const live = () => { const left = intOf('#rvLeft') ?? 0, boxes = intOf('#rvBoxes') ?? 0, perBox = intOf('#rvPerBox', 1) || cfg.bagsPerBox || 1, perBin = intOf('#rvPerBin', 1) || cfg.bagsPerBin || 1;
     const bins = left + Math.ceil((boxes * perBox) / perBin), tape = Math.ceil((ln.reorderPoint || 0) / perBin);
     $('#rvLive').innerHTML = es ? `= <b>${bins}</b> bins · cinta roja en el bin <b>${tape}</b>` : `= <b>${bins}</b> bins · red tape at bin <b>${tape}</b>`; };
@@ -447,11 +451,14 @@ function laneTile(ln) { const es = ES(); const { size, rest } = laneSize(ln);
   if (rq) { const day = localDay(rq.requestedAt); const w = daysSince(day); const asked = L.nudged[ln.cardId] === M.today;
     req = `<div class="lt-req ${w > 7 ? 'warn' : ''}"><span><b>${t('requestedDamon')} · ${fmtMD(day)}</b> · ${es ? `${w} ${w === 1 ? 'día' : 'días'}` : `${w} day${w === 1 ? '' : 's'}`}${rq.notifyState === 'failed' ? ` · <span class="warn">${es ? 'el correo no salió' : 'email failed'}</span>` : ''}</span><button class="tb-btn btn-sm" data-nudge="${ln.cardId}" ${asked ? 'disabled' : ''}>${asked ? t('askedToday') : t('askAgain')}</button></div>`; }
   const urgent = ln.status !== 'ok';
+  // The order in flight (email intake): one line, red when overdue.
+  const ol = laneOrderLine(ln.order, M.today, es);
+  const order = ol ? `<div class="lt-order st-${esc(ln.order.stage)}">${esc(ol)}</div>` : '';
   return `<section class="lane-tile st-${esc(ln.status || 'order')}" style="--lane:${laneColour(ln.colour)}" data-lane="${ln.cardId}">
     <header><div class="lt-name"><span class="lt-size">${esc(size)}</span><span>${esc(rest)}</span></div><h3>${esc(laneHeadline(ln, M.today, es))}</h3></header>
     <div class="sqs" role="img" aria-label="${bins} bins · ${t('redTape')} ${tape}">${sq}</div>
     <div class="lt-meta">${meta}${ln.recount ? ` <span class="lt-badge">${es ? 'recontar' : 'recount'}</span>` : ''}</div>
-    ${req}
+    ${order}${req}
     <div class="lt-acts"><button class="tb-btn ${urgent || rq ? 'btn-primary' : ''}" data-rv="${ln.cardId}">${t('receiveBins')}</button><button class="tb-btn" data-rc="${ln.cardId}">${t('recount')}</button><button class="tb-btn" data-kit="${ln.cardId}">${t('laneKit')}</button><button class="tb-btn ghost" data-cfg="${ln.cardId}">${t('settings')}</button><button class="tb-btn btn-sm ghost lt-tape" data-tape="${ln.cardId}">${t('tapeLabel')}</button></div>
   </section>`; }
 
@@ -462,7 +469,11 @@ function renderGrove() { const es = ES(); const el = $('#view-grove'); const B =
   else if (!lanes.length) body = `<p class="unavail muted">${es ? 'Ningún carril configurado todavía' : 'No lanes set up yet'}</p>`;
   else body = `<div class="lane-grid">${lanes.map(laneTile).join('')}</div>`;
   const strip = unmapped.length ? `<details class="tech unmapped" open><summary>${t('noRecipe')} (${unmapped.length})</summary><ul>${unmapped.map(u => `<li><code>${esc(u.variant_id)}</code><span class="muted">${u.qty} ${es ? 'vendidos' : 'sold'}${u.lastSeen ? ` · ${fmtMD(localDay(u.lastSeen))}` : ''}</span><button class="tb-btn btn-sm" data-map="${esc(u.variant_id)}">${es ? 'Asignar' : 'Map'}</button></li>`).join('')}</ul></details>` : '';
-  el.innerHTML = `<div class="board grove-board" style="margin-top:0">${head}<div class="grove-body">${body}</div></div>${strip}`;
+  // Grove emails the parser could not apply (size, qty or tracking missing): Koa receives by hand, then clears them here.
+  const review = B.review || [];
+  const mails = review.length ? `<div class="mail-review"><h4>${t('mailReview')} (${review.length})</h4><ul>${review.map(m => `<li data-mail="${m.id}"><span><b>${esc(m.subject || '(no subject)')}</b><span class="muted"> · ${fmtMD(localDay(m.receivedAt))}${m.missing?.length ? ` · ${t('missing')}: ${esc(m.missing.join(', '))}` : ''}</span></span><button class="tb-btn btn-sm" data-handled="${m.id}">${t('markHandled')}</button></li>`).join('')}</ul></div>` : '';
+  el.innerHTML = `<div class="board grove-board" style="margin-top:0">${head}<div class="grove-body">${mails}${body}</div></div>${strip}`;
+  $$('[data-handled]', el).forEach(b => b.onclick = () => act(async () => { await api.markMailHandled(+b.dataset.handled); await refreshBins(); }, es ? 'Correo marcado como atendido' : 'Email marked as handled'));
   $$('[data-rv]', el).forEach(b => b.onclick = () => openReceive(+b.dataset.rv));
   $$('[data-rc]', el).forEach(b => b.onclick = () => openRecount(+b.dataset.rc));
   $$('[data-kit]', el).forEach(b => b.onclick = () => printLaneKit(+b.dataset.kit));
