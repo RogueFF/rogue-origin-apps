@@ -16,7 +16,7 @@ The Monday digest arrives as a wall of Telegram text. Koa wants a picture: "a pn
 | Cost lock | **Pass-through bearer.** The card worker forwards the request's `Authorization` header to the API and holds no password | Same rule as the API: no bearer → cost tiles render "locked"; the worker never leaks money |
 | Target line | Per-day / per-hour **crew-adjusted target = trimmers × cultivar target rate × slot multiplier**, exactly the scoreboard's method (all-time cultivar average rate) | Card and TV agree; Koa's 7-day-window question stays open — if he picks it, the scoreboard changes and the card follows for free |
 | Crew number | "Line crew" = peak trimmers + buckers + T-Zero, as the API reports it today | QC and water spider are not logged yet; a separate PR stores them, and the card label flips to "crew (all roles)" when `totalCrew` changes meaning |
-| Sending | **`telegram_send_photo` tool in the bridge**: fetches the image server-side (adding the bearer for our host), uploads bytes to Telegram | No token or password in any prompt; the routine and Timber both call it; lets the plaintext bot token leave the routine later |
+| Sending | **`telegram_send_photo` tool in the bridge**: fetches the image server-side (adding the bearer only for the cards worker host, never the whole workers.dev suffix: the API worker takes the same password for write actions), uploads bytes to Telegram | No token or password in any prompt; the routine and Timber both call it; lets the plaintext bot token leave the routine later |
 | Midday / EOD schedule | **Cron in the bridge**, not in the card worker | The bridge is the only thing that talks to Telegram and already holds the token and password |
 | Size | 1080 × 1350 (4:5 portrait) | Reads large on a phone; all three cards share one layout system |
 
@@ -55,7 +55,7 @@ cards/                       rogue-origin-cards worker (this repo)
 
 telegram-claude-bot/         bridge
   src/telegram.ts            + sendPhoto(env, bytes, {caption, filename}) multipart to sendPhoto
-  src/cards.ts               fetchCard(url, env) adds bearer for *.roguefamilyfarms.workers.dev, 10 MB cap, image/* only
+  src/cards.ts               fetchCard(url, env) adds the bearer only when the host equals the cards worker host, redirect: manual, streamed 10 MB cap, png/jpeg/webp only
   src/mcp.ts                 + tool telegram_send_photo({url, caption?})
   src/index.ts               + scheduled(): midday + eod crons with a Pacific-hour guard; skip when the card worker says 204
   wrangler.jsonc             + triggers.crons, + CARDS_URL var
@@ -73,7 +73,7 @@ telegram-claude-bot/         bridge
 
 ## Sending
 
-**Bridge tool `telegram_send_photo`** — input `{ url: https URL, caption?: ≤1024 chars }`. Fetches the URL with `Authorization: Bearer ORDERS_PASSWORD` only when the host ends with `roguefamilyfarms.workers.dev`; rejects non-https, non-image responses and bodies over 10 MB; on 204 returns "No card for that period (no production logged)." without calling Telegram; otherwise posts multipart `sendPhoto` (chat_id, photo as `card.png`, caption) and returns "Photo sent." or the Telegram error text. The tool description tells Timber the three card URLs so "send me today's card" works without a prompt change.
+**Bridge tool `telegram_send_photo`** — input `{ url: https URL, caption?: ≤1024 chars }`. Fetches the URL with `Authorization: Bearer ORDERS_PASSWORD` only when the host is exactly the cards worker host (from `CARDS_URL`), with `redirect: manual` and a streamed 10 MB cap; rejects non-https, non-image responses and bodies over 10 MB; on 204 returns "No card for that period (no production logged)." without calling Telegram; otherwise posts multipart `sendPhoto` (chat_id, photo as `card.png`, caption) and returns "Photo sent." or the Telegram error text. The tool description tells Timber the three card URLs so "send me today's card" works without a prompt change.
 
 **Routine.** Step 3 of the Weekly Digest routine (trig_01S7HyPtDWWBP7gEA2DN55F6) gains one line after the text message: `telegram_send_photo({ url: "https://rogue-origin-cards.roguefamilyfarms.workers.dev/weekly?week=<YEAR>-W<WEEK_NUM>", caption: "Week <N> card" })`. Koa updates the routine (standing config) once the worker is live.
 
@@ -91,7 +91,7 @@ telegram-claude-bot/         bridge
 - `cards/test/layout.test.mjs` — every text node has a font + size, no NaN/undefined in styles, tick heights never exceed the plot, chips never exceed two per tile.
 - `cards/test/render.test.mjs` — real satori + resvg in Node: PNG signature, IHDR 1080×1350, renders each of the three fixtures under 5 s, and the locked variant renders.
 - `cards/test/routes.test.mjs` — the fetch handler with a mocked upstream: 200 png, 400 on a bad week/date, 204 when no rows, 502 on upstream 500, bearer forwarded only to the API host, cache keys separate for auth/no-auth, format=json returns the model.
-- bridge `test/send-photo.test.ts` — multipart body carries chat_id/photo/caption; bearer only for our host; 10 MB and content-type rejections; 204 → no Telegram call; scheduled guard fires at 12 PT / 17 PT only.
+- bridge `test/send-photo.test.ts` — multipart body carries chat_id/photo/caption; bearer only for the cards host, none for the API host or look-alikes; manual redirects; streamed 10 MB and content-type rejections; 204 → no Telegram call; scheduled guard fires at 12 PT / 17 PT only.
 - Manual before PR: `wrangler dev` + curl the three routes and look at the PNGs; after deploy, send one `/eod?date=2026-10-16` through the bridge tool and confirm it renders in Telegram.
 
 ## Deployment

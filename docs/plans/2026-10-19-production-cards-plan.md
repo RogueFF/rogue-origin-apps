@@ -441,7 +441,7 @@ test('caption is cut to 1024 chars', ...);
 - Create: `src/cards.ts` → `export async function fetchCard(url: string, env: Env, fetchFn = fetch): Promise<{ status: 'ok'; bytes: Uint8Array; contentType: string } | { status: 'empty' } | { status: 'error'; message: string }>`
 - Test: `test/cards.test.ts`
 
-Rules (one test each): only `https:`; the `Authorization: Bearer ${env.ORDERS_PASSWORD}` header is added only when `hostname.endsWith('.roguefamilyfarms.workers.dev')`; 204 → `empty`; non-2xx → `error` with status; `content-type` not starting with `image/` → `error`; body over 10 MB (check `content-length` first, then the byte length) → `error`; `export function cardUrl(env, kind: 'weekly'|'eod'|'midday', params: Record<string,string>)` builds `${env.CARDS_URL ?? 'https://rogue-origin-cards.roguefamilyfarms.workers.dev'}/${kind}?${query}`.
+Rules (one test each): only `https:`; the `Authorization: Bearer ${env.ORDERS_PASSWORD}` header is added only when the parsed hostname equals the cards worker host exactly (`new URL(env.CARDS_URL || DEFAULT_CARDS_URL).hostname`) — never on a suffix match, because the API worker on the same suffix accepts the same password for write actions; with a bearer the fetch uses `redirect: "manual"`; the body is read as a stream and cancelled past 10 MB; only image/png, image/jpeg, image/webp are accepted; 204 → `empty`; non-2xx → `error` with status; `content-type` not starting with `image/` → `error`; body over 10 MB (check `content-length` first, then the byte length) → `error`; `export function cardUrl(env, kind: 'weekly'|'eod'|'midday', params: Record<string,string>)` builds `${env.CARDS_URL ?? 'https://rogue-origin-cards.roguefamilyfarms.workers.dev'}/${kind}?${query}`.
 
 Commit `feat(telegram): fetchCard with bearer-for-our-host and size guards`.
 
@@ -458,7 +458,7 @@ this.server.registerTool(
   {
     title: "Send Telegram Photo",
     description:
-      "Send an image to the farm Telegram chat from a URL. Fetches the image server-side (adds the ops password for *.roguefamilyfarms.workers.dev, so production cards render with costs) and uploads it. Production cards: " +
+      "Send an image to the farm Telegram chat from a URL. Fetches the image server-side (adds the ops password only for the production cards worker, so cards render with costs) and uploads it. Production cards: " +
       "https://rogue-origin-cards.roguefamilyfarms.workers.dev/weekly?week=2026-W42 · /eod?date=YYYY-MM-DD · /midday?date=YYYY-MM-DD (date defaults to today Pacific). " +
       "Returns 'No card for that period' when the line did not run.",
     inputSchema: { url: z.string().url().max(500), caption: z.string().max(1024).optional() },
