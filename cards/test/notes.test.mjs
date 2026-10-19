@@ -49,6 +49,41 @@ test('standalone mucho/mucha/muchos/muchas → "a lot of", while longer phrases 
   assert.equal(translate('mucho mold'), 'A lot of mold');
 });
 
+test('spoilage is any form of "ech… a perder" or "se va(n) a perder"', () => {
+  for (const note of ['se echan a perder las bolsas', 'se va a perder el producto', 'las bolsas se van a perder', 'se pueden echar a perder']) {
+    const flag = classifyNote(note);
+    assert.equal(flag?.kind, 'bad', note);
+    assert.match(flag.text, /spoil/i, note);
+  }
+});
+
+test('theme markers are whole words and a negation in the same clause cancels them', () => {
+  for (const note of ['moldura', 'deshojando', 'la humedad del cuarto esta bien', 'no hay mold', 'sin gusanos', 'no tiene gusanos', 'no trae hoja']) {
+    assert.equal(classifyNote(note), null, note);
+    assert.deepEqual(themes(note), [], note);
+  }
+  // the negation reaches only to the end of its own clause
+  assert.deepEqual(themes('no hay mold, pero trae gusanos'), ['worms']);
+  assert.deepEqual(themes('trae gusanos, no hay mold'), ['worms']);
+  assert.deepEqual(themes('gusanos y hoja; sin mold'), ['worms', 'leaf']);
+  assert.deepEqual(themes('no hay mold y tiene gusanos'), [], 'one clause: the negation covers both');
+});
+
+test('accents: composed and decomposed forms match the same unaccented table row', () => {
+  assert.equal(translate('está muy húmedo'), 'Is very wet');
+  assert.equal(translate('esta muy humedo'), 'Is very wet');
+  assert.equal(translate('húmedo'), 'Wet');
+  assert.equal(translate('ESTÁN MUY HÚMEDAS'), 'Are very wet');
+  assert.deepEqual(themes('está muy húmedo'), ['moisture']);
+  assert.deepEqual(themes('húmedo'), ['moisture']);
+  assert.equal(classifyNote('húmedo').kind, 'warn');
+});
+
+test('words the table does not know keep their accents', () => {
+  assert.equal(translate('año húmedo'), 'Año wet');
+  assert.equal(translate('ya está mucho mejor'), 'Ya está a lot of mejor');
+});
+
 test('themes lists the matched themes in a fixed order', () => {
   assert.deepEqual(themes('trae mold y gusanos, esta humedo'), ['mold', 'worms', 'moisture']);
   assert.deepEqual(themes('mucha hoja y está HÚMEDO'), ['moisture', 'leaf']);
