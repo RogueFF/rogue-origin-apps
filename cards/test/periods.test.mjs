@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   pacificDate, pacificClock, lastCompleteWeek, weekRange, weekDates, slotLabel, slotEnd, weekdayName, shortWeekday,
-  isYmd, addDaysYmd, priorWeekday, rangeLabel, monthDay,
+  isYmd, addDaysYmd, priorWeekday, rangeLabel, monthDay, slotMinutes, slotClock, slotSpan,
 } from '../src/periods.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -132,4 +132,28 @@ test('monthDay is the short month and day of a date', () => {
   assert.equal(monthDay('2026-10-19'), 'Oct 19');
   assert.equal(monthDay('2026-01-02'), 'Jan 2');
   assert.throws(() => monthDay('2026-13-01'), /date/);
+});
+
+test('slotMinutes reads a slot as minutes since midnight', () => {
+  assert.deepEqual(slotMinutes('3:00 PM – 4:00 PM'), { start: 900, end: 960 });
+  assert.deepEqual(slotMinutes('12:30 PM – 1:00 PM'), { start: 750, end: 780 });
+  assert.deepEqual(slotMinutes('7:11 AM – 8:00 AM'), { start: 431, end: 480 });
+  assert.deepEqual(slotMinutes('12:00 AM - 1:00 AM'), { start: 0, end: 60 });
+  assert.deepEqual(slotMinutes('4:00 PM'), { start: 960, end: null });
+  assert.equal(slotMinutes('lunch'), null);
+});
+
+test('slotClock is the 12-hour start of a slot', () => {
+  assert.equal(slotClock('2:00 PM – 3:00 PM'), '2 PM');
+  assert.equal(slotClock('12:30 PM – 1:00 PM'), '12:30 PM');
+  assert.equal(slotClock('7:11 AM – 8:00 AM'), '7:11 AM');
+  assert.equal(slotClock(''), null);
+});
+
+test('slotSpan draws both ends of a slot the way slotLabel draws a start', () => {
+  assert.equal(slotSpan('3:00 PM – 4:00 PM'), '3–4');
+  assert.equal(slotSpan('11:00 AM – 12:00 PM'), '11–12');
+  assert.equal(slotSpan('12:30 PM – 1:00 PM'), '12½–1');
+  assert.equal(slotSpan('4:00 PM'), null);
+  assert.equal(slotSpan(undefined), null);
 });
