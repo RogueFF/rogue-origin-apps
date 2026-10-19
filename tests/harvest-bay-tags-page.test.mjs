@@ -227,3 +227,56 @@ test('bay_tags: ?open=N renders that bay open, ?warn= shows as a notice beside a
   assert.match(html, /ok=1&open=/, 'client redirect carries ok and open');
   assert.match(html, /addedOk/);
 });
+
+// A bay's drawer as rendered: from its <details> to the next drawer or the dialogs.
+const drawer = (html, bay) => {
+  const from = html.indexOf(`data-bay="${bay}"`);
+  assert.ok(from > -1, `bay ${bay} is on the screen`);
+  const rest = html.slice(from);
+  const next = rest.slice(1).search(/<details class="baydrawer|<dialog/);
+  return next > -1 ? rest.slice(0, next + 1) : rest;
+};
+const printsIn = (d) => [...d.matchAll(/<span class="printcv">([^<]+)<\/span>/g)].map(m => m[1]);
+const fillStartsIn = (d) => [...new Set([...d.matchAll(/name="fill_start" value="([^"]+)"/g)].map(m => m[1]))];
+
+test('bay_tags: a late load into a bay that never came down joins what hangs there (bays 8 and 12, 2026-10-16)', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  // Bay 12: Lifter hung 10 days ago; no tag, no Finished. Two loads of a 2nd cut arrived 3 days ago.
+  const lifter = seedLot(sqlite, { zone: 'Z19', cultivar: 'Lifter', daysAgo: 10 });
+  for (let i = 0; i < 4; i++) seedLoad(sqlite, lifter, 12, { minutesAgo: 10 * 1440 - i * 30 });
+  const sl2 = seedLot(sqlite, { zone: 'Z4', cultivar: 'Sour Lifter', cut: 2, daysAgo: 3 });
+  seedLoad(sqlite, sl2, 12, { minutesAgo: 3 * 1440 });
+  seedLoad(sqlite, sl2, 12, { minutesAgo: 3 * 1440 - 8 });
+  // Bay 8: Lifter 9 days ago, a McLoughlin cultivar added by hand, GMO Belly 3 days ago.
+  const z20 = seedLot(sqlite, { zone: 'Z20', cultivar: 'Lifter', daysAgo: 9 });
+  for (let i = 0; i < 3; i++) seedLoad(sqlite, z20, 8, { minutesAgo: 9 * 1440 - i * 20 });
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Critical Berries', 'CB')`);
+  assert.equal((await post(env, ctx, 'lot_add', { bay: 8, cultivar: 'Critical Berries' })).status, 200);
+  const gmo = seedLot(sqlite, { zone: 'Z10', cultivar: 'GMO Belly', daysAgo: 3 });
+  seedLoad(sqlite, gmo, 8, { minutesAgo: 3 * 1440 });
+
+  const html = await (await page(env, ctx)).text();
+  assert.deepEqual(drawerBays(html), ['8', '12']);
+  const b12 = drawer(html, 12);
+  assert.deepEqual(printsIn(b12), ['Lifter', 'Sour Lifter'], 'the Lifter keeps its PRINT; the 2nd cut hangs beside it');
+  const lifterStart = sqlite.prepare(`SELECT MIN(occurred_at) AS t FROM harvest_scan_log WHERE event_type = 'barn_load' AND bay = 12`).get().t;
+  assert.deepEqual(fillStartsIn(b12), [lifterStart], 'one fill, the one the bay has had since the Lifter went in');
+  const b8 = drawer(html, 8);
+  assert.deepEqual(printsIn(b8).sort(), ['Critical Berries', 'GMO Belly', 'Lifter']);
+  assert.match(b8, /no loads scanned/, 'the hand-added lot is still there too');
+});
+
+test('bay_tags: Whole bay down with no tag printed still lets the next loads refill the bay', async (t) => {
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const old = seedLot(sqlite, { zone: 'Z3', daysAgo: 20 });
+  seedLoad(sqlite, old, 5, { minutesAgo: 19 * 1440 });
+  const fin = await postForm(env, ctx, 'bay_finish', { bay: '5', all: '1' });   // tags went out under another bay
+  assert.equal(fin.status, 200);
+  const fresh = seedLot(sqlite, { zone: 'Z20', cultivar: 'Lifter', daysAgo: 8 });
+  seedLoad(sqlite, fresh, 5, { minutesAgo: 8 * 1440 });
+  const html = await (await page(env, ctx)).text();
+  assert.deepEqual(drawerBays(html), ['5']);
+  assert.deepEqual(printsIn(drawer(html, 5)), ['Lifter'], 'the finished fill stays off the screen');
+});

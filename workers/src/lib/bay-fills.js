@@ -18,6 +18,14 @@
  * day's loads, and the Bay field is often just the last bay used. The gap
  * depends only on the barn-door scans, which carry the bay the load went into.
  *
+ * BUT A GAP ALONE IS NOT A TAKEDOWN (2026-10-19). On 10/16 a few loads were
+ * scanned into bays 8 and 12 a week after the Lifter went in, the gap read as a
+ * refill, and the Lifter fell off the screen with its lots open, no tag printed
+ * and no bay-done row. So a later load may only close a fill that shows signs
+ * of having come down: a bay-done row for it, a sack tagged in that bay off one
+ * of its lots, or every lot in it finished (fillIsDown). Otherwise the new
+ * loads join the fill: they hang beside what was already there.
+ *
  * Pure functions: every input is a plain row, so they test without a database.
  */
 import { harvestZone } from './zones.js';
@@ -35,12 +43,15 @@ const ts = (s) => {
  * Assign every load to its fill.
  *
  * @param {Array<{bay:number, occurred_at:string}>} loads
- * @param {{gapDays?:number}} [opts]
+ * @param {{gapDays?:number, isDown?:(bay:number, fill:object) => boolean}} [opts]
+ *   `isDown(bay, fill)`: has this fill (its loads so far) started coming down?
+ *   Asked once per gap; `false` makes the load after the gap join the fill.
+ *   Without it a gap alone splits, as before 2026-10-19 (see fillIsDown).
  * @returns {Map<number, Array<{startMs:number, loads:object[], closed:boolean}>>}
  *          per bay, its fills oldest first. `closed` = a later fill exists, so
  *          this one was taken down and the bay refilled.
  */
-export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
+export function bayFills(loads, { gapDays = FILL_GAP_DAYS, isDown = null } = {}) {
   const gapMs = gapDays * 86400000;
   const loadsByBay = new Map();
   for (const l of loads) {
@@ -57,7 +68,7 @@ export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
     let fill = null, prev = null;
     for (const l of sorted) {
       const at = ts(l.occurred_at);
-      if (fill && at - prev >= gapMs) fill = null;
+      if (fill && at - prev >= gapMs && (!isDown || isDown(bay, fill))) fill = null;
       if (!fill) { fill = { startMs: at, loads: [], closed: false }; fills.push(fill); }
       fill.loads.push(l);
       prev = at;
@@ -66,6 +77,44 @@ export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
     out.set(bay, fills);
   }
   return out;
+}
+
+/**
+ * The `isDown` for bayFills: has a fill shown any sign of coming down?
+ *
+ *  - a bay-done row for this bay keyed on the fill's start ("Finished" or
+ *    "Whole bay down" was pressed), or
+ *  - a sack tagged in THIS bay, off one of the fill's lots, since the fill
+ *    started (the bay on a tag is typed, so a tag off another lot or in another
+ *    bay proves nothing about this fill), or
+ *  - every lot in the fill finished (closed out lot by lot, the old way).
+ *
+ * @param {{lotOfSession: Map<number, object>, tags: Array<{bay, printed_at, zone_session_id}>,
+ *          done: Array<{bay, fill_start}>}} ctx
+ *   `lotOfSession` maps every session id of a picker lot to the lot (with
+ *   `id`, `takedown_done_at`); tags hang off the lot's primary session, loads
+ *   may sit on any of them.
+ * @returns {(bay:number, fill:{startMs:number, loads:object[]}) => boolean}
+ */
+export function fillIsDown({ lotOfSession, tags = [], done = [] }) {
+  const doneFills = new Set(done.map(d => `${Number(d.bay)}|${ts(d.fill_start)}`));
+  return (bay, fill) => {
+    if (doneFills.has(`${bay}|${fill.startMs}`)) return true;
+    const lotIds = new Set();
+    let allFinished = true;
+    for (const l of fill.loads) {
+      const lot = lotOfSession.get(l.session_id);
+      if (!lot) continue;
+      lotIds.add(lot.id);
+      if (!lot.takedown_done_at) allFinished = false;
+    }
+    if (lotIds.size && allFinished) return true;
+    return tags.some(t => {
+      if (Number(t.bay) !== bay || !(ts(t.printed_at) > fill.startMs)) return false;
+      const lot = lotOfSession.get(t.zone_session_id);
+      return !!lot && lotIds.has(lot.id);
+    });
+  };
 }
 
 /**
