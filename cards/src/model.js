@@ -54,9 +54,14 @@ export function pctChip(value, target) {
   return { kind: pct >= 100 ? 'good' : pct >= 90 ? 'warn' : 'bad', text: `${pct}% target` };
 }
 
-/** Crew-adjusted target for one hourly slot, the scoreboard's method: trimmers × rate × multiplier. */
-export function hourTarget(slot, rate) {
-  return (slot?.trimmers ?? 0) * rate * (slot?.multiplier ?? 1);
+/**
+ * Crew-adjusted target for one `scoreboard.hourlyRates` row, the scoreboard's
+ * own method (workers/src/handlers/production/scoreboard.js): effective
+ * trimmers × that row's strain target rate × the slot multiplier. The rate is
+ * per row because the strain can change mid-day (a blank strain grades at 0.85).
+ */
+export function hourTarget(row) {
+  return (row?.effectiveTrimmers ?? row?.trimmers ?? 0) * (row?.target ?? 0) * (row?.multiplier ?? 1);
 }
 
 const intFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
