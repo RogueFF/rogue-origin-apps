@@ -6,7 +6,7 @@
 
 **Architecture:** Pure functions turn API JSON into a card model, the model into a Satori element tree, and Satori + resvg-wasm turn the tree into PNG. The worker forwards the caller's bearer to the API so cost tiles lock exactly as the API locks them. The bridge is the only thing that talks to Telegram: a tool fetches a card URL and uploads the bytes; a cron does the same twice a day.
 
-**Tech Stack:** Cloudflare Workers (wrangler, ES modules, wasm imports), `satori@0.63`, `@resvg/resvg-wasm@2.6`, `yoga-wasm-web@0.3.3`, `node --test` (`*.test.mjs`), TypeScript in the bridge (`node --test test/*.test.ts`, `@modelcontextprotocol/sdk`, `zod`).
+**Tech Stack:** Cloudflare Workers (wrangler, ES modules, wasm imports), `satori@0.63` (its `standalone` entry + `layout.wasm`), `@resvg/resvg-wasm@2.6`, `node --test` (`*.test.mjs`), TypeScript in the bridge (`node --test test/*.test.ts`, `@modelcontextprotocol/sdk`, `zod`).
 
 **Worktrees:** apps → `C:\Users\Koasm\Desktop\Dev\roa-cards` (branch `feat/production-cards`). Bridge → `C:\Users\Koasm\Desktop\telegram-claude-bot-photo` (branch `feat/telegram-send-photo`). Baselines: apps `workers` tests 0 failures, root tests 1190/1192 (two pre-existing failures unrelated to `cards/`); bridge 8/8 + `tsc --noEmit` clean.
 
@@ -40,8 +40,7 @@
   },
   "dependencies": {
     "@resvg/resvg-wasm": "2.6.2",
-    "satori": "0.63.0",
-    "yoga-wasm-web": "0.3.3"
+    "satori": "0.63.0"
   },
   "devDependencies": {
     "wrangler": "^4"
@@ -300,6 +299,10 @@ Commit `feat(cards): end-of-day card model`.
 Commit `feat(cards): midday card model`.
 
 ---
+
+### Task A8 step 0: runtime spike before any layout work
+
+Before A8/A9, prove the render path in the real runtime: a throwaway `cards/src/index.js` that imports `satori/standalone` + `satori/layout.wasm` + `@resvg/resvg-wasm` + its `index_bg.wasm`, initialises both once, renders one text node in Outfit to a 1080×1350 PNG and returns it. `npx wrangler dev --port 8790` + `curl -o /tmp/spike.png -w "%{http_code}"` → 200 and a real PNG. Then `npm run deploy` the spike as `rogue-origin-cards` and curl the deployed URL: a 1102 "exceeded CPU" error means the account is on Workers Free (10 ms CPU) and Koa decides on the Paid plan before continuing; a 200 means rendering fits (the bridge's Durable Object already needs the Paid plan, so a 200 is expected). Keep the spike's wasm/font wiring as `runtime-workers.js` in A10. Commit `chore(cards): render spike — satori standalone + resvg in the Workers runtime`.
 
 ### Task A8: `layout.js` — card model → Satori element tree (pure)
 
