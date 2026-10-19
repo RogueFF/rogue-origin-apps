@@ -42,7 +42,7 @@ Flag text is rule-based, not AI: a note containing mold/gusano/humed → Watch; 
 ```
 cards/                       rogue-origin-cards worker (this repo)
   wrangler.toml              name, main, [[rules]] Data globs **/*.ttf, no bindings, no secrets
-  package.json               satori, @resvg/resvg-wasm, yoga-wasm-web; test = node --test test/*.test.mjs
+  package.json               satori (standalone + layout.wasm), @resvg/resvg-wasm; test = node --test test/*.test.mjs
   fonts/                     Outfit-Medium/SemiBold, JetBrainsMono-Regular, DMSerifDisplay-Italic (TTF)
   src/index.js               router: /weekly /eod /midday /health, cache, bearer pass-through, format=json
   src/data.js                fetch dashboard / scoreboard / supersack summary (+ prior period); injectable fetch
