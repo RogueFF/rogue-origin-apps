@@ -196,9 +196,33 @@ export function mcloughlinZonesFor(cultivar) {
   return MCLOUGHLIN_ZONES.filter(z => (ZONE_CULTIVARS[z] || []).some(c => norm(c) === want));
 }
 
-/** Every cultivar planted at McLoughlin, once, sorted — the add sheet's list. */
+/** Every cultivar planted at McLoughlin, once, sorted. */
 export function mcloughlinCultivars() {
   const set = new Set();
   for (const z of MCLOUGHLIN_ZONES) for (const c of ZONE_CULTIVARS[z] || []) set.add(c);
+  return [...set].sort((a, b) => a.localeCompare(b, 'en'));
+}
+
+/**
+ * Cultivars a bay can take by hand besides the McLoughlin ones (Koa, 2026-10-19:
+ * Lifter must be addable to bay 12 for takedown). Keyed by cultivar, listing the
+ * zones it is planted in, so the add sheet can ask which one.
+ */
+export const HAND_ADD_EXTRA = {
+  'Lifter': ['Z14', 'Z15', 'Z19', 'Z20', 'Z21'],
+};
+
+/** Zones a hand-added cultivar can come from: McLoughlin first, then HAND_ADD_EXTRA. */
+export function handAddZonesFor(cultivar) {
+  const mcl = mcloughlinZonesFor(cultivar);
+  if (mcl.length) return mcl;
+  const want = norm(cultivar);
+  const key = Object.keys(HAND_ADD_EXTRA).find(c => norm(c) === want);
+  return key ? [...HAND_ADD_EXTRA[key]] : [];
+}
+
+/** Every cultivar the bay add sheet offers: McLoughlin's list plus HAND_ADD_EXTRA. */
+export function handAddCultivars() {
+  const set = new Set([...mcloughlinCultivars(), ...Object.keys(HAND_ADD_EXTRA)]);
   return [...set].sort((a, b) => a.localeCompare(b, 'en'));
 }

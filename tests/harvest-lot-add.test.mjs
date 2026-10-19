@@ -69,11 +69,19 @@ test('lot_add refuses a cultivar with no sku_prefix, naming it', async (t) => {
   assert.match((await res.json()).error, /Runtz/);
 });
 
-test('lot_add refuses a cultivar not planted at McLoughlin and a bad bay', async (t) => {
+test('lot_add takes Lifter by hand from its planted zones, and refuses others and a bad bay', async (t) => {
   if (!sqliteAvailable) return t.skip();
   const { sqlite, env, ctx } = freshDb();
   sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Lifter', 'LIFT')`);
-  assert.equal((await post(env, ctx, 'lot_add', { bay: 3, cultivar: 'Lifter' })).status, 400);
+  const noZone = await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Lifter' });
+  assert.equal(noZone.status, 400, 'Lifter is planted in five zones, so the zone is asked');
+  assert.deepEqual((await noZone.json()).details.zones, ['Z14', 'Z15', 'Z19', 'Z20', 'Z21']);
+  const ok = await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Lifter', zone: 'Z19' });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).bay, 12);
+  assert.equal((await post(env, ctx, 'lot_add', { bay: 12, cultivar: 'Lifter', zone: 'MZ1' })).status, 400);
+  sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Lemon', 'LEM')`);
+  assert.equal((await post(env, ctx, 'lot_add', { bay: 3, cultivar: 'Lemon' })).status, 400, 'Lemon is not hand-addable');
   sqlite.exec(`INSERT INTO cultivars (name, sku_prefix) VALUES ('Runtz', 'RUN')`);
   assert.equal((await post(env, ctx, 'lot_add', { bay: 13, cultivar: 'Runtz' })).status, 400);
 });
