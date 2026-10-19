@@ -1,0 +1,91 @@
+[
+  {
+    "note": "",
+    "flag": null
+  },
+  {
+    "note": "\n",
+    "flag": null
+  },
+  {
+    "note": "\n,trae un poquito de mold  y algunos gusanos ,tenemos la meta un poco alta ,problemas para incrementar la volsa   ",
+    "flag": {
+      "kind": "warn",
+      "text": "A bit of mold and some worms, tenemos la meta un poco alta, problemas para incrementar la bag"
+    }
+  },
+  {
+    "note": "El producto esta muy humedo y tiene mucha hoja ",
+    "flag": {
+      "kind": "warn",
+      "text": "Product is very wet and has a lot of leaf"
+    }
+  },
+  {
+    "note": "El producto esta muy humedo y tiene mucha hoja ,Tiene mucho gusano ",
+    "flag": {
+      "kind": "warn",
+      "text": "Product is very wet and has a lot of leaf, has a lot of worms"
+    }
+  },
+  {
+    "note": "Hubo movimiento de personal a ultima hora ",
+    "flag": null
+  },
+  {
+    "note": "Tiene mucho gusano ",
+    "flag": {
+      "kind": "warn",
+      "text": "Has a lot of worms"
+    }
+  },
+  {
+    "note": "[Crew change 10:06 AM: Buckers : 10 → 3, Podadores : 10 → 4]\n[Crew change 9:35 AM: T-Zero : 1 → 0],se canvio a la canpni,nose esta marcacando la cantidad correcta  en la  computadora de la tele  \n",
+    "flag": null
+  },
+  {
+    "note": "[Crew change 10:06 AM: Buckers : 10 → 3, Podadores : 10 → 4],trae mucho mold y esta mix ",
+    "flag": {
+      "kind": "warn",
+      "text": "Has a lot of mold and esta mix"
+    }
+  },
+  {
+    "note": "[Crew change 12:42 PM: Cultivar :  → 2025 - Lifter / Sungrown]",
+    "flag": null
+  },
+  {
+    "note": "las volsas  que quedaron a vajo estan muy humedas  piensen que se va aser  porque se pueden echar a perder ",
+    "flag": {
+      "kind": "bad",
+      "text": "Bags stored below are very wet, spoilage risk, need a plan"
+    }
+  },
+  {
+    "note": "les estoy ay",
+    "flag": null
+  },
+  {
+    "note": "les estoy ay,Hubo movimiento de personal a ultima hora ",
+    "flag": null
+  },
+  {
+    "note": "problemas para incrementar la volsa   ",
+    "flag": null
+  },
+  {
+    "note": "se yevaron la gente  a colgar   ",
+    "flag": null
+  },
+  {
+    "note": "tenemos la meta un poco alta ",
+    "flag": null
+  },
+  {
+    "note": "trae un poquito de mold  y algunos gusanos ",
+    "flag": {
+      "kind": "warn",
+      "text": "A bit of mold and some worms"
+    }
+  }
+]

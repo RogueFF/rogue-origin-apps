@@ -126,6 +126,7 @@ export function lastCompleteWeek(ymd) {
 export function rangeLabel(start, end) {
   const a = parseYmd(start);
   const b = parseYmd(end);
+  if (b < a) throw new Error(`bad range: end ${end} is before start ${start}`);
   const md = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
   const year = b.getUTCFullYear();
   if (a.getUTCFullYear() !== year) return `${md(a)}, ${a.getUTCFullYear()}–${md(b)}, ${year}`;
