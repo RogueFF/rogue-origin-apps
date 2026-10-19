@@ -110,6 +110,11 @@ test('rangeLabel', () => {
   assert.equal(rangeLabel('2026-10-16', '2026-10-16'), 'Oct 16, 2026');
 });
 
+test('rangeLabel throws when the end is before the start', () => {
+  assert.throws(() => rangeLabel('2026-10-16', '2026-10-12'), /before/);
+  assert.throws(() => rangeLabel('2026-01-02', '2025-12-29'), /before/);
+});
+
 test('shortWeekday', () => {
   assert.equal(shortWeekday('2026-10-15'), 'Thu');
   assert.equal(shortWeekday('2026-10-19'), 'Mon');

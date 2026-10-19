@@ -89,6 +89,61 @@ test('y / pero / e split clauses, so a negation or reassurance stays in its own 
   assert.deepEqual(themes('mucha humedad, el cuarto esta bien'), ['moisture']);
 });
 
+/** Asserts a note's flag kind and its themes. */
+function flags(note, kind, expectedThemes) {
+  assert.equal(classifyNote(note)?.kind ?? null, kind, note);
+  assert.deepEqual(themes(note), expectedThemes, note);
+}
+
+test('a reassurance cancels only the markers before it; bien before a word is "very"', () => {
+  flags('el producto viene bien humedo', 'warn', ['moisture']);
+  flags('bien humedas las volsas', 'warn', ['moisture']);
+  flags('viene bien feo el mold', 'warn', ['mold']);
+  flags('mold bien feo', 'warn', ['mold']);
+  flags('la humedad del cuarto esta bien', null, []);
+  flags('humedad normal', null, []);
+  flags('ok, humedad', 'warn', ['moisture']);
+  flags('normal la mañana pero humedo', 'warn', ['moisture']);
+});
+
+test('seco/seca/secos/secas cancels only an earlier moisture marker', () => {
+  flags('hojas secas', 'warn', ['leaf']);
+  flags('medio seco con mold', 'warn', ['mold']);
+  flags('las volsas humedas ya estan secas', null, []);
+  flags('seco ahora pero humedo', 'warn', ['moisture']);
+});
+
+test('a negation reaches at most two words to its marker, and ni chains it', () => {
+  flags('no hay suficiente gente trae mucho mold', 'warn', ['mold']);
+  flags('sin embargo trae mucho mold', 'warn', ['mold']);
+  flags('ya no trae mold', null, []);
+  flags('no hay mold y tiene gusanos', 'warn', ['worms']);
+  flags('no hay mold ni gusanos', null, []);
+  flags('no tiene nada de mold', null, []);
+  flags('no hay mold ni gusanos ni hoja', null, []);
+});
+
+test('spoilage needs the reflexive se (or pueden echar), and a negation cancels it', () => {
+  assert.equal(classifyNote('la gente va a perder tiempo'), null);
+  assert.equal(classifyNote('no se va a perder'), null);
+  assert.equal(classifyNote('no se van a echar a perder'), null);
+  for (const note of ['se echan a perder las bolsas', 'se van a echar a perder', 'pueden echar a perder el producto', 'se le va a perder']) {
+    assert.equal(classifyNote(note)?.kind, 'bad', note);
+  }
+  assert.deepEqual(
+    classifyNote('las volsas  que quedaron a vajo estan muy humedas  piensen que se va aser  porque se pueden echar a perder '),
+    { kind: 'bad', text: 'Bags stored below are very wet, spoilage risk, need a plan' },
+  );
+});
+
+test('mojado, a dropped h (umedo) and moho are markers too', () => {
+  for (const note of ['mojado', 'mojada', 'mojados', 'las volsas mojadas', 'umedo', 'umeda']) flags(note, 'warn', ['moisture']);
+  flags('trae moho', 'warn', ['mold']);
+  assert.equal(translate('trae moho'), 'Has mold');
+  assert.equal(translate('producto mojado'), 'Product wet');
+  assert.equal(translate('esta umedo'), 'Esta wet');
+});
+
 test('accents: composed and decomposed forms match the same unaccented table row', () => {
   assert.equal(translate('está muy húmedo'), 'Is very wet');
   assert.equal(translate('esta muy humedo'), 'Is very wet');
