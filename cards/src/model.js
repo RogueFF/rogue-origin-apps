@@ -275,7 +275,29 @@ function dayNotes(day, scoreboards) {
   return texts.map(noteText).filter(Boolean);
 }
 
-const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text });
+/** A flag is one line on the card: at most this many characters (24 px Outfit across the flag row). */
+const FLAG_TEXT_MAX = 72;
+/** How far back from the cut a clause break (", " ": " "; ") is preferred over the last space. */
+const CLAUSE_REACH = 24;
+
+/**
+ * Text cut to `max` characters with a trailing "…": at the last clause break in
+ * the final CLAUSE_REACH characters of the window, else at the last space, else
+ * hard. Trailing punctuation before the "…" is dropped. Shorter text is unchanged.
+ */
+export function capText(text, max = FLAG_TEXT_MAX) {
+  const s = String(text ?? '');
+  if (s.length <= max) return s;
+  // The kept text is s.slice(0, cut) plus "…", so cut ≤ max - 1; s[max - 1] may be the space cut at.
+  const room = s.slice(0, max);
+  const clause = Math.max(...[', ', ': ', '; '].map((sep) => room.lastIndexOf(sep, max - 2)));
+  const space = room.lastIndexOf(' ', max - 1);
+  const cut = clause >= max - 1 - CLAUSE_REACH ? clause : space > 0 ? space : max - 1;
+  return `${s.slice(0, cut).replace(/[\s,;:.·–—-]+$/u, '')}…`;
+}
+
+// Flag text can carry a translated floor note, so every flag is capped to one line.
+const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text: capText(text) });
 
 /** At most three flags: Act first, then Watch, then Good. */
 const pickFlags = (flags) => ['bad', 'warn', 'good'].flatMap((kind) => flags.filter((f) => f?.kind === kind)).slice(0, 3);
@@ -462,10 +484,20 @@ function crewDropFlag(rows) {
   return flag('warn', `Crew fell ${peak} → ${last} trimmers after ${slotClock(rows[from].timeSlot) ?? DASH}${reason}${hours}`);
 }
 
-/** The fastest full-hour row; null when no row spans a full hour (a half slot is not an hour). */
-function bestHour(rows) {
+/** An hour worked by fewer than this share of the day's peak trimmers is never the best hour. */
+const BEST_HOUR_CREW_SHARE = 0.5;
+
+const peakTrimmers = (rows) => Math.max(0, ...rows.map((row) => row.trimmers ?? 0));
+
+/**
+ * The fastest full-hour row among `rows` worked by at least half of `peak`
+ * trimmers (the day's peak: one trimmer at 2.77 is not the line's best hour);
+ * null when none qualifies (a half slot is not an hour).
+ */
+function bestHour(rows, peak = peakTrimmers(rows)) {
   return rows
     .filter((row) => Number.isFinite(row.rate) && slotLength(row) >= FULL_HOUR_MINUTES)
+    .filter((row) => (row.trimmers ?? 0) >= BEST_HOUR_CREW_SHARE * peak)
     .reduce((best, row) => (!best || row.rate > best.rate ? row : best), null);
 }
 
@@ -543,7 +575,7 @@ function middayGood(rows) {
   else if (slotMinutes(rows[firstUnder].timeSlot)?.start >= MORNING_CUTOFF_MINUTES) lead = 'Morning above target every hour';
   else if (firstUnder >= 2) lead = `First ${firstUnder} hours above target`;
   else return null;
-  const best = bestHour(firstUnder === -1 ? rows : rows.slice(0, firstUnder));
+  const best = bestHour(firstUnder === -1 ? rows : rows.slice(0, firstUnder), peakTrimmers(rows));
   return best ? flag('good', `${lead}, best ${fmt2(best.rate)} at ${slotSpan(best.timeSlot) ?? DASH}`) : null;
 }
 

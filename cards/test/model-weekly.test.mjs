@@ -199,3 +199,13 @@ test('weekly model leaves its inputs alone', () => {
   weeklyModel(args);
   assert.deepEqual(args, before);
 });
+
+test('weekly Act line from a long note is cut to one line (72 characters) at a word boundary', () => {
+  const long = structuredClone(args.dashboard);
+  for (const day of long.daily) day.notes = '';
+  long.daily.find((d) => d.date === '2026-10-16').notes = 'las volsas que quedaron a vajo estan muy humedas y se pueden echar a perder si no se cuelgan hoy mismo en el granero';
+  const act = weeklyModel({ ...args, dashboard: long, scoreboards: {} }).flags[0];
+  assert.equal(act.kind, 'bad');
+  assert.ok(act.text.length <= 72 && act.text.endsWith('…'), act.text);
+  assert.ok(act.text.startsWith('Fri: '));
+});

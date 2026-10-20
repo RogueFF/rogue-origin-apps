@@ -91,7 +91,8 @@ test('midday buckers per trimmer: short below 0.65, idle above 0.85', () => {
 test('midday flags: crew drop with its floor note, no sacks yet, a morning above target', () => {
   assert.deepEqual(m.flags, [
     // Peak 8 → 3 trimmers; the 12:30 row (5) is the first under 5.6 and carries the note; 12½, 1 and 2 are under target.
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last minute, 3 hours under target' },
+    // 93 characters: cut to one line at a word boundary.
+    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last…' },
     { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
     // The first hour under target (12:30) starts after noon.
     { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9–10' },
@@ -113,7 +114,7 @@ test('midday crew reason is only the drop row\'s own note', () => {
 
 test('midday hours under target count from the drop row on', () => {
   const early = withRows((sb) => { sb.hourlyRates[1].lbs = 5; }); // 8 AM under target too
-  assert.equal(early.flags[0].text, 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last minute, 3 hours under target');
+  assert.equal(early.flags[0].text, 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last…');
 });
 
 test('midday Good: every hour above target so far', () => {
@@ -218,4 +219,13 @@ test('midday model leaves its inputs alone', () => {
   const before = structuredClone(args);
   middayModel(args);
   assert.deepEqual(args, before);
+});
+
+test('midday best hour needs at least half the peak crew', () => {
+  const lone = withRows((sb) => {
+    sb.hourlyRates = sb.hourlyRates.slice(0, 5);
+    // A full hour on one trimmer at 2.77, above its own one-trimmer target.
+    sb.hourlyRates.push({ ...sb.hourlyRates[4], timeSlot: '12:00 PM – 1:00 PM', trimmers: 1, effectiveTrimmers: 1, buckers: 1, lbs: 2.77, rate: 2.77, notes: '' });
+  });
+  assert.deepEqual(lone.flags.at(-1), { kind: 'good', tag: 'Good', text: 'Every hour above target so far, best 2.14 at 9–10' });
 });
