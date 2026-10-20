@@ -141,3 +141,12 @@ test('fetch aborts after the timeout', async () => {
   assert.equal(seenSignal.aborted, true);
   assert.equal(err.cause, seenSignal.reason);
 });
+
+test('sackOutToday(date) reads the salida scan-out without a bearer', async () => {
+  const { calls, fetchFn } = recorder(fixture('sack-out-2026-10-20.json'));
+  const api = makeApi({ base: BASE, fetchFn, bearer: 'secret' });
+  const out = await api.sackOutToday('2026-10-20');
+  assert.equal(calls[0].url, `${BASE}/harvest?action=sack_out_today&date=2026-10-20`);
+  assert.equal(Object.hasOwn(calls[0].init.headers, 'Authorization'), false);
+  assert.equal(out.total, 10);
+});

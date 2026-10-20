@@ -1,0 +1,254 @@
+{
+  "success": true,
+  "date": "2026-10-20",
+  "tz": "UTC",
+  "is_test": false,
+  "total": 10,
+  "groups": [
+    {
+      "season": 2026,
+      "cultivar": "Sour Lifter",
+      "cultivar_code": "SLIFT",
+      "order": null,
+      "sacks_today": 10,
+      "sacks_needed": null,
+      "sacks_out": null,
+      "sacks_total": null,
+      "sacks": [
+        {
+          "sack_id": "26-SLIFT-1397",
+          "serial": 1397,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 14:31:23",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1394",
+          "serial": 1394,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 14:40:33",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1391",
+          "serial": 1391,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 16:10:56",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1388",
+          "serial": 1388,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 16:30:51",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1385",
+          "serial": 1385,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 16:58:45",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1355",
+          "serial": 1355,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 17:58:41",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1274",
+          "serial": 1274,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 18:33:18",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1271",
+          "serial": 1271,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 18:45:09",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1367",
+          "serial": 1367,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 19:35:57",
+          "out_by": "scan",
+          "can_undo": true
+        },
+        {
+          "sack_id": "26-SLIFT-1337",
+          "serial": 1337,
+          "zone": "Z12",
+          "cut_number": 1,
+          "opened_at": "2026-10-20 19:46:13",
+          "out_by": "scan",
+          "can_undo": true
+        }
+      ]
+    }
+  ],
+  "chips": [
+    {
+      "code": "ANIMUF",
+      "cultivar": "Animal Muffins",
+      "in_inventory": 34
+    },
+    {
+      "code": "BLUPQ",
+      "cultivar": "Blue Pineapple Quik",
+      "in_inventory": 4
+    },
+    {
+      "code": "CB",
+      "cultivar": "Critical Berries",
+      "in_inventory": 35
+    },
+    {
+      "code": "DEMI",
+      "cultivar": "Demi Glaze",
+      "in_inventory": 20
+    },
+    {
+      "code": "LIFT",
+      "cultivar": "Lifter",
+      "in_inventory": 307
+    },
+    {
+      "code": "LIMEYL",
+      "cultivar": "Limey Lifter",
+      "in_inventory": 8
+    },
+    {
+      "code": "MANCHOC",
+      "cultivar": "Mandarin Chocolate",
+      "in_inventory": 17
+    },
+    {
+      "code": "MTNAPP",
+      "cultivar": "Mountain Apple",
+      "in_inventory": 7
+    },
+    {
+      "code": "OF",
+      "cultivar": "Orange Fritter",
+      "in_inventory": 8
+    },
+    {
+      "code": "ORNGPQ",
+      "cultivar": "Orange Pineapple Quik",
+      "in_inventory": 21
+    },
+    {
+      "code": "PD",
+      "cultivar": "Platinum Delicata",
+      "in_inventory": 10
+    },
+    {
+      "code": "PLATMA4",
+      "cultivar": "Platinum M A4",
+      "in_inventory": 9
+    },
+    {
+      "code": "PUFF",
+      "cultivar": "Puff Pastries",
+      "in_inventory": 23
+    },
+    {
+      "code": "PURPSNOW",
+      "cultivar": "Purple Snowman",
+      "in_inventory": 15
+    },
+    {
+      "code": "RAINCAKE",
+      "cultivar": "Rainbow Cake",
+      "in_inventory": 32
+    },
+    {
+      "code": "RAINGQ",
+      "cultivar": "Rainbow GMO Quik",
+      "in_inventory": 21
+    },
+    {
+      "code": "ROCKET",
+      "cultivar": "Rocket Sauce",
+      "in_inventory": 7
+    },
+    {
+      "code": "SAUCIERE",
+      "cultivar": "Sauciere",
+      "in_inventory": 12
+    },
+    {
+      "code": "SNICK",
+      "cultivar": "Snickerdoodle",
+      "in_inventory": 6
+    },
+    {
+      "code": "SLIFT",
+      "cultivar": "Sour Lifter",
+      "in_inventory": 2498
+    },
+    {
+      "code": "SPRUCE",
+      "cultivar": "Spruce Dough",
+      "in_inventory": 4
+    },
+    {
+      "code": "STRAWCRM",
+      "cultivar": "Strawberry Cream",
+      "in_inventory": 8
+    },
+    {
+      "code": "STRAWDNT",
+      "cultivar": "Strawberry Doughnuts",
+      "in_inventory": 67
+    },
+    {
+      "code": "STRAWFRT",
+      "cultivar": "Strawberry Fritter",
+      "in_inventory": 15
+    },
+    {
+      "code": "STRAWSCE",
+      "cultivar": "Strawberry Sauce",
+      "in_inventory": 15
+    },
+    {
+      "code": "TAHITI",
+      "cultivar": "Tahitian",
+      "in_inventory": 5
+    }
+  ],
+  "by_strain": [
+    {
+      "season": 2026,
+      "cultivar": "Sour Lifter",
+      "cut_number": 1,
+      "sacks": 10,
+      "strain_titles": [
+        "2026 - Sour Lifter / Sungrown / 1st Cut"
+      ]
+    }
+  ]
+}

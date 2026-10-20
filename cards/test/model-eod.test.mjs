@@ -19,6 +19,7 @@ const args = {
   priorDay: withCosts(fixture('dashboard-2026-10-15.locked.json')),
   scoreboard: fixture('scoreboard-2026-10-16.json'),
   sacks: fixture('supersack-2026-10-16.json'),
+  sackOut: fixture('sack-out-2026-10-20.json'), // the tracker is filled, so the scan-out is not used
   generatedAt: new Date('2026-10-17T00:05:00Z'), // 17:05 PDT on Oct 16
 };
 const m = eodModel(args);
@@ -202,4 +203,14 @@ test('end-of-day crew line is singular at one trimmer', () => {
   const one = structuredClone(args.scoreboard);
   one.scoreboard.hourlyRates.at(-1).trimmers = 1;
   assert.equal(eodModel({ ...args, scoreboard: one }).flags.find((f) => f.kind === 'warn').text, 'Crew fell 8 → 1 trimmer after 4 PM');
+});
+
+test('end-of-day supersacks: the tracker when it has the day, else the scan-out count', () => {
+  assert.deepEqual(m.minis[1], { label: 'Supersacks', value: '20', unit: 'opened', sub: '700 lb raw · 6.0 tops/sack' });
+  const unfilled = eodModel({ ...args, sacks: fixture('supersack-2026-10-19.json') });
+  assert.deepEqual(unfilled.minis[1], { label: 'Supersacks', value: '10', unit: 'scanned', sub: 'tracker not filled yet' });
+  const none = eodModel({ ...args, sacks: fixture('supersack-2026-10-19.json'), sackOut: fixture('sack-out-2026-10-18.empty.json') });
+  assert.deepEqual(none.minis[1], { label: 'Supersacks', value: '0', unit: 'scanned', sub: 'tracker not filled yet' });
+  const blind = eodModel({ ...args, sacks: fixture('supersack-2026-10-19.json'), sackOut: undefined });
+  assert.deepEqual(blind.minis[1], { label: 'Supersacks', value: '—', unit: '', sub: 'tracker empty' });
 });

@@ -1,0 +1,141 @@
+{
+  "success": true,
+  "date": "2026-10-18",
+  "tz": "UTC",
+  "is_test": false,
+  "total": 0,
+  "groups": [],
+  "chips": [
+    {
+      "code": "ANIMUF",
+      "cultivar": "Animal Muffins",
+      "in_inventory": 34
+    },
+    {
+      "code": "BLUPQ",
+      "cultivar": "Blue Pineapple Quik",
+      "in_inventory": 4
+    },
+    {
+      "code": "CB",
+      "cultivar": "Critical Berries",
+      "in_inventory": 35
+    },
+    {
+      "code": "DEMI",
+      "cultivar": "Demi Glaze",
+      "in_inventory": 20
+    },
+    {
+      "code": "LIFT",
+      "cultivar": "Lifter",
+      "in_inventory": 307
+    },
+    {
+      "code": "LIMEYL",
+      "cultivar": "Limey Lifter",
+      "in_inventory": 8
+    },
+    {
+      "code": "MANCHOC",
+      "cultivar": "Mandarin Chocolate",
+      "in_inventory": 17
+    },
+    {
+      "code": "MTNAPP",
+      "cultivar": "Mountain Apple",
+      "in_inventory": 7
+    },
+    {
+      "code": "OF",
+      "cultivar": "Orange Fritter",
+      "in_inventory": 8
+    },
+    {
+      "code": "ORNGPQ",
+      "cultivar": "Orange Pineapple Quik",
+      "in_inventory": 21
+    },
+    {
+      "code": "PD",
+      "cultivar": "Platinum Delicata",
+      "in_inventory": 10
+    },
+    {
+      "code": "PLATMA4",
+      "cultivar": "Platinum M A4",
+      "in_inventory": 9
+    },
+    {
+      "code": "PUFF",
+      "cultivar": "Puff Pastries",
+      "in_inventory": 23
+    },
+    {
+      "code": "PURPSNOW",
+      "cultivar": "Purple Snowman",
+      "in_inventory": 15
+    },
+    {
+      "code": "RAINCAKE",
+      "cultivar": "Rainbow Cake",
+      "in_inventory": 32
+    },
+    {
+      "code": "RAINGQ",
+      "cultivar": "Rainbow GMO Quik",
+      "in_inventory": 21
+    },
+    {
+      "code": "ROCKET",
+      "cultivar": "Rocket Sauce",
+      "in_inventory": 7
+    },
+    {
+      "code": "SAUCIERE",
+      "cultivar": "Sauciere",
+      "in_inventory": 12
+    },
+    {
+      "code": "SNICK",
+      "cultivar": "Snickerdoodle",
+      "in_inventory": 6
+    },
+    {
+      "code": "SLIFT",
+      "cultivar": "Sour Lifter",
+      "in_inventory": 2498
+    },
+    {
+      "code": "SPRUCE",
+      "cultivar": "Spruce Dough",
+      "in_inventory": 4
+    },
+    {
+      "code": "STRAWCRM",
+      "cultivar": "Strawberry Cream",
+      "in_inventory": 8
+    },
+    {
+      "code": "STRAWDNT",
+      "cultivar": "Strawberry Doughnuts",
+      "in_inventory": 67
+    },
+    {
+      "code": "STRAWFRT",
+      "cultivar": "Strawberry Fritter",
+      "in_inventory": 15
+    },
+    {
+      "code": "STRAWSCE",
+      "cultivar": "Strawberry Sauce",
+      "in_inventory": 15
+    },
+    {
+      "code": "TAHITI",
+      "cultivar": "Tahitian",
+      "in_inventory": 5
+    }
+  ],
+  "by_strain": []
+}

@@ -32,7 +32,7 @@ const SACKS = {
  * (the fallback shape); `unlocked` adds the cost keys, as the password would.
  * `failOn` makes one method throw the UpstreamError a failed upstream call throws.
  */
-function fakeApi({ unlocked = false, failOn, fallback = {} } = {}) {
+function fakeApi({ unlocked = false, failOn, fallback = {}, sackOut = {} } = {}) {
   const calls = [];
   const fail = (method, url) => {
     if (failOn === method) throw new UpstreamError(500, url);
@@ -52,6 +52,11 @@ function fakeApi({ unlocked = false, failOn, fallback = {} } = {}) {
       calls.push(['scoreboard', date]);
       fail('scoreboard', `https://api.test/production?action=scoreboard&date=${date}`);
       return SCOREBOARDS.includes(date) ? fixture(`scoreboard-${date}.json`) : { scoreboard: { hourlyRates: [] }, date };
+    },
+    async sackOutToday(date) {
+      calls.push(['sackout', date]);
+      fail('sackout', `https://api.test/harvest?action=sack_out_today&date=${date}`);
+      return sackOut[date] ?? fixture('sack-out-2026-10-18.empty.json');
     },
     async supersackSummary(start, end) {
       calls.push(['supersack', start, end]);
@@ -165,13 +170,13 @@ test('bad week or date → 400 with a one-line JSON error, no upstream calls', a
   assert.equal(t.api.calls.length, 0);
 });
 
-test('/eod fetches the day, the prior weekday, the scoreboard and the sacks; defaults to today Pacific', async () => {
+test('/eod fetches the day, the prior weekday, the scoreboard, the tracker and the scan-out; defaults to today Pacific', async () => {
   const t = app();
   const res = await get(t.app, '/eod?date=2026-10-16');
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('X-Card'), 'eod');
   assert.deepEqual(t.api.calls.map((c) => c.join(' ')).sort(), [
-    'dashboard 2026-10-15 2026-10-15', 'dashboard 2026-10-16 2026-10-16', 'scoreboard 2026-10-16', 'supersack 2026-10-16 2026-10-16',
+    'dashboard 2026-10-15 2026-10-15', 'dashboard 2026-10-16 2026-10-16', 'sackout 2026-10-16', 'scoreboard 2026-10-16', 'supersack 2026-10-16 2026-10-16',
   ]);
   const today = app();
   const model = await (await get(today.app, '/eod?format=json')).json();
@@ -179,14 +184,14 @@ test('/eod fetches the day, the prior weekday, the scoreboard and the sacks; def
   assert.ok(today.api.calls.some((c) => c.join(' ') === 'dashboard 2026-10-16 2026-10-16'), 'Monday’s prior weekday is Friday');
 });
 
-test('/midday fetches the scoreboard, the day, the prior weekday and the sacks; today is a short cache', async () => {
+test('/midday fetches the scoreboard, the day, the prior weekday and the scan-out (never the tracker); today is a short cache', async () => {
   const t = app();
   const res = await get(t.app, '/midday');
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('X-Card'), 'midday');
   assert.equal(res.headers.get('Cache-Control'), 'public, max-age=120');
   assert.deepEqual(t.api.calls.map((c) => c.join(' ')).sort(), [
-    'dashboard 2026-10-16 2026-10-16', 'dashboard 2026-10-19 2026-10-19', 'scoreboard 2026-10-19', 'supersack 2026-10-19 2026-10-19',
+    'dashboard 2026-10-16 2026-10-16', 'dashboard 2026-10-19 2026-10-19', 'sackout 2026-10-19', 'scoreboard 2026-10-19',
   ]);
 });
 
@@ -297,4 +302,26 @@ test('HEAD is answered like GET', async () => {
   const res = await t.app.fetch(new Request('https://cards.test/weekly?week=2026-W42', { method: 'HEAD' }));
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('X-Costs'), 'locked');
+});
+
+test('midday counts the sacks scanned out today', async () => {
+  const t = app({ api: fakeApi({ sackOut: { '2026-10-19': fixture('sack-out-2026-10-20.json') } }) });
+  const model = await (await get(t.app, '/midday?format=json')).json();
+  assert.equal(model.minis[2].sub, 'sacks scanned: 10');
+  assert.ok(!model.flags.some((f) => /sacks/.test(f.text)));
+  const none = await (await get(app().app, '/midday?format=json')).json();
+  assert.equal(none.minis[2].sub, 'sacks scanned: 0');
+});
+
+test('eod falls back to the scan-out count when the tracker has no rows for the day', async () => {
+  const t = app({ api: fakeApi({ sackOut: { '2026-10-19': fixture('sack-out-2026-10-20.json') } }) });
+  const model = await (await get(t.app, '/eod?date=2026-10-19&format=json')).json();
+  assert.deepEqual(model.minis[1], { label: 'Supersacks', value: '10', unit: 'scanned', sub: 'tracker not filled yet' });
+});
+
+test('a failed scan-out call is an upstream failure (502), like any other', async () => {
+  const t = app({ api: fakeApi({ failOn: 'sackout' }) });
+  const res = await get(t.app, '/midday?date=2026-10-19');
+  assert.equal(res.status, 502);
+  assert.deepEqual(await res.json(), { error: 'upstream 500 at https://api.test/harvest?action=sack_out_today&date=2026-10-19' });
 });
