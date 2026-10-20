@@ -2,7 +2,9 @@
 // initialised from wasm modules wrangler compiles at build time (CompiledWasm rule),
 // because Workers refuse to compile wasm from bytes at run time. Fonts arrive as
 // ArrayBuffers through the Data rule for **/*.ttf.
-import './harfbuzz-shim.js'; // must run before satori evaluates
+// The shim must evaluate before satori does, so it is imported first, and no other
+// module in the worker may import satori directly (render.js takes it as a parameter).
+import './harfbuzz-shim.js';
 import satori, { init as initSatori } from 'satori/standalone';
 import layoutWasm from 'satori/layout.wasm';
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
@@ -11,13 +13,15 @@ import outfitMedium from '../fonts/Outfit-Medium.ttf';
 import outfitSemiBold from '../fonts/Outfit-SemiBold.ttf';
 import jetBrainsMono from '../fonts/JetBrainsMono-Regular.ttf';
 import dmSerifItalic from '../fonts/DMSerifDisplay-Italic.ttf';
+import { fontsFrom } from './fonts.js';
 
-const FONTS = [
-  { name: 'Outfit', data: outfitMedium, weight: 500, style: 'normal' },
-  { name: 'Outfit', data: outfitSemiBold, weight: 600, style: 'normal' },
-  { name: 'JetBrains Mono', data: jetBrainsMono, weight: 400, style: 'normal' },
-  { name: 'DM Serif Display', data: dmSerifItalic, weight: 400, style: 'italic' },
-];
+const FONT_BYTES = {
+  'Outfit-Medium.ttf': outfitMedium,
+  'Outfit-SemiBold.ttf': outfitSemiBold,
+  'JetBrainsMono-Regular.ttf': jetBrainsMono,
+  'DMSerifDisplay-Italic.ttf': dmSerifItalic,
+};
+const FONTS = fontsFrom((file) => FONT_BYTES[file]);
 
 let ready = null;
 

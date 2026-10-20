@@ -82,7 +82,7 @@ function head(m) {
 function chip(c) {
   const t = tone(c.kind);
   return div({
-    display: 'flex', alignItems: 'center', ...mono(19), ...pad(7, 12), ...radius(999),
+    display: 'flex', alignItems: 'center', ...mono(18), ...pad(7, 12), ...radius(999),
     whiteSpace: 'nowrap', color: t.color, backgroundColor: t.bg,
   }, c.text, { 'data-role': 'chip' });
 }
@@ -94,7 +94,7 @@ function tile(t) {
     : div({ fontSize: 76, fontWeight: 600, lineHeight: 1, letterSpacing: -1.52 }, t.value);
   return div({ ...flex1, display: 'flex', flexDirection: 'column', ...panel(24), ...pad(22, 28, 20) }, [
     div({ fontSize: 24, color: INK.label }, t.label),
-    div({ display: 'flex', alignItems: 'baseline', marginTop: 8 }, [
+    div({ display: 'flex', alignItems: 'baseline', marginTop: 8, whiteSpace: 'nowrap' }, [
       value,
       t.unit && !locked ? div({ fontSize: 28, color: INK.unit, marginLeft: 10 }, t.unit) : null,
     ]),
@@ -190,7 +190,7 @@ function mini(x) {
   const sub = locked && x.sub === 'locked' ? '' : x.sub || '';
   return div({ ...flex1, display: 'flex', flexDirection: 'column', ...panel(20), ...pad(16, 24, 14) }, [
     div({ fontSize: 22, color: INK.label }, x.label),
-    div({ display: 'flex', alignItems: 'baseline', ...mono(36), marginTop: 4, color: INK.text }, [
+    div({ display: 'flex', alignItems: 'baseline', ...mono(36), marginTop: 4, color: INK.text, whiteSpace: 'nowrap' }, [
       value,
       x.unit && !locked ? div({ fontSize: 20, color: INK.unit, marginLeft: 8 }, x.unit) : null,
     ]),
@@ -204,19 +204,38 @@ function minis(m) {
 
 function flag(f) {
   const t = tone(f.kind);
-  return div({ display: 'flex', alignItems: 'center', ...radius(16), ...pad(12, 20), fontSize: 24, backgroundColor: t.bg }, [
+  return div({ flexShrink: 0, display: 'flex', alignItems: 'center', ...radius(16), ...pad(12, 20), fontSize: 24, backgroundColor: t.bg }, [
     div({ flexShrink: 0, width: 14, height: 14, ...radius(7), marginRight: 16, backgroundColor: t.color }, []),
     div({ flexShrink: 0, ...mono(19), letterSpacing: 1.52, marginRight: 18, width: 74, color: t.color }, f.tag.toUpperCase()),
-    div({}, f.text),
+    // Floor notes are free text: two lines at most, so one long note cannot push the foot off.
+    div({ flexShrink: 1, minWidth: 0, lineClamp: 2 }, f.text),
   ], { 'data-role': 'flag' });
 }
 
+// Vertical give when floor notes run long. The mock leaves 17 px under the flags
+// on the eod and weekly cards; one two-line flag needs 30. The foot gives way first:
+// it slides up to FOOT_GIVE px into the bottom padding (its shrink factor dwarfs the
+// flags' so it takes ~all of the overflow until it is down to its one line). Only
+// then does the flags section shrink and clip its last, least urgent flag. The foot
+// never leaves the card. (A flags factor below 1 would not work: CSS distributes
+// only that fraction of the overflow once the foot is frozen.)
+const BOTTOM_PAD = 40;
+const FOOT_GIVE = 28;
+const FOOT_LINE = 22; // one 17 px JetBrains Mono line
+const FOOT_SHRINK = 1e6;
+
 function flags(m) {
-  return div({ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }, (m.flags || []).map(flag), { 'data-section': 'flags' });
+  return div({
+    display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16, flexShrink: 1, minHeight: 0, overflow: 'hidden',
+  }, (m.flags || []).map(flag), { 'data-section': 'flags' });
 }
 
 function foot(m) {
-  return div({ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', ...mono(17), color: INK.foot }, [
+  // FOOT_GIVE px of the card's bottom padding live inside the foot box, under its line.
+  return div({
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 'auto',
+    height: FOOT_LINE + FOOT_GIVE, minHeight: FOOT_LINE, flexShrink: FOOT_SHRINK, ...mono(17), color: INK.foot,
+  }, [
     div({}, m.foot.left),
     div({}, m.foot.right),
   ], { 'data-section': 'foot' });
@@ -225,7 +244,7 @@ function foot(m) {
 /** The whole card: a 1080×1350 column of head, tiles, chart, minis, flags and foot. */
 export function cardTree(m) {
   return div({
-    width: CANVAS.width, height: CANVAS.height, boxSizing: 'border-box', ...pad(52, 56, 40),
+    width: CANVAS.width, height: CANVAS.height, boxSizing: 'border-box', ...pad(52, 56, BOTTOM_PAD - FOOT_GIVE),
     display: 'flex', flexDirection: 'column', backgroundColor: INK.card, color: INK.text,
     fontFamily: FONT.sans, fontWeight: 500,
   }, [head(m), tiles(m), chart(m), minis(m), flags(m), foot(m)]);
