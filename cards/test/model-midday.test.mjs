@@ -53,6 +53,8 @@ test('midday chart: the logged hours plus a "now" column at the current hour tar
   assert.deepEqual(m.chart.cols.map((c) => c.rate), ['1.77', '1.81', '2.14', '1.99', '1.89', '1.20', '1.35', '1.33', '—']);
   assert.deepEqual(m.chart.cols.map((c) => c.lbs), [15.6, 14.5, 14.2, 15.9, 15.1, 3, 4.2, 4, 0]);
   assert.deepEqual(m.chart.cols.map((c) => c.kind), ['bar', 'bar', 'bar', 'bar', 'bar', 'bar', 'bar', 'bar', 'now']);
+  // Crew-adjusted hour targets (effective trimmers × 1.5835 × multiplier), to the cent.
+  assert.deepEqual(m.chart.cols.map((c) => Math.round(c.target * 100) / 100), [13.93, 12.67, 10.51, 12.67, 12.67, 3.96, 4.91, 4.75, 3.94]);
   const { target, ...now } = m.chart.cols[8];
   assert.deepEqual(now, { label: '3', rate: '—', lbs: 0, kind: 'now' });
   assert.ok(Math.abs(target - 3.94) < 0.01, `now target ${target}`);
@@ -62,6 +64,12 @@ test('midday chart has no "now" column when the current hour has no target', () 
   const closed = withRows((sb) => { sb.currentHourTarget = 0; });
   assert.equal(closed.chart.cols.length, 8);
   assert.ok(closed.chart.cols.every((c) => c.kind === 'bar'));
+});
+
+test('midday chart has no "now" column while the current slot is still the last logged one', () => {
+  const same = withRows((sb) => { sb.currentTimeSlot = '2:00 PM – 3:00 PM'; });
+  assert.equal(same.chart.cols.length, 8);
+  assert.ok(same.chart.cols.every((c) => c.kind === 'bar'));
 });
 
 test('midday mini row', () => {
@@ -83,28 +91,60 @@ test('midday buckers per trimmer: short below 0.65, idle above 0.85', () => {
 test('midday flags: crew drop with its floor note, no sacks yet, a morning above target', () => {
   assert.deepEqual(m.flags, [
     // Peak 8 → 3 trimmers; the 12:30 row (5) is the first under 5.6 and carries the note; 12½, 1 and 2 are under target.
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12½: Staff moved at the last minute, 3 hours under target' },
+    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last minute, 3 hours under target' },
     { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
-    { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9' },
+    // The first hour under target (12:30) starts after noon.
+    { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9–10' },
   ]);
 });
 
 test('midday crew drop without an explaining note', () => {
   const quiet = withRows((sb) => { for (const row of sb.hourlyRates) row.notes = ''; });
-  assert.equal(quiet.flags[0].text, 'Crew fell 8 → 3 trimmers after 12½, 3 hours under target');
+  assert.equal(quiet.flags[0].text, 'Crew fell 8 → 3 trimmers after 12:30 PM, 3 hours under target');
+});
+
+test('midday crew reason is only the drop row\'s own note', () => {
+  const later = withRows((sb) => {
+    sb.hourlyRates[5].notes = '';
+    sb.hourlyRates[6].notes = 'Hubo movimiento de personal a ultima hora ';
+  });
+  assert.equal(later.flags[0].text, 'Crew fell 8 → 3 trimmers after 12:30 PM, 3 hours under target');
+});
+
+test('midday hours under target count from the drop row on', () => {
+  const early = withRows((sb) => { sb.hourlyRates[1].lbs = 5; }); // 8 AM under target too
+  assert.equal(early.flags[0].text, 'Crew fell 8 → 3 trimmers after 12:30 PM: Staff moved at the last minute, 3 hours under target');
 });
 
 test('midday Good: every hour above target so far', () => {
   const morning = withRows((sb) => { sb.hourlyRates = sb.hourlyRates.slice(0, 5); });
   assert.deepEqual(morning.flags, [
     { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
-    { kind: 'good', tag: 'Good', text: 'Every hour above target so far, best 2.14 at 9' },
+    { kind: 'good', tag: 'Good', text: 'Every hour above target so far, best 2.14 at 9–10' },
   ]);
 });
 
-test('midday: no Good when the line fell under target before the fourth hour', () => {
-  const early = withRows((sb) => { sb.hourlyRates[1].lbs = 5; });
-  assert.ok(!early.flags.some((f) => f.kind === 'good'));
+const good = (model) => model.flags.find((f) => f.kind === 'good')?.text ?? null;
+
+test('midday Good: "Morning" only when the first hour under target starts at noon or later', () => {
+  // Boundary: the first under-target row starting exactly at 12:00 still counts as after the morning.
+  assert.equal(good(withRows((sb) => { sb.hourlyRates[5].timeSlot = '12:00 PM – 1:00 PM'; })),
+    'Morning above target every hour, best 2.14 at 9–10');
+  // 11 AM under target: four hours above it, not a whole morning.
+  assert.equal(good(withRows((sb) => { sb.hourlyRates[4].lbs = 5; })), 'First 4 hours above target, best 2.14 at 9–10');
+  assert.equal(good(withRows((sb) => { sb.hourlyRates[3].lbs = 5; })), 'First 3 hours above target, best 2.14 at 9–10');
+});
+
+test('midday Good: "First N hours" needs at least two hours above target', () => {
+  assert.equal(good(withRows((sb) => { sb.hourlyRates[2].lbs = 5; })), 'First 2 hours above target, best 1.81 at 8–9');
+  assert.equal(good(withRows((sb) => { sb.hourlyRates[1].lbs = 5; })), null);
+});
+
+test('midday Good needs a full-hour slot to name', () => {
+  const halves = withRows((sb) => {
+    sb.hourlyRates = [{ ...sb.hourlyRates[0], timeSlot: '7:30 AM – 8:00 AM' }, { ...sb.hourlyRates[1], timeSlot: '8:00 AM – 8:30 AM' }];
+  });
+  assert.equal(good(halves), null);
 });
 
 test('midday: no "no supersacks" line once sacks are logged, or before 10:00', () => {
@@ -120,7 +160,7 @@ test('midday: a warn note takes the first Watch slot over the crew drop; the sac
   assert.deepEqual(warned.flags, [
     { kind: 'warn', tag: 'Watch', text: '9 AM: A bit of mold and some worms' },
     { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
-    { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9' },
+    { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9–10' },
   ]);
 });
 
@@ -142,6 +182,36 @@ test('midday foot', () => {
 
 test('midday model is null without hourly rows', () => {
   assert.equal(withRows((sb) => { sb.hourlyRates = []; }), null);
+});
+
+test('midday model is null when today\'s dashboard is the API fallback shape', () => {
+  assert.equal(middayModel({ ...args, dashboardToday: fixture('dashboard-2026-10-10.empty.json') }), null);
+});
+
+test('midday T-Zero count: the dashboard number, 0 included, else 1', () => {
+  const tz = (tzero) => {
+    const dashboardToday = structuredClone(args.dashboardToday);
+    if (tzero === undefined) delete dashboardToday.today.tzero;
+    else dashboardToday.today.tzero = tzero;
+    return middayModel({ ...args, dashboardToday }).pill;
+  };
+  assert.equal(tz(0), 'Line crew 3 T · 2 B · 0 TZ');
+  assert.equal(tz(2), 'Line crew 3 T · 2 B · 2 TZ');
+  assert.equal(tz(undefined), 'Line crew 3 T · 2 B · 1 TZ');
+});
+
+test('midday with costs unlocked: only the lock flag changes (the midday card draws no money)', () => {
+  // Synthetic cost keys: midday shows no money, so only the unlock is under test.
+  const dashboardToday = structuredClone(args.dashboardToday);
+  Object.assign(dashboardToday.daily[0], { laborCost: 3000, costPerLb: 18.02, topsCostPerLb: 24.5, smallsCostPerLb: 11.2 });
+  const u = middayModel({ ...args, dashboardToday });
+  assert.equal(u.costsLocked, false);
+  assert.deepEqual({ ...u, costsLocked: true }, m);
+});
+
+test('midday model needs generatedAt', () => {
+  assert.throws(() => middayModel({ ...args, generatedAt: undefined }), /generatedAt/);
+  assert.throws(() => middayModel({ ...args, generatedAt: new Date('nope') }), /generatedAt/);
 });
 
 test('midday model leaves its inputs alone', () => {

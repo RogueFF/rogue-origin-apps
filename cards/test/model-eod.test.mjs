@@ -5,7 +5,8 @@ import { eodModel, hourTarget } from '../src/model.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-// Cost figures for the two days (the fixtures were captured without the password).
+// Cost figures for the two days. The fixtures were captured without the password;
+// these were read from the live dashboard with the ops password on 2026-10-19.
 const COSTS = {
   '2026-10-16': { laborCost: 4588.5, costPerLb: 21.84, topsCostPerLb: 27.51, smallsCostPerLb: 14.27 },
   '2026-10-15': { laborCost: 5322.66, costPerLb: 22.51, topsCostPerLb: 30.94, smallsCostPerLb: 12.81 },
@@ -93,6 +94,35 @@ test('end-of-day has one Watch line: a warn note takes it over the crew drop, an
     { kind: 'warn', tag: 'Watch', text: '10 AM: Product is very wet and has a lot of leaf' },
     { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.21' },
   ]);
+});
+
+test('end-of-day crew line names the drop row note and the hours under target from the drop on', () => {
+  const fell = structuredClone(args.scoreboard);
+  fell.scoreboard.hourlyRates[7].notes = ''; // no Act note, so the Watch line is the crew drop
+  const lastRow = fell.scoreboard.hourlyRates.at(-1);
+  lastRow.notes = 'Hubo movimiento de personal a ultima hora ';
+  lastRow.lbs = 2; // under its 2.61 lb target
+  assert.deepEqual(eodModel({ ...args, scoreboard: fell }).flags, [
+    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute, 1 hour under target' },
+    { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.21' },
+  ]);
+});
+
+test('end-of-day: no Good line when no slot is a full hour', () => {
+  const halves = structuredClone(args.scoreboard);
+  halves.scoreboard.hourlyRates = halves.scoreboard.hourlyRates.filter((row) => /^(12:30|4:00) PM/.test(row.timeSlot));
+  assert.equal(halves.scoreboard.hourlyRates.length, 2);
+  assert.ok(!eodModel({ ...args, scoreboard: halves }).flags.some((f) => f.kind === 'good'));
+});
+
+test('end-of-day: a day without cultivars[] names its cultivar field', () => {
+  const plain = structuredClone(args.dashboard);
+  delete plain.daily[0].cultivars;
+  assert.equal(eodModel({ ...args, dashboard: plain }).sub, "Oct 16 · Sour Lifter '26 · 8.5 h logged");
+});
+
+test('end-of-day model needs generatedAt', () => {
+  assert.throws(() => eodModel({ ...args, generatedAt: undefined }), /generatedAt/);
 });
 
 test('end-of-day: no crew line while the last hour keeps 70% of the peak', () => {

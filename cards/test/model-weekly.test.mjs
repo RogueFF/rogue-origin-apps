@@ -5,7 +5,8 @@ import { weeklyModel } from '../src/model.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-// W41 cost figures (the W41 fixture was captured without the password).
+// W41 cost figures. The W41 fixture was captured without the password; these
+// were read from the live dashboard with the ops password on 2026-10-19.
 const W41_COSTS = {
   '2026-10-05': { laborCost: 1730.52, costPerLb: 28.14, topsCostPerLb: 35.33, smallsCostPerLb: 20.59 },
   '2026-10-06': { laborCost: 2307.36, costPerLb: 20.29, topsCostPerLb: 30.99, smallsCostPerLb: 10.72 },
@@ -101,25 +102,63 @@ test('weekly Good says "Rate rose all week" only when every worked day is at or 
   assert.deepEqual(weeklyModel({ ...args, dashboard: rising }).flags.at(-1), { kind: 'good', tag: 'Good', text: 'Rate rose all week' });
 });
 
+/** The scoreboards with every hourly note cleared, then `notes` ({ ymd: { rowIndex: text } }) written in. */
+const scoreboardsWithNotes = (notes) => {
+  const copy = structuredClone(scoreboards);
+  for (const [ymd, { scoreboard }] of Object.entries(copy)) {
+    scoreboard.hourlyRates.forEach((row, i) => { row.notes = notes[ymd]?.[i] ?? ''; });
+  }
+  return copy;
+};
+
+test('weekly notes come from the scoreboard rows, one note per hour, not the dashboard blob', () => {
+  const blank = structuredClone(args.dashboard);
+  for (const day of blank.daily) day.notes = '';
+  assert.deepEqual(weeklyModel({ ...args, dashboard: blank }).flags, m.flags);
+  const quiet = weeklyModel({ ...args, scoreboards: scoreboardsWithNotes({}) });
+  assert.deepEqual(quiet.flags, [{ kind: 'good', tag: 'Good', text: 'Best day Wed, 140 lb at 1.38' }]);
+});
+
 test('weekly Watch: one theme on one day prints without a list or a range', () => {
-  const one = structuredClone(args.dashboard);
-  for (const day of one.daily) day.notes = '';
-  one.daily.find((d) => d.date === '2026-10-14').notes = '[Crew change 9:35 AM: T-Zero : 1 → 0]\nTiene mucho gusano ';
-  assert.deepEqual(weeklyModel({ ...args, dashboard: one }).flags, [
+  const one = scoreboardsWithNotes({ '2026-10-14': { 3: '[Crew change 9:35 AM: T-Zero : 1 → 0],Tiene mucho gusano ' } });
+  assert.deepEqual(weeklyModel({ ...args, scoreboards: one }).flags, [
     { kind: 'warn', tag: 'Watch', text: 'Worms flagged Wed' },
     { kind: 'good', tag: 'Good', text: 'Best day Wed, 140 lb at 1.38' },
   ]);
 });
 
-test('weekly notes split on newlines and crew-change markers, so one day can give several flags', () => {
-  const split = structuredClone(args.dashboard);
-  for (const day of split.daily) day.notes = '';
-  split.daily.find((d) => d.date === '2026-10-13').notes =
-    'se pueden echar a perder\n[Crew change 10:06 AM: Buckers : 10 → 3]trae mucho mold';
-  assert.deepEqual(weeklyModel({ ...args, dashboard: split }).flags.slice(0, 2), [
-    { kind: 'bad', tag: 'Act', text: 'Tue: Spoilage risk' },
-    { kind: 'warn', tag: 'Watch', text: 'Mold flagged Tue' },
+test('weekly: a day without a scoreboard falls back to the comma-joined dashboard notes', () => {
+  // The API joins a day's notes with bare commas (GROUP_CONCAT), and a crew-change
+  // marker carries commas of its own, so markers come out before the split.
+  const dashboard = structuredClone(args.dashboard);
+  dashboard.daily.find((d) => d.date === '2026-10-16').notes = '[Crew change 10:06 AM: Buckers : 10 → 3, Podadores : 10 → 4]'
+    + ',trae mucho mold y esta mix ,las volsas  que quedaron a vajo estan muy humedas  piensen que se va aser  porque se pueden echar a perder ';
+  const { '2026-10-16': fri, ...others } = scoreboards;
+  assert.ok(fri);
+  const flags = weeklyModel({ ...args, dashboard, scoreboards: others }).flags;
+  assert.deepEqual(flags.slice(0, 2), [
+    { kind: 'bad', tag: 'Act', text: 'Fri: Bags stored below are very wet, spoilage risk, need a plan' },
+    { kind: 'warn', tag: 'Watch', text: 'Mold, worms, moisture and leaf flagged Tue–Fri' },
   ]);
+});
+
+test('weekly with no scoreboards reads every day from the dashboard blobs and flags the same', () => {
+  assert.deepEqual(weeklyModel({ ...args, scoreboards: {} }).flags, m.flags);
+});
+
+test('weekly rate skips a day with no trimmer hours from both sums', () => {
+  const dashboard = structuredClone(args.dashboard);
+  dashboard.daily.find((d) => d.date === '2026-10-13').trimmerHours = 0;
+  const z = weeklyModel({ ...args, dashboard });
+  // (497.2 − 110.8) ÷ (377 − 103) = 1.41; W41 1.16.
+  assert.deepEqual(z.tiles[1], { label: 'Rate', value: '1.41', unit: 'lb/hr', chips: [{ kind: 'good', text: '▲ +0.25 vs W41' }] });
+  assert.equal(z.chart.cols[1].rate, '—');
+  assert.equal(z.chart.cols[1].lbs, 110.8);
+  assert.equal(z.tiles[0].value, '497');
+});
+
+test('weekly model needs generatedAt', () => {
+  assert.throws(() => weeklyModel({ ...args, generatedAt: undefined }), /generatedAt/);
 });
 
 test('weekly cultivar: the one with the most tops, +1 per other cultivar that logged tops', () => {
