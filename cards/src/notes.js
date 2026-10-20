@@ -58,6 +58,7 @@ const PHRASES = {
   'moho': 'mold',
   'hojas': 'leaves',
   'hoja': 'leaf',
+  'costales': 'sacks',
   'costal': 'sack',
   'volsas': 'bags',
   'bolsas': 'bags',

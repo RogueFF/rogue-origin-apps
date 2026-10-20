@@ -37,6 +37,7 @@ test('translate keeps unknown words and maps the floor vocabulary', () => {
     'Product is very wet and has a lot of leaf, has a lot of worms');
   assert.equal(translate('se yevaron la gente  a colgar   '), 'Se yevaron la gente a hang');
   assert.equal(translate('no se está pasando por el costal'), 'Not going through the sack');
+  assert.equal(translate('los costales vienen mojados'), 'Sacks vienen wet');
   assert.equal(translate('esta humedo porque'), 'Esta wet');
 });
 
