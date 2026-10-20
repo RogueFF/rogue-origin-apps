@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { freshDb, seedLot, seedLoad, sqliteAvailable } from './helpers/harvest-bay-seed.mjs';
+import { freshDb, seedLot, seedLoad, seedTag, sqliteAvailable } from './helpers/harvest-bay-seed.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mod = (p) => join(REPO, p).replace(/\\/g, '/').replace(/^/, 'file:///');
@@ -256,6 +256,10 @@ test('bay_tags: a late load into a bay that never came down joins what hangs the
   const gmo = seedLot(sqlite, { zone: 'Z10', cultivar: 'GMO Belly', daysAgo: 3 });
   seedLoad(sqlite, gmo, 8, { minutesAgo: 3 * 1440 });
 
+  // Bay 12's Lifter started coming down today, after the 2nd cut arrived: those tags prove nothing about the gap.
+  seedTag(sqlite, lifter, 12, 1, { minutesAgo: 90 });
+  seedTag(sqlite, lifter, 12, 2, { minutesAgo: 60 });
+
   const html = await (await page(env, ctx)).text();
   assert.deepEqual(drawerBays(html), ['8', '12']);
   const b12 = drawer(html, 12);
@@ -274,6 +278,9 @@ test('bay_tags: Whole bay down with no tag printed still lets the next loads ref
   seedLoad(sqlite, old, 5, { minutesAgo: 19 * 1440 });
   const fin = await postForm(env, ctx, 'bay_finish', { bay: '5', all: '1' });   // tags went out under another bay
   assert.equal(fin.status, 200);
+  // In the story the bay was finished ten days ago; the refill below is dated eight days back.
+  sqlite.exec(`UPDATE harvest_bay_done SET done_at = datetime('now', '-10 days')`);
+  sqlite.exec(`UPDATE harvest_scan_log SET takedown_done_at = datetime('now', '-10 days') WHERE takedown_done_at IS NOT NULL`);
   const fresh = seedLot(sqlite, { zone: 'Z20', cultivar: 'Lifter', daysAgo: 8 });
   seedLoad(sqlite, fresh, 5, { minutesAgo: 8 * 1440 });
   const html = await (await page(env, ctx)).text();
