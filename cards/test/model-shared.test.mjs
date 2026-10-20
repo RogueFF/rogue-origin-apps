@@ -141,3 +141,9 @@ test('capText: one line of at most 72 characters, cut at a clause break near the
   assert.equal(capText('y'.repeat(100)), 'y'.repeat(71) + '…');
   for (const n of [73, 80, 150]) assert.ok(capText('word '.repeat(n)).length <= 72);
 });
+
+test('capText takes a shorter limit', async () => {
+  const { capText } = await import('../src/model.js');
+  assert.equal(capText('Staff moved at the last minute and se fueron a hang al granero', 40), 'Staff moved at the last minute and se…');
+  assert.equal(capText('Staff moved at the last minute', 40), 'Staff moved at the last minute');
+});

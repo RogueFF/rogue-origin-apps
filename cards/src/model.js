@@ -275,8 +275,14 @@ function dayNotes(day, scoreboards) {
   return texts.map(noteText).filter(Boolean);
 }
 
-/** A flag is one line on the card: at most this many characters (24 px Outfit across the flag row). */
-const FLAG_TEXT_MAX = 72;
+/**
+ * Floor notes are free text, so the note part of a flag is capped; generated
+ * text never is. A note flag ("2 PM: <note>") keeps NOTE_MAX characters of note
+ * (one line on the card with its prefix); the crew-drop line, whose generated
+ * part is already long, keeps CREW_NOTE_MAX.
+ */
+const NOTE_MAX = 72;
+const CREW_NOTE_MAX = 40;
 /** How far back from the cut a clause break (", " ": " "; ") is preferred over the last space. */
 const CLAUSE_REACH = 24;
 
@@ -285,7 +291,7 @@ const CLAUSE_REACH = 24;
  * the final CLAUSE_REACH characters of the window, else at the last space, else
  * hard. Trailing punctuation before the "…" is dropped. Shorter text is unchanged.
  */
-export function capText(text, max = FLAG_TEXT_MAX) {
+export function capText(text, max = NOTE_MAX) {
   const s = String(text ?? '');
   if (s.length <= max) return s;
   // The kept text is s.slice(0, cut) plus "…", so cut ≤ max - 1; s[max - 1] may be the space cut at.
@@ -296,8 +302,7 @@ export function capText(text, max = FLAG_TEXT_MAX) {
   return `${s.slice(0, cut).replace(/[\s,;:.·–—-]+$/u, '')}…`;
 }
 
-// Flag text can carry a translated floor note, so every flag is capped to one line.
-const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text: capText(text) });
+const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text });
 
 /** At most three flags: Act first, then Watch, then Good. */
 const pickFlags = (flags) => ['bad', 'warn', 'good'].flatMap((kind) => flags.filter((f) => f?.kind === kind)).slice(0, 3);
@@ -341,7 +346,7 @@ function weeklyFlags(worked, scoreboards) {
   const best = worked.reduce((a, b) => (b.totalTops > a.totalTops ? b : a));
   const day = (note) => shortWeekday(note.day.date);
   return [
-    bad ? flag('bad', `${day(bad)}: ${bad.flag.text}`) : null,
+    bad ? flag('bad', `${day(bad)}: ${capText(bad.flag.text)}`) : null,
     warns.length
       ? flag('warn', `${themeList(THEME_ORDER.filter((t) => found.has(t)))} flagged ${span(day(warns[0]), day(warns.at(-1)))}`)
       : null,
@@ -457,17 +462,18 @@ function noteFlags(rows) {
   const notes = rows.map((row) => ({ row, flag: classifyNote(noteText(row.notes)) }));
   return ['bad', 'warn'].map((kind) => {
     const note = notes.filter((n) => n.flag?.kind === kind).at(-1);
-    return note ? flag(kind, `${slotClock(note.row.timeSlot) ?? DASH}: ${note.flag.text}`) : null;
+    return note ? flag(kind, `${slotClock(note.row.timeSlot) ?? DASH}: ${capText(note.flag.text)}`) : null;
   });
 }
 
 /**
  * Watch line for a line that ended under CREW_DROP_RATIO of its peak trimmers:
- * "Crew fell 8 → 3 trimmers after 12:30 PM: <reason>, 3 hours under target".
+ * "Crew fell 8 → 3 trimmers after 12:30 PM, 3 hours under target: <reason>".
  * The drop row is the first of that final stretch under the ratio; the reason
- * is that row's own note, translated (unless it is a flag of its own); the
- * hours under target are counted from the drop row on. null while the last
- * row still holds the ratio.
+ * is that row's own note, translated (unless it is a flag of its own) and
+ * capped at CREW_NOTE_MAX; the hours under target are counted from the drop
+ * row on. The generated facts come first so a long note never cuts them. null
+ * while the last row still holds the ratio.
  */
 function crewDropFlag(rows) {
   const trimmers = rows.map((row) => row.trimmers ?? 0);
@@ -478,10 +484,11 @@ function crewDropFlag(rows) {
   let from = rows.length - 1;
   while (from > 0 && trimmers[from - 1] < floor) from -= 1;
   const note = noteText(rows[from].notes);
-  const reason = /\p{L}/u.test(note) && !classifyNote(note) ? `: ${translate(note)}` : '';
+  const reason = /\p{L}/u.test(note) && !classifyNote(note) ? `: ${capText(translate(note), CREW_NOTE_MAX)}` : '';
   const under = rows.slice(from).filter(underTarget).length;
   const hours = under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : '';
-  return flag('warn', `Crew fell ${peak} → ${last} trimmers after ${slotClock(rows[from].timeSlot) ?? DASH}${reason}${hours}`);
+  const crew = `${last} ${last === 1 ? 'trimmer' : 'trimmers'}`;
+  return flag('warn', `Crew fell ${peak} → ${crew} after ${slotClock(rows[from].timeSlot) ?? DASH}${hours}${reason}`);
 }
 
 /** An hour worked by fewer than this share of the day's peak trimmers is never the best hour. */

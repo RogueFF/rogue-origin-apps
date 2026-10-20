@@ -103,8 +103,8 @@ test('end-of-day crew line names the drop row note and the hours under target fr
   lastRow.notes = 'Hubo movimiento de personal a ultima hora ';
   lastRow.lbs = 2; // under its 2.61 lb target
   assert.deepEqual(eodModel({ ...args, scoreboard: fell }).flags, [
-    // 88 characters, so the flag is cut to one line at its last clause break.
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute…' },
+    // Generated facts first, the drop row's note last (capped at 40 characters, this one is 30).
+    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM, 1 hour under target: Staff moved at the last minute' },
     { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.21' },
   ]);
 });
@@ -180,10 +180,26 @@ test('end-of-day best hour needs at least half the peak crew', () => {
   assert.deepEqual(eodModel(oct19).flags.at(-1), { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.77' });
 });
 
-test('end-of-day note flags are cut to one line (72 characters) at a word boundary', () => {
+test('end-of-day note flags cap the note at 72 characters at a word boundary; the hour prefix is not counted', () => {
   const long = structuredClone(args.scoreboard);
   long.scoreboard.hourlyRates[3].notes = 'El producto esta muy humedo y tiene mucha hoja y los costales vienen mal amarrados desde el campo';
   const watch = eodModel({ ...args, scoreboard: long }).flags.find((f) => f.kind === 'warn');
-  assert.equal(watch.text, '10 AM: Product is very wet and has a lot of leaf and los costales…');
-  assert.ok(watch.text.length <= 72);
+  assert.equal(watch.text, '10 AM: Product is very wet and has a lot of leaf and los sacks vienen mal…');
+  assert.equal(watch.text.slice('10 AM: '.length).length, 67);
+});
+
+test('end-of-day crew line: a long drop-row note is capped at 40 characters, the count and hours always whole', () => {
+  const fell = structuredClone(args.scoreboard);
+  fell.scoreboard.hourlyRates[7].notes = '';
+  const lastRow = fell.scoreboard.hourlyRates.at(-1);
+  lastRow.notes = 'Hubo movimiento de personal a ultima hora y se fueron a colgar al granero del norte';
+  lastRow.lbs = 2;
+  const watch = eodModel({ ...args, scoreboard: fell }).flags.find((f) => f.kind === 'warn');
+  assert.equal(watch.text, 'Crew fell 8 → 5 trimmers after 4 PM, 1 hour under target: Staff moved at the last minute and se…');
+});
+
+test('end-of-day crew line is singular at one trimmer', () => {
+  const one = structuredClone(args.scoreboard);
+  one.scoreboard.hourlyRates.at(-1).trimmers = 1;
+  assert.equal(eodModel({ ...args, scoreboard: one }).flags.find((f) => f.kind === 'warn').text, 'Crew fell 8 → 1 trimmer after 4 PM');
 });
