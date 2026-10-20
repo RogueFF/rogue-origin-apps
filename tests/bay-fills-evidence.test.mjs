@@ -38,29 +38,33 @@ test('bayFills: a load after the gap joins the fill when nothing says the bay ca
 
 test('bayFills: the same gap splits the bay when the first fill did come down', () => {
   const seen = [];
-  const fills = bayFills(bay12, { isDown: (bay, fill) => { seen.push([bay, fill.loads.length]); return true; } });
+  const fills = bayFills(bay12, { isDown: (bay, fill, at) => { seen.push([bay, fill.loads.length, at]); return true; } });
   const f = fills.get(12);
   assert.equal(f.length, 2);
   assert.deepEqual(f[0].loads.map(l => l.session_id), [1470, 1665]);
   assert.equal(f[0].closed, true);
   assert.deepEqual(f[1].loads.map(l => l.session_id), [1879, 1879]);
-  assert.deepEqual(seen, [[12, 2]], 'asked once, at the gap, about the fill as it stood');
+  assert.deepEqual(seen, [[12, 2, Date.parse('2026-10-16T18:17:00Z')]],
+    'asked once, at the gap, about the fill as it stood, with the time of the load that arrived');
 });
 
 test('bayFills: without an isDown the gap rule stands alone (the picker before 2026-10-19)', () => {
   assert.equal(bayFills(bay12).get(12).length, 2);
 });
 
-test('fillIsDown: a bay-done row for the fill is proof', () => {
+const GAP_LOAD = Date.parse('2026-10-16T18:17:00Z');   // the load that arrived after the gap
+
+test('fillIsDown: a bay-done row for the fill is proof, if it was pressed before the later load arrived', () => {
   const lifter = lot(1470);
-  const isDown = fillIsDown({ lotOfSession: sessions(lifter), tags: [],
-    done: [{ bay: 12, cultivar: 'Lifter', cut_number: 1, fill_start: at(9, 15, 51) }] });
   const fill = { startMs: Date.parse('2026-10-09T15:51:00Z'), loads: bay12.slice(0, 1) };
-  assert.equal(isDown(12, fill), true);
-  assert.equal(isDown(11, fill), false, 'another bay\'s row says nothing about this one');
+  const withDone = (done_at) => fillIsDown({ lotOfSession: sessions(lifter), tags: [],
+    done: [{ bay: 12, cultivar: 'Lifter', cut_number: 1, fill_start: at(9, 15, 51), done_at }] });
+  assert.equal(withDone(at(15, 20))(12, fill, GAP_LOAD), true);
+  assert.equal(withDone(at(15, 20))(11, fill, GAP_LOAD), false, 'another bay\'s row says nothing about this one');
+  assert.equal(withDone(at(19, 20))(12, fill, GAP_LOAD), false, 'finished three days after the load came in: it hung beside that load');
   const other = fillIsDown({ lotOfSession: sessions(lifter), tags: [],
-    done: [{ bay: 12, cultivar: 'Lifter', cut_number: 1, fill_start: at(1, 9) }] });
-  assert.equal(other(12, fill), false, 'a row for an earlier fill of the bay is not this fill');
+    done: [{ bay: 12, cultivar: 'Lifter', cut_number: 1, fill_start: at(1, 9), done_at: at(15, 20) }] });
+  assert.equal(other(12, fill, GAP_LOAD), false, 'a row for an earlier fill of the bay is not this fill');
 });
 
 test('fillIsDown: a tag printed in that bay off one of the fill\'s lots is proof; other tags are not', () => {
@@ -68,20 +72,24 @@ test('fillIsDown: a tag printed in that bay off one of the fill\'s lots is proof
   const sl = lot(840, { zone: 'Z3', cultivar: 'Sour Lifter' });
   const lotOfSession = sessions(lifter, sl);
   const fill = { startMs: Date.parse('2026-10-09T15:51:00Z'), loads: [{ bay: 12, occurred_at: at(9, 15, 51), session_id: 1499 }] };
-  const tag = (over) => ({ sack_id: '26-LFT-1', bay: 12, printed_at: at(17, 16), zone_session_id: 1470, ...over });
-  const down = (tags) => fillIsDown({ lotOfSession, tags, done: [] })(12, fill);
-  assert.equal(down([tag()]), true, 'a sack came out of this bay from this lot');
+  const tag = (over) => ({ sack_id: '26-LFT-1', bay: 12, printed_at: at(15, 16), zone_session_id: 1470, ...over });
+  const down = (tags) => fillIsDown({ lotOfSession, tags, done: [] })(12, fill, GAP_LOAD);
+  assert.equal(down([tag()]), true, 'a sack came out of this bay from this lot before the later load arrived');
   assert.equal(down([tag({ bay: 11 })]), false, 'the lot was bagged out of another bay');
   assert.equal(down([tag({ printed_at: at(9, 15, 50) })]), false, 'printed before the fill started: the previous fill\'s sack');
+  assert.equal(down([tag({ printed_at: at(19, 17) })]), false,
+    'bay 12, 2026-10-19: the Lifter was bagged three days AFTER the 2nd-cut loads came in, so those loads hung beside it');
   assert.equal(down([tag({ zone_session_id: 840 })]), false, 'a different lot\'s sack, however the bay was typed');
   assert.equal(down([tag({ zone_session_id: 9999 })]), false, 'a lot the picker does not know');
 });
 
 test('fillIsDown: every lot in the fill finished is proof; one still open is not', () => {
-  const a = lot(1470, { takedown_done_at: at(17, 22) });
+  const a = lot(1470, { takedown_done_at: at(15, 22) });
   const b = lot(1665, { zone: 'Z15', takedown_done_at: null });
   const fill = { startMs: Date.parse('2026-10-09T15:51:00Z'), loads: bay12.slice(0, 2) };
-  assert.equal(fillIsDown({ lotOfSession: sessions(a, b), tags: [], done: [] })(12, fill), false);
-  assert.equal(fillIsDown({ lotOfSession: sessions(a, { ...b, takedown_done_at: at(17, 22) }), tags: [], done: [] })(12, fill), true);
-  assert.equal(fillIsDown({ lotOfSession: new Map(), tags: [], done: [] })(12, fill), false, 'no known lot is no proof');
+  assert.equal(fillIsDown({ lotOfSession: sessions(a, b), tags: [], done: [] })(12, fill, GAP_LOAD), false);
+  assert.equal(fillIsDown({ lotOfSession: sessions(a, { ...b, takedown_done_at: at(15, 22) }), tags: [], done: [] })(12, fill, GAP_LOAD), true);
+  assert.equal(fillIsDown({ lotOfSession: sessions(a, { ...b, takedown_done_at: at(19, 22) }), tags: [], done: [] })(12, fill, GAP_LOAD), false,
+    'one lot finished after the later load arrived: not proof the bay was empty when it came in');
+  assert.equal(fillIsDown({ lotOfSession: new Map(), tags: [], done: [] })(12, fill, GAP_LOAD), false, 'no known lot is no proof');
 });
