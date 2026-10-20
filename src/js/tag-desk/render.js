@@ -6,6 +6,7 @@
  */
 import { t, ES } from './labels.js';
 import * as api from './api.js';
+import { redCardPage, RED_CARD_CSS, imagesSettled, bi } from './red-card.js';
 import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure, laneHeadline, laneRateLine } from './model.js';
 
 // ---------- context (set by init) ----------
@@ -477,23 +478,22 @@ const KIT_CSS = col => `@page{size:8.5in 11in;margin:0}*{box-sizing:border-box}b
     .size{font-size:150px;font-weight:800;line-height:.95;letter-spacing:-.02em}.rest{font-size:34px;color:#444}.col{font-size:30px;font-weight:700;color:${col};letter-spacing:.08em}
     .photo{flex:1;min-height:2.6in;border:4px dashed #b9b4a8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#8a857a;overflow:hidden}.photo.has{border:0}.photo img{max-width:100%;max-height:100%;object-fit:contain}
     .rules{font-size:26px;line-height:1.3}.rules p{margin:0 0 .16in}.rules .en{display:block;font-size:19px;color:#555}
-    .red{background:#b5493a;color:#fff}.red .band{height:.7in;background:${col};border:4px solid #fff}
-    .pedir{font-size:110px;font-weight:800;line-height:1}.qr{background:#fff;padding:.25in;border-radius:16px;width:4.6in;height:4.6in;align-self:center}.qr svg{width:100%;height:100%;display:block}
-    .scan{font-size:46px;font-weight:800;text-align:center}.scan .en{display:block;font-size:26px;font-weight:500}.keep{font-size:24px;text-align:center}.keep .en{display:block;font-size:18px;opacity:.85}.url{font:14px monospace;text-align:center;opacity:.8;word-break:break-all}
     .tapelbl{height:auto;justify-content:flex-start}.lbl{width:7in;border:6px solid #dc2626;border-left:.5in solid ${col};border-radius:12px;padding:.3in .4in;font-size:48px;font-weight:800;line-height:1.1}.lbl .en{display:block;font-size:26px;font-weight:500;color:#444}.cut{font-size:14px;color:#888}`;
-const kitDoc = (title, col, pages) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${KIT_CSS(col)}</style></head><body>${pages.join('')}</body></html>`;
-const tapePage = (size, tape, col, es) => `<section class="pg tapelbl"><div class="lbl">Cinta roja en el bin ${tape}<span class="en">Red tape at bin ${tape} · ${esc(size)}</span></div><div class="cut">✂ ${es ? 'recorta y pega en la pared del carril, a la altura de la cinta' : 'cut out and stick on the lane wall at the tape'}</div></section>`;
+const kitDoc = (title, col, pages, lang = 'es') => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${KIT_CSS(col)}${RED_CARD_CSS}</style></head><body>${pages.join('')}</body></html>`;
+const tapePage = (size, tape, col, es) => { const main = es ? `Cinta roja en el bin ${tape}` : `Red tape at bin ${tape}`, sub = `${es ? `Red tape at bin ${tape}` : `Cinta roja en el bin ${tape}`} · ${esc(size)}`;
+  return `<section class="pg tapelbl"><div class="lbl">${main}<span class="en">${sub}</span></div><div class="cut">✂ ${es ? 'recorta y pega en la pared del carril, a la altura de la cinta' : 'cut out and stick on the lane wall at the tape'}</div></section>`; };
 function openPrintWin(es) { const w = window.open('', '_blank'); if (!w) toast(es ? 'El navegador bloqueó la ventana — permite ventanas emergentes' : 'The browser blocked the window — allow pop-ups'); return w; }
 function writeDoc(w, html) { try { w.document.open(); w.document.write(html); w.document.close(); return true; } catch (e) { console.warn('print window', e); return false; } }
-const printSoon = w => setTimeout(() => { try { w.focus(); w.print(); } catch { /* closed */ } }, 300);
+/** Print once the kit's images are in (bag photo, logo); a 3 s cap so a slow CDN never holds the kit. */
+const printSoon = w => imagesSettled(w.document.images, 3000).then(() => setTimeout(() => { try { w.focus(); w.print(); } catch { /* closed */ } }, 150));
 const laneCol = l => LANE_HEX[l.colour] || '#8b1a1a';
 
 /** Just the red-tape label (page 3), from the lane as it stands. No API call: the red card on the rack keeps working. */
-function printTapeLabel(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const { size } = laneSize(ln, 'es'); const tape = Math.max(0, ln.redTapeAtBins | 0);
+function printTapeLabel(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const lang = es ? 'es' : 'en'; const { size } = laneSize(ln, lang); const tape = Math.max(0, ln.redTapeAtBins | 0);
   const w = openPrintWin(es); if (!w) return;
-  if (writeDoc(w, kitDoc(`Tape label · ${size}`, laneCol(ln), [tapePage(size, tape, laneCol(ln), es)]))) printSoon(w); }
+  if (writeDoc(w, kitDoc(`Tape label · ${size}`, laneCol(ln), [tapePage(size, tape, laneCol(ln), es)], lang))) printSoon(w); }
 
-/** Full lane kit: header card · red ORDER card · red-tape label. Mints a new red card, so the old one stops working. */
+/** Full lane kit: header card · red ORDER card (the old kanban card template, in red — red-card.js) · red-tape label. Mints a new red card, so the old one stops working. */
 async function printLaneKit(id) { const es = ES(); const ln = laneById(id); if (!ln) return;
   if (!confirm(es ? 'Esto reemplaza la tarjeta roja del estante — la anterior deja de funcionar. ¿Imprimir el kit completo?' : 'This replaces the red card on the rack — the old one stops working. Print a full kit?')) return;
   const w = openPrintWin(es); if (!w) return; // opened inside the click so the browser allows it; filled once the token is back
@@ -501,13 +501,13 @@ async function printLaneKit(id) { const es = ES(); const ln = laneById(id); if (
   let r; try { r = await api.makeLaneKit(id); } catch (e) { console.error(e); try { w.close(); } catch { /* */ } toast(`${t('saveFail')} · ${esc(e.message || '')}`); return; }
   const nl = r.lane || ln; let ok = false;
   try {
-    const { size, rest } = laneSize(nl, 'es'); const col = laneCol(nl); const colEs = (COLOUR_ES[nl.colour] || '').toUpperCase(); const tape = Math.max(0, nl.redTapeAtBins | 0);
-    const c = byId(id); const photo = c?.picture ? `<div class="photo has"><img src="${esc(c.picture)}" alt="" referrerpolicy="no-referrer"></div>` : '<div class="photo">foto de la bolsa · bag photo</div>';
+    const lang = es ? 'es' : 'en'; const { size, rest } = laneSize(nl, lang); const col = laneCol(nl); const colName = ((es ? COLOUR_ES[nl.colour] : nl.colour) || '').toUpperCase(); const tape = Math.max(0, nl.redTapeAtBins | 0);
+    const c = byId(id); const photo = c?.picture ? `<div class="photo has"><img src="${esc(c.picture)}" alt="" referrerpolicy="no-referrer"></div>` : `<div class="photo">${es ? 'foto de la bolsa · bag photo' : 'bag photo · foto de la bolsa'}</div>`;
     ok = writeDoc(w, kitDoc(`Lane kit · ${size}`, col, [
-      `<section class="pg"><div class="band"></div><div class="size">${esc(size)}</div><div class="rest">${esc(rest)}${colEs ? ` · <span class="col">${esc(colEs)}</span>` : ''}</div>${photo}
-        <div class="rules"><p>1. Solo un bin abierto por carril. Abre el siguiente cuando EN USO esté vacío.<span class="en">Only one open bin per lane. Open the next one when EN USO is empty.</span></p><p>2. Si descubres la tarjeta roja, escanéala.<span class="en">If you uncover the red card, scan it.</span></p></div></section>`,
-      `<section class="pg red"><div class="band"></div><div class="pedir">PEDIR · ${esc(size)}</div><div class="qr">${qrSvg(r.redCard.url)}</div><div class="scan">ESCANEA ESTA TARJETA<span class="en">scan this card</span></div><div class="keep">Déjala aquí hasta la próxima entrega<span class="en">Leave it here until the next delivery</span></div><div class="url">${esc(r.redCard.url)}</div></section>`,
-      tapePage(size, tape, col, es)]));
+      `<section class="pg"><div class="band"></div><div class="size">${esc(size)}</div><div class="rest">${esc(rest)}${colName ? ` · <span class="col">${esc(colName)}</span>` : ''}</div>${photo}
+        <div class="rules"><p>${bi('1. Solo un bin abierto por carril. Abre el siguiente cuando EN USO esté vacío.', '1. Only one open bin per lane. Open the next one when EN USO is empty.', lang)}</p><p>${bi('2. Si descubres la tarjeta roja, escanéala.', '2. If you uncover the red card, scan it.', lang)}</p></div></section>`,
+      redCardPage({ item: c?.item || size, crumbtrail: c?.crumbtrailRaw || '', colourHex: col, colourName: colName, lang, picture: c?.picture || '', supplier: c?.vendor || 'Grove', orderQty: c?.orderQtyRaw, delivery: c?.deliveryRaw, price: c?.priceRaw, qr: qrSvg(r.redCard.url), logo: new URL('../assets/ro-logo-square.png', document.baseURI).href }),
+      tapePage(size, tape, col, es)], lang));
     if (ok) { printSoon(w); toast(es ? `Kit listo · cinta roja en el bin ${tape} · la tarjeta roja anterior ya no funciona` : `Kit ready · red tape at bin ${tape} · the old red card no longer works`); }
     else toast(es ? 'La ventana de impresión se cerró — el kit nuevo ya está activo, vuelve a imprimir' : 'The print window closed — the new kit is already live, print it again');
   } catch (e) { console.error(e); toast(`${t('saveFail')} · ${esc(e.message || '')}`); }
