@@ -10,7 +10,7 @@ const args = {
   scoreboard: fixture('scoreboard-2026-10-19.json'),
   dashboardToday: fixture('dashboard-2026-10-19.locked.json'),
   priorDay: fixture('dashboard-2026-10-16.locked.json'),
-  sacks: fixture('supersack-2026-10-19.json'),
+  sackOut: fixture('sack-out-2026-10-18.empty.json'), // nothing scanned out yet
   generatedAt: new Date('2026-10-19T22:55:00Z'), // 15:55 PDT
 };
 const m = middayModel(args);
@@ -77,7 +77,7 @@ test('midday mini row', () => {
     { label: 'Smalls so far', value: '80', unit: 'lb', sub: '' },
     // Last hour: 2 buckers for 3 trimmers.
     { label: 'Buckers per trimmer', value: '0.67', unit: '', sub: 'band 0.70–0.75, fed' },
-    { label: 'Hours logged', value: '7.3', unit: 'of 8.5', sub: 'sacks logged: 0' },
+    { label: 'Hours logged', value: '7.3', unit: 'of 8.5', sub: 'sacks scanned: 0' },
   ]);
 });
 
@@ -92,7 +92,7 @@ test('midday flags: crew drop with its floor note, no sacks yet, a morning above
   assert.deepEqual(m.flags, [
     // Peak 8 → 3 trimmers; the 12:30 row (5) is the first under 5.6 and carries the note; 12½, 1 and 2 are under target.
     { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 3 trimmers after 12:30 PM, 3 hours under target: Staff moved at the last minute' },
-    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
+    { kind: 'warn', tag: 'Watch', text: 'No sacks scanned out yet today' },
     // The first hour under target (12:30) starts after noon.
     { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9–10' },
   ]);
@@ -119,7 +119,7 @@ test('midday hours under target count from the drop row on', () => {
 test('midday Good: every hour above target so far', () => {
   const morning = withRows((sb) => { sb.hourlyRates = sb.hourlyRates.slice(0, 5); });
   assert.deepEqual(morning.flags, [
-    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
+    { kind: 'warn', tag: 'Watch', text: 'No sacks scanned out yet today' },
     { kind: 'good', tag: 'Good', text: 'Every hour above target so far, best 2.14 at 9–10' },
   ]);
 });
@@ -147,19 +147,27 @@ test('midday Good needs a full-hour slot to name', () => {
   assert.equal(good(halves), null);
 });
 
-test('midday: no "no supersacks" line once sacks are logged, or before 10:00', () => {
-  const sacked = middayModel({ ...args, sacks: fixture('supersack-2026-10-16.json') });
-  assert.equal(sacked.minis[2].sub, 'sacks logged: 20');
-  assert.ok(!sacked.flags.some((f) => /supersacks/.test(f.text)));
+test('midday sacks come from the scan-out: the count, and no "no sacks" line once any are scanned or before 10:00', () => {
+  const scanned = middayModel({ ...args, sackOut: fixture('sack-out-2026-10-20.json') });
+  assert.equal(scanned.minis[2].sub, 'sacks scanned: 10');
+  assert.ok(!scanned.flags.some((f) => /sacks/.test(f.text)));
   const early = withRows((sb) => { sb.hourlyRates = sb.hourlyRates.slice(0, 2); }); // through 9:00
-  assert.ok(!early.flags.some((f) => /supersacks/.test(f.text)));
+  assert.ok(!early.flags.some((f) => /sacks/.test(f.text)));
+});
+
+test('midday never reads the end-of-day supersack tracker; a missing scan-out counts as none', () => {
+  const tracker = middayModel({ ...args, sacks: fixture('supersack-2026-10-16.json') }); // 20 on the tracker
+  assert.equal(tracker.minis[2].sub, 'sacks scanned: 0');
+  const missing = middayModel({ ...args, sackOut: undefined });
+  assert.equal(missing.minis[2].sub, 'sacks scanned: 0');
+  assert.ok(missing.flags.some((f) => f.text === 'No sacks scanned out yet today'));
 });
 
 test('midday: a warn note takes the first Watch slot over the crew drop; the sacks line is the second', () => {
   const warned = withRows((sb) => { sb.hourlyRates[2].notes = 'trae un poquito de mold  y algunos gusanos '; });
   assert.deepEqual(warned.flags, [
     { kind: 'warn', tag: 'Watch', text: '9 AM: A bit of mold and some worms' },
-    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
+    { kind: 'warn', tag: 'Watch', text: 'No sacks scanned out yet today' },
     { kind: 'good', tag: 'Good', text: 'Morning above target every hour, best 2.14 at 9–10' },
   ]);
 });
@@ -172,7 +180,7 @@ test('midday: floor notes flag with their hour, Act first, then the two Watch li
   assert.deepEqual(noted.flags, [
     { kind: 'bad', tag: 'Act', text: '10 AM: Spoilage risk' },
     { kind: 'warn', tag: 'Watch', text: '9 AM: A bit of mold and some worms' },
-    { kind: 'warn', tag: 'Watch', text: 'No supersacks logged on the tracker yet today' },
+    { kind: 'warn', tag: 'Watch', text: 'No sacks scanned out yet today' },
   ]);
 });
 

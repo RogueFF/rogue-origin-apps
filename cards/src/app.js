@@ -98,11 +98,12 @@ const CARDS = {
     },
     async model(api, { date }, generatedAt) {
       const before = priorWeekday(date);
-      const [dashboard, priorDay, scoreboard, sacks] = await Promise.all([
-        api.dashboard(date, date), api.dashboard(before, before), api.scoreboard(date), api.supersackSummary(date, date),
+      const [dashboard, priorDay, scoreboard, sacks, sackOut] = await Promise.all([
+        api.dashboard(date, date), api.dashboard(before, before), api.scoreboard(date),
+        api.supersackSummary(date, date), api.sackOutToday(date),
       ]);
       if (!real(dashboard)) return null;
-      return eodModel({ date, dashboard, priorDay: real(priorDay), scoreboard, sacks, generatedAt });
+      return eodModel({ date, dashboard, priorDay: real(priorDay), scoreboard, sacks, sackOut, generatedAt });
     },
   },
   midday: {
@@ -112,11 +113,12 @@ const CARDS = {
     },
     async model(api, { date }, generatedAt) {
       const before = priorWeekday(date);
-      const [scoreboard, dashboardToday, priorDay, sacks] = await Promise.all([
-        api.scoreboard(date), api.dashboard(date, date), api.dashboard(before, before), api.supersackSummary(date, date),
+      // The live sack count is the salida scan-out; the supersack tracker is end-of-day only.
+      const [scoreboard, dashboardToday, priorDay, sackOut] = await Promise.all([
+        api.scoreboard(date), api.dashboard(date, date), api.dashboard(before, before), api.sackOutToday(date),
       ]);
       if (!real(dashboardToday)) return null;
-      return middayModel({ date, scoreboard, dashboardToday, priorDay: real(priorDay), sacks, generatedAt });
+      return middayModel({ date, scoreboard, dashboardToday, priorDay: real(priorDay), sackOut, generatedAt });
     },
   },
 };

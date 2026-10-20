@@ -58,5 +58,7 @@ export function makeApi({ base, fetchFn = (url, init) => globalThis.fetch(url, i
     dashboard: (start, end) => getJson(url('production', { action: 'dashboard', start, end }), { auth: true }),
     scoreboard: (date) => getJson(url('production', { action: 'scoreboard', date })),
     supersackSummary: (start, end) => getJson(url('supersack', { action: 'summary', start, end })),
+    // The salida scan-out for one Pacific day: { total, groups, by_strain, ... }. Public, no bearer.
+    sackOutToday: (date) => getJson(url('harvest', { action: 'sack_out_today', date })),
   };
 }

@@ -38,6 +38,7 @@ function eodArgs() {
     priorDay: withCosts(fixture('dashboard-2026-10-15.locked.json'), EOD_COSTS),
     scoreboard: fixture('scoreboard-2026-10-16.json'),
     sacks: fixture('supersack-2026-10-16.json'),
+    sackOut: fixture('sack-out-2026-10-20.json'),
     generatedAt: new Date('2026-10-17T00:05:00Z'),
   };
 }
@@ -48,7 +49,7 @@ function middayArgs() {
     scoreboard: fixture('scoreboard-2026-10-19.json'),
     dashboardToday: fixture('dashboard-2026-10-19.locked.json'),
     priorDay: fixture('dashboard-2026-10-16.locked.json'),
-    sacks: fixture('supersack-2026-10-19.json'),
+    sackOut: fixture('sack-out-2026-10-18.empty.json'),
     generatedAt: new Date('2026-10-19T22:55:00Z'),
   };
 }

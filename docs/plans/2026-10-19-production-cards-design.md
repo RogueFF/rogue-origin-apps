@@ -12,7 +12,7 @@ The Monday digest arrives as a wall of Telegram text. Koa wants a picture: "a pn
 |---|---|---|
 | Where the card renders | **A separate worker, `rogue-origin-cards`**, in `cards/` of this repo | Satori + resvg add ~2 MB of wasm; keep it off the API bundle and the free-plan size limit; deploys on its own; anyone (routine, Timber, Hub) can pull a card |
 | Rendering stack | **satori → SVG → resvg-wasm → PNG**, no browser | Works in Workers and in Node for tests; the cloud routine box has no Chromium |
-| Data | The existing API only: `?action=dashboard`, `?action=scoreboard&date=`, `/api/supersack?action=summary` | No new definitions; the card can never drift from the dashboard the way the digest did |
+| Data | The existing API only: `?action=dashboard`, `?action=scoreboard&date=`, `/api/supersack?action=summary` (the water spider's end-of-day material-balance tracker), `/api/harvest?action=sack_out_today&date=` (the salida scan-out, live all day) | No new definitions; the card can never drift from the dashboard the way the digest did. Sacks: midday counts the scan-out (the tracker is empty until the day is closed); end of day and weekly use the tracker for raw lb and tops/sack, and end of day falls back to the scan-out count while the tracker is not filled yet |
 | Cost lock | **Pass-through bearer.** The card worker forwards the request's `Authorization` header to the API and holds no password | Same rule as the API: no bearer → cost tiles render "locked"; the worker never leaks money |
 | Target line | Per-day / per-hour **crew-adjusted target = trimmers × cultivar target rate × slot multiplier**, exactly the scoreboard's method (all-time cultivar average rate) | Card and TV agree; Koa's 7-day-window question stays open — if he picks it, the scoreboard changes and the card follows for free |
 | Crew number | "Line crew" = peak trimmers + buckers + T-Zero, as the API reports it today | QC and water spider are not logged yet; a separate PR stores them, and the card label flips to "crew (all roles)" when `totalCrew` changes meaning |
@@ -32,8 +32,8 @@ All three share: eyebrow · serif title · sub line · a crew pill; three hero t
 | Hero 2 | Rate so far · target rate | Rate · vs prior day | Rate · vs prior week |
 | Hero 3 | Projected end of day · prior day's close | $/lb tops · vs prior day | $/lb tops · vs prior week |
 | Chart | tops by hour, logged slots + a dashed "now" slot at its target | tops by hour, all slots | tops by day Mon–Fri, off days as stubs |
-| Mini row | smalls so far · buckers per trimmer (band 0.70–0.75) · hours logged + sacks logged | smalls + $/lb · supersacks + raw lb + tops/sack · labor + all-in | smalls + $/lb · supersacks + raw + tops/sack · labor + all-in |
-| Flags | from the day's qcNotes so far, plus "no sacks logged" when the tracker is empty after 10:00 | from the day's qcNotes; best/worst hour | from the week's notes; rate trend |
+| Mini row | smalls so far · buckers per trimmer (band 0.70–0.75) · hours logged + sacks scanned (scan-out total) | smalls + $/lb · supersacks + raw lb + tops/sack from the tracker (until it is filled: the scan-out count, "tracker not filled yet") · labor + all-in | smalls + $/lb · supersacks + raw + tops/sack from the tracker ("tracker empty" otherwise) · labor + all-in |
+| Flags | from the day's qcNotes so far, plus "No sacks scanned out yet today" when the scan-out is 0 after 10:00 | from the day's qcNotes; best/worst hour | from the week's notes; rate trend |
 
 Flag text is rule-based, not AI: a note containing mold/gusano/humed → Watch; "echar a perder" / spoil → Act; the best hour or rising rate → Good. Spanish notes are shown translated by a small phrase table (the words the floor uses: mold, gusanos, humedo, hoja, costal, volsa/bolsa, colgar) and otherwise verbatim.
 
@@ -45,7 +45,7 @@ cards/                       rogue-origin-cards worker (this repo)
   package.json               satori 0.63.0 (standalone + layout.wasm), harfbuzzjs 0.10.0 (hb.wasm), @resvg/resvg-wasm; test = node --test test/*.test.mjs
   fonts/                     Outfit-Medium/SemiBold, JetBrainsMono-Regular, DMSerifDisplay-Italic (TTF)
   src/index.js               router: /weekly /eod /midday /health, cache, bearer pass-through, format=json
-  src/data.js                fetch dashboard / scoreboard / supersack summary (+ prior period); injectable fetch
+  src/data.js                fetch dashboard / scoreboard / supersack summary / sack-out today (+ prior period); injectable fetch
   src/model.js               PURE: API JSON → card model {title, pill, tiles[], chart{cols[], ticks}, minis[], flags[], foot}
   src/layout.js              PURE: card model → satori element tree (flex only, inline styles, px numbers)
   src/render.js              satori(tree, fonts) → svg → resvg → png; wasm + font loading abstracted for Node vs Workers
@@ -61,7 +61,7 @@ telegram-claude-bot/         bridge
   wrangler.jsonc             + triggers.crons, + CARDS_URL var
 ```
 
-**Request flow.** `GET /eod?date=2026-10-16` → parse + validate → cache lookup (key = URL + "#auth" when a bearer is present) → `data.js` fetches scoreboard(date), dashboard(date..date), dashboard(prior day), supersack summary(date) in parallel, forwarding the bearer to the dashboard calls → `model.js` builds the card model (costsLocked when the dashboard omitted cost keys) → `layout.js` → `render.js` → `image/png`, `Cache-Control: public, max-age=86400` for finished periods, `max-age=120` for today → stored in cache only when (bearer present ⇔ costs unlocked), so a wrong password can never poison the unlocked key.
+**Request flow.** `GET /eod?date=2026-10-16` → parse + validate → cache lookup (key = URL + `_auth=<SHA-256 of the bearer>` when a bearer is present) → `data.js` fetches scoreboard(date), dashboard(date..date), dashboard(prior day), supersack summary(date) and sack-out today(date) in parallel (midday: no supersack summary), forwarding the bearer to the dashboard calls → `model.js` builds the card model (costsLocked when the dashboard omitted cost keys) → `layout.js` → `render.js` → `image/png`, `Cache-Control: public, max-age=86400` for finished periods, `max-age=120` for today → stored in cache only when (bearer present ⇔ costs unlocked), so a wrong password can never poison the unlocked key.
 
 **No data** (no production rows for the day / week) → `204 No Content`, so a scheduled sender has nothing to post. **Bad input** → `400` with a one-line JSON error. **Upstream failure** → `502` with the upstream status, never a half-rendered card.
 

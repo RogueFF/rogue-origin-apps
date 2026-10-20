@@ -138,7 +138,7 @@ const SHIFT_HOURS = '8.5';
 const CREW_DROP_RATIO = 0.7;
 /** Buckers per trimmer: the band the card names, and the range it reads as fed (short below, idle above). */
 const BUCKER_BAND = { lo: 0.65, hi: 0.85, label: '0.70–0.75' };
-/** From 10:00 an empty supersack tracker is worth a Watch line. */
+/** From 10:00, no sack scanned out at the salida is worth a Watch line. */
 const SACKS_DUE_MINUTES = 600;
 /** Noon: an hour under target that starts then or later leaves the morning whole. */
 const MORNING_CUTOFF_MINUTES = 720;
@@ -235,20 +235,36 @@ function costTile(figures, prior, vs, locked) {
   ]);
 }
 
-/** Supersacks opened, with the tracker's own raw pounds and tops (not the dashboard's). */
-function sackMini(summary) {
+/**
+ * Sacks scanned out at the salida (harvest `sack_out_today`), the live count;
+ * null when there is no scan-out answer. The supersack tracker is the water
+ * spider's end-of-day material balance and stays empty until the day is closed.
+ */
+const scannedOut = (sackOut) => (Number.isFinite(sackOut?.total) ? sackOut.total : null);
+
+/**
+ * Supersacks opened, with the tracker's own raw pounds and tops (not the
+ * dashboard's). Before the tracker has the period, the scan-out count when one
+ * is given (end of day), else "tracker empty" (weekly).
+ */
+function sackMini(summary, sackOut) {
   const periods = summary?.periods ?? [];
-  if (!periods.length) return mini('Supersacks', DASH, '', 'tracker empty');
+  if (!periods.length) {
+    const scanned = scannedOut(sackOut);
+    return scanned === null
+      ? mini('Supersacks', DASH, '', 'tracker empty')
+      : mini('Supersacks', fmtInt(scanned), 'scanned', 'tracker not filled yet');
+  }
   const sacks = sum(periods, (p) => p.total_sacks);
   const topsPerSack = ratio(sum(periods, (p) => p.total_tops), sacks);
   return mini('Supersacks', fmtInt(sacks), 'opened', `${fmtInt(sum(periods, (p) => p.total_raw))} lb raw · ${fmt1(topsPerSack)} tops/sack`);
 }
 
 /** The mini row of a closed period (weekly, end of day): smalls + $/lb, supersacks, labor + all-in. */
-function closeMinis(figures, sacks, locked) {
+function closeMinis(figures, sacks, locked, sackOut) {
   return [
     mini('Smalls', fmtInt(figures.smalls), 'lb', locked ? 'locked' : `${perLb(figures.smallsCost)}/lb`),
-    sackMini(sacks),
+    sackMini(sacks, sackOut),
     locked ? mini('Labor', LOCK, '', 'locked') : mini('Labor', fmtMoney(figures.labor), '', `all-in ${perLb(figures.allIn)}/lb`),
   ];
 }
@@ -511,11 +527,13 @@ function bestHour(rows, peak = peakTrimmers(rows)) {
 /**
  * End-of-day card for `date`. `dashboard` is the dashboard JSON for date..date,
  * `priorDay` the dashboard of the previous weekday, `scoreboard` and `sacks`
- * that day's scoreboard JSON and supersack summary. null when the day has no
- * hourly rows or the dashboard is the API's fallback shape. Flags: Act, one
- * Watch (a warn note, else the crew drop), Good (the best full hour).
+ * that day's scoreboard JSON and supersack summary (the tracker), `sackOut`
+ * that day's salida scan-out (the Supersacks mini's count until the tracker is
+ * filled). null when the day has no hourly rows or the dashboard is the API's
+ * fallback shape. Flags: Act, one Watch (a warn note, else the crew drop),
+ * Good (the best full hour).
  */
-export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generatedAt }) {
+export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, sackOut, generatedAt }) {
   checkGeneratedAt(generatedAt);
   const sb = scoreboard?.scoreboard;
   const rows = hourRows(sb);
@@ -542,7 +560,7 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
       costTile(now, before, vs, locked),
     ],
     chart: hourlyChart(rows),
-    minis: closeMinis(now, sacks, locked),
+    minis: closeMinis(now, sacks, locked, sackOut),
     flags: pickFlags([
       act,
       noteWatch ?? crewDropFlag(rows),
@@ -589,12 +607,13 @@ function middayGood(rows) {
 /**
  * Midday card for `date` (today, so far). `scoreboard` is today's scoreboard
  * JSON, `dashboardToday` today's dashboard (cultivar and T-Zero count),
- * `priorDay` the previous weekday's dashboard, `sacks` today's supersack
- * summary. null while no hour is logged, or when today's dashboard is the
- * API's fallback shape. Flags: Act, two Watch lines (a warn note, else the
- * crew drop; then "no supersacks"), Good.
+ * `priorDay` the previous weekday's dashboard, `sackOut` today's salida
+ * scan-out (harvest `sack_out_today`; the supersack tracker is end-of-day only
+ * and is never read here). null while no hour is logged, or when today's
+ * dashboard is the API's fallback shape. Flags: Act, two Watch lines (a warn
+ * note, else the crew drop; then "no sacks scanned out"), Good.
  */
-export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks, generatedAt }) {
+export function middayModel({ date, scoreboard, dashboardToday, priorDay, sackOut, generatedAt }) {
   checkGeneratedAt(generatedAt);
   const sb = scoreboard?.scoreboard;
   const rows = hourRows(sb);
@@ -605,7 +624,7 @@ export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks,
   const lastEnd = slotMinutes(last.timeSlot)?.end;
   const tops = sum(rows, (row) => row.lbs);
   const rate = ratio(tops, sum(rows, crewHours));
-  const sackCount = sum(sacks?.periods ?? [], (p) => p.total_sacks);
+  const sackCount = scannedOut(sackOut) ?? 0;
   const tzero = dashboardToday?.today?.tzero;
   const [act, noteWatch] = noteFlags(rows);
   const currentStart = slotMinutes(sb.currentTimeSlot)?.start;
@@ -629,12 +648,12 @@ export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks,
     minis: [
       mini('Smalls so far', fmtInt(sum(rows, (row) => row.smalls)), 'lb', ''),
       buckerMini(last),
-      mini('Hours logged', fmt1(sb.effectiveHours), `of ${SHIFT_HOURS}`, `sacks logged: ${fmtInt(sackCount)}`),
+      mini('Hours logged', fmt1(sb.effectiveHours), `of ${SHIFT_HOURS}`, `sacks scanned: ${fmtInt(sackCount)}`),
     ],
     flags: pickFlags([
       act,
       noteWatch ?? crewDropFlag(rows),
-      sackCount === 0 && lastEnd >= SACKS_DUE_MINUTES ? flag('warn', 'No supersacks logged on the tracker yet today') : null,
+      sackCount === 0 && lastEnd >= SACKS_DUE_MINUTES ? flag('warn', 'No sacks scanned out yet today') : null,
       middayGood(rows),
     ]),
     foot: foot('cards/midday · scoreboard target · $/lb at close', generatedAt),
