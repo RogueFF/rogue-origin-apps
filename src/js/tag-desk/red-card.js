@@ -35,23 +35,28 @@ export const RED_CARD_CSS = `
 .full-keep .en{display:block;font-weight:500;opacity:.85}
 `;
 
+/** Two-language text: the Desk language first, the other small underneath. Spanish first unless lang is 'en'. */
+export const bi = (es, en, lang = 'es') => lang === 'en' ? `${en}<span class="en">${es}</span>` : `${es}<span class="en">${en}</span>`;
+
 /**
  * One letter page holding the red card. Everything is text the caller already
  * has: the kanban card's fields, the lane colour, the QR as an inline SVG and
  * an absolute logo URL (the print window is about:blank, so no relative paths).
+ * `lang` ('es' default, or 'en') picks which language is big; the other stays small underneath.
  */
-export function redCardPage({ item, crumbtrail, colourHex, colourName, picture, supplier, orderQty, delivery, price, qr, logo }) {
+export function redCardPage({ item, crumbtrail, colourHex, colourName, picture, supplier, orderQty, delivery, price, qr, logo, lang = 'es' }) {
+  const en = lang === 'en';
   const loc = esc(String(crumbtrail || '').replace(/\s*>\s*/g, ' › '));
   const swatch = colourName ? `<span>·</span><span><i class="sw" style="background:${esc(colourHex)}"></i>${esc(colourName)}</span>` : '';
-  const photo = picture ? `<div class="full-img has"><img src="${esc(picture)}" alt="" referrerpolicy="no-referrer"></div>` : '<div class="full-img">foto de la bolsa · bag photo</div>';
-  const field = (es, en, v) => `<div class="full-field"><small>${es} · ${en}</small><span>${esc(v || '—')}</span></div>`;
+  const photo = picture ? `<div class="full-img has"><img src="${esc(picture)}" alt="" referrerpolicy="no-referrer"></div>` : `<div class="full-img">${en ? 'bag photo · foto de la bolsa' : 'foto de la bolsa · bag photo'}</div>`;
+  const field = (lEs, lEn, v) => `<div class="full-field"><small>${en ? `${lEn} · ${lEs}` : `${lEs} · ${lEn}`}</small><span>${esc(v || '—')}</span></div>`;
   return `<section class="pg rc"><div class="kanban full-card red"><div class="kanban-border"></div><div class="kanban-inner"></div>
 <div class="full-content"><div class="full-header"><h3>${esc(item)}</h3></div>
 <div class="full-loc"><span>${loc}</span>${swatch}</div>
 ${photo}
 <div class="full-fields">${field('Proveedor', 'Supplier', supplier)}${field('Cantidad', 'Order qty', orderQty)}${field('Entrega', 'Delivery', delivery)}</div>
-<div class="full-bottom"><div class="full-qr">${qr}</div><div class="full-scan">ESCANEA PARA PEDIR<span class="en">SCAN TO ORDER</span></div>${price ? `<div class="kanban-price">${esc(price)}</div>` : ''}</div></div>
-<img class="kanban-logo" src="${esc(logo)}" alt=""><div class="full-keep">Déjala aquí hasta la próxima entrega<span class="en">Leave it here until the next delivery</span></div></div></section>`;
+<div class="full-bottom"><div class="full-qr">${qr}</div><div class="full-scan">${bi('ESCANEA PARA PEDIR', 'SCAN TO ORDER', lang)}</div>${price ? `<div class="kanban-price">${esc(price)}</div>` : ''}</div></div>
+<img class="kanban-logo" src="${esc(logo)}" alt=""><div class="full-keep">${bi('Déjala aquí hasta la próxima entrega', 'Leave it here until the next delivery', lang)}</div></div></section>`;
 }
 
 /**

@@ -70,3 +70,27 @@ test('imagesSettled resolves true at once when nothing is pending', async () => 
   assert.equal(await imagesSettled([fakeImg(true)], 1000), true);
   assert.equal(await imagesSettled([], 1000), true);
 });
+
+// ---- English version (Koa 2026-10-19: "make sure we have english versions also") ----
+import { bi } from '../src/js/tag-desk/red-card.js';
+
+test('bi() puts the Desk language first and the other language small underneath', () => {
+  assert.equal(bi('Hola', 'Hello', 'es'), 'Hola<span class="en">Hello</span>');
+  assert.equal(bi('Hola', 'Hello', 'en'), 'Hello<span class="en">Hola</span>');
+  assert.equal(bi('Hola', 'Hello'), 'Hola<span class="en">Hello</span>', 'Spanish first by default');
+});
+
+test('lang "en" prints the red card English-first: scan line, field labels, keep line, photo placeholder', () => {
+  const h = redCardPage({ ...lane(), picture: '', lang: 'en' });
+  assert.ok(h.includes('class="full-scan">SCAN TO ORDER<span class="en">ESCANEA PARA PEDIR</span>'), 'scan line');
+  assert.ok(h.includes('<small>Supplier · Proveedor</small>') && h.includes('<small>Order qty · Cantidad</small>') && h.includes('<small>Delivery · Entrega</small>'), 'labels');
+  assert.ok(h.includes('class="full-keep">Leave it here until the next delivery<span class="en">Déjala aquí hasta la próxima entrega</span>'), 'keep line');
+  assert.ok(h.includes('class="full-img">bag photo · foto de la bolsa'), 'placeholder');
+});
+
+test('without lang the red card stays Spanish-first', () => {
+  const h = redCardPage({ ...lane(), picture: '' });
+  assert.ok(h.includes('class="full-scan">ESCANEA PARA PEDIR<span class="en">SCAN TO ORDER</span>'));
+  assert.ok(h.includes('<small>Proveedor · Supplier</small>'));
+  assert.ok(h.includes('class="full-keep">Déjala aquí hasta la próxima entrega<span class="en">Leave it here until the next delivery</span>'));
+});
