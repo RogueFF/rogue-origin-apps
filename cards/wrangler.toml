@@ -1,0 +1,19 @@
+name = "rogue-origin-cards"
+main = "src/index.js"
+compatibility_date = "2025-04-01"
+# The API is a sibling worker on the same workers.dev subdomain; without this flag
+# Cloudflare refuses that worker-to-worker fetch (error 1042, served as a 404).
+compatibility_flags = ["global_fetch_strictly_public"]
+
+[vars]
+API_BASE = "https://rogue-origin-api.roguefamilyfarms.workers.dev/api"
+
+[[rules]]
+type = "Data"
+globs = ["**/*.ttf"]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true

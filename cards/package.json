@@ -1,0 +1,19 @@
+{
+  "name": "rogue-origin-cards",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "size": "node -e \"require('fs').rmSync('.wrangler/size',{recursive:true,force:true})\" && wrangler deploy --dry-run --outdir .wrangler/size && node -e \"const fs=require('fs'),z=require('zlib'),d='.wrangler/size/';let raw=0,gz=0;for(const f of fs.readdirSync(d)){if(f.endsWith('.map')||f==='README.md')continue;const b=fs.readFileSync(d+f);raw+=b.length;gz+=z.gzipSync(b).length}console.log('raw',raw,'gzip',gz,gz<2800000?'OK':'OVER 2800000');if(gz>=2800000)process.exit(1)\"",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "2.6.2",
+    "harfbuzzjs": "0.10.0",
+    "satori": "0.63.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
