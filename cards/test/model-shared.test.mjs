@@ -125,3 +125,19 @@ test('cultivarShort', () => {
   assert.equal(cultivarShort(''), '—');
   assert.equal(cultivarShort(undefined), '—');
 });
+
+test('capText: one line of at most 72 characters, cut at a clause break near the end, else a space, else hard', async () => {
+  const { capText } = await import('../src/model.js');
+  assert.equal(capText('short stays'), 'short stays');
+  const exact = 'x'.repeat(72);
+  assert.equal(capText(exact), exact);
+  // A comma within the last 24 characters of the window wins over a later space.
+  assert.equal(capText('Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute, 1 hour under target'),
+    'Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute…');
+  // No clause break near the end: the last space, trailing punctuation dropped.
+  assert.equal(capText('aaaa '.repeat(20)).length <= 72, true);
+  assert.ok(/a…$/.test(capText('aaaa '.repeat(20))));
+  // One unbroken word: a hard cut.
+  assert.equal(capText('y'.repeat(100)), 'y'.repeat(71) + '…');
+  for (const n of [73, 80, 150]) assert.ok(capText('word '.repeat(n)).length <= 72);
+});

@@ -103,7 +103,8 @@ test('end-of-day crew line names the drop row note and the hours under target fr
   lastRow.notes = 'Hubo movimiento de personal a ultima hora ';
   lastRow.lbs = 2; // under its 2.61 lb target
   assert.deepEqual(eodModel({ ...args, scoreboard: fell }).flags, [
-    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute, 1 hour under target' },
+    // 88 characters, so the flag is cut to one line at its last clause break.
+    { kind: 'warn', tag: 'Watch', text: 'Crew fell 8 → 5 trimmers after 4 PM: Staff moved at the last minute…' },
     { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.21' },
   ]);
 });
@@ -165,4 +166,24 @@ test('end-of-day model leaves its inputs alone', () => {
   const before = structuredClone(args);
   eodModel(args);
   assert.deepEqual(args, before);
+});
+
+test('end-of-day best hour needs at least half the peak crew', () => {
+  // Oct 19 with a 3–4 PM hour worked by one trimmer at 2.77: it must not beat 9–10 at 2.14 on eight.
+  const sb = fixture('scoreboard-2026-10-19.json');
+  const rows = sb.scoreboard.hourlyRates;
+  rows.push({ ...rows.at(-1), timeSlot: '3:00 PM – 4:00 PM', trimmers: 1, effectiveTrimmers: 1, buckers: 1, lbs: 2.77, rate: 2.77, notes: '' });
+  const oct19 = { ...args, date: '2026-10-19', dashboard: fixture('dashboard-2026-10-19.locked.json'), priorDay: fixture('dashboard-2026-10-16.locked.json'), scoreboard: sb, sacks: fixture('supersack-2026-10-19.json') };
+  assert.deepEqual(eodModel(oct19).flags.at(-1), { kind: 'good', tag: 'Good', text: 'Best hour 9–10 at 2.14' });
+  // Four of a peak of eight is half: that hour still counts.
+  rows.at(-1).trimmers = 4;
+  assert.deepEqual(eodModel(oct19).flags.at(-1), { kind: 'good', tag: 'Good', text: 'Best hour 3–4 at 2.77' });
+});
+
+test('end-of-day note flags are cut to one line (72 characters) at a word boundary', () => {
+  const long = structuredClone(args.scoreboard);
+  long.scoreboard.hourlyRates[3].notes = 'El producto esta muy humedo y tiene mucha hoja y los costales vienen mal amarrados desde el campo';
+  const watch = eodModel({ ...args, scoreboard: long }).flags.find((f) => f.kind === 'warn');
+  assert.equal(watch.text, '10 AM: Product is very wet and has a lot of leaf and los costales…');
+  assert.ok(watch.text.length <= 72);
 });
