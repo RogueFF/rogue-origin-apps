@@ -18,6 +18,17 @@
  * day's loads, and the Bay field is often just the last bay used. The gap
  * depends only on the barn-door scans, which carry the bay the load went into.
  *
+ * BUT A GAP ALONE IS NOT A TAKEDOWN (2026-10-19). On 10/16 a few loads were
+ * scanned into bays 8 and 12 a week after the Lifter went in, the gap read as a
+ * refill, and the Lifter fell off the screen with its lots open, no tag printed
+ * and no bay-done row. So a later load may only close a fill that showed signs
+ * of having come down BEFORE that load arrived: a bay-done row for it, a sack
+ * tagged in that bay off one of its lots, or every lot in it finished
+ * (fillIsDown). Otherwise the new loads join the fill: they hang beside what
+ * was already there. Signs that come later prove nothing about the gap — bay
+ * 12's Lifter was bagged on 10/19, three days after the 2nd cut was hung
+ * beside it, and those tags must not split the two.
+ *
  * Pure functions: every input is a plain row, so they test without a database.
  */
 import { harvestZone } from './zones.js';
@@ -35,12 +46,16 @@ const ts = (s) => {
  * Assign every load to its fill.
  *
  * @param {Array<{bay:number, occurred_at:string}>} loads
- * @param {{gapDays?:number}} [opts]
+ * @param {{gapDays?:number, isDown?:(bay:number, fill:object, at:number) => boolean}} [opts]
+ *   `isDown(bay, fill, at)`: had this fill (its loads so far) started coming
+ *   down by `at`, the time (ms) of the load that arrived after the gap? Asked
+ *   once per gap; `false` makes that load join the fill. Without it a gap alone
+ *   splits, as before 2026-10-19 (see fillIsDown).
  * @returns {Map<number, Array<{startMs:number, loads:object[], closed:boolean}>>}
  *          per bay, its fills oldest first. `closed` = a later fill exists, so
  *          this one was taken down and the bay refilled.
  */
-export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
+export function bayFills(loads, { gapDays = FILL_GAP_DAYS, isDown = null } = {}) {
   const gapMs = gapDays * 86400000;
   const loadsByBay = new Map();
   for (const l of loads) {
@@ -57,7 +72,7 @@ export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
     let fill = null, prev = null;
     for (const l of sorted) {
       const at = ts(l.occurred_at);
-      if (fill && at - prev >= gapMs) fill = null;
+      if (fill && at - prev >= gapMs && (!isDown || isDown(bay, fill, at))) fill = null;
       if (!fill) { fill = { startMs: at, loads: [], closed: false }; fills.push(fill); }
       fill.loads.push(l);
       prev = at;
@@ -66,6 +81,57 @@ export function bayFills(loads, { gapDays = FILL_GAP_DAYS } = {}) {
     out.set(bay, fills);
   }
   return out;
+}
+
+/**
+ * The `isDown` for bayFills: had a fill shown any sign of coming down by the
+ * time `at` (the load after the gap) arrived?
+ *
+ *  - a bay-done row for this bay keyed on the fill's start ("Finished" or
+ *    "Whole bay down" pressed before `at`), or
+ *  - a sack tagged in THIS bay, off one of the fill's lots, between the fill's
+ *    start and `at` (the bay on a tag is typed, so a tag off another lot or in
+ *    another bay proves nothing about this fill), or
+ *  - every lot in the fill finished before `at` (closed out lot by lot, the
+ *    old way).
+ *
+ * Anything dated at or after `at` is left out: it happened with the new load
+ * already hanging, so it cannot show the bay was empty when that load came in.
+ *
+ * @param {{lotOfSession: Map<number, object>, tags: Array<{bay, printed_at, zone_session_id}>,
+ *          done: Array<{bay, fill_start, done_at}>}} ctx
+ *   `lotOfSession` maps every session id of a picker lot to the lot (with
+ *   `id`, `takedown_done_at`); tags hang off the lot's primary session, loads
+ *   may sit on any of them.
+ * @returns {(bay:number, fill:{startMs:number, loads:object[]}, at:number) => boolean}
+ */
+export function fillIsDown({ lotOfSession, tags = [], done = [] }) {
+  const doneAt = new Map();   // `${bay}|${fill start}` -> earliest done_at (ms)
+  for (const d of done) {
+    const k = `${Number(d.bay)}|${ts(d.fill_start)}`;
+    const t = d.done_at ? ts(d.done_at) : -Infinity;   // a row without a time counts as old
+    if (!doneAt.has(k) || t < doneAt.get(k)) doneAt.set(k, t);
+  }
+  return (bay, fill, at = Infinity) => {
+    const before = (ms) => Number.isFinite(ms) ? ms < at : ms === -Infinity;
+    const k = `${bay}|${fill.startMs}`;
+    if (doneAt.has(k) && before(doneAt.get(k))) return true;
+    const lotIds = new Set();
+    let allFinished = true;
+    for (const l of fill.loads) {
+      const lot = lotOfSession.get(l.session_id);
+      if (!lot) continue;
+      lotIds.add(lot.id);
+      if (!lot.takedown_done_at || !before(ts(lot.takedown_done_at))) allFinished = false;
+    }
+    if (lotIds.size && allFinished) return true;
+    return tags.some(t => {
+      const printed = ts(t.printed_at);
+      if (Number(t.bay) !== bay || !(printed > fill.startMs) || !before(printed)) return false;
+      const lot = lotOfSession.get(t.zone_session_id);
+      return !!lot && lotIds.has(lot.id);
+    });
+  };
 }
 
 /**

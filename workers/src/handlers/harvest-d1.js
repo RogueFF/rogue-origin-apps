@@ -66,7 +66,7 @@ import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
 import { adjustSupersackCount, listSupersackVariants, matchSupersackVariant, checkSupersackVariant } from '../lib/supersack-inventory.js';
 import { decideHeal, settleStatement, latestMarkerAt, HEAL_QUIET_MS, LAST_CALL_KEY } from '../lib/inventory-heal.js';
 import { floorOutputByCultivar } from '../lib/floor-output.js';
-import { bayFills, bayCards, bayScreenGroups, percentShares } from '../lib/bay-fills.js';
+import { bayFills, bayCards, bayScreenGroups, percentShares, fillIsDown } from '../lib/bay-fills.js';
 import { sendTelegramMessage } from '../lib/telegram.js';
 import { pickLang, t as translate, langCookie } from '../lib/i18n.js';
 import { handleHarvestBoard, BOARD_ACTIONS } from './harvest-board-d1.js';
@@ -2126,7 +2126,7 @@ async function getBayTakedown(db, isTest, lots) {
                         WHERE b.event_type = 'barn_load' AND b.attributed_zone_session_id = e.id)
     `, [isTest, LOT_PICKER_DAYS, isTest, LOT_PICKER_DAYS]),
     query(db, `
-      SELECT sack_id, bay, printed_at, cultivar, cut_number FROM harvest_sacks
+      SELECT sack_id, bay, printed_at, cultivar, cut_number, zone_session_id FROM harvest_sacks
       WHERE is_test = ? AND bay IS NOT NULL AND voided_at IS NULL
         AND julianday('now') - julianday(printed_at) <= ?
     `, [isTest, LOT_PICKER_DAYS]),
@@ -2134,9 +2134,13 @@ async function getBayTakedown(db, isTest, lots) {
     query(db, `SELECT bay, cultivar, cut_number, fill_start, done_at FROM harvest_bay_done WHERE is_test = ?`, [isTest])
       .catch(() => []),
   ]);
-  const fills = bayFills(loads);
   const lotOfSession = new Map();
   for (const l of lots) for (const id of (l.session_ids || [l.id])) lotOfSession.set(id, l);
+  // A gap in a bay's loads closes its fill only once that fill shows signs of
+  // having come down (a bay-done row, a sack tagged in the bay off its lots, or
+  // every lot finished). On 2026-10-16 small lots were scanned into bays 8 and
+  // 12 beside Lifter still drying, and the gap alone had hidden the Lifter.
+  const fills = bayFills(loads, { isDown: fillIsDown({ lotOfSession, tags, done }) });
   const doneByKey = new Map(done.map(d => [bayKey(d.bay, d.cultivar, d.cut_number, d.fill_start), d]));
 
   const cards = bayCards(fills, lotOfSession, tags).map(c => {
