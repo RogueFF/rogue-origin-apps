@@ -1063,7 +1063,7 @@ function renderGrove() {
 `openRecount(id)`: one input, sealed bins → `api.recountBins`.
 `openBinSettings(id)`: the six config numbers + colour → `api.setBinConfig`.
 `openMapRecipe(variantId)`: pick a Grove card → `api.setRecipe({ variant_id, card_id, qty: 1 })`.
-`printLaneKit(id)`: `api.makeLaneKit(id)` then `window.open('', '_blank')` with three pages (reuse the `printCards` print-doc CSS): header card (photo placeholder, size name huge, lane colour band, the two rules ES/EN), red ORDER card (red, `PEDIR · <size>`, QR via the same qrserver call as `printOneCard` encoding `redCard.url`, *ESCANEA ESTA TARJETA*, "Déjala aquí hasta la próxima entrega"), red-tape label (`Cinta roja en el bin N`).
+`printLaneKit(id)`: `api.makeLaneKit(id)` then `window.open('', '_blank')` with three pages (reuse the `printCards` print-doc CSS): header card (photo placeholder, size name huge, lane colour band, the two rules ES/EN), red ORDER card (since 2026-10-19 `red-card.js`: the old kanban card template in red — gold double border, name, location + lane colour, bag photo, Supplier / Order qty / Delivery, inline-SVG QR of `redCard.url`, *ESCANEA PARA PEDIR*, price pill, logo, "Déjala aquí hasta la próxima entrega"), red-tape label (`Cinta roja en el bin N`).
 `laneColour(token)`: map `orange/teal/violet/olive/slate` → the Desk's existing Grove badge colours (search render.js for the badge CSS vars) with a fallback.
 
 `store.js`: delete `groveOrdered` and `bins` from the default slice and any reads (`Lslice`, `state()` in model.js checks `L.groveOrdered` — remove that branch; `on-order` for Grove now comes from `lane.openRequest`).
