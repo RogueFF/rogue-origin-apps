@@ -156,6 +156,9 @@ const THEMES = [
   ['leaf', words('hojas?|leaf|leaves'), REASSURED],
 ];
 
+/** The theme names in the fixed order `themes` reports them. */
+export const THEME_ORDER = THEMES.map(([name]) => name);
+
 /** True when some match of `re` in the clause is neither negated before it nor reassured after it. */
 function live(clause, re, negated, reassuredAfter) {
   return [...clause.matchAll(re)].some(

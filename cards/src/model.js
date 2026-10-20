@@ -10,7 +10,7 @@ import {
   weekRange, weekDates, lastCompleteWeek, rangeLabel, weekdayName, shortWeekday, monthDay, pacificDate, pacificClock,
   slotLabel, slotSpan, slotClock, slotMinutes, slotEnd,
 } from './periods.js';
-import { classifyNote, themes, translate } from './notes.js';
+import { classifyNote, themes, translate, THEME_ORDER } from './notes.js';
 
 const MINUS = '−';
 const DASH = '—';
@@ -133,7 +133,25 @@ export function cultivarShort(name) {
 const LOCK = '🔒';
 const LEGEND = 'target, crew-adjusted';
 const FLAG_TAGS = { bad: 'Act', warn: 'Watch', good: 'Good' };
-const THEME_ORDER = ['mold', 'worms', 'moisture', 'leaf'];
+const SHIFT_HOURS = '8.5';
+/** The line has dropped when its last hour is under this share of its peak trimmers. */
+const CREW_DROP_RATIO = 0.7;
+/** Buckers per trimmer: the band the card names, and the range it reads as fed (short below, idle above). */
+const BUCKER_BAND = { lo: 0.65, hi: 0.85, label: '0.70–0.75' };
+/** From 10:00 an empty supersack tracker is worth a Watch line. */
+const SACKS_DUE_MINUTES = 600;
+/** Noon: an hour under target that starts then or later leaves the morning whole. */
+const MORNING_CUTOFF_MINUTES = 720;
+/** A slot shorter than an hour (a half slot) is never the best hour. */
+const FULL_HOUR_MINUTES = 60;
+const CREW_CHANGE = /\[Crew change[^\]]*\]/gi;
+
+/** Every card prints the instant it was generated, so a missing or invalid `generatedAt` is a caller bug. */
+function checkGeneratedAt(generatedAt) {
+  if (!(generatedAt instanceof Date) || Number.isNaN(generatedAt.getTime())) {
+    throw new Error('card model needs generatedAt: the Date the card is generated, printed in its footer');
+  }
+}
 
 /** Σ fn(item) over the items where it is a number, float dust trimmed so 86.4999… cannot round down. */
 function sum(items, fn) {
@@ -161,17 +179,18 @@ const dayRate = (day) => ratio(day.totalTops, day.trimmerHours);
 
 /**
  * What a set of dashboard days adds up to. Every average is weighted, never a
- * mean of daily means: rate = Σ tops ÷ Σ trimmer hours, $/lb tops =
+ * mean of daily means: rate = Σ tops ÷ Σ trimmer hours over the days that
+ * logged trimmer hours (both sums over the same days), $/lb tops =
  * Σ(topsCostPerLb × tops) ÷ Σ tops (smalls likewise), all-in = Σ labor ÷ Σ tops.
  */
 function periodFigures(days) {
   const costed = days.filter((day) => !costsLocked(day));
-  const tops = sum(days, (d) => d.totalTops);
+  const rated = days.filter((day) => day.trimmerHours > 0);
   const labor = costed.length ? sum(costed, (d) => d.laborCost) : null;
   return {
-    tops,
+    tops: sum(days, (d) => d.totalTops),
     smalls: sum(days, (d) => d.totalSmalls),
-    rate: ratio(tops, sum(days, (d) => d.trimmerHours)),
+    rate: ratio(sum(rated, (d) => d.totalTops), sum(rated, (d) => d.trimmerHours)),
     topsCost: weighted(days, (d) => d.topsCostPerLb, (d) => d.totalTops),
     smallsCost: weighted(days, (d) => d.smallsCostPerLb, (d) => d.totalSmalls),
     labor,
@@ -205,6 +224,9 @@ function cultivarName(days) {
 const tile = (label, value, unit, chips = []) => ({ label, value, unit, chips: chips.filter(Boolean) });
 const mini = (label, value, unit, sub) => ({ label, value, unit, sub });
 
+/** The Rate tile (lb per trimmer hour) with its one chip. */
+const rateTile = (rate, chip) => tile('Rate', fmt2(rate), 'lb/hr', [chip]);
+
 /** "$ per lb tops" with its change vs the prior period; 🔒 and no chip when costs are locked. */
 function costTile(figures, prior, vs, locked) {
   if (locked) return tile('$ per lb tops', LOCK, '');
@@ -231,8 +253,27 @@ function closeMinis(figures, sacks, locked) {
   ];
 }
 
-/** A notes blob → its single notes; the API joins them with newlines and crew-change markers. */
-const notePieces = (text) => String(text ?? '').split(/\n|\[Crew change[^\]]*\]/i).filter((piece) => piece.trim());
+/** A note without its crew-change markers, whitespace squashed, stray commas trimmed; '' when nothing is left. */
+const noteText = (text) => String(text ?? '').replace(CREW_CHANGE, ' ').replace(/\s+/g, ' ').replace(/^[\s,]+|[\s,]+$/g, '');
+
+/** The scoreboard's hourly rows sorted by slot start; an unreadable slot sorts last. */
+function hourRows(scoreboard) {
+  const start = (row) => slotMinutes(row.timeSlot)?.start ?? Number.MAX_SAFE_INTEGER;
+  return [...(scoreboard?.hourlyRates ?? [])].sort((a, b) => start(a) - start(b));
+}
+
+/**
+ * A day's floor notes for the weekly card, in hour order: one per hourly row of
+ * the day's scoreboard. A day without a scoreboard falls back to the
+ * dashboard's notes blob, which the API joins with bare commas (GROUP_CONCAT):
+ * crew-change markers (which carry commas of their own) come out first, then
+ * the rest splits on commas.
+ */
+function dayNotes(day, scoreboards) {
+  const sb = scoreboards?.[day.date]?.scoreboard;
+  const texts = sb ? hourRows(sb).map((row) => row.notes) : String(day.notes ?? '').replace(CREW_CHANGE, ' ').split(',');
+  return texts.map(noteText).filter(Boolean);
+}
 
 const flag = (kind, text) => ({ kind, tag: FLAG_TAGS[kind], text });
 
@@ -266,8 +307,8 @@ function crewRange(crews) {
  * week" when every worked day's rate is at or above the day before (and the
  * week ends higher than it started), else the day with the most tops.
  */
-function weeklyFlags(worked) {
-  const notes = worked.flatMap((day) => notePieces(day.notes).map((text) => ({ day, text, flag: classifyNote(text) })));
+function weeklyFlags(worked, scoreboards) {
+  const notes = worked.flatMap((day) => dayNotes(day, scoreboards).map((text) => ({ day, text, flag: classifyNote(text) })));
   const bad = notes.filter((n) => n.flag?.kind === 'bad').at(-1);
   const warns = notes.filter((n) => n.flag?.kind === 'warn');
   const found = new Set(warns.flatMap((n) => themes(n.text)));
@@ -292,10 +333,11 @@ function weeklyFlags(worked) {
  * Weekly card for ISO week `week` ("2026-W42"). `dashboard` and `prior` are
  * the dashboard JSON for this week and the week before, `scoreboards` the
  * scoreboard JSON of each worked day keyed by date (their todayTarget is the
- * day's target), `sacks` the week's supersack summary. null when no day of the
- * week logged tops.
+ * day's target, their hourly rows carry the floor notes), `sacks` the week's
+ * supersack summary. null when no day of the week logged tops.
  */
 export function weeklyModel({ week, dashboard, prior, scoreboards, sacks, generatedAt }) {
+  checkGeneratedAt(generatedAt);
   const { start, end, week: number } = weekRange(week);
   const dates = weekDates(week);
   const worked = workedDays(dashboard, dates);
@@ -320,7 +362,7 @@ export function weeklyModel({ week, dashboard, prior, scoreboards, sacks, genera
         deltaChip(now.tops, before?.tops, { pct: true, upIsGood: true, vs }),
         pctChip(sum(targeted, (day) => day.totalTops), sum(targeted, (day) => target(day.date))),
       ]),
-      tile('Rate', fmt2(now.rate), 'lb/hr', [deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })]),
+      rateTile(now.rate, deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })),
       costTile(now, before, vs, locked),
     ],
     chart: {
@@ -335,7 +377,7 @@ export function weeklyModel({ week, dashboard, prior, scoreboards, sacks, genera
       }),
     },
     minis: closeMinis(now, sacks, locked),
-    flags: pickFlags(weeklyFlags(worked)),
+    flags: pickFlags(weeklyFlags(worked, scoreboards)),
     foot: foot('cards/weekly · dashboard allocation · $/lb tops', generatedAt),
   };
 }
@@ -356,12 +398,6 @@ function lastDayBefore(dashboard, date) {
     .reduce((latest, day) => (!latest || day.date > latest.date ? day : latest), null);
 }
 
-/** The scoreboard's hourly rows sorted by slot start; an unreadable slot sorts last. */
-function hourRows(scoreboard) {
-  const start = (row) => slotMinutes(row.timeSlot)?.start ?? Number.MAX_SAFE_INTEGER;
-  return [...(scoreboard?.hourlyRates ?? [])].sort((a, b) => start(a) - start(b));
-}
-
 const hourCol = (row) => ({
   label: slotLabel(row.timeSlot) ?? DASH,
   rate: fmt2(row.rate),
@@ -369,6 +405,19 @@ const hourCol = (row) => ({
   target: hourTarget(row),
   kind: 'bar',
 });
+
+/** "Tops by hour": a bar per logged row, then any extra columns (midday's "now"). */
+function hourlyChart(rows, extra = []) {
+  return { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: [...rows.map(hourCol), ...extra] };
+}
+
+const underTarget = (row) => row.lbs < hourTarget(row);
+
+/** Minutes a slot spans; 0 when it has no readable end. */
+function slotLength(row) {
+  const slot = slotMinutes(row.timeSlot);
+  return slot && slot.end !== null ? slot.end - slot.start : 0;
+}
 
 /** "▲ 113% of target" from the scoreboard's own percent, banded like pctChip. */
 function targetChip(percent) {
@@ -378,12 +427,12 @@ function targetChip(percent) {
 }
 
 /**
- * The latest Act note and the latest Watch note of the hourly rows, each led
- * by its hour ("2 PM: …"), as [act, watch]. A Watch note outranks the
- * crew-drop line: the two share one Watch slot on the hourly cards.
+ * The latest Act note and the latest Watch note of the hourly rows (one note
+ * per row), each led by its hour ("2 PM: …"), as [act, watch]. A Watch note
+ * outranks the crew-drop line: the two share one Watch slot on the hourly cards.
  */
 function noteFlags(rows) {
-  const notes = rows.flatMap((row) => notePieces(row.notes).map((text) => ({ row, flag: classifyNote(text) })));
+  const notes = rows.map((row) => ({ row, flag: classifyNote(noteText(row.notes)) }));
   return ['bad', 'warn'].map((kind) => {
     const note = notes.filter((n) => n.flag?.kind === kind).at(-1);
     return note ? flag(kind, `${slotClock(note.row.timeSlot) ?? DASH}: ${note.flag.text}`) : null;
@@ -391,38 +440,44 @@ function noteFlags(rows) {
 }
 
 /**
- * The line ending under 70% of its peak trimmers: `{ peak, last, from }`, where
- * `from` is the index of the first row of that final stretch under 70%. null
- * while the last row still holds 70% of the peak.
+ * Watch line for a line that ended under CREW_DROP_RATIO of its peak trimmers:
+ * "Crew fell 8 → 3 trimmers after 12:30 PM: <reason>, 3 hours under target".
+ * The drop row is the first of that final stretch under the ratio; the reason
+ * is that row's own note, translated (unless it is a flag of its own); the
+ * hours under target are counted from the drop row on. null while the last
+ * row still holds the ratio.
  */
-function crewDrop(rows) {
+function crewDropFlag(rows) {
   const trimmers = rows.map((row) => row.trimmers ?? 0);
   const peak = Math.max(...trimmers);
-  const floor = 0.7 * peak;
-  if (!(trimmers.at(-1) < floor)) return null;
-  let from = trimmers.length - 1;
+  const floor = CREW_DROP_RATIO * peak;
+  const last = trimmers.at(-1);
+  if (!(last < floor)) return null;
+  let from = rows.length - 1;
   while (from > 0 && trimmers[from - 1] < floor) from -= 1;
-  return { peak, last: trimmers.at(-1), from };
+  const note = noteText(rows[from].notes);
+  const reason = /\p{L}/u.test(note) && !classifyNote(note) ? `: ${translate(note)}` : '';
+  const under = rows.slice(from).filter(underTarget).length;
+  const hours = under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : '';
+  return flag('warn', `Crew fell ${peak} → ${last} trimmers after ${slotClock(rows[from].timeSlot) ?? DASH}${reason}${hours}`);
 }
 
-/** The fastest full-hour row (a half slot is not an hour), or the fastest row when none is a full hour. */
+/** The fastest full-hour row; null when no row spans a full hour (a half slot is not an hour). */
 function bestHour(rows) {
-  const minutes = (row) => {
-    const slot = slotMinutes(row.timeSlot);
-    return slot && slot.end !== null ? slot.end - slot.start : 0;
-  };
-  const timed = rows.filter((row) => Number.isFinite(row.rate));
-  const hours = timed.filter((row) => minutes(row) >= 60);
-  return (hours.length ? hours : timed).reduce((best, row) => (!best || row.rate > best.rate ? row : best), null);
+  return rows
+    .filter((row) => Number.isFinite(row.rate) && slotLength(row) >= FULL_HOUR_MINUTES)
+    .reduce((best, row) => (!best || row.rate > best.rate ? row : best), null);
 }
 
 /**
  * End-of-day card for `date`. `dashboard` is the dashboard JSON for date..date,
  * `priorDay` the dashboard of the previous weekday, `scoreboard` and `sacks`
  * that day's scoreboard JSON and supersack summary. null when the day has no
- * hourly rows or the dashboard is the API's fallback shape.
+ * hourly rows or the dashboard is the API's fallback shape. Flags: Act, one
+ * Watch (a warn note, else the crew drop), Good (the best full hour).
  */
 export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generatedAt }) {
+  checkGeneratedAt(generatedAt);
   const sb = scoreboard?.scoreboard;
   const rows = hourRows(sb);
   const day = dayRow(dashboard, date);
@@ -434,7 +489,6 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
   const locked = costsLocked(day);
   const most = (key) => Math.max(...rows.map((row) => row[key] ?? 0));
   const [act, noteWatch] = noteFlags(rows);
-  const drop = crewDrop(rows);
   const best = bestHour(rows);
   return {
     kind: 'eod',
@@ -445,22 +499,19 @@ export function eodModel({ date, dashboard, priorDay, scoreboard, sacks, generat
     pill: `Line crew peak ${fmtInt(day.totalCrew)} · ${most('trimmers')} T · ${most('buckers')} B`,
     tiles: [
       tile('Tops', fmtInt(now.tops), 'lb', [targetChip(sb.todayPercentage)]),
-      tile('Rate', fmt2(now.rate), 'lb/hr', [deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })]),
+      rateTile(now.rate, deltaChip(shown2(now.rate), shown2(before?.rate), { fmt: fmt2, upIsGood: true, vs })),
       costTile(now, before, vs, locked),
     ],
-    chart: { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: rows.map(hourCol) },
+    chart: hourlyChart(rows),
     minis: closeMinis(now, sacks, locked),
     flags: pickFlags([
       act,
-      noteWatch ?? (drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotClock(rows[drop.from].timeSlot) ?? DASH}`)),
-      best && flag('good', `Best hour ${slotSpan(best.timeSlot) ?? slotLabel(best.timeSlot) ?? DASH} at ${fmt2(best.rate)}`),
+      noteWatch ?? crewDropFlag(rows),
+      best && flag('good', `Best hour ${slotSpan(best.timeSlot) ?? DASH} at ${fmt2(best.rate)}`),
     ]),
     foot: foot('cards/eod · dashboard allocation · $/lb tops', generatedAt),
   };
 }
-
-const SHIFT_HOURS = '8.5';
-const BUCKER_BAND = 'band 0.70–0.75';
 
 /** "▲ target 1.58": good when the rate so far (as shown) is at or above the target rate. */
 function rateTargetChip(rate, target) {
@@ -469,68 +520,73 @@ function rateTargetChip(rate, target) {
   return { kind: up ? 'good' : 'bad', text: `${up ? '▲' : '▼'} target ${fmt2(target)}` };
 }
 
-/** Buckers per trimmer in the last hour against the 0.70–0.75 band: fed from 0.65 to 0.85, short below, idle above. */
+/** Buckers per trimmer in the last hour against BUCKER_BAND: fed inside lo–hi, short below, idle above. */
 function buckerMini(row) {
+  const band = `band ${BUCKER_BAND.label}`;
   const perTrimmer = shown2(ratio(row.buckers, row.trimmers));
-  if (perTrimmer === null) return mini('Buckers per trimmer', DASH, '', BUCKER_BAND);
-  const word = perTrimmer < 0.65 ? 'short' : perTrimmer > 0.85 ? 'idle' : 'fed';
-  return mini('Buckers per trimmer', fmt2(perTrimmer), '', `${BUCKER_BAND}, ${word}`);
+  if (perTrimmer === null) return mini('Buckers per trimmer', DASH, '', band);
+  const word = perTrimmer < BUCKER_BAND.lo ? 'short' : perTrimmer > BUCKER_BAND.hi ? 'idle' : 'fed';
+  return mini('Buckers per trimmer', fmt2(perTrimmer), '', `${band}, ${word}`);
 }
 
-/** The first floor note from row `from` on that is not a flag of its own, translated: why the crew moved. */
-function crewNote(rows, from) {
-  const note = rows.slice(from).flatMap((row) => notePieces(row.notes)).find((piece) => /\p{L}/u.test(piece) && !classifyNote(piece));
-  return note ? translate(note) : null;
-}
-
-/** Good line for the day so far: every hour above target, or a morning of at least three hours above it. */
+/**
+ * Good line for the day so far, naming the best full hour before the first
+ * hour under target: "Every hour above target so far" when none is under;
+ * "Morning above target every hour" when the first under-target hour starts at
+ * noon or later; "First N hours above target" when it starts earlier, after at
+ * least two hours above target. null otherwise.
+ */
 function middayGood(rows) {
-  const firstUnder = rows.findIndex((row) => row.lbs < hourTarget(row));
-  if (firstUnder !== -1 && firstUnder < 3) return null;
+  const firstUnder = rows.findIndex(underTarget);
+  let lead;
+  if (firstUnder === -1) lead = 'Every hour above target so far';
+  else if (slotMinutes(rows[firstUnder].timeSlot)?.start >= MORNING_CUTOFF_MINUTES) lead = 'Morning above target every hour';
+  else if (firstUnder >= 2) lead = `First ${firstUnder} hours above target`;
+  else return null;
   const best = bestHour(firstUnder === -1 ? rows : rows.slice(0, firstUnder));
-  if (!best) return null;
-  const lead = firstUnder === -1 ? 'Every hour above target so far' : 'Morning above target every hour';
-  return flag('good', `${lead}, best ${fmt2(best.rate)} at ${slotLabel(best.timeSlot) ?? DASH}`);
+  return best ? flag('good', `${lead}, best ${fmt2(best.rate)} at ${slotSpan(best.timeSlot) ?? DASH}`) : null;
 }
 
 /**
  * Midday card for `date` (today, so far). `scoreboard` is today's scoreboard
  * JSON, `dashboardToday` today's dashboard (cultivar and T-Zero count),
  * `priorDay` the previous weekday's dashboard, `sacks` today's supersack
- * summary. null while no hour is logged.
+ * summary. null while no hour is logged, or when today's dashboard is the
+ * API's fallback shape. Flags: Act, two Watch lines (a warn note, else the
+ * crew drop; then "no supersacks"), Good.
  */
 export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks, generatedAt }) {
+  checkGeneratedAt(generatedAt);
   const sb = scoreboard?.scoreboard;
   const rows = hourRows(sb);
-  if (!rows.length) return null;
+  if (!rows.length || dashboardToday?.fallback?.active) return null;
   const today = dayRow(dashboardToday, date);
   const prior = lastDayBefore(priorDay, date);
   const last = rows.at(-1);
+  const lastEnd = slotMinutes(last.timeSlot)?.end;
   const tops = sum(rows, (row) => row.lbs);
   const rate = ratio(tops, sum(rows, crewHours));
   const sackCount = sum(sacks?.periods ?? [], (p) => p.total_sacks);
-  const under = rows.filter((row) => row.lbs < hourTarget(row)).length;
+  const tzero = dashboardToday?.today?.tzero;
   const [act, noteWatch] = noteFlags(rows);
-  const drop = crewDrop(rows);
-  const why = drop && crewNote(rows, drop.from);
-  const now = sb.currentHourTarget > 0
-    ? { label: slotLabel(sb.currentTimeSlot) ?? DASH, rate: DASH, lbs: 0, target: sb.currentHourTarget, kind: 'now' }
-    : null;
+  const currentStart = slotMinutes(sb.currentTimeSlot)?.start;
+  const showNow = sb.currentHourTarget > 0 && Number.isFinite(currentStart) && Number.isFinite(lastEnd) && currentStart >= lastEnd;
+  const now = showNow ? [{ label: slotLabel(sb.currentTimeSlot) ?? DASH, rate: DASH, lbs: 0, target: sb.currentHourTarget, kind: 'now' }] : [];
   return {
     kind: 'midday',
     costsLocked: costsLocked(today),
     eyebrow: 'Rogue Origin · Midday check',
     title: weekdayName(date),
     sub: `${monthDay(date)} · ${today ? cultivarName([today]) : cultivarShort(sb.strain)} · through ${slotEnd(last.timeSlot) ?? DASH}`,
-    pill: `Line crew ${last.trimmers ?? 0} T · ${last.buckers ?? 0} B · ${dashboardToday?.today?.tzero || 1} TZ`,
+    pill: `Line crew ${last.trimmers ?? 0} T · ${last.buckers ?? 0} B · ${Number.isFinite(tzero) ? tzero : 1} TZ`,
     tiles: [
       tile('Tops so far', fmtInt(tops), 'lb', [targetChip(sb.todayPercentage)]),
-      tile('Rate', fmt2(rate), 'lb/hr', [rateTargetChip(rate, sb.targetRate)]),
+      rateTile(rate, rateTargetChip(rate, sb.targetRate)),
       tile('Projected end of day', fmtInt(sb.projectedTotal), 'lb', [
         prior ? { kind: 'neutral', text: `${shortWeekday(prior.date)} closed at ${fmtInt(prior.totalTops)}` } : null,
       ]),
     ],
-    chart: { title: 'Tops by hour', legend: LEGEND, sub: 'lb · rate under the hour', cols: [...rows.map(hourCol), ...(now ? [now] : [])] },
+    chart: hourlyChart(rows, now),
     minis: [
       mini('Smalls so far', fmtInt(sum(rows, (row) => row.smalls)), 'lb', ''),
       buckerMini(last),
@@ -538,9 +594,8 @@ export function middayModel({ date, scoreboard, dashboardToday, priorDay, sacks,
     ],
     flags: pickFlags([
       act,
-      noteWatch ?? (drop && flag('warn', `Crew fell ${drop.peak} → ${drop.last} trimmers after ${slotLabel(rows[drop.from].timeSlot) ?? DASH}`
-        + `${why ? `: ${why}` : ''}${under ? `, ${under} ${under === 1 ? 'hour' : 'hours'} under target` : ''}`)),
-      sackCount === 0 && slotMinutes(last.timeSlot)?.end >= 600 ? flag('warn', 'No supersacks logged on the tracker yet today') : null,
+      noteWatch ?? crewDropFlag(rows),
+      sackCount === 0 && lastEnd >= SACKS_DUE_MINUTES ? flag('warn', 'No supersacks logged on the tracker yet today') : null,
       middayGood(rows),
     ]),
     foot: foot('cards/midday · scoreboard target · $/lb at close', generatedAt),
