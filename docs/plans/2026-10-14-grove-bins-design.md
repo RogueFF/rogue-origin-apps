@@ -245,7 +245,7 @@ Printed **once** per lane from the Desk ("Lane kit"), laminated:
 - **Red ORDER card** (full sheet): the old supply-closet kanban card template
   (kanban.html, 8.5×11 "full" size) in red — double gold border, bag name
   header, rack location + lane colour swatch, bag photo, Supplier / Order qty /
-  Delivery, QR (`/k/<token>`) + *ESCANEA PARA PEDIR* / *scan to order*, gold
+  Delivery, QR (`/k/<token>`) + *ESCANEA PARA PEDIR* / *SCAN TO ORDER* (the Desk's language first, the other small underneath — the header card and tape label follow it too), gold
   price pill, round logo, "Leave it here until the next delivery". Koa
   2026-10-19: closer to the old template (`src/js/tag-desk/red-card.js`).
 - **Red tape label** (small, reprinted when the depth changes): "Red tape at
