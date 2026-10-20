@@ -7,6 +7,8 @@ workers/node_modules/
 # because CI installs from it with `npm ci`.
 package-lock.json
 !/package-lock.json
+# The cards worker deploys on its own from cards/, so its lockfile is pinned too.
+!/cards/package-lock.json
 
 # Vercel
 .vercel/
@@ -97,3 +99,9 @@ workers/scripts/_generated/*.sql
 tests/screenshots/*.png
 tests/tests/screenshots/*.png
 tests/*.png
+
+# Production cards worker (cards/)
+cards/node_modules/
+cards/.wrangler/
+cards/test/out/
+cards/dist/
