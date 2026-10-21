@@ -215,3 +215,10 @@ test('lane headline never reassures on an unknown status', () => {
   assert.equal(laneHeadline({ status: undefined, orderBy: null, runOut: '2027-01-01' }, '2026-10-14'), 'ORDER NOW');
   assert.equal(laneHeadline({ status: 'weird', orderBy: '2026-10-10' }, '2026-10-14'), 'ORDER NOW · 4 days late');
 });
+
+test('laneRateLine shows a planned rate and what the ledger measured beside it', () => {
+  const ln = { rate: 1500 / 30.4, rateSource: 'plan', measured: { rate: 3.9, source: 'ledger' } };
+  assert.equal(laneRateLine(ln), '~345/wk (plan · ledger ~27/wk)');
+  assert.equal(laneRateLine(ln, true), '~345/sem (plan · registro ~27/sem)');
+  assert.equal(laneRateLine({ rate: 1500 / 30.4, rateSource: 'plan', measured: { rate: 0, source: 'seed' } }), '~345/wk (plan)');
+});

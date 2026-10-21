@@ -213,3 +213,37 @@ test('season window for a short-lead lane', () => {
     to: '2025-10-28T23:59:59.999Z',
   });
 });
+
+// --- planned use (Koa 2026-10-20: "~1500/month is a good start … update next time we order") ---
+
+test('a planned monthly use overrides the ledger: rate, reorder point, red tape, one month per order', () => {
+  const r = lane({ per: 50, lead: 7, safety: 7, moq: 0, planPerMonth: 1500 });
+  assert.equal(r.rateSource, 'plan');
+  assert.ok(Math.abs(r.rate - 1500 / 30.4) < 1e-9);
+  assert.equal(r.reorderPoint, 691);       // 49.34/day × 14 days
+  assert.equal(r.redTapeAtBins, 14);       // 691 / 50, rounded up
+  assert.equal(r.suggestedQty, 1500);      // one month per order, not four
+  assert.equal(r.measured.source, 'ledger');
+  assert.equal(r.measured.rate, 20);       // what the ledger still says (1120 / 56)
+});
+
+test('plan floors at MOQ and rounds up to 100', () => {
+  assert.equal(lane({ moq: 2500, planPerMonth: 1500 }).suggestedQty, 2500);
+  assert.equal(lane({ moq: 0, planPerMonth: 1450 }).suggestedQty, 1500);
+});
+
+test('plan 0 or absent leaves the ledger in charge', () => {
+  for (const planPerMonth of [0, null, undefined]) {
+    const r = lane({ planPerMonth });
+    assert.equal(r.rateSource, 'ledger');
+    assert.equal(r.rate, 20);
+    assert.equal(r.suggestedQty, 2500);
+    assert.equal(r.measured.source, 'ledger');
+  }
+});
+
+test('plan also beats the season floor', () => {
+  const r = lane({ per: 50, lead: 7, safety: 7, moq: 0, planPerMonth: 300, seasonUsage: 10000 });
+  assert.equal(r.rateSource, 'plan');
+  assert.equal(r.measured.source, 'season');
+});
