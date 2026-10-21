@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   checkDays, nextCheckAfter, addDays, localDay, zoneOf, deliveryDays, parsePrice,
   normalizeCard, toRawCard, buildModel, cardState, scanPlan, orderedMap, ulinePasteText, ULINE_QUICK_ORDER_URL, ulineQuickOrderUrl, amazonQueueUrl, walmartCartUrl,
-  laneHeadline, laneRateLine, fmtMD,
+  laneHeadline, laneRateLine, laneOnHandLine, shopifyNag, fmtMD,
 } from '../src/js/tag-desk/model.js';
 
 const card = (o) => ({ id: 1, item: 'Packing Tape', supplier: 'Uline', orderQty: 'x72', orderWhen: '36', deliveryTime: '1 Day', price: '$2.10', crumbtrail: 'Supply Rack > A-1', url: '', picture: '', imageFile: '', ...o });
@@ -221,4 +221,27 @@ test('laneRateLine shows a planned rate and what the ledger measured beside it',
   assert.equal(laneRateLine(ln), '~345/wk (plan · ledger ~27/wk)');
   assert.equal(laneRateLine(ln, true), '~345/sem (plan · registro ~27/sem)');
   assert.equal(laneRateLine({ rate: 1500 / 30.4, rateSource: 'plan', measured: { rate: 0, source: 'seed' } }), '~345/wk (plan)');
+});
+
+test('lane on-hand line: where the bins number comes from and when Shopify last spoke (Pacific)', () => {
+  const sh = (over) => ({ bins: 10, onHandSource: 'shopify', shopify: { available: 500, at: '2026-10-21T21:41:00Z', bins: 10, agrees: true }, ...over });
+  assert.equal(laneOnHandLine(sh(), false, '2026-10-21'), '~10 bins · from Shopify · as of 2:41 pm');
+  assert.equal(laneOnHandLine(sh(), true, '2026-10-21'), '~10 bins · de Shopify · a las 2:41 pm');
+  const older = { shopify: { available: 300, at: '2026-10-20T20:14:16Z', bins: 6, agrees: true }, bins: 6 };
+  assert.equal(laneOnHandLine(sh(older), false, '2026-10-21'), '~6 bins · from Shopify · as of Oct 20');
+  assert.equal(laneOnHandLine(sh(older), true, '2026-10-21'), '~6 bins · de Shopify · del 20 oct');
+  const led = { bins: 10, onHandSource: 'ledger', shopify: { available: 294, at: '2026-10-21T17:48:38Z', bins: 5, agrees: false } };
+  assert.equal(laneOnHandLine(led, false, '2026-10-21'), '~10 bins · from the count · Shopify says ~5 (as of 10:48 am)');
+  assert.equal(laneOnHandLine(led, true, '2026-10-21'), '~10 bins · del conteo · Shopify dice ~5 (10:48 am)');
+  assert.equal(laneOnHandLine({ bins: 9, onHandSource: 'ledger', shopify: null }, false, '2026-10-21'), '~9 bins');
+  assert.equal(laneOnHandLine({ bins: 9 }, true, '2026-10-21'), '~9 bins');
+});
+
+test('shopify nag: only when Shopify disagrees with the count, says what to set', () => {
+  const off = { onHandSource: 'ledger', ledgerOnHand: 500, shopify: { available: 294, bins: 5, agrees: false } };
+  assert.equal(shopifyNag(off), ' · Shopify says 294 (~5 bins) · set it to 500 in Shopify');
+  assert.equal(shopifyNag(off, true), ' · Shopify dice 294 (~5 bins) · ponlo en 500 en Shopify');
+  assert.equal(shopifyNag({ onHandSource: 'shopify', ledgerOnHand: 500, shopify: { available: 480, bins: 9, agrees: true } }), '');
+  assert.equal(shopifyNag({ onHandSource: 'ledger', ledgerOnHand: 500, shopify: null }), '');
+  assert.equal(shopifyNag({ bins: 9 }), '');
 });
