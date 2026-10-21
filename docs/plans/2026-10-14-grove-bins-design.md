@@ -327,3 +327,11 @@ Desk writes carry the shared password like the rest of Phase A.
 - Bin to bench vs single bags at the rack (default: bin to bench).
 - Lane colours: reuse the Desk's Grove badge colours unless Koa picks others.
 - Per-bin cards (kind='bin') only if a size's Receive count keeps disagreeing with the ledger.
+
+## Addendum 2026-10-20 — planned use per lane
+
+Koa: "I think ~1500/month is a good start just because we are intaking product too. Please set it for me. We can update next time we order based off of the updated burn rate." Background: the 10 lb lane's ledger counts 10 lb scan-outs (sales side, ~27/wk), but the bags are consumed at bagging on the trim line (~110/wk in a full trim week, ~345/wk under the 50-person plan), and purchased flower adds ~100 bags per 1,000 lb.
+
+- `kanban_bin_config.plan_per_month` (migration 0047, default 0). `laneStatus` takes `planPerMonth`: > 0 overrides ledger, seed and season (`rateSource: 'plan'`), one month becomes the suggested order (floored at MOQ), and the rate the data would have given still comes back as `measured: {rate, source}`.
+- Desk: lane Settings gets "Planned use per month · overrides the ledger · 0 = off"; the tile's rate line reads "~345/wk (plan · ledger ~27/wk)" so the next order can compare plan and measured.
+- Card 99 set to 1,500/month on 2026-10-20 → reorder point 691 bags, red tape at bin 14, suggested order 1,500. Custom-bag lanes keep the ledger.

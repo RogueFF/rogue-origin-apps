@@ -17,6 +17,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
  * @param {number} i.safety         safety stock, days
  * @param {number} i.moq            minimum order qty (0 = none)
  * @param {number} i.seedPerMonth   bags/month used until the ledger has 14 days
+ * @param {number} [i.planPerMonth] bags/month Koa plans on; > 0 overrides ledger, seed and season (the measured rate still comes back in `measured`), and one month becomes the suggested order
  * @param {{bags:number, at:string}|null} i.baseline  null = never received/counted: no estimate (on hand 0, recount false)
  * @param {number} i.usageSince     bags used after baseline.at
  * @param {number} i.usage56        bags used in the last 56 days
@@ -29,6 +30,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
 export function laneStatus(i) {
   const { lead, safety, moq, seedPerMonth, baseline, usageSince, usage56, usageDays,
     seasonUsage, redScanned, leftoverBins, today } = i;
+  const plan = Number(i.planPerMonth) || 0;
   const per = Math.max(1, Number(i.per) || 0);
 
   const onHand = baseline ? Math.max(0, baseline.bags - usageSince) : 0;
@@ -52,9 +54,17 @@ export function laneStatus(i) {
     }
   }
 
+  // What the data says, kept beside a plan so the next order can compare the two.
+  const measured = { rate, source: rateSource };
+  if (plan > 0) {
+    rate = plan / 30.4;
+    rateSource = 'plan';
+  }
+
   const reorderPoint = Math.round(rate * cover);
   const redTapeAtBins = Math.ceil(reorderPoint / per);
-  const suggestedQty = Math.max(moq, Math.ceil((rate * 120) / 100) * 100);
+  // Four months of the measured rate per order (custom bags: one Grove run); a plan orders one month.
+  const suggestedQty = Math.max(moq, Math.ceil((plan > 0 ? plan : rate * 120) / 100) * 100);
 
   const t = today.getTime();
   const runOut = rate > 0 ? isoDate(t + (onHand / rate) * DAY) : null;
@@ -69,7 +79,7 @@ export function laneStatus(i) {
   const recount = !!baseline && leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
   const bins = Math.floor(onHand / per);
 
-  return { onHand, bins, rate, rateSource, reorderPoint, redTapeAtBins, suggestedQty,
+  return { onHand, bins, rate, rateSource, measured, reorderPoint, redTapeAtBins, suggestedQty,
     runOut, orderBy, status, recount };
 }
 
