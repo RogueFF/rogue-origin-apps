@@ -268,3 +268,74 @@ test('orderDays 0 or absent keeps the defaults: one month with a plan, four mont
     assert.equal(lane({ moq: 0, planPerMonth: 1500, orderDays }).suggestedQty, 1500);
   }
 });
+
+// --- Shopify's word on the lane (addendum 2026-10-21) -----------------------
+// The freshest word wins: Shopify's level when it is newer than the last count,
+// the count (baseline − scans since) when the count is newer. Rate, reorder
+// point and the dates never change — they only read onHand.
+
+test('without a Shopify word the lane is exactly what it was, plus the source fields', () => {
+  const r = lane();
+  assert.equal(r.onHandSource, 'ledger');
+  assert.equal(r.shopify, null);
+  assert.equal(r.ledgerOnHand, 1800);
+  assert.deepEqual(lane({ shopify: null }), r);
+});
+
+test('Shopify newer than the count: on hand and bins are Shopify’s; the rest is untouched', () => {
+  const r = lane({ shopify: { available: 1234, at: '2026-10-10T12:00:00Z' } });
+  assert.equal(r.onHand, 1234);
+  assert.equal(r.bins, 24);
+  assert.equal(r.onHandSource, 'shopify');
+  assert.equal(r.ledgerOnHand, 1800);
+  assert.deepEqual(r.shopify, { available: 1234, at: '2026-10-10T12:00:00Z', bins: 24, agrees: false });
+  const was = lane();
+  for (const k of ['rate', 'rateSource', 'reorderPoint', 'redTapeAtBins', 'suggestedQty']) assert.equal(r[k], was[k], k);
+  assert.equal(r.status, 'order');                 // 1234 ≤ 2100: status follows the on hand shown
+  assert.equal(r.runOut, '2026-12-15');            // 1234 / 20 = 61.7 days after Oct 14 12:00Z
+});
+
+test('the count newer than Shopify’s word: ledger on hand, Shopify kept beside it', () => {
+  const r = lane({ shopify: { available: 1234, at: '2026-09-30T12:00:00Z' } });
+  assert.equal(r.onHand, 1800);
+  assert.equal(r.bins, 36);
+  assert.equal(r.onHandSource, 'ledger');
+  assert.deepEqual(r.shopify, { available: 1234, at: '2026-09-30T12:00:00Z', bins: 24, agrees: false });
+});
+
+test('no count yet: Shopify’s word is the on hand and has nothing to disagree with', () => {
+  const r = lane({ baseline: null, usageSince: 0, shopify: { available: 294, at: '2026-10-10T12:00:00Z' } });
+  assert.equal(r.onHand, 294);
+  assert.equal(r.bins, 5);
+  assert.equal(r.onHandSource, 'shopify');
+  assert.equal(r.ledgerOnHand, null);
+  assert.equal(r.shopify.agrees, true);
+});
+
+test('a negative Shopify level is 0 on hand; the raw level is still reported', () => {
+  const r = lane({ shopify: { available: -14, at: '2026-10-10T12:00:00Z' } });
+  assert.equal(r.onHand, 0);
+  assert.equal(r.bins, 0);
+  assert.equal(r.shopify.available, -14);
+  assert.equal(r.shopify.bins, 0);
+});
+
+test('agrees means within a bin of the ledger estimate', () => {
+  assert.equal(lane({ shopify: { available: 1760, at: '2026-10-10T12:00:00Z' } }).shopify.agrees, true);  // 40 off
+  assert.equal(lane({ shopify: { available: 1850, at: '2026-10-10T12:00:00Z' } }).shopify.agrees, true);  // 50 off
+  assert.equal(lane({ shopify: { available: 1749, at: '2026-10-10T12:00:00Z' } }).shopify.agrees, false); // 51 off
+});
+
+test('recount compares the physical count to the on hand shown, whichever source', () => {
+  const sh = { available: 1234, at: '2026-10-10T12:00:00Z' };
+  assert.equal(lane({ shopify: sh, leftoverBins: 24 }).recount, false); // |1200 − 1234| = 34
+  assert.equal(lane({ leftoverBins: 24 }).recount, true);               // |1200 − 1800| = 600
+});
+
+test('newer is decided by instant, not by string order', () => {
+  // Flow echoes carry whole seconds ("…:00Z"); baselines carry milliseconds. As strings
+  // "…:00.500Z" sorts BEFORE "…:00Z", which would call Shopify older when it is newer.
+  const b = { bags: 2000, at: '2026-10-01T00:00:00Z' };
+  assert.equal(lane({ baseline: b, shopify: { available: 1234, at: '2026-10-01T00:00:00.500Z' } }).onHandSource, 'shopify');
+  assert.equal(lane({ baseline: b, shopify: { available: 1234, at: '2026-10-01T00:00:00Z' } }).onHandSource, 'ledger'); // a tie is not newer
+});

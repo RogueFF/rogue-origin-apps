@@ -7,7 +7,7 @@
 import { t, ES } from './labels.js';
 import * as api from './api.js';
 import { redCardPage, RED_CARD_CSS, imagesSettled, bi } from './red-card.js';
-import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure, laneHeadline, laneRateLine } from './model.js';
+import { addDays, daysBetween, localDay, d1Instant, cardState, expectedOf, leadOf, orderedMap, toRawCard, ZONES, ulinePasteText, ulineQuickOrderUrl, ULINE_HELPER_URL, ULINE_BOOKMARKLET, amazonQueueUrl, walmartCartUrl, fmtMD as fmtMDPure, laneHeadline, laneRateLine, laneOnHandLine, shopifyNag } from './model.js';
 
 // ---------- context (set by init) ----------
 let M = null, L = null, saveL = () => {}, reload = async () => {}, RAW = {}, PAGE_URL = '';
@@ -308,13 +308,13 @@ function openReceive(id) { const es = ES(); const ln = laneById(id); if (!ln) re
     const r = await api.receiveBins(b); await refreshBins(r.lane); const nl = laneById(id) || r.lane;
     let msg = es ? `Cinta roja en el bin ${nl.redTapeAtBins | 0} · mueve la tarjeta roja · imprime la etiqueta de cinta` : `Red tape at bin ${nl.redTapeAtBins | 0} · move the red card · print the tape label`;
     if (r.needsRecount) { const est = Math.floor((r.estimateBefore || 0) / (cfg.bagsPerBin || 1)); msg += es ? ` · ¿Recontar? El estimado decía ~${est} bins` : ` · Recount? The estimate said ~${est} bins`; }
-    return msg;
+    return msg + shopifyNag(nl, es);
   }, () => { ['#rvLeft', '#rvBoxes', '#rvPerBox', '#rvPerBin'].forEach(s2 => { $(s2).oninput = live; }); live(); });
 }
 
 function openRecount(id) { const es = ES(); const ln = laneById(id); if (!ln) return; const { size } = laneSize(ln);
   binDialog(`${t('recount')} · ${size}`, `<div class="f"><label>${es ? 'Cuenta los bins sellados en el estante (sin contar EN USO)' : 'Count the sealed bins on the rack (not the EN USO bin)'}</label><input id="rcSealed" type="number" min="0" inputmode="numeric" placeholder="${numAttr(ln.bins)}" style="font-size:28px;height:60px"></div><p class="muted" style="margin:0">${es ? `El estimado dice ~${ln.bins | 0} bins. Tu conteo lo reemplaza.` : `The estimate says ~${ln.bins | 0} bins. Your count replaces it.`}</p>`,
-    es ? 'Guardar conteo' : 'Save count', async () => { const n = intOf('#rcSealed'); if (n == null) return needNum(); const r = await api.recountBins(id, n); await refreshBins(r.lane); return es ? `Conteo guardado · ${n} bins` : `Count saved · ${n} bins`; });
+    es ? 'Guardar conteo' : 'Save count', async () => { const n = intOf('#rcSealed'); if (n == null) return needNum(); const r = await api.recountBins(id, n); await refreshBins(r.lane); return (es ? `Conteo guardado · ${n} bins` : `Count saved · ${n} bins`) + shopifyNag(laneById(id) || r.lane, es); });
 }
 
 const LANE_COLOURS = ['orange', 'teal', 'violet', 'olive', 'slate'];
@@ -443,7 +443,7 @@ function laneTile(ln) { const es = ES(); const { size, rest } = laneSize(ln);
   const bins = Math.max(0, ln.bins | 0), tape = Math.max(0, ln.redTapeAtBins | 0), n = Math.max(bins, tape), shown = Math.min(n, SQ_MAX);
   let sq = ''; for (let i = 0; i < shown; i++) { sq += `<i class="sq${i < bins ? ' on' : ''}${i < tape ? ' red' : ''}"></i>`; if (i === tape - 1) sq += '<b class="tape" aria-hidden="true"></b>'; }
   if (n > shown) sq += `<span class="more">+${n - shown}</span>`;
-  const meta = [`~${bins} bins`, laneRateLine(ln, es), `<span class="tape-txt">${t('redTape')} <b>${tape}</b></span>`, ln.baseline ? `${t('lastCount')} ${fmtMD(localDay(ln.baseline.at))}` : (es ? 'sin conteo todavía' : 'not counted yet')].join(' · ');
+  const meta = [laneOnHandLine(ln, es, M.today), laneRateLine(ln, es), `<span class="tape-txt">${t('redTape')} <b>${tape}</b></span>`, ln.baseline ? `${t('lastCount')} ${fmtMD(localDay(ln.baseline.at))}` : (es ? 'sin conteo todavía' : 'not counted yet')].join(' · ');
   const rq = ln.openRequest; let req = '';
   if (rq) { const day = localDay(rq.requestedAt); const w = daysSince(day); const asked = L.nudged[ln.cardId] === M.today;
     req = `<div class="lt-req ${w > 7 ? 'warn' : ''}"><span><b>${t('requestedDamon')} · ${fmtMD(day)}</b> · ${es ? `${w} ${w === 1 ? 'día' : 'días'}` : `${w} day${w === 1 ? '' : 's'}`}${rq.notifyState === 'failed' ? ` · <span class="warn">${es ? 'el correo no salió' : 'email failed'}</span>` : ''}</span><button class="tb-btn btn-sm" data-nudge="${ln.cardId}" ${asked ? 'disabled' : ''}>${asked ? t('askedToday') : t('askAgain')}</button></div>`; }
@@ -451,7 +451,7 @@ function laneTile(ln) { const es = ES(); const { size, rest } = laneSize(ln);
   return `<section class="lane-tile st-${esc(ln.status || 'order')}" style="--lane:${laneColour(ln.colour)}" data-lane="${ln.cardId}">
     <header><div class="lt-name"><span class="lt-size">${esc(size)}</span><span>${esc(rest)}</span></div><h3>${esc(laneHeadline(ln, M.today, es))}</h3></header>
     <div class="sqs" role="img" aria-label="${bins} bins · ${t('redTape')} ${tape}">${sq}</div>
-    <div class="lt-meta">${meta}${ln.recount ? ` <span class="lt-badge">${es ? 'recontar' : 'recount'}</span>` : ''}</div>
+    <div class="lt-meta">${meta}${ln.recount ? ` <span class="lt-badge">${es ? 'recontar' : 'recount'}</span>` : ''}${ln.shopify && !ln.shopify.agrees ? ` <span class="lt-badge">${es ? 'Shopify ≠ conteo' : 'Shopify ≠ count'}</span>` : ''}</div>
     ${req}
     <div class="lt-acts"><button class="tb-btn ${urgent || rq ? 'btn-primary' : ''}" data-rv="${ln.cardId}">${t('receiveBins')}</button><button class="tb-btn" data-rc="${ln.cardId}">${t('recount')}</button><button class="tb-btn" data-kit="${ln.cardId}">${t('laneKit')}</button><button class="tb-btn ghost" data-cfg="${ln.cardId}">${t('settings')}</button><button class="tb-btn btn-sm ghost lt-tape" data-tape="${ln.cardId}">${t('tapeLabel')}</button></div>
   </section>`; }

@@ -26,6 +26,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
  * @param {number|null} i.seasonUsage bags used last year in the window seasonWindow() gives, or null
  * @param {boolean} i.redScanned
  * @param {number|null} [i.leftoverBins] physical bin count, if one was taken
+ * @param {{available:number, at:string}|null} [i.shopify] Shopify's last word on the lane — its level and when it said so (addendum 2026-10-21); lanes Shopify does not count pass nothing
  * @param {Date} i.today
  */
 export function laneStatus(i) {
@@ -35,7 +36,15 @@ export function laneStatus(i) {
   const orderDays = Number(i.orderDays) > 0 ? Number(i.orderDays) : 0;
   const per = Math.max(1, Number(i.per) || 0);
 
-  const onHand = baseline ? Math.max(0, baseline.bags - usageSince) : 0;
+  // The freshest word wins (addendum 2026-10-21): Shopify's level when it is newer than the
+  // last count, else the count minus the scans since it. Compared as instants, not strings —
+  // Flow echoes carry whole seconds and baselines milliseconds, and "…:00.500Z" sorts before "…:00Z".
+  const ledgerOnHand = baseline ? Math.max(0, baseline.bags - usageSince) : null;
+  const word = i.shopify && Number.isFinite(Number(i.shopify.available)) ? i.shopify : null;
+  const level = word ? Number(word.available) : null;
+  const shopifyNewer = !!word && (!baseline || new Date(word.at).getTime() > new Date(baseline.at).getTime());
+  const onHand = shopifyNewer ? Math.max(0, level) : (ledgerOnHand ?? 0);
+  const onHandSource = shopifyNewer ? 'shopify' : 'ledger';
   const windowDays = Math.min(56, Math.max(1, usageDays));
 
   let rate, rateSource;
@@ -79,11 +88,15 @@ export function laneStatus(i) {
   else if (rate > 0 && onHand <= reorderPoint + 14 * rate) status = 'soon';
   else status = 'ok';
 
-  // With no baseline there is no estimate to disagree with.
-  const recount = !!baseline && leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
+  // With no estimate (no count and no Shopify word) there is nothing to disagree with.
+  const recount = (!!baseline || shopifyNewer) && leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
   const bins = Math.floor(onHand / per);
+  // Shopify's word kept beside the lane whichever source won, so the Desk can show when it
+  // last spoke and nag when it is more than a bin off the count (`agrees`).
+  const shopify = word ? { available: level, at: word.at, bins: Math.floor(Math.max(0, level) / per),
+    agrees: ledgerOnHand == null || Math.abs(level - ledgerOnHand) <= per } : null;
 
-  return { onHand, bins, rate, rateSource, measured, reorderPoint, redTapeAtBins, suggestedQty,
+  return { onHand, bins, onHandSource, ledgerOnHand, shopify, rate, rateSource, measured, reorderPoint, redTapeAtBins, suggestedQty,
     runOut, orderBy, status, recount };
 }
 
