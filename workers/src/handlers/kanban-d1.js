@@ -1207,14 +1207,14 @@ async function computeLane(env, row, today = new Date(), leftoverBins = null) {
   ]) : [null, 0];
   const usageDays = first?.t ? Math.floor((today - new Date(first.t)) / DAY) : 0;
   const s = laneStatus({
-    per: row.bags_per_bin, lead: row.lead_days, safety: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month, planPerMonth: row.plan_per_month,
+    per: row.bags_per_bin, lead: row.lead_days, safety: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month, planPerMonth: row.plan_per_month, orderDays: row.order_days,
     baseline: baseline ? { bags: baseline.bags, at: baseline.at } : null,
     usageSince, usage56, usageDays,
     seasonUsage: seasonRaw > 0 ? seasonRaw : null,
     redScanned: !!red, leftoverBins, today,
   });
   return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
-    config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month, planPerMonth: row.plan_per_month || 0 },
+    config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month, planPerMonth: row.plan_per_month || 0, orderDays: row.order_days || 0 },
     baseline: baseline || null, redCard: row.redToken ? { id: row.redCardId, token: row.redToken } : null, openRequest: openReq || null, ...s };
 }
 
@@ -1286,7 +1286,7 @@ async function recount(body, env) {
   return successResponse({ success: true, lane });
 }
 
-/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, planPerMonth?, colour?} — atomic upsert. planPerMonth > 0 makes the lane plan on that use instead of the ledger (Koa 2026-10-20). */
+/** POST ?action=setBinConfig {cardId, bagsPerBox?, bagsPerBin?, leadDays?, safetyDays?, moq?, seedPerMonth?, planPerMonth?, orderDays?, colour?} — atomic upsert. planPerMonth > 0 makes the lane plan on that use instead of the ledger (Koa 2026-10-20). */
 async function setBinConfig(body, env) {
   const cardId = cardIdOf(body.cardId);
   const { data, error } = validateBinConfig(body);
