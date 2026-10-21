@@ -335,3 +335,7 @@ Koa: "I think ~1500/month is a good start just because we are intaking product t
 - `kanban_bin_config.plan_per_month` (migration 0047, default 0). `laneStatus` takes `planPerMonth`: > 0 overrides ledger, seed and season (`rateSource: 'plan'`), one month becomes the suggested order (floored at MOQ), and the rate the data would have given still comes back as `measured: {rate, source}`.
 - Desk: lane Settings gets "Planned use per month · overrides the ledger · 0 = off"; the tile's rate line reads "~345/wk (plan · ledger ~27/wk)" so the next order can compare plan and measured.
 - Card 99 set to 1,500/month on 2026-10-20 → reorder point 691 bags, red tape at bin 14, suggested order 1,500. Custom-bag lanes keep the ledger.
+
+## Addendum 2026-10-21 — order cycle per lane
+
+Koa: "I'd like to hold enough stock to order every 2 weeks." `kanban_bin_config.order_days` (migration 0048, default 0): one order covers that many days of use (rounded up to 100, floored at MOQ). 0 keeps the defaults — 30 days with a plan, 120 without. The red line (lead + safety) does not move with the cycle. Card 99 set to 14 → at 1,500/month: order 700 (7 cases) every two weeks, red tape stays at bin 14, stock swings between ~350 just before a delivery and ~1,050 just after. Desk: lane Settings "Order every (days)".

@@ -247,3 +247,24 @@ test('plan also beats the season floor', () => {
   assert.equal(r.rateSource, 'plan');
   assert.equal(r.measured.source, 'season');
 });
+
+// --- order cycle (Koa 2026-10-21: "hold enough stock to order every 2 weeks") ---
+
+test('orderDays sets how much use one order covers: 14 days of the plan = 700 bags', () => {
+  const r = lane({ per: 50, lead: 7, safety: 7, moq: 0, planPerMonth: 1500, orderDays: 14 });
+  assert.equal(r.suggestedQty, 700);      // 49.34/day × 14 = 691 → 700
+  assert.equal(r.reorderPoint, 691);      // the red line does not move with the cycle
+  assert.equal(r.redTapeAtBins, 14);
+});
+
+test('orderDays also applies to a ledger-driven lane, floored at MOQ', () => {
+  assert.equal(lane({ moq: 0, orderDays: 30 }).suggestedQty, 600);   // 20/day × 30
+  assert.equal(lane({ moq: 2500, orderDays: 30 }).suggestedQty, 2500);
+});
+
+test('orderDays 0 or absent keeps the defaults: one month with a plan, four months without', () => {
+  for (const orderDays of [0, null, undefined]) {
+    assert.equal(lane({ moq: 0, orderDays }).suggestedQty, 2400);
+    assert.equal(lane({ moq: 0, planPerMonth: 1500, orderDays }).suggestedQty, 1500);
+  }
+});

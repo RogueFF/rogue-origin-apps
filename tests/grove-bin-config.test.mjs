@@ -63,3 +63,10 @@ test('planPerMonth maps to plan_per_month; 0 switches the plan off; negatives re
   assert.deepEqual(validateBinConfig({ planPerMonth: '1500' }).data, { plan_per_month: 1500 });
   assert.match(validateBinConfig({ planPerMonth: -1 }).error, /planPerMonth/);
 });
+
+test('orderDays maps to order_days as an integer ≥ 0', () => {
+  assert.deepEqual(validateBinConfig({ orderDays: 14 }).data, { order_days: 14 });
+  assert.deepEqual(validateBinConfig({ orderDays: 0 }).data, { order_days: 0 });
+  assert.match(validateBinConfig({ orderDays: 1.5 }).error, /orderDays/);
+  assert.match(validateBinConfig({ orderDays: -7 }).error, /orderDays/);
+});
