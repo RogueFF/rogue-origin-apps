@@ -339,3 +339,30 @@ Koa: "I think ~1500/month is a good start just because we are intaking product t
 ## Addendum 2026-10-21 — order cycle per lane
 
 Koa: "I'd like to hold enough stock to order every 2 weeks." `kanban_bin_config.order_days` (migration 0048, default 0): one order covers that many days of use (rounded up to 100, floored at MOQ). 0 keeps the defaults — 30 days with a plan, 120 without. The red line (lead + safety) does not move with the cycle. Card 99 set to 14 → at 1,500/month: order 700 (7 cases) every two weeks, red tape stays at bin 14, stock swings between ~350 just before a delivery and ~1,050 just after. Desk: lane Settings "Order every (days)".
+
+## Addendum 2026-10-21 — 10 lb lane on hand from Shopify
+
+Koa: "make sure this follows current inventory … we can get shopify hooked into the system to read live numbers after."
+
+**What Shopify holds.** There is no Shopify item with SKU `MANUAL-10LB-BAG`; that is the pseudo-SKU the barn bag scan (`logBag`) writes into `inventory_adjustments` locally. The 10 lb bags in Shopify are the "Grove Bags" product's **"10 lbs."** variant (no SKU, location Eagle Point) — the fake product §0 describes. Shopify Flow already posts every inventory change on it to the worker (`inventory_adjustments`, `adjustment_source='shopify_flow'`, `product_name='Grove Bags'`, `variant_title='10 lbs.'`), hand edits included: reset −448 → 0 on 10-14, set to 300 on 10-20 20:14 UTC, then 299 … 294 as 10 lb flower sold. `new_total_available` is Shopify's level after each change (`quantity_adjusted` and `previous_available` arrive as 0).
+
+**Where the level is read.** From that echo: the newest Grove Bags / 10 lbs. row is Shopify's last word (`available`, `at`), read in the same D1 round trip as the rest of the lane. No Admin API call, no new credentials, no cache: the worker has no Shopify client (Super Sack counts go through the Pool Inventory Apps Script), and Shopify pushes the number within seconds of each change. `SHOPIFY_COUNTED` in kanban-d1.js maps card 99 → that product/variant; another lane is a row there, not a migration. The `*/5` cron is not involved: a poll adds nothing while the Flow is on (see write-back below for when it would).
+
+**Rule: the freshest word wins** (`laneStatus({ shopify: { available, at } })`, pure):
+
+- Shopify's word newer than the last count (baseline) → `onHand = max(0, available)`, `onHandSource: 'shopify'`.
+- Count newer than Shopify's word (a Receive/Recount Shopify has not been told about) → `onHand = baseline − scans since`, `onHandSource: 'ledger'`.
+- No Shopify row → ledger, as before. Other lanes are untouched (`shopify: null`).
+- `shopify.agrees`: Shopify is within a bin of the ledger estimate (`ledgerOnHand`). False → the tile shows a badge and the Receive/Recount toast says what to set in Shopify.
+
+Rate, reorder point, red tape depth, order qty and the dates are unchanged; they only read `onHand`. `recount` compares a physical count to the on hand the tile shows, whichever source that is.
+
+**Why not "always Shopify".** On 2026-10-21 that would have put the lane at 294 bags (5 bins), under the 296 red line → ORDER NOW on a rack holding 10 bins after the day's Receive (baseline 500 at 21:31 UTC, Shopify's last word 294 at 17:48 UTC). The count is the fresher fact until Shopify is told.
+
+**Receive / Recount ↔ Shopify.** The worker cannot write to that variant yet: the Pool proxy's write actions are for Super Sack and `[VENDOR]` products. So the lane carries `shopify: { available, at, bins, agrees }` and `ledgerOnHand`; the Desk toast appends "Shopify says 294 (~5 bins) · set it to 500 in Shopify" and the tile keeps the badge until Shopify agrees. **Write-back is the next step:** the proxy's `get_vendor_variants { productId }` returns any product's variants with `inventoryItemId`, `locationId` and live `quantity` (verified 2026-10-21 on a `[VENDOR]` product). With the Grove Bags product id from its admin URL, a 5-minute poll can write a synthetic echo row when the level changed (insurance against the Flow being off) and Receive/Recount can set the quantity through the same proxy. Until then Koa sets it by hand after each count.
+
+**Tile text** (`model.js` `laneOnHandLine`, pure, Pacific time): `~10 bins · from Shopify · as of 2:41 pm` (the date instead of the time when not today); from the count: `~10 bins · from the count · Shopify says ~5 (as of 10:48 am)`; lanes without Shopify: `~9 bins` as before. ES: `de Shopify · a las 2:41 pm` / `del conteo · Shopify dice ~5 (10:48 am)`.
+
+**Runbook consequence.** The "Grove Bags" product and its order-decrement Flow stay for the **10 lbs.** variant: the lane now depends on them. When the two-week ledger comparison passes, archive the other four variants, not this one.
+
+**Rollout.** Merge → `npm run deploy` from `workers/` (no migration) → Pages serves the Desk (CACHE_VERSION bumped) → Koa sets Grove Bags › 10 lbs. to the rack count (500 on 2026-10-21) → the tile reads "from Shopify" and counts down with each 10 lb sale.

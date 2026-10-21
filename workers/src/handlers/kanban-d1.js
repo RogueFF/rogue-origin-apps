@@ -18,6 +18,15 @@ const SHEET_NAME = '12.12 Supplies';
 const TEN_LB_CARD = 99;
 /** The sku production's logBag writes on every barn 10 lb bag scan. */
 const TEN_LB_SCAN_SKU = 'MANUAL-10LB-BAG';
+/**
+ * Lanes whose on hand Shopify counts (design addendum 2026-10-21). Shopify Flow echoes
+ * every inventory change on these variants into inventory_adjustments, hand edits
+ * included, and `new_total_available` is the level after the change; the newest row is
+ * Shopify's last word, which laneStatus uses when it is newer than the last count.
+ * Card 99 is the "Grove Bags" product's "10 lbs." variant (it has no SKU — MANUAL-10LB-BAG
+ * is the barn scan's local pseudo-SKU, not a Shopify item). Another lane is a row here.
+ */
+const SHOPIFY_COUNTED = { [TEN_LB_CARD]: { product: 'Grove Bags', variant: '10 lbs.' } };
 
 /**
  * Vendors whose reordering runs outside the Friday cart. Scanning one of these
@@ -1180,6 +1189,16 @@ async function usageSum(env, cardId, after, until = null) {
   return Number(r?.n || 0);
 }
 
+/** Shopify's last word on a lane, { available, at }, or null: not a Shopify-counted lane, or no echo yet. */
+async function shopifyWord(env, cardId) {
+  const v = SHOPIFY_COUNTED[cardId];
+  if (!v) return null;
+  const r = await queryOne(env.DB, `SELECT new_total_available AS available, timestamp AS at FROM inventory_adjustments
+    WHERE adjustment_source = 'shopify_flow' AND product_name = ? AND variant_title = ? AND new_total_available IS NOT NULL
+    ORDER BY timestamp DESC, id DESC LIMIT 1`, [v.product, v.variant]);
+  return r ? { available: Number(r.available), at: r.at } : null;
+}
+
 /**
  * Lane status for one laneRows() row. `leftoverBins` (a physical count of sealed
  * bins at the row's current bin size) feeds laneStatus's recount check.
@@ -1194,12 +1213,13 @@ async function computeLane(env, row, today = new Date(), leftoverBins = null) {
   const [firstSql, firstArgs] = cardId === TEN_LB_CARD
     ? [`SELECT MIN(timestamp) AS t FROM inventory_adjustments WHERE size = '10lb' AND sku = ?`, [TEN_LB_SCAN_SKU]]
     : [`SELECT MIN(at) AS t FROM kanban_usage WHERE card_id = ? AND source = 'shopify'`, [cardId]];
-  const [baseline, first, seasonRaw, usage56, openReq] = await Promise.all([
+  const [baseline, first, seasonRaw, usage56, openReq, shopify] = await Promise.all([
     queryOne(env.DB, 'SELECT bags, at, reason FROM kanban_baselines WHERE card_id = ? ORDER BY at DESC, id DESC LIMIT 1', [cardId]),
     queryOne(env.DB, firstSql, firstArgs),
     usageSum(env, cardId, win.from, win.to),
     usageSum(env, cardId, since56),
     queryOne(env.DB, `SELECT id, requested_at AS requestedAt, notify_state AS notifyState FROM kanban_reorder_requests WHERE card_id = ? AND status='open'`, [cardId]),
+    shopifyWord(env, cardId),
   ]);
   const [red, usageSince] = baseline ? await Promise.all([
     queryOne(env.DB, `SELECT id FROM kanban_bin_events WHERE card_id = ? AND kind='red' AND at > ? LIMIT 1`, [cardId, baseline.at]),
@@ -1211,7 +1231,7 @@ async function computeLane(env, row, today = new Date(), leftoverBins = null) {
     baseline: baseline ? { bags: baseline.bags, at: baseline.at } : null,
     usageSince, usage56, usageDays,
     seasonUsage: seasonRaw > 0 ? seasonRaw : null,
-    redScanned: !!red, leftoverBins, today,
+    redScanned: !!red, leftoverBins, shopify, today,
   });
   return { cardId, item: row.item, crumbtrail: row.crumbtrail, colour: row.colour,
     config: { bagsPerBox: row.bags_per_box, bagsPerBin: row.bags_per_bin, leadDays: row.lead_days, safetyDays: row.safety_days, moq: row.moq, seedPerMonth: row.seed_per_month, planPerMonth: row.plan_per_month || 0, orderDays: row.order_days || 0 },
