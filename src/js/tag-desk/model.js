@@ -270,11 +270,12 @@ export function laneHeadline(lane, today, es = false) {
   if (lane.status === 'soon') return es ? `Pedir antes del ${fmtMD(lane.orderBy, es)}` : `Order by ${fmtMD(lane.orderBy, es)}`;
   return es ? `Bien hasta ${fmtMD(lane.runOut, es)}` : `OK until ${fmtMD(lane.runOut, es)}`;
 }
-const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'] };
-/** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. Pure. */
+const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'], plan: ['plan', 'plan'] };
+/** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. A planned rate also shows what the data measured, so the next order can compare: "~345/wk (plan · ledger ~27/wk)". Pure. */
 export function laneRateLine(lane, es = false) {
   const rate = Number(lane.rate);
   if (lane.rate == null || !Number.isFinite(rate) || rate <= 0) return '—';
-  const src = RATE_SOURCE[lane.rateSource];
-  return `~${Math.round(rate * 7)}/${es ? 'sem' : 'wk'}${src ? ` (${src[es ? 1 : 0]})` : ''}`;
+  const src = RATE_SOURCE[lane.rateSource]; const wk = es ? 'sem' : 'wk';
+  const m = lane.rateSource === 'plan' && lane.measured && Number(lane.measured.rate) > 0 && RATE_SOURCE[lane.measured.source] ? ` · ${RATE_SOURCE[lane.measured.source][es ? 1 : 0]} ~${Math.round(Number(lane.measured.rate) * 7)}/${wk}` : '';
+  return `~${Math.round(rate * 7)}/${wk}${src ? ` (${src[es ? 1 : 0]}${m})` : ''}`;
 }

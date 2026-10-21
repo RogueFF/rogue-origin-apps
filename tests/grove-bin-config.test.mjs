@@ -56,3 +56,10 @@ test('non-number/non-string types rejected (Number(true) is 1, Number([50]) is 5
   assert.match(validateBinConfig({ moq: '  ' }).error, /moq/);
   assert.deepEqual(validateBinConfig({ bagsPerBin: '25' }).data, { bags_per_bin: 25 });
 });
+
+test('planPerMonth maps to plan_per_month; 0 switches the plan off; negatives rejected', () => {
+  assert.deepEqual(validateBinConfig({ planPerMonth: 1500 }).data, { plan_per_month: 1500 });
+  assert.deepEqual(validateBinConfig({ planPerMonth: 0 }).data, { plan_per_month: 0 });
+  assert.deepEqual(validateBinConfig({ planPerMonth: '1500' }).data, { plan_per_month: 1500 });
+  assert.match(validateBinConfig({ planPerMonth: -1 }).error, /planPerMonth/);
+});
