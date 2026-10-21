@@ -7300,6 +7300,8 @@ ${groups.map(drawer).join('')}
   <h2>${ui.t('addSheetTitle')}</h2>
   <label for="addCv">${ui.t('addCvLabel')}</label>
   <input id="addCv" type="search" autocomplete="off" autocapitalize="none" enterkeyhint="done">
+  <label for="addCut">${ui.t('addCutLabel')}</label>
+  <select id="addCut">${[1, 2, 3].map(n => `<option value="${n}">${ui.t('cut', { n })}</option>`).join('')}</select>
   <!-- The matches are buttons on the page, not a native datalist: phones show a
        datalist's suggestions late, oddly or not at all (iOS Safari), and the
        crew member typing "crit" has to SEE Critical Berries to tap it. -->
@@ -7500,6 +7502,7 @@ ${groups.map(drawer).join('')}
   var addErr = document.getElementById('addErr');
   var addSave = document.getElementById('addSave');
   var addBay = null, addZone = '';
+  var addCut = document.getElementById('addCut');
   function renderZones(zones) {
     addZones.textContent = '';
     addZone = '';
@@ -7550,7 +7553,7 @@ ${groups.map(drawer).join('')}
   document.getElementById('addCancel').addEventListener('click', function () { closeModal(add); });
   addSave.addEventListener('click', function () {
     if (addSave.disabled) return;
-    var body = { bay: addBay, cultivar: addCv.value.trim() };
+    var body = { bay: addBay, cultivar: addCv.value.trim(), cut: Number(addCut.value) };
     if (addZone) body.zone = addZone;
     addSave.disabled = true;
     addErr.hidden = true;
@@ -7628,6 +7631,7 @@ ${groups.map(drawer).join('')}
     if ((a = t.closest('.addcv'))) {
       addBay = Number(a.getAttribute('data-bay'));
       addCv.value = '';
+      addCut.value = '1';
       renderZones([]);
       renderList();
       addErr.hidden = true;
