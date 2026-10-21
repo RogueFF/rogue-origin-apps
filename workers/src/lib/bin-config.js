@@ -14,11 +14,12 @@ const FIELDS = {
   moq:          { col: 'moq',            int: true, min: 0 },
   seedPerMonth: { col: 'seed_per_month', int: false, min: 0 },
   planPerMonth: { col: 'plan_per_month', int: false, min: 0 },   // > 0 overrides the ledger (bin-math); 0 = off
+  orderDays:    { col: 'order_days',     int: true,  min: 0 },   // days of use per order; 0 = default (30 with a plan, 120 without)
 };
 
 /**
  * @param {object} body  any of bagsPerBox, bagsPerBin, leadDays, safetyDays, moq,
- *                       seedPerMonth, planPerMonth, colour. undefined/null = not provided; other keys ignored.
+ *                       seedPerMonth, planPerMonth, orderDays, colour. undefined/null = not provided; other keys ignored.
  * @returns {{data: object|null, error: string|null}}  data keyed by column name
  */
 export function validateBinConfig(body) {

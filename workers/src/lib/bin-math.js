@@ -18,6 +18,7 @@ const isoDate = (ms) => new Date(ms).toISOString().slice(0, 10);
  * @param {number} i.moq            minimum order qty (0 = none)
  * @param {number} i.seedPerMonth   bags/month used until the ledger has 14 days
  * @param {number} [i.planPerMonth] bags/month Koa plans on; > 0 overrides ledger, seed and season (the measured rate still comes back in `measured`), and one month becomes the suggested order
+ * @param {number} [i.orderDays]    days of use one order covers (the order cycle); 0/absent = 30 with a plan, 120 without
  * @param {{bags:number, at:string}|null} i.baseline  null = never received/counted: no estimate (on hand 0, recount false)
  * @param {number} i.usageSince     bags used after baseline.at
  * @param {number} i.usage56        bags used in the last 56 days
@@ -31,6 +32,7 @@ export function laneStatus(i) {
   const { lead, safety, moq, seedPerMonth, baseline, usageSince, usage56, usageDays,
     seasonUsage, redScanned, leftoverBins, today } = i;
   const plan = Number(i.planPerMonth) || 0;
+  const orderDays = Number(i.orderDays) > 0 ? Number(i.orderDays) : 0;
   const per = Math.max(1, Number(i.per) || 0);
 
   const onHand = baseline ? Math.max(0, baseline.bags - usageSince) : 0;
@@ -63,8 +65,10 @@ export function laneStatus(i) {
 
   const reorderPoint = Math.round(rate * cover);
   const redTapeAtBins = Math.ceil(reorderPoint / per);
-  // Four months of the measured rate per order (custom bags: one Grove run); a plan orders one month.
-  const suggestedQty = Math.max(moq, Math.ceil((plan > 0 ? plan : rate * 120) / 100) * 100);
+  // One order covers `cycle` days of use: four months by default (custom bags: one Grove run), one month
+  // under a plan, or the lane's own order cycle (Koa 2026-10-21: the 10 lb lane orders every 2 weeks).
+  const cycle = orderDays || (plan > 0 ? 30 : 120);
+  const suggestedQty = Math.max(moq, Math.ceil((rate * cycle) / 100) * 100);
 
   const t = today.getTime();
   const runOut = rate > 0 ? isoDate(t + (onHand / rate) * DAY) : null;
