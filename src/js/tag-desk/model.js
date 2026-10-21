@@ -270,6 +270,35 @@ export function laneHeadline(lane, today, es = false) {
   if (lane.status === 'soon') return es ? `Pedir antes del ${fmtMD(lane.orderBy, es)}` : `Order by ${fmtMD(lane.orderBy, es)}`;
   return es ? `Bien hasta ${fmtMD(lane.runOut, es)}` : `OK until ${fmtMD(lane.runOut, es)}`;
 }
+/** "2:41 pm" in farm time; "" when the instant is bad. */
+export function fmtTimePT(s, tz = 'America/Los_Angeles') {
+  const d = d1Instant(s); if (!d || Number.isNaN(d.getTime())) return '';
+  try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(d).replace(/\s+/g, ' ').toLowerCase(); }
+  catch { return ''; }
+}
+/** "as of 2:41 pm" on the farm day `today`, "as of Oct 20" on any other day (ES "a las 2:41 pm" / "del 20 oct"). */
+function asOf(at, es, today) {
+  const day = localDay(at);
+  if (day && day === today) return es ? `a las ${fmtTimePT(at)}` : `as of ${fmtTimePT(at)}`;
+  return es ? `del ${fmtMD(day, true)}` : `as of ${fmtMD(day, false)}`;
+}
+/**
+ * The tile's bins figure with where it came from (addendum 2026-10-21): "~10 bins · from Shopify ·
+ * as of 2:41 pm"; from the count with Shopify behind, "~10 bins · from the count · Shopify says ~5
+ * (as of 10:48 am)"; a lane Shopify does not count, "~9 bins". Pure: `today` is the farm day.
+ */
+export function laneOnHandLine(lane, es = false, today = null) {
+  const head = `~${Math.max(0, lane.bins | 0)} bins`, sh = lane.shopify;
+  if (!sh) return head;
+  const when = asOf(sh.at, es, today);
+  if (lane.onHandSource === 'shopify') return `${head} · ${es ? 'de Shopify' : 'from Shopify'} · ${when}`;
+  return es ? `${head} · del conteo · Shopify dice ~${sh.bins | 0} (${when.replace(/^a las /, '')})` : `${head} · from the count · Shopify says ~${sh.bins | 0} (${when})`;
+}
+/** The Receive/Recount toast's tail when Shopify is more than a bin off the count — what to set it to; "" otherwise. Pure. */
+export function shopifyNag(lane, es = false) {
+  const sh = lane.shopify; if (!sh || sh.agrees || lane.ledgerOnHand == null) return '';
+  return es ? ` · Shopify dice ${sh.available} (~${sh.bins | 0} bins) · ponlo en ${lane.ledgerOnHand} en Shopify` : ` · Shopify says ${sh.available} (~${sh.bins | 0} bins) · set it to ${lane.ledgerOnHand} in Shopify`;
+}
 const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'], plan: ['plan', 'plan'] };
 /** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. A planned rate also shows what the data measured, so the next order can compare: "~345/wk (plan · ledger ~27/wk)". Pure. */
 export function laneRateLine(lane, es = false) {
