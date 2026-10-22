@@ -48,3 +48,12 @@ test('a trailing slash on PUBLIC_API_BASE is stripped', async () => {
   assert.ok(html.includes(`"${BASE}"`));
   assert.ok(!html.includes(`"${BASE}/"`));
 });
+
+test('page asks cardState first, then orders or receives; the arrival form is there in both languages', () => {
+  const html = scanPageHtml('abcdefgh23', BASE);
+  assert.match(html, /\/api\/kanban\?action=cardState&token=/);
+  assert.match(html, /action=receiveFromCard/);
+  for (const s of ['¿Llegaron las cajas?', 'Did the cases arrive?', 'Cajas que llegaron', 'Cases that arrived', 'Bins llenos en el rack', 'Full bins on the rack', 'Recibido', 'debajo de los bins verdes', 'under the green bins']) {
+    assert.ok(html.includes(s), s);
+  }
+});
