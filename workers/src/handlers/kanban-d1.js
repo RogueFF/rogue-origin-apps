@@ -1352,13 +1352,50 @@ async function makeLaneKit(body, env) {
 }
 
 /** POST ?action=scanCard {token, by?} — the red ORDER card. Logs a 'red' event and raises (or re-sends) the Damon request. */
-async function scanCard(body, env, ctx) {
-  const token = String(body.token || '').trim().toLowerCase();
+/** The live red card a token names, or the error the scan page shows (404 unknown, 400 replaced). */
+async function redCardByToken(env, rawToken) {
+  const token = String(rawToken || '').trim().toLowerCase();
   if (!/^[a-z2-7]{10}$/.test(token)) throw createError('NOT_FOUND', 'Card not recognised');
   const bc = await queryOne(env.DB, 'SELECT id, card_id, kind, retired FROM kanban_bin_cards WHERE token = ?', [token]);
   if (!bc) throw createError('NOT_FOUND', 'Card not recognised');
   if (bc.retired) throw createError('VALIDATION_ERROR', 'This card was replaced — use the new one');
   if (bc.kind !== 'red') throw createError('VALIDATION_ERROR', 'Per-bin cards are not in use yet');
+  return bc;
+}
+
+/**
+ * GET ?action=cardState&token= → { lane, openRequest }. Read-only: the scan
+ * page asks this first and then either orders (no open request) or offers the
+ * delivery form (request open = the card is in the ORDERED box). A delivery
+ * scan can therefore never raise a stray order. SOP-024 step 6.
+ */
+async function cardState(request, env) {
+  const { token } = getQueryParams(request);
+  const bc = await redCardByToken(env, token);
+  const lane = await computeLane(env, await laneRow(env, bc.card_id));
+  return successResponse({ success: true, lane, openRequest: lane.openRequest || null });
+}
+
+/**
+ * POST ?action=receiveFromCard {token, boxes, leftoverBins?, by?, lot?} — the
+ * red card re-scanned when the cases land. Same receive as the Desk's
+ * (baseline, event, closes the open request, logs the order); leftoverBins
+ * defaults to the full bins the lane already shows, so the crew enters only
+ * the cases. Koa 2026-10-22.
+ */
+async function receiveFromCard(body, env) {
+  const bc = await redCardByToken(env, body.token);
+  const boxes = countOf(body.boxes);
+  if (!Number.isInteger(boxes) || boxes < 1) throw createError('VALIDATION_ERROR', 'boxes must be a whole number ≥ 1');
+  let leftoverBins = body.leftoverBins;
+  if (leftoverBins === undefined || leftoverBins === null || leftoverBins === '') {
+    leftoverBins = (await computeLane(env, await laneRow(env, bc.card_id))).bins;
+  }
+  return receiveBins({ cardId: bc.card_id, boxes, leftoverBins, by: body.by || 'card', lot: body.lot }, env);
+}
+
+async function scanCard(body, env, ctx) {
+  const bc = await redCardByToken(env, body.token);
   const card = await queryOne(env.DB, 'SELECT * FROM kanban_cards WHERE id = ?', [bc.card_id]);
   if (!card) throw createError('NOT_FOUND', 'card not found');
   // Request first, red event second: if raising the request throws, no 'red'
@@ -1411,6 +1448,8 @@ export async function handleKanbanD1(request, env, ctx) {
     setBinConfig: () => setBinConfig(body, env),
     makeLaneKit: () => makeLaneKit(body, env),
     scanCard: () => scanCard(body, env, ctx),
+    cardState: () => cardState(request, env),
+    receiveFromCard: () => receiveFromCard(body, env),
   };
 
   if (!action || !actions[action]) {
