@@ -2531,7 +2531,7 @@ function lotLevel(lot) {
 async function getRecentLots(db, isTest) {
   const sessions = await query(db, `
     SELECT
-      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.takedown_done_at,
+      l.id, l.zone, l.cultivar, l.cut_number, l.season, l.occurred_at, l.takedown_done_at, l.crew,
       CAST(julianday('now') - julianday(l.occurred_at) AS INTEGER) AS days_since_cut,
       COALESCE((
         SELECT COUNT(*) FROM harvest_sacks s
@@ -2556,7 +2556,12 @@ async function getRecentLots(db, isTest) {
 }
 
 function mergePickerLot(sessions) {
-  const primary = sessions[0];
+  // The lead session is the earliest one a crew actually opened. A row added
+  // by hand (lot_add or the SOP's D1 insert) has no crew and is dated at its
+  // bay's fill start so it joins that fill — which can put it FIRST by date.
+  // Letting it lead would hang every tag of the lot, from every bay, on it:
+  // harvest date = the fill start, not the cut (Z21 Lifter, Koa, 2026-10-23).
+  const primary = sessions.find(s => s.crew) || sessions[0];
   return {
     ...primary,
     // Sacks hang off ONE session per lot so a re-entered zone cannot split its

@@ -287,3 +287,27 @@ test('bay_tags: Whole bay down with no tag printed still lets the next loads ref
   assert.deepEqual(drawerBays(html), ['5']);
   assert.deepEqual(printsIn(drawer(html, 5)), ['Lifter'], 'the finished fill stays off the screen');
 });
+
+test('a hand-added session never leads its lot: tags and the harvest date stay on the crewed session', async (t) => {
+  // Z21 Lifter: the crew scanned the zone sign on Oct 13 (session with a crew),
+  // then a row was added by hand on bay 5, dated at that bay's Oct 3 fill so it
+  // joins the fill. Ordered by date the hand row comes first, and before this
+  // fix it became the lot's primary: every Lifter tag from any bay would have
+  // carried harvest date Oct 3 (Koa, 2026-10-23, live).
+  if (!sqliteAvailable) return t.skip();
+  const { sqlite, env, ctx } = freshDb();
+  const sour = seedLot(sqlite, { zone: 'Z3', cultivar: 'Sour Lifter', daysAgo: 20 });
+  seedLoad(sqlite, sour, 5, { minutesAgo: 20 * 1440, bins: 480 });
+  const crewed = seedLot(sqlite, { zone: 'Z21', cultivar: 'Lifter', daysAgo: 10 });
+  sqlite.prepare(`UPDATE harvest_scan_log SET crew = 'A' WHERE id = ?`).run(crewed);
+  seedLoad(sqlite, crewed, 4, { minutesAgo: 10 * 1440, bins: 168 });
+  sqlite.prepare(`
+    INSERT INTO harvest_scan_log (event_type, zone, cultivar, season, cut_number, crew, bay, occurred_at, closed_at, is_test)
+    VALUES ('enter', 'Z21', 'Lifter', ?, 1, NULL, 5, datetime('now', '-20 days'), datetime('now', '-20 days'), 1)
+  `).run(2026);
+  const hand = Number(sqlite.prepare('SELECT last_insert_rowid() AS id').get().id);
+  const html = await (await handleHarvestD1(new Request(`${API}?action=bay_tags&lang=en`), env, ctx)).text();
+  const rows = [...html.matchAll(/data-session="(\d+)" data-cultivar="Lifter" data-cut="1" data-bay="(\d+)"/g)].map(m => [Number(m[1]), Number(m[2])]);
+  assert.deepEqual(rows.map(r => r[1]).sort(), [4, 5], 'Lifter shows on bays 4 and 5');
+  for (const [session, bay] of rows) assert.equal(session, crewed, `bay ${bay} hangs on the crewed session, not ${hand}`);
+});
