@@ -51,7 +51,8 @@ test('bay_tags renders one drawer per bay with a PRINT button per cultivar', asy
   assert.match(html, new RegExp(`data-session="${b}" data-cultivar="Rainbow Cake" data-cut="1" data-bay="3"`));
   assert.equal((html.match(/class="btn alt addcv"/g) || []).length, 2);
   assert.equal((html.match(/name="all" value="1"/g) || []).length, 2);
-  assert.match(html, /"Critical Berries"/, 'McLoughlin list rides the page for the add sheet');
+  assert.match(html, /"Critical Berries"/, 'the season list rides the page for the add sheet');
+  assert.match(html, /"Lifter":\["Z14","Z15","Z19","Z20","Z21"\]/, 'any planted cultivar, with every zone it grows in');
   assert.match(html, /id="addList"/, 'matches are tappable rows on the page');
   assert.doesNotMatch(html, /<datalist/, 'no native datalist: phones show it late or not at all');
   assert.match(html, /"Angel Cake":\["MZ1","MZ2"\]/);
