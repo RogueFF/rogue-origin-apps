@@ -1,0 +1,29 @@
+# gitleaks configuration — used by .github/workflows/gitleaks.yml and the
+# pre-commit hook in tools/hooks/pre-commit.
+#
+# Extends the default rule set. Everything below is an allowlist of strings the
+# generic high-entropy rule flags in this repo that are not secrets. Add to it
+# only for a specific, reviewed false positive; never allowlist a whole file
+# that could later hold a real key.
+
+title = "rogue-origin-apps"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "localStorage keys and alphabets that look like API keys to the generic rule"
+regexTarget = "line"
+regexes = [
+  '''salida\.(queue|cultivar|recent)\.v\d+''',   # harvest-salida-client.js localStorage keys
+  '''ro-tagdesk-v\d+''',                          # tag-desk/store.js localStorage key
+  '''TOKEN_ALPHABET = 'ABCDEF''',                 # grove-bag-bins design doc, a base-32 alphabet
+]
+
+[[allowlists]]
+description = "placeholders used in docs and tests"
+regexes = [
+  '''REDACTED-[A-Z0-9-]+''',
+  '''YOUR_API_KEY_HERE''',
+  '''AIzaSyXX[X]+''',
+]

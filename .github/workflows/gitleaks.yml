@@ -1,0 +1,39 @@
+name: Secret scan
+
+# Scans the ENTIRE git history (not just the diff) for credentials on every push
+# to master and every PR. Added 2026-10-22 after the history scrub; the rules
+# that keep this green live in .gitleaks.toml. A finding here means a key is
+# already in a commit — rotate it first, then rewrite the branch.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a secret two commits back is still a secret.
+          fetch-depth: 0
+
+      - name: Install gitleaks (pinned, checksum-verified)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$tarball" "$base/$tarball"
+          curl -sSfL -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $tarball\$" checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          ./gitleaks version
+
+      - name: Scan full history
+        run: ./gitleaks git --log-opts="--all" --redact --no-banner --exit-code 1 --config .gitleaks.toml .

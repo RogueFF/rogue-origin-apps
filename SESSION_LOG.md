@@ -6,6 +6,16 @@ History of significant changes to this repo, written by `/close`. Companion to t
 
 ---
 
+## 2026-10-23 — scrub secrets from git history and add gitleaks scanning
+
+- History rewritten with `git filter-repo` (replace-text + replace-message) in a disposable mirror and force-pushed: all 15 branches, master `3489560e` → `a3a36d03`. Purged a dead Atlas bearer token, a hard-coded test password, 7 Google Sheet IDs and 9 Apps Script deployment IDs; HEAD trees byte-identical apart from three docs already using `REDACTED-*` placeholders.
+- `.github/workflows/gitleaks.yml` — full-history secret scan (pinned, checksum-verified gitleaks 8.30.1) on push to master and on PRs.
+- `.gitleaks.toml` — extends default rules; allowlists the three reviewed false positives and the `REDACTED-*` placeholders.
+- `tools/hooks/pre-commit` — staged-changes gitleaks scan when the binary is on PATH; re-install the hook after merging.
+- `.gitignore` — `tools/print-agent/*.local`, `**/.token.local`, `SECRETS-AUDIT.md`.
+- Wiki context: wiki/seasons/2026/journal/2026-10-23.md
+
+---
 ## 2026-10-14 — scan sacks out to an order, and size the order from this year's crop
 
 - `workers/src/handlers/harvest-sack-out.js`, `harvest-salida-*.js`, `lib/sack-out.js`, `vendor/jsqr.js` — the `/salida` water spider page (PRs #98–#102): one scan per 2026 sack as it goes to the trim line, by camera, Socket S720 scanner or typed number; proposed order from the wholesale queue; undo; Today list; offline queue. Migration 0045 adds `out_order_id/out_order_source/out_by`.
