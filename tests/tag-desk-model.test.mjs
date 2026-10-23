@@ -245,3 +245,11 @@ test('shopify nag: only when Shopify disagrees with the count, says what to set'
   assert.equal(shopifyNag({ onHandSource: 'ledger', ledgerOnHand: 500, shopify: null }), '');
   assert.equal(shopifyNag({ bins: 9 }), '');
 });
+
+test('shopify nag on a lane summed over two variants names the pieces and which one takes the count', () => {
+  const parts = [{ variant: '1/4 & 1/2 oz.', available: 7198, at: 'x' }, { variant: '1 oz.', available: -30, at: 'y' }];
+  const off = { onHandSource: 'ledger', ledgerOnHand: 8400, shopify: { available: 7168, bins: 5, agrees: false, parts } };
+  assert.equal(shopifyNag(off), ' · Shopify says 7168 (1/4 & 1/2 oz. 7198 + 1 oz. -30) (~5 bins) · set 1/4 & 1/2 oz. to 8400 and 1 oz. to 0 in Shopify');
+  assert.equal(shopifyNag(off, true), ' · Shopify dice 7168 (1/4 & 1/2 oz. 7198 + 1 oz. -30) (~5 bins) · pon 1/4 & 1/2 oz. en 8400 y 1 oz. en 0 en Shopify');
+  assert.equal(shopifyNag({ onHandSource: 'ledger', ledgerOnHand: 500, shopify: { available: 294, bins: 5, agrees: false, parts: [parts[0]] } }), ' · Shopify says 294 (~5 bins) · set it to 500 in Shopify');
+});
