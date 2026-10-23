@@ -93,8 +93,9 @@ export function laneStatus(i) {
   const bins = Math.floor(onHand / per);
   // Shopify's word kept beside the lane whichever source won, so the Desk can show when it
   // last spoke and nag when it is more than a bin off the count (`agrees`).
+  // `parts` (a lane summed over several variants) rides along untouched so the Desk can name them.
   const shopify = word ? { available: level, at: word.at, bins: Math.floor(Math.max(0, level) / per),
-    agrees: ledgerOnHand == null || Math.abs(level - ledgerOnHand) <= per } : null;
+    agrees: ledgerOnHand == null || Math.abs(level - ledgerOnHand) <= per, ...(Array.isArray(word.parts) ? { parts: word.parts } : {}) } : null;
 
   return { onHand, bins, onHandSource, ledgerOnHand, shopify, rate, rateSource, measured, reorderPoint, redTapeAtBins, suggestedQty,
     runOut, orderBy, status, recount };

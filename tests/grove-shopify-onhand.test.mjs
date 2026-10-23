@@ -83,3 +83,53 @@ test('a Shopify echo with no level is not a word', async () => {
   assert.equal(ln.onHandSource, 'ledger');
   assert.equal(ln.shopify, null);
 });
+
+// --- card 56: the one combined ounce bag reads the SUM of two Grove Bags variants (2026-10-22) ---
+const lane56 = async (env) => (await call(env, 'getBinStatus&cardId=56')).lanes[0];
+
+test('card 56 sums "1/4 & 1/2 oz." and "1 oz.", dated by the newer, and carries the parts', async () => {
+  const env = fakeEnv();
+  await call(env, 'setBinConfig', { cardId: 56, bagsPerBox: 1200, bagsPerBin: 1200 });
+  await call(env, 'recount', { cardId: 56, sealedBins: 6 });            // 7,200 counted
+  const a = secs(5), b = secs(9);
+  echo(env, a, 7198, '1/4 & 1/2 oz.');
+  echo(env, b, -30, '1 oz.');                                            // 1 oz sales drift it below zero
+  echo(env, secs(2), 7200, '1/4 & 1/2 oz.');                             // older level of the same variant: not the newest
+  const ln = await lane56(env);
+  assert.equal(ln.onHand, 7168);
+  assert.equal(ln.onHandSource, 'shopify');
+  assert.equal(ln.bins, 5);
+  assert.equal(ln.shopify.available, 7168);
+  assert.equal(ln.shopify.at, b);
+  assert.equal(ln.shopify.agrees, true);                                 // 32 off on a 1,200 bin
+  assert.deepEqual(ln.shopify.parts, [{ variant: '1/4 & 1/2 oz.', available: 7198, at: a }, { variant: '1 oz.', available: -30, at: b }]);
+});
+
+test('card 56 with only one of its variants echoed so far: that level alone, parts still listed', async () => {
+  const env = fakeEnv();
+  await call(env, 'setBinConfig', { cardId: 56, bagsPerBox: 1200, bagsPerBin: 1200 });
+  const at = secs(5);
+  echo(env, at, 7200, '1/4 & 1/2 oz.');
+  const ln = await lane56(env);
+  assert.equal(ln.onHand, 7200);
+  assert.equal(ln.onHandSource, 'shopify');
+  assert.deepEqual(ln.shopify.parts, [{ variant: '1/4 & 1/2 oz.', available: 7200, at }]);
+});
+
+test('the "1/4 & 1/2 lb." variant is a different bag: it never feeds card 56, and the oz variants never feed card 99', async () => {
+  const env = fakeEnv();
+  await call(env, 'recount', { cardId: 56, sealedBins: 6 });
+  echo(env, secs(5), -243, '1/4 & 1/2 lb.');
+  echo(env, secs(6), 7198, '1/4 & 1/2 oz.');
+  const ln = await lane56(env);
+  assert.equal(ln.shopify.available, 7198);
+  assert.equal((await lane99(env)).shopify, null);
+});
+
+test('card 99 keeps its single-variant word with no parts', async () => {
+  const env = fakeEnv();
+  const at = secs(5);
+  echo(env, at, 294);
+  const ln = await lane99(env);
+  assert.deepEqual(ln.shopify, { available: 294, at, bins: 5, agrees: true });
+});

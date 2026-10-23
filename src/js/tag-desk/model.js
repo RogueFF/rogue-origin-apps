@@ -297,7 +297,14 @@ export function laneOnHandLine(lane, es = false, today = null) {
 /** The Receive/Recount toast's tail when Shopify is more than a bin off the count — what to set it to; "" otherwise. Pure. */
 export function shopifyNag(lane, es = false) {
   const sh = lane.shopify; if (!sh || sh.agrees || lane.ledgerOnHand == null) return '';
-  return es ? ` · Shopify dice ${sh.available} (~${sh.bins | 0} bins) · ponlo en ${lane.ledgerOnHand} en Shopify` : ` · Shopify says ${sh.available} (~${sh.bins | 0} bins) · set it to ${lane.ledgerOnHand} in Shopify`;
+  // A lane summed over several Shopify variants: show the pieces and say which one takes the count (the rest go to 0).
+  const parts = Array.isArray(sh.parts) && sh.parts.length > 1 ? sh.parts : null;
+  const pieces = parts ? ` (${parts.map(p => `${p.variant} ${p.available}`).join(' + ')})` : '';
+  const rest = parts ? parts.slice(1).map(p => p.variant).join(', ') : '';
+  const set = parts
+    ? (es ? `pon ${parts[0].variant} en ${lane.ledgerOnHand} y ${rest} en 0 en Shopify` : `set ${parts[0].variant} to ${lane.ledgerOnHand} and ${rest} to 0 in Shopify`)
+    : (es ? `ponlo en ${lane.ledgerOnHand} en Shopify` : `set it to ${lane.ledgerOnHand} in Shopify`);
+  return es ? ` · Shopify dice ${sh.available}${pieces} (~${sh.bins | 0} bins) · ${set}` : ` · Shopify says ${sh.available}${pieces} (~${sh.bins | 0} bins) · ${set}`;
 }
 const RATE_SOURCE = { ledger: ['ledger', 'registro'], season: ['last fall', 'otoño pasado'], seed: ['estimate', 'estimado'], plan: ['plan', 'plan'] };
 /** "~140/wk (ledger)" — the lane's use rate (bags/day on the worker) per week, with where it came from. A planned rate also shows what the data measured, so the next order can compare: "~345/wk (plan · ledger ~27/wk)". Pure. */
