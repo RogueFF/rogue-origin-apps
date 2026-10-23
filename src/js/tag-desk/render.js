@@ -307,7 +307,7 @@ function openReceive(id) { const es = ES(); const ln = laneById(id); if (!ln) re
     const perBox = intOf('#rvPerBox', 1), perBin = intOf('#rvPerBin', 1); if (perBox && perBox !== cfg.bagsPerBox) b.bagsPerBox = perBox; if (perBin && perBin !== cfg.bagsPerBin) b.bagsPerBin = perBin;
     const r = await api.receiveBins(b); await refreshBins(r.lane); const nl = laneById(id) || r.lane;
     let msg = es ? `Cinta roja en el bin ${nl.redTapeAtBins | 0} · mueve la tarjeta roja · imprime la etiqueta de cinta` : `Red tape at bin ${nl.redTapeAtBins | 0} · move the red card · print the tape label`;
-    if (r.needsRecount) { const est = Math.floor((r.estimateBefore || 0) / (cfg.bagsPerBin || 1)); msg += es ? ` · ¿Recontar? El estimado decía ~${est} bins` : ` · Recount? The estimate said ~${est} bins`; }
+    if (r.needsRecount) { const est = Math.ceil((r.estimateBefore || 0) / (cfg.bagsPerBin || 1)); msg += es ? ` · ¿Recontar? El estimado decía ~${est} bins` : ` · Recount? The estimate said ~${est} bins`; }
     return msg + shopifyNag(nl, es);
   }, () => { ['#rvLeft', '#rvBoxes', '#rvPerBox', '#rvPerBin'].forEach(s2 => { $(s2).oninput = live; }); live(); });
 }

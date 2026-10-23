@@ -90,11 +90,14 @@ export function laneStatus(i) {
 
   // With no estimate (no count and no Shopify word) there is nothing to disagree with.
   const recount = (!!baseline || shopifyNewer) && leftoverBins != null && Math.abs(leftoverBins * per - onHand) > per;
-  const bins = Math.floor(onHand / per);
+  // Sealed bins on the rack. A count is the sealed bins (the open one at the station is never
+  // counted) and every bag used comes out of that open one, so a count of 6 × 1,200 that has
+  // sold 17 is still 6 sealed bins: round UP (Koa 2026-10-23: "this was 6 bins yesterday, why 5?").
+  const bins = Math.ceil(onHand / per);
   // Shopify's word kept beside the lane whichever source won, so the Desk can show when it
   // last spoke and nag when it is more than a bin off the count (`agrees`).
   // `parts` (a lane summed over several variants) rides along untouched so the Desk can name them.
-  const shopify = word ? { available: level, at: word.at, bins: Math.floor(Math.max(0, level) / per),
+  const shopify = word ? { available: level, at: word.at, bins: Math.ceil(Math.max(0, level) / per),
     agrees: ledgerOnHand == null || Math.abs(level - ledgerOnHand) <= per, ...(Array.isArray(word.parts) ? { parts: word.parts } : {}) } : null;
 
   return { onHand, bins, onHandSource, ledgerOnHand, shopify, rate, rateSource, measured, reorderPoint, redTapeAtBins, suggestedQty,

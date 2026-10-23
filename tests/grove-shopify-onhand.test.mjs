@@ -21,10 +21,10 @@ test('Shopify’s word newer than the count: card 99 shows Shopify’s level and
   echo(env, at, 294);
   const ln = await lane99(env);
   assert.equal(ln.onHand, 294);
-  assert.equal(ln.bins, 5);
+  assert.equal(ln.bins, 6);
   assert.equal(ln.onHandSource, 'shopify');
   assert.equal(ln.ledgerOnHand, 500);
-  assert.deepEqual(ln.shopify, { available: 294, at, bins: 5, agrees: false });
+  assert.deepEqual(ln.shopify, { available: 294, at, bins: 6, agrees: false });
 });
 
 test('the count newer than Shopify’s word: the count shows, Shopify rides beside it for the nag', async () => {
@@ -44,7 +44,7 @@ test('receive answers with the lane’s Shopify word so the Desk can say what to
   const r = await call(env, 'receiveBins', { cardId: 99, leftoverBins: 2, boxes: 4 });
   assert.equal(r.lane.onHand, 500);
   assert.equal(r.lane.onHandSource, 'ledger');
-  assert.deepEqual({ ...r.lane.shopify, at: undefined }, { available: 294, bins: 5, agrees: false, at: undefined });
+  assert.deepEqual({ ...r.lane.shopify, at: undefined }, { available: 294, bins: 6, agrees: false, at: undefined });
 });
 
 test('barn scans are usage, never a Shopify word; another size’s echo never feeds the 10 lb lane', async () => {
@@ -98,7 +98,7 @@ test('card 56 sums "1/4 & 1/2 oz." and "1 oz.", dated by the newer, and carries 
   const ln = await lane56(env);
   assert.equal(ln.onHand, 7168);
   assert.equal(ln.onHandSource, 'shopify');
-  assert.equal(ln.bins, 5);
+  assert.equal(ln.bins, 6);
   assert.equal(ln.shopify.available, 7168);
   assert.equal(ln.shopify.at, b);
   assert.equal(ln.shopify.agrees, true);                                 // 32 off on a 1,200 bin
@@ -131,5 +131,5 @@ test('card 99 keeps its single-variant word with no parts', async () => {
   const at = secs(5);
   echo(env, at, 294);
   const ln = await lane99(env);
-  assert.deepEqual(ln.shopify, { available: 294, at, bins: 5, agrees: true });
+  assert.deepEqual(ln.shopify, { available: 294, at, bins: 6, agrees: true });
 });
