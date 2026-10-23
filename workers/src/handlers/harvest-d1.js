@@ -59,7 +59,7 @@ import { createError, formatError } from '../lib/errors.js';
 import { VALID_ZONES, normalizeZone } from '../lib/zones.js';
 import { cultivarsFor, isMultiCultivar, isHarvestTracked,
   cultivarShare, ZONE_CULTIVAR_ROWS, zoneRowTotal,
-  mcloughlinZonesFor, mcloughlinCultivars } from '../lib/zone-cultivars.js';
+  zonesFor, allCultivars } from '../lib/zone-cultivars.js';
 import { zoneFacts, plantCountFor, acresFor, PLANTS_PER_ACRE, PLANT_SPACING_FT } from '../lib/zone-facts.js';
 import { cultivarCode, supersackSku } from '../lib/cultivar-codes.js';
 import { fullSackLbs, sackLbs, parseFillLbs } from '../lib/sack-weight.js';
@@ -2336,9 +2336,12 @@ async function handleLotAdd(ui, db, env, body) {
   if (!bay) throw createError('VALIDATION_ERROR', ui.t('addBayBad'));
   const cultivar = String(body.cultivar || '').trim().substring(0, 60);
   const cut = Math.max(1, Math.min(3, parseInt(body.cut, 10) || 1));
-  const zones = mcloughlinZonesFor(cultivar);
-  if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotMcloughlin', { c: cultivar }));
-  const canonical = mcloughlinCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
+  // Any cultivar planted this season (Koa, 2026-10-23; McLoughlin-only until
+  // then). The zone comes from the planting layout; a cultivar grown in several
+  // zones asks which, with the zones as chips.
+  const zones = zonesFor(cultivar);
+  if (!zones.length) throw createError('VALIDATION_ERROR', ui.t('addNotPlanted', { c: cultivar }));
+  const canonical = allCultivars().find(c => c.toLowerCase() === cultivar.toLowerCase());
 
   // The bay's fill as the screen sees it: barn loads AND hand-added enter rows
   // (a McLoughlin bay nobody scans has only those). Reading loads alone dated
@@ -7273,7 +7276,7 @@ function bayTagsBody(ui, groups, storages = new Map(), flash = null, { today = '
 </details>`;
   };
 
-  const mcl = mcloughlinCultivars();
+  const mcl = allCultivars();
   // As data in a script tag: a "</" in a name must not close the tag, so "<"
   // goes out as the six characters <, which JS reads back as "<".
   const json = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
@@ -7320,7 +7323,7 @@ ${groups.map(drawer).join('')}
     <button class="btn alt" id="addCancel" type="button">${ui.t('cancel')}</button>
   </div>
 </dialog>
-<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, mcloughlinZonesFor(c)])))};</script>
+<script>window.MCL = ${json(mcl)}; window.MCLZ = ${json(Object.fromEntries(mcl.map(c => [c, zonesFor(c)])))};</script>
 <script>${HARVEST_PRINT_CLIENT}</script>
 <script>
 (function () {
@@ -7550,7 +7553,7 @@ ${groups.map(drawer).join('')}
   function cvChanged() {
     var name = canonical(addCv.value);
     var zones = name && window.MCLZ ? window.MCLZ[name] : null;
-    if (zones && zones.length === 2) { if (addZones.children.length !== 2) renderZones(zones); }
+    if (zones && zones.length > 1) { if (addZones.children.length !== zones.length) renderZones(zones); }
     else renderZones([]);
     renderList();
   }

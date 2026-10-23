@@ -202,3 +202,21 @@ export function mcloughlinCultivars() {
   for (const z of MCLOUGHLIN_ZONES) for (const c of ZONE_CULTIVARS[z] || []) set.add(c);
   return [...set].sort((a, b) => a.localeCompare(b, 'en'));
 }
+
+/**
+ * Every zone a cultivar was planted in this season, in field order (Egg Farm
+ * Z1–Z21, retail R1, then McLoughlin MZ1–MZ4). The add sheet takes ANY planted
+ * cultivar since 2026-10-23 (Koa: Lifter was hanging in bay 5 with no scan to
+ * that bay); one zone fills in by itself, several become chips.
+ */
+export function zonesFor(cultivar) {
+  const want = norm(cultivar);
+  return Object.keys(ZONE_CULTIVARS).filter(z => (ZONE_CULTIVARS[z] || []).some(c => norm(c) === want));
+}
+
+/** Every cultivar planted anywhere this season, once, sorted — the add sheet's list. */
+export function allCultivars() {
+  const set = new Set();
+  for (const z of Object.keys(ZONE_CULTIVARS)) for (const c of ZONE_CULTIVARS[z] || []) set.add(c);
+  return [...set].sort((a, b) => a.localeCompare(b, 'en'));
+}

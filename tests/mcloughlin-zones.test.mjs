@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VALID_ZONES } from '../workers/src/lib/zones.js';
-import { ZONE_CULTIVARS, MCLOUGHLIN_ZONES, mcloughlinZonesFor, mcloughlinCultivars, isHarvestTracked }
+import { ZONE_CULTIVARS, MCLOUGHLIN_ZONES, mcloughlinZonesFor, mcloughlinCultivars, isHarvestTracked, zonesFor, allCultivars }
   from '../workers/src/lib/zone-cultivars.js';
 
 test('McLoughlin zones MZ1-MZ4 are valid, harvest-tracked zones', () => {
@@ -34,4 +34,15 @@ test('mcloughlinCultivars lists 25 names once, sorted', () => {
   assert.equal(new Set(list).size, 25);
   assert.deepEqual(list, [...list].sort((a, b) => a.localeCompare(b, 'en')));
   assert.equal(ZONE_CULTIVARS.MZ3.length, 6);
+});
+
+test('zonesFor: every zone a cultivar is planted in, field order; allCultivars: the whole season once', () => {
+  assert.deepEqual(zonesFor('Lifter'), ['Z14', 'Z15', 'Z19', 'Z20', 'Z21']);
+  assert.deepEqual(zonesFor('Critical Berries'), ['MZ1']);
+  assert.deepEqual(zonesFor('Animal Muffins'), ['Z10', 'R1', 'MZ3'], 'Egg Farm, retail, then McLoughlin');
+  assert.deepEqual(zonesFor('Nope'), []);
+  const all = allCultivars();
+  assert.ok(all.includes('Lifter') && all.includes('Runtz') && all.includes('Sauciere'));
+  assert.equal(new Set(all).size, all.length);
+  assert.deepEqual(all, [...all].sort((a, b) => a.localeCompare(b, 'en')));
 });
