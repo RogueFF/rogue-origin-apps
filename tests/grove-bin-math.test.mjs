@@ -44,8 +44,9 @@ test('on hand never goes negative', () => {
   assert.equal(r.bins, 0);
 });
 
-test('bins floors partial bins', () => {
-  assert.equal(lane({ usageSince: 230 }).bins, 35); // 1770 / 50 = 35.4
+test('bins rounds a partial bin up: the sealed bins on the rack, the open one is what is being used', () => {
+  assert.equal(lane({ usageSince: 230 }).bins, 36); // 1770 / 50 = 35.4 → 36 sealed (Koa 2026-10-23)
+  assert.equal(lane({ usageSince: 250 }).bins, 35); // 1750 / 50 = 35 exactly: an exact multiple is that many sealed bins
 });
 
 // --- rate ------------------------------------------------------------------
@@ -285,10 +286,10 @@ test('without a Shopify word the lane is exactly what it was, plus the source fi
 test('Shopify newer than the count: on hand and bins are Shopify’s; the rest is untouched', () => {
   const r = lane({ shopify: { available: 1234, at: '2026-10-10T12:00:00Z' } });
   assert.equal(r.onHand, 1234);
-  assert.equal(r.bins, 24);
+  assert.equal(r.bins, 25);
   assert.equal(r.onHandSource, 'shopify');
   assert.equal(r.ledgerOnHand, 1800);
-  assert.deepEqual(r.shopify, { available: 1234, at: '2026-10-10T12:00:00Z', bins: 24, agrees: false });
+  assert.deepEqual(r.shopify, { available: 1234, at: '2026-10-10T12:00:00Z', bins: 25, agrees: false });
   const was = lane();
   for (const k of ['rate', 'rateSource', 'reorderPoint', 'redTapeAtBins', 'suggestedQty']) assert.equal(r[k], was[k], k);
   assert.equal(r.status, 'order');                 // 1234 ≤ 2100: status follows the on hand shown
@@ -300,13 +301,13 @@ test('the count newer than Shopify’s word: ledger on hand, Shopify kept beside
   assert.equal(r.onHand, 1800);
   assert.equal(r.bins, 36);
   assert.equal(r.onHandSource, 'ledger');
-  assert.deepEqual(r.shopify, { available: 1234, at: '2026-09-30T12:00:00Z', bins: 24, agrees: false });
+  assert.deepEqual(r.shopify, { available: 1234, at: '2026-09-30T12:00:00Z', bins: 25, agrees: false });
 });
 
 test('no count yet: Shopify’s word is the on hand and has nothing to disagree with', () => {
   const r = lane({ baseline: null, usageSince: 0, shopify: { available: 294, at: '2026-10-10T12:00:00Z' } });
   assert.equal(r.onHand, 294);
-  assert.equal(r.bins, 5);
+  assert.equal(r.bins, 6);
   assert.equal(r.onHandSource, 'shopify');
   assert.equal(r.ledgerOnHand, null);
   assert.equal(r.shopify.agrees, true);
