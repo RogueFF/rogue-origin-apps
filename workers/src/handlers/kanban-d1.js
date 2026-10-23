@@ -25,8 +25,16 @@ const TEN_LB_SCAN_SKU = 'MANUAL-10LB-BAG';
  * Shopify's last word, which laneStatus uses when it is newer than the last count.
  * Card 99 is the "Grove Bags" product's "10 lbs." variant (it has no SKU — MANUAL-10LB-BAG
  * is the barn scan's local pseudo-SKU, not a Shopify item). Another lane is a row here.
+ * A lane may read several variants: its word is the SUM of each variant's newest level,
+ * dated by the newest of them. Card 56 is the one combined ounce bag (Koa 2026-10-22): the
+ * Flow decrements "1/4 & 1/2 oz." on ¼ oz and ½ oz sales and "1 oz." on 1 oz sales, so the
+ * count lives on the first (set to the rack count) and the second drifts below zero by the
+ * 1 oz bags used. The "1/4 & 1/2 lb." variant is a different bag and never feeds this lane.
  */
-const SHOPIFY_COUNTED = { [TEN_LB_CARD]: { product: 'Grove Bags', variant: '10 lbs.' } };
+const SHOPIFY_COUNTED = {
+  [TEN_LB_CARD]: { product: 'Grove Bags', variants: ['10 lbs.'] },
+  56: { product: 'Grove Bags', variants: ['1/4 & 1/2 oz.', '1 oz.'] },
+};
 
 /**
  * Vendors whose reordering runs outside the Friday cart. Scanning one of these
@@ -1189,14 +1197,27 @@ async function usageSum(env, cardId, after, until = null) {
   return Number(r?.n || 0);
 }
 
-/** Shopify's last word on a lane, { available, at }, or null: not a Shopify-counted lane, or no echo yet. */
+/**
+ * Shopify's last word on a lane, { available, at }, or null: not a Shopify-counted lane, or no
+ * echo yet. A lane with several variants sums each variant's newest level and carries the
+ * pieces as `parts` so the Desk can say which variant to set at a count.
+ */
 async function shopifyWord(env, cardId) {
   const v = SHOPIFY_COUNTED[cardId];
   if (!v) return null;
-  const r = await queryOne(env.DB, `SELECT new_total_available AS available, timestamp AS at FROM inventory_adjustments
-    WHERE adjustment_source = 'shopify_flow' AND product_name = ? AND variant_title = ? AND new_total_available IS NOT NULL
-    ORDER BY timestamp DESC, id DESC LIMIT 1`, [v.product, v.variant]);
-  return r ? { available: Number(r.available), at: r.at } : null;
+  const marks = v.variants.map(() => '?').join(', ');
+  const rows = await query(env.DB, `SELECT variant_title AS variant, new_total_available AS available, timestamp AS at FROM (
+      SELECT variant_title, new_total_available, timestamp,
+             ROW_NUMBER() OVER (PARTITION BY variant_title ORDER BY timestamp DESC, id DESC) AS rn
+        FROM inventory_adjustments
+       WHERE adjustment_source = 'shopify_flow' AND product_name = ? AND variant_title IN (${marks}) AND new_total_available IS NOT NULL)
+    WHERE rn = 1`, [v.product, ...v.variants]);
+  if (!rows.length) return null;
+  // In the lane's own variant order, so the first part is the one that holds the count.
+  const parts = v.variants.flatMap(t => rows.filter(r => r.variant === t).map(r => ({ variant: r.variant, available: Number(r.available), at: r.at })));
+  const available = parts.reduce((sum, p) => sum + p.available, 0);
+  const at = parts.reduce((m, p) => (new Date(p.at).getTime() > new Date(m).getTime() ? p.at : m), parts[0].at);
+  return v.variants.length > 1 ? { available, at, parts } : { available, at };
 }
 
 /**

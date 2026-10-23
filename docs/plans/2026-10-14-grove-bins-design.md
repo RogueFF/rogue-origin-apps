@@ -363,6 +363,8 @@ Rate, reorder point, red tape depth, order qty and the dates are unchanged; they
 
 **Tile text** (`model.js` `laneOnHandLine`, pure, Pacific time): `~10 bins · from Shopify · as of 2:41 pm` (the date instead of the time when not today); from the count: `~10 bins · from the count · Shopify says ~5 (as of 10:48 am)`; lanes without Shopify: `~9 bins` as before. ES: `de Shopify · a las 2:41 pm` / `del conteo · Shopify dice ~5 (10:48 am)`.
 
+**Addendum 2026-10-22 — the ounce lane reads two variants.** Koa combined the ¼ oz, ½ oz and 1 oz bags into one custom bag on card 56 and set Grove Bags › "1/4 & 1/2 oz." to the rack count (7,200) with "1 oz." at 0. The order Flow decrements "1/4 & 1/2 oz." on ¼ oz and ½ oz sales and "1 oz." on 1 oz sales, so the lane's word is the **sum** of the two variants' newest levels (the second drifts below zero by the 1 oz bags used), dated by the newer. `SHOPIFY_COUNTED` takes a `variants` list; a lane with several carries `shopify.parts` and the Desk's Receive/Recount nag says which variant takes the count and which go to 0. "1/4 & 1/2 lb." is a different bag and never feeds card 56. Retiring the "1 oz." variant later: set it to 0 first, or its last level stays in the sum.
+
 **Runbook consequence.** The "Grove Bags" product and its order-decrement Flow stay for the **10 lbs.** variant: the lane now depends on them. When the two-week ledger comparison passes, archive the other four variants, not this one.
 
 **Rollout.** Merge → `npm run deploy` from `workers/` (no migration) → Pages serves the Desk (CACHE_VERSION bumped) → Koa sets Grove Bags › 10 lbs. to the rack count (500 on 2026-10-21) → the tile reads "from Shopify" and counts down with each 10 lb sale.
