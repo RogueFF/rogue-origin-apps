@@ -105,3 +105,10 @@ cards/node_modules/
 cards/.wrangler/
 cards/test/out/
 cards/dist/
+
+# Local secrets and the uncommitted secret-audit report. Added 2026-10-22 so a
+# `git add -A` in any worktree can never sweep them in (print-agent token was
+# only excluded via .git/info/exclude on one PC).
+tools/print-agent/*.local
+**/.token.local
+SECRETS-AUDIT.md

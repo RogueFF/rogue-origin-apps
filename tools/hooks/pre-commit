@@ -24,6 +24,21 @@
 #   cp tools/hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 #
 
+# Secret scan of the staged changes (added 2026-10-22 after the history scrub).
+# gitleaks is optional locally — CI runs the same rules over the whole history
+# on every push and PR (.github/workflows/gitleaks.yml) — but catching a key
+# here keeps it out of a commit, where removing it again means a force-push.
+# Install: https://github.com/gitleaks/gitleaks/releases (any 8.x).
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks git --pre-commit --staged --redact --no-banner --exit-code 1 \
+       --config .gitleaks.toml . ; then
+    echo "[gitleaks] a staged change looks like a secret — commit aborted." >&2
+    echo "           Real key: move it to a Worker secret / .dev.vars, never the repo." >&2
+    echo "           False positive: add a reviewed allowlist entry to .gitleaks.toml." >&2
+    exit 1
+  fi
+fi
+
 # Nothing to do unless an asset or a page actually changed.
 CHANGED=$(git diff --cached --name-only --diff-filter=AMR \
   | grep -E '\.(js|mjs|css|html)$' || true)
