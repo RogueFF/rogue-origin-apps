@@ -105,9 +105,9 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   await page.click('.tabs [data-view="cards"]');
   expect(await page.$$eval('.pc', e => e.length)).toBe(93);
   await page.click('.tabs [data-view="print"]');
-  expect(await page.$('#pstage .pcard .qr svg')).not.toBeNull();
+  expect(await page.$('#pstage .kc .kc-qr svg')).not.toBeNull();
   await page.click('.pv-head [data-fmt="red"]');
-  expect(await page.$('#pstage .pcard.red')).not.toBeNull();
+  expect(await page.$('#pstage .kc.red')).not.toBeNull();
   expect(errs.filter(e => !/favicon|manifest|ro-logo|icon-apple/.test(e))).toEqual([]);
 });
 
@@ -218,13 +218,11 @@ test('print: cancelling the dialog keeps the card on the to-print list; Yes mark
   await page.evaluate(() => { window.print = () => window.dispatchEvent(new Event('afterprint')); }); // Chrome fires afterprint on Cancel too
   await page.click('.tabs [data-view="print"]'); await page.waitForSelector('#printOne');
   const printed = () => page.evaluate(() => Object.keys((JSON.parse(localStorage.getItem('ro-tagdesk-v1') || '{}')).printed || {}).length);
-  let asked = '';
-  page.once('dialog', d => { asked = d.message(); d.dismiss(); });
-  await page.click('#printOne'); await page.waitForTimeout(400);
-  expect(asked).toMatch(/Did the card print\?/);
+  // Print waits for the card photo (3 s cap), so wait for the question rather than a fixed delay.
+  let dlg = page.waitForEvent('dialog'); await page.click('#printOne'); let d = await dlg;
+  expect(d.message()).toMatch(/Did the card print\?/); await d.dismiss(); await page.waitForTimeout(100);
   expect(await printed()).toBe(0);
-  page.once('dialog', d => d.accept());
-  await page.click('#printOne'); await page.waitForTimeout(400);
+  dlg = page.waitForEvent('dialog'); await page.click('#printOne'); d = await dlg; await d.accept(); await page.waitForTimeout(100);
   expect(await printed()).toBe(1);
 });
 
