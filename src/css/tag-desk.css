@@ -637,8 +637,11 @@ details.unmapped li .tb-btn{margin-left:auto}
   #printArea .kc{box-shadow:none}
   /* 6×4 cards: two per letter page, centred with ~1 in all round, so nothing lands in the printer's unprintable edge */
   #printArea .kc-page{width:8.5in;height:11in;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly}
-  #printArea .kc-cut{position:relative;padding:.1in;border:2px dotted #6b6b6b;break-inside:avoid}
-  #printArea .kc-cut::before{content:'\2702';position:absolute;top:-.14in;left:-.3in;font-size:16px;line-height:1;color:#6b6b6b}
+  /* The dotted line sits on the card's own edge: cut on the dots = exactly 6×4, which fits a 4×6 laminating pouch with a sealed border.
+     Square corners in print, so the cut has no white corner slivers. */
+  #printArea .kc-cut{position:relative;break-inside:avoid;outline:2px dotted #6b6b6b;outline-offset:-1px}
+  #printArea .kc.c6,#printArea .kc.c6 .kc-border{border-radius:0}
+  #printArea .kc-cut::before{content:'\2702';position:absolute;top:-.12in;left:-.28in;font-size:16px;line-height:1;color:#6b6b6b}
 }
 /* Uline quick-order paste block */
 .copyline pre.paste{margin:0;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--ink);white-space:pre;flex:1 0 100%;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--surface);max-height:160px;overflow:auto;user-select:all}
