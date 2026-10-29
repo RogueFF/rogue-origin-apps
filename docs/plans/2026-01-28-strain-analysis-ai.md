@@ -48,8 +48,8 @@ For each of the top 5 strains:
 **Example AI Context Addition:**
 ```
 RECENT STRAIN ACTIVITY (Last 7 Days):
-1. 2025 - Lifter / Sungrown: 532.3 lbs (5 days, 0.86 lbs/hr, $47.71/lb tops, $13.89/lb smalls)
-2. 2025 - Sour Lifter / Sungrown: 412.1 lbs (4 days, 0.92 lbs/hr, $45.20/lb tops, $12.34/lb smalls)
+1. 2025 - Lifter / Sungrown: 532.3 lbs (5 days, 0.86 lbs/hr, $36.40/lb tops, $10.60/lb smalls)
+2. 2025 - Sour Lifter / Sungrown: 412.1 lbs (4 days, 0.92 lbs/hr, $34.50/lb tops, $9.40/lb smalls)
 ...
 ```
 
@@ -107,7 +107,7 @@ LIMIT 5
 
 **Processing:**
 ```javascript
-const HOURLY_RATE = 26.22;
+const HOURLY_RATE = 20.00; // example only — the real loaded rate lives in D1 config
 
 rows.map(r => {
   const totalLbs = r.total_tops + r.total_smalls;
@@ -203,10 +203,10 @@ ORDER BY production_date, time_slot
       daysWorked: 5,
       productionHours: 38,
       avgRate: 0.86,
-      topsCostPerLb: 47.71,
-      smallsCostPerLb: 13.89,
-      blendedCostPerLb: 32.26,
-      totalLaborCost: 17174.10
+      topsCostPerLb: 36.40,
+      smallsCostPerLb: 10.60,
+      blendedCostPerLb: 24.61,
+      totalLaborCost: 13100.00
     },
     labor: {
       trimmerHours: 373,
@@ -336,10 +336,10 @@ User: "How's Lifter doing?"
   ↓
 AI loads context (includes strainSnapshot)
   ↓
-AI sees: "Lifter: 532.3 lbs (5 days, 0.86 lbs/hr, $47.71/lb tops)"
+AI sees: "Lifter: 532.3 lbs (5 days, 0.86 lbs/hr, $36.40/lb tops)"
   ↓
 AI responds: "Lifter's been solid this week - 532 lbs over 5 days at 0.86 lbs/hr.
-Tops are running $47.71/lb, smalls at $13.89/lb."
+Tops are running $36.40/lb, smalls at $10.60/lb."
 ```
 
 ### Deep Analysis Flow (Tier 2)
@@ -369,7 +369,7 @@ User: What's our most efficient strain?
 
 AI: Based on the last 7 days, Sour Lifter is leading at 0.92 lbs/hr,
 followed by Lifter at 0.86 lbs/hr. Sour Lifter also has lower tops
-cost ($45.20/lb vs $47.71/lb).
+cost ($34.50/lb vs $36.40/lb).
 ```
 *Uses Tier 1 context only - instant response*
 
@@ -385,7 +385,7 @@ AI: Let me pull the full analysis for you.
 [Returns formatted analysis with data cards showing:]
 - Total production: 532.3 lbs (289 tops, 243 smalls)
 - Efficiency: 0.86 lbs/crew-hour average
-- Labor costs: $47.71/lb tops, $13.89/lb smalls
+- Labor costs: $36.40/lb tops, $10.60/lb smalls
 - Best day: Jan 19 (0.98 lbs/hr)
 - 5 production days across 3 strain variants
 ```
@@ -400,8 +400,8 @@ AI: Looking at recent data, I need to compare all strains. Let me check.
 {"task": "analyze_strain", "params": {"strain": "Sour Lifter", "days": 30}}
 ```
 
-Based on the analysis, Sour Lifter has the best tops cost at $45.20/lb,
-beating Lifter's $47.71/lb. The difference comes from better efficiency
+Based on the analysis, Sour Lifter has the best tops cost at $34.50/lb,
+beating Lifter's $36.40/lb. The difference comes from better efficiency
 (0.92 vs 0.86 lbs/hr).
 ```
 *AI can call tool multiple times to compare strains*
@@ -519,4 +519,4 @@ None - all changes to existing files
 - Analysis tool supports any strain (not limited to top 5)
 - Fuzzy matching allows flexible queries ("lifter" matches "2025 - Lifter / Sungrown")
 - Cost calculations use split allocation (trimmers→tops, shared roles→ratio)
-- All monetary values assume $26.22/hour labor cost (includes 14% Oregon taxes)
+- All monetary values in this doc are examples at a synthetic $20.00/hour loaded rate; the real rate (wage + 14% Oregon taxes) lives in D1 config

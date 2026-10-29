@@ -8,10 +8,10 @@
   "buckers": 0,
   "tzero": 0,
   "operatorHours": 199,
-  "laborCost": 4588.5,
-  "costPerLb": 21.84,
-  "topsCostPerLb": 27.51,
-  "smallsCostPerLb": 14.27
+  "laborCost": 3500,
+  "costPerLb": 16.66,
+  "topsCostPerLb": 20.5,
+  "smallsCostPerLb": 11.53
  },
  "current": {
   "strain": "",
@@ -42,8 +42,8 @@
    "smalls": 479,
    "avgRate": 1.33,
    "daysWorked": 5,
-   "topsCostPerLb": 30.25,
-   "smallsCostPerLb": 10.52
+   "topsCostPerLb": 23.4,
+   "smallsCostPerLb": 9.85
   }
  ],
  "isHistorical": true,
@@ -68,10 +68,10 @@
    ],
    "totalCrew": 21,
    "notes": "\n,trae un poquito de mold  y algunos gusanos ,tenemos la meta un poco alta ,problemas para incrementar la volsa   ",
-   "laborCost": 5217.78,
-   "costPerLb": 23.85,
-   "topsCostPerLb": 34.8,
-   "smallsCostPerLb": 12.61
+   "laborCost": 3980,
+   "costPerLb": 18.19,
+   "topsCostPerLb": 26.4,
+   "smallsCostPerLb": 9.77
   },
   {
    "date": "2026-10-14",
@@ -92,10 +92,10 @@
    ],
    "totalCrew": 27,
    "notes": "",
-   "laborCost": 5401.32,
-   "costPerLb": 20.71,
-   "topsCostPerLb": 28.49,
-   "smallsCostPerLb": 11.72
+   "laborCost": 4120,
+   "costPerLb": 15.8,
+   "topsCostPerLb": 21.09,
+   "smallsCostPerLb": 9.68
   },
   {
    "date": "2026-10-15",
@@ -116,10 +116,10 @@
    ],
    "totalCrew": 22,
    "notes": "El producto esta muy humedo y tiene mucha hoja ,Tiene mucho gusano ",
-   "laborCost": 5322.66,
-   "costPerLb": 22.51,
-   "topsCostPerLb": 30.94,
-   "smallsCostPerLb": 12.81
+   "laborCost": 4060,
+   "costPerLb": 17.17,
+   "topsCostPerLb": 23.65,
+   "smallsCostPerLb": 9.71
   },
   {
    "date": "2026-10-16",
@@ -140,10 +140,10 @@
    ],
    "totalCrew": 18,
    "notes": "las volsas  que quedaron a vajo estan muy humedas  piensen que se va aser  porque se pueden echar a perder ",
-   "laborCost": 4588.5,
-   "costPerLb": 21.84,
-   "topsCostPerLb": 27.51,
-   "smallsCostPerLb": 14.27
+   "laborCost": 3500,
+   "costPerLb": 16.66,
+   "topsCostPerLb": 20.5,
+   "smallsCostPerLb": 11.53
   }
  ],
  "fallback": null,
