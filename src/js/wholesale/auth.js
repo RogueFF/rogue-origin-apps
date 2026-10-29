@@ -19,7 +19,13 @@ const $ = (id) => document.getElementById(id);
 
 export const hasPassword = () => Boolean(localStorage.getItem(KEY));
 
+/**
+ * Behind the page gate (shared/page-gate.js), forgetting re-gates this tab in
+ * place: the cover comes back and the board stays as it is underneath. Without
+ * the gate, a plain removal as before.
+ */
 export function forgetPassword() {
+  if (window.ROGate && window.ROGate.relock) { window.ROGate.relock(); return; }
   localStorage.removeItem(KEY);
 }
 

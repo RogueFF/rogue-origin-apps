@@ -14,10 +14,11 @@ const announce = () => document.dispatchEvent(new CustomEvent('ro:authchange', {
 /**
  * Forget the password. The Hub sits behind the page gate (shared/page-gate.js),
  * which owns forgetting there: it clears the key, fires ro:authchange and
- * re-gates the page. Without the gate, clear and announce here as before.
+ * re-gates the page in place, so the chat's question and reply stay put behind
+ * the cover (no reload). Without the gate, clear and announce here as before.
  */
 export const forget = () => {
-  if (window.ROGate) { window.ROGate.lock(); return; }
+  if (window.ROGate && window.ROGate.relock) { window.ROGate.relock(); return; }
   localStorage.removeItem(KEY);
   announce();
 };

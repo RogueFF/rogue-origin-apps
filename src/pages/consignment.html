@@ -6,6 +6,7 @@
   <link rel="icon" type="image/png" href="/rogue-origin-apps/favicon.png">
   <meta name="theme-color" content="#141816">
   <title>Consignment - Rogue Origin</title>
+  <script src="../js/shared/page-gate.js?h=d2bfee6c" data-lang="en"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -381,6 +382,14 @@
     const AUTH_KEY = 'ro_consignment_auth';
 
     (function checkAuth() {
+      // The shared page gate guards this page now: it asks for the password,
+      // holds every API call until it validates, and keeps the page hidden
+      // until then. This old login stands aside so nobody is asked twice; it
+      // only still applies if the gate script failed to load.
+      if (window.ROGate) {
+        unlockPage();
+        return;
+      }
       const session = localStorage.getItem(AUTH_KEY);
       if (session) {
         try {

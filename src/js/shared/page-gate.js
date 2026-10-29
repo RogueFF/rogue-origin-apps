@@ -20,8 +20,17 @@
  *   no stored key                 -> show the dialog
  *   stored key, server says yes   -> reveal
  *   stored key, 401/success:false -> forget it, show the dialog
- *   stored key, offline/timeout   -> reveal anyway (barn PC on bad wifi, or a
+ *   stored key, offline/5xx       -> reveal anyway (barn PC on bad wifi, or a
  *                                    page the service worker served offline)
+ *   stored key, no answer in 3 s  -> reveal, but keep waiting for the answer
+ *                                    (up to 30 s); a late rejection re-gates
+ *
+ * Once the page is open, losing the key re-gates it IN PLACE: the cover comes
+ * back and API calls are held again, but the page itself (typed input, open
+ * modals, in-flight work) stays as it was. That happens when another tab locks,
+ * when the page forgets the key itself (ROGate.relock()), or on a late
+ * rejection. Unlocking from that cover reveals in place and announces
+ * ro:authchange {unlocked:true}. Only the Lock button reloads its own tab.
  *
  * This locks the UI only. The API itself still answers anyone who calls it.
  *
@@ -29,6 +38,7 @@
  * globalThis.ROGateCore; tests/page-gate.test.mjs runs this very file in a vm
  * sandbox (no document) to exercise them.
  */
+/* global Headers, Request */
 (function () {
   'use strict';
 
@@ -39,7 +49,8 @@
   // these legacy keys still honoured (i18n migrates them; we only read).
   const LANG_KEY = 'ro-lang';
   const LEGACY_LANG_KEYS = ['barcodeLang', 'kanbanLang', 'sopAppLang', 'supersack-lang', 'lang', 'language'];
-  const STORED_CHECK_MS = 3000;   // stored key: short, then fail open
+  const STORED_CHECK_MS = 3000;   // stored key: reveal after this if no answer yet...
+  const LATE_CHECK_MS = 30000;    // ...but keep listening this long for a rejection
   const TYPED_CHECK_MS = 10000;   // typed password: someone is waiting on it
   const WAIT_HINT_MS = 400;       // stored check slower than this: say "Checking…"
 
@@ -76,11 +87,19 @@
 
   const decideLoad = (storedKey) => (storedKey ? 'validate' : 'prompt');
 
+  /** outcome 'slow': no answer within STORED_CHECK_MS (the check keeps running). */
   const afterStoredCheck = (outcome) => (outcome === 'rejected' ? 'forget-and-prompt' : 'reveal');
 
-  /** stored: whether the password could be written to localStorage. */
-  function afterTyped(outcome, stored) {
-    if (outcome === 'ok') return stored ? 'store-and-reload' : 'reveal';
+  /** The answer that arrives after a slow stored check already revealed the page. */
+  const afterLateCheck = (outcome) => (outcome === 'rejected' ? 'forget-and-relock' : 'keep');
+
+  /**
+   * stored: whether the password could be written to localStorage.
+   * inPlace: the page has been open in this load and was re-gated in place;
+   * it reveals where it stands instead of reloading over the operator's work.
+   */
+  function afterTyped(outcome, stored, inPlace = false) {
+    if (outcome === 'ok') return stored && !inPlace ? 'store-and-reload' : 'reveal';
     if (outcome === 'rejected') return 'wrong';
     return 'offline';
   }
@@ -106,7 +125,8 @@
   }
 
   globalThis.ROGateCore = {
-    API_ORIGIN, PASSWORD_KEY, isApiUrl, classifyValidation, decideLoad, afterStoredCheck, afterTyped, pickLang,
+    API_ORIGIN, PASSWORD_KEY, isApiUrl, classifyValidation, decideLoad, afterStoredCheck, afterLateCheck,
+    afterTyped, pickLang,
   };
 
   // -- Browser -------------------------------------------------------------
@@ -213,15 +233,110 @@ html.ro-gated body > #ro-gate { visibility: visible !important; }
   (document.head || root).appendChild(style);
 
   // 2. Hold API requests until unlock. The gate's own check uses nativeFetch.
+  // The hold is re-armed each time the page is re-gated in place, so requests
+  // made while the cover is back wait for the next unlock.
   let unlocked = false;
+  let everOpen = false; // revealed at least once in this load
+  let activeKey = '';   // the key the page was last unlocked with
   let release;
-  const ready = new Promise((resolve) => { release = resolve; });
+  let hold;
+  let held; // identical GETs waiting on the current hold, so they go out once
+  const armHold = () => {
+    hold = new Promise((resolve) => { release = resolve; });
+    held = new Map();
+  };
+  armHold();
+  const ready = hold; // the first unlock of this load
   const nativeFetch = window.fetch.bind(window);
-  window.fetch = function gatedFetch(input, init) {
-    if (!unlocked && isApiUrl(input, location.href)) {
-      return ready.then(() => nativeFetch(input, init));
+
+  /**
+   * A key for a plain GET (string or URL, no init beyond method/headers), so
+   * that a tab sitting re-gated for hours does not release one copy of every
+   * poll it made in that time. Anything else is held as it is.
+   */
+  function coalesceKey(input, init) {
+    if (typeof input !== 'string' && !(typeof URL === 'function' && input instanceof URL)) return null;
+    let headers = '';
+    if (init) {
+      if (Object.keys(init).some((k) => k !== 'method' && k !== 'headers')) return null;
+      if (init.method && String(init.method).toUpperCase() !== 'GET') return null;
+      const h = init.headers;
+      if (h) {
+        if (typeof h !== 'object' || Array.isArray(h) || (typeof Headers === 'function' && h instanceof Headers)) return null;
+        headers = JSON.stringify(Object.keys(h).sort().map((k) => [k, String(h[k])]));
+      }
     }
-    return nativeFetch(input, init);
+    try {
+      return `${new URL(String(input), location.href).href}\n${headers}`;
+    } catch {
+      return null;
+    }
+  }
+
+  // No Authorization value, or "Bearer" with nothing after it.
+  const EMPTY_AUTH = /^\s*(?:bearer)?\s*$/i;
+  // fetch's own test for a header record (versus a Headers object or a list of
+  // pairs): an object that is not iterable. No prototype check, so an object
+  // from another realm (an iframe) still counts.
+  const isHeaderRecord = (o) => Boolean(o) && typeof o === 'object' && typeof o[Symbol.iterator] !== 'function';
+
+  /**
+   * A held request built while the key was gone (a page re-gated in place, or
+   * a fresh tab another tab unlocked) carries no Authorization, or "Bearer "
+   * with an empty token. Give it the key that unlocked the page, so it reaches
+   * the API as the operator who unlocked. gatedFetch calls this only for
+   * requests built with no key on file. An Authorization the caller set is
+   * never touched. Returns [input, init].
+   */
+  function withKey(input, init, key) {
+    if (!key) return [input, init];
+    const value = `Bearer ${key}`;
+    try {
+      const own = init && init.headers !== undefined && init.headers !== null ? init.headers : null;
+      if (own === null) {
+        if (typeof Request === 'function' && input instanceof Request) {
+          if (!EMPTY_AUTH.test(input.headers.get('authorization') || '')) return [input, init];
+          const headers = new Headers(input.headers);
+          headers.set('Authorization', value);
+          return [new Request(input, { headers }), init];
+        }
+        return [input, { ...(init || {}), headers: { Authorization: value } }];
+      }
+      if (isHeaderRecord(own)) {
+        // Keep the plain-object shape, so the request can still be coalesced.
+        const names = Object.keys(own).filter((k) => k.toLowerCase() === 'authorization');
+        if (!names.every((k) => EMPTY_AUTH.test(String(own[k])))) return [input, init];
+        const headers = {};
+        for (const k of Object.keys(own)) if (!names.includes(k)) headers[k] = own[k];
+        headers.Authorization = value;
+        return [input, { ...init, headers }];
+      }
+      const headers = new Headers(own); // a Headers instance or a list of pairs
+      if (!EMPTY_AUTH.test(headers.get('authorization') || '')) return [input, init];
+      headers.set('Authorization', value);
+      return [input, { ...init, headers }];
+    } catch {
+      return [input, init]; // send it as the caller built it
+    }
+  }
+
+  window.fetch = function gatedFetch(input, init) {
+    if (unlocked || !isApiUrl(input, location.href)) return nativeFetch(input, init);
+    const bucket = held; // this hold's batch, even if the page re-gates again later
+    // Only a request built while no key was on file can be missing it by
+    // accident. One built while the key was there and sent without it is a
+    // public read on purpose; it goes out as built (no key, no preflight).
+    const builtKeyless = !store.get(PASSWORD_KEY);
+    // Everything runs at release, when the key is known: put the key in first,
+    // then coalesce on what will actually be sent.
+    return hold.then(() => {
+      const [i, n] = builtKeyless ? withKey(input, init, activeKey) : [input, init];
+      const key = coalesceKey(i, n);
+      if (key === null) return nativeFetch(i, n);
+      if (!bucket.has(key)) bucket.set(key, nativeFetch(i, n));
+      // Each caller reads its own copy of the one response.
+      return bucket.get(key).then((res) => res.clone());
+    });
   };
 
   // -- Language ------------------------------------------------------------
@@ -376,7 +491,7 @@ html.ro-gated body > #ro-gate { visibility: visible !important; }
     button.textContent = txt('checking');
     showError('');
     const outcome = await check(password, TYPED_CHECK_MS);
-    const next = afterTyped(outcome, outcome === 'ok' && store.set(PASSWORD_KEY, password));
+    const next = afterTyped(outcome, outcome === 'ok' && store.set(PASSWORD_KEY, password), everOpen);
 
     if (next === 'store-and-reload') {
       // Reload so every script on the page starts with the key in place, as on
@@ -389,13 +504,19 @@ html.ro-gated body > #ro-gate { visibility: visible !important; }
     button.disabled = false;
     button.textContent = txt('submit');
     if (next === 'reveal') {
-      // localStorage is blocked: unlock this load only; it will ask again.
-      reveal();
+      // Either the page was re-gated in place (reveal it where it stands and
+      // tell it the key is back), or localStorage is blocked (unlock this load
+      // only; it will ask again).
+      reveal(everOpen, password);
       return;
     }
     if (next === 'wrong') {
       input.value = ''; // so a retype cannot append to the bad one
       showError('wrong');
+      // Another tab may have unlocked while this one was being checked (its
+      // storage event is skipped while busy): try the key it left on file.
+      const onFile = store.get(PASSWORD_KEY);
+      if (onFile && onFile !== password) adopt(onFile);
     } else {
       showError('offline');
     }
@@ -450,25 +571,76 @@ html.ro-gated body > #ro-gate { visibility: visible !important; }
     else fn();
   }
 
-  function reveal() {
+  /** Dispatched on document (where the Hub listens) and bubbling, so window listeners hear it too. */
+  function authChange(isUnlocked) {
+    document.dispatchEvent(new CustomEvent('ro:authchange', { bubbles: true, detail: { unlocked: isUnlocked } }));
+  }
+
+  let refocus = null; // what had focus when the page was re-gated in place
+
+  /**
+   * announce: the page started (or was re-gated) without this key, so tell it
+   * the key is now there (the Hub's cost lock refetches on this).
+   * key: the key this unlock was made with; held requests that lack one get it.
+   */
+  function reveal(announce, key) {
     if (unlocked) return;
     unlocked = true;
+    everOpen = true;
+    activeKey = key || '';
     // Show the page before releasing the held requests, so they land on a
     // visible, laid-out page (charts size themselves when they render).
     root.classList.remove('ro-gated');
+    const back = refocus;
+    refocus = null;
     whenBody(() => {
       if (gateEl) { gateEl.remove(); gateEl = null; }
+      // Re-gated in place: give focus back to the field the operator was in.
+      if (back && back.isConnected && typeof back.focus === 'function') {
+        try { back.focus({ preventScroll: true }); } catch { /* not focusable now */ }
+      }
     });
     whenParsed(mountLockButton);
+    const released = hold;
     release();
+    // Announce only once the held requests have gone out (their callbacks were
+    // queued on this hold first). Those built while the key was gone were
+    // given this key as they went out (withKey), so they and the refetch a
+    // page makes on this event (the Hub's cost lock) all carry it, whichever
+    // answer lands last.
+    if (announce) released.then(() => authChange(true));
   }
 
-  /** Forget the password, tell the page, and re-gate it. */
+  /**
+   * Put the cover back over the page as it stands. Nothing on the page is
+   * touched (typed input, open editors, in-flight work), nothing reloads, and
+   * API requests are held again until the next unlock.
+   */
+  function regate() {
+    if (!unlocked) return; // already behind the cover
+    unlocked = false;
+    const active = document.activeElement;
+    refocus = active && active !== document.body && active !== root ? active : null;
+    armHold();
+    root.classList.add('ro-gated');
+    authChange(false);
+    showPrompt();
+  }
+
+  /** Forget the password and re-gate this page in place (no reload). */
+  function relock() {
+    store.remove(PASSWORD_KEY);
+    regate();
+  }
+
+  /**
+   * The Lock button: forget the password, tell the page, and reload it. The
+   * operator chose to lock this tab, so its state goes with it. Every other
+   * way of losing the key re-gates in place instead (relock).
+   */
   function lock() {
     store.remove(PASSWORD_KEY);
-    // Dispatched on document (where the Hub listens) and bubbling, so window
-    // listeners hear it too.
-    document.dispatchEvent(new CustomEvent('ro:authchange', { bubbles: true, detail: { unlocked: false } }));
+    authChange(false);
     location.reload();
   }
 
@@ -481,36 +653,89 @@ html.ro-gated body > #ro-gate { visibility: visible !important; }
     paintLockButton();
   });
 
-  // Another tab locked (key removed) or unlocked (key added): follow it.
+  // Another tab locked (key removed) or unlocked (key added): follow it, in
+  // place. Never reload here: that would throw away whatever this tab holds.
+  let adopting = ''; // a key from another tab being checked right now
+  let storedPending = false; // the load-time stored-key check has not settled yet
+
+  /** Check a key another tab put on file; open this tab in place if it is good. */
+  function adopt(key) {
+    if (!key || key === adopting) return;
+    adopting = key;
+    check(key, TYPED_CHECK_MS).then((outcome) => {
+      if (adopting === key) adopting = '';
+      // Only if it is still the key on file: it may have changed meanwhile.
+      if (outcome === 'ok' && store.get(PASSWORD_KEY) === key) reveal(true, key);
+    });
+  }
+
   window.addEventListener('storage', (e) => {
     if (e.key !== PASSWORD_KEY && e.key !== null) return;
-    const has = Boolean(store.get(PASSWORD_KEY));
-    if (unlocked && !has) location.reload();
-    else if (!unlocked && has && !busy) location.reload();
+    const key = store.get(PASSWORD_KEY);
+    if (unlocked) {
+      if (!key) regate();
+      return;
+    }
+    // While busy, a rejected typed password re-reads the key (onSubmit); while
+    // the stored-key check runs, it re-reads the key before it reveals.
+    if (!key || busy || storedPending) return;
+    adopt(key);
   });
 
   window.ROGate = {
-    lock,
+    lock,   // the Lock button: forget and reload this tab
+    relock, // forget and re-gate in place, keeping the page as it is
     isUnlocked: () => unlocked,
-    ready, // resolves when the page is unlocked
+    ready,  // resolves when the page first unlocks
   };
 
-  // 3. Decide.
-  whenBody(mountGate); // opaque cover while we decide, so nothing flashes
-  const storedKey = store.get(PASSWORD_KEY);
-  if (decideLoad(storedKey) === 'prompt') {
-    showPrompt();
-  } else {
+  /**
+   * The load-time check of the key on file. Before it reveals (or forgets) it
+   * re-reads the key: another tab may have locked meanwhile (prompt instead) or
+   * put a different key in (check that one instead, from the start).
+   */
+  function checkStored(key) {
+    storedPending = true;
     // A quick check shows a blank cover; only a slow one says "Checking…".
+    let settled = false;
+    let opened = false;
+    let slowTimer = null;
     const waitTimer = setTimeout(() => showWaiting(true), WAIT_HINT_MS);
-    check(storedKey, STORED_CHECK_MS).then((outcome) => {
+    const settle = (outcome) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(waitTimer);
+      clearTimeout(slowTimer);
+      const onFile = store.get(PASSWORD_KEY);
+      if (onFile && onFile !== key) { checkStored(onFile); return; }
+      storedPending = false;
+      if (!onFile) { showPrompt(); return; } // locked elsewhere while we checked
       if (afterStoredCheck(outcome) === 'reveal') {
-        reveal();
+        opened = true;
+        // A key another tab put in meanwhile: the page started up with (and
+        // built its held calls with) the one on file at load, so tell it the
+        // key changed (the Hub refetches its costs). Same key: stay quiet, so
+        // a normal load fetches nothing twice.
+        reveal(key !== storedKey, key);
       } else {
         store.remove(PASSWORD_KEY);
         showPrompt();
       }
+    };
+    // No answer in STORED_CHECK_MS: open anyway (barn on bad wifi), but keep
+    // the check running, so a rejection that arrives late still re-gates.
+    slowTimer = setTimeout(() => settle('slow'), STORED_CHECK_MS);
+    check(key, LATE_CHECK_MS).then((outcome) => {
+      if (!settled) { settle(outcome); return; }
+      // Only if this check opened the page and it is still the key on file:
+      // it may have been replaced or removed meanwhile.
+      if (opened && afterLateCheck(outcome) === 'forget-and-relock' && store.get(PASSWORD_KEY) === key) relock();
     });
   }
+
+  // 3. Decide.
+  whenBody(mountGate); // opaque cover while we decide, so nothing flashes
+  const storedKey = store.get(PASSWORD_KEY);
+  if (decideLoad(storedKey) === 'prompt') showPrompt();
+  else checkStored(storedKey);
 })();

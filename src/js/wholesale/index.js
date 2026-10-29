@@ -397,6 +397,9 @@ function wire() {
   };
 
   document.addEventListener('ro:langchange', paintBell);
+  // The page gate re-gates and re-unlocks in place: show "Clear password" again
+  // once the key is back (and hide it while it is gone).
+  document.addEventListener('ro:authchange', paintLock);
 
   $('done-toggle').onclick = () => {
     const list = $('done-list');
