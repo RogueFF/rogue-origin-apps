@@ -30,10 +30,10 @@ async function fetchModel() {
 async function reload() { const M = await fetchModel(); setModel(M, RAW); }
 
 // ---------- the Tag route ----------
-async function runTag(id, red) {
+async function runTag(id, red, legacy) {
   document.body.classList.add('tagonly');
-  S.tag.live = true; S.tag.card = id; S.tag.state = 'queued'; S.tag.undoLeft = 30; S.tag.added = false; S.tag.last = 'scan';
-  const params = new URLSearchParams(location.search); params.delete('flag'); params.delete('red'); const qs = params.toString();
+  S.tag.live = true; S.tag.card = id; S.tag.state = 'queued'; S.tag.undoLeft = 30; S.tag.added = false; S.tag.last = 'scan'; S.tag.legacy = legacy;
+  const params = new URLSearchParams(location.search); params.delete('flag'); params.delete('red'); params.delete('v'); const qs = params.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
   let M;
   try { M = await fetchModel(); } catch (e) { console.error(e); $('#view-tag').innerHTML = `<div class="boot err">${t('loadFail')}</div>`; document.querySelector('#view-tag').hidden = false; return; }
@@ -42,8 +42,10 @@ async function runTag(id, red) {
   const refresh = async () => { M = await fetchModel(); setModel(M, RAW); };
   const card = () => M.byId[id];
   init({ M, L, saveL, reload: refresh, RAW, pageUrl: PAGE_URL });
-  const exec = async () => {
-    const plan = scanPlan(card(), { red });
+  // asRed: an old red card, or "Completely out?" on the Tag — the same alarm.
+  const exec = async (asRed = red) => {
+    const plan = scanPlan(card(), { red: asRed });
+    if (legacy && plan.call === 'addToCart' && !plan.note) plan.note = 'OLD CARD'; // the desk sees which cards still need swapping
     if (plan.outcome === 'unknown') { S.tag.state = 'unknown'; return; }
     try {
       if (plan.call === 'addToCart') { const r = await api.addToCart({ cardId: id, qty: plan.qty || 1, note: plan.note || null, addedBy: 'tag' }); S.tag.added = true; if (r.mode === 'reorder_request') { S.tag.state = 'requested'; return; } }
@@ -58,7 +60,7 @@ async function runTag(id, red) {
     undo: async () => { try { if (S.tag.last === 'plus') { const q = card()?.inCart?.qty || 1; await api.setCartQty(id, Math.max(1, q - 1)); S.tag.last = 'scan'; await refresh(); render(); return; } if (S.tag.added) await api.removeFromCart(id); await refresh(); S.tag.state = 'removed'; S.tag.added = false; render(); } catch { S.tag.state = 'bad'; render(); } },
     requeue: async () => { try { const r = await api.addToCart({ cardId: id, qty: card().suggested, addedBy: 'tag' }); S.tag.added = true; await refresh(); S.tag.state = r.mode === 'reorder_request' ? 'requested' : 'queued'; S.tag.undoLeft = 30; render(); } catch { S.tag.state = 'bad'; render(); } },
     retry: async () => { await refresh(); await exec(); render(); },
-    urgent: async () => { try { const cur = card()?.inCart; if (cur) await api.setCartNote(id, 'URGENT', cur.qty); else await api.addToCart({ cardId: id, qty: card().suggested, note: 'URGENT', addedBy: 'tag' }); S.tag.told[id] = true; await refresh(); render(); toast(tagES() ? 'El escritorio ve una bandera roja en esta tarjeta' : 'The desk now sees a red flag on this card'); } catch { S.tag.state = 'bad'; render(); } },
+    out: async () => { await refresh(); await exec(true); render(); },
     rescan: () => { toast(tagES() ? 'Apunta la cámara a la tarjeta' : 'Point the camera at the card'); },
     close: () => { history.back(); },
   });
@@ -93,4 +95,4 @@ if (!getLang()) setLang('en');
 
 const params = new URLSearchParams(location.search);
 const flag = parseInt(params.get('flag') || '', 10);
-if (flag) runTag(flag, params.get('red') === '1'); else runDesk();
+if (flag) runTag(flag, params.get('red') === '1', params.get('v') !== '3'); else runDesk();

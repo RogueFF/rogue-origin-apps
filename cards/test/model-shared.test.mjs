@@ -21,9 +21,9 @@ test('costsLocked reads the day keys, for one day or a whole dashboard', () => {
 
 test('delta chip: direction, sign, good/bad polarity', () => {
   assert.deepEqual(deltaChip(1.34, 1.20, { fmt: fmt2, upIsGood: true, vs: 'W41' }), { kind: 'good', text: '▲ +0.14 vs W41' });
-  assert.deepEqual(deltaChip(30.28, 35.12, { fmt: fmtMoney2, upIsGood: false, vs: 'W41' }), { kind: 'good', text: '▼ −$4.84 vs W41' });
+  assert.deepEqual(deltaChip(22.78, 26.33, { fmt: fmtMoney2, upIsGood: false, vs: 'W41' }), { kind: 'good', text: '▼ −$3.55 vs W41' });
   assert.deepEqual(deltaChip(1.20, 1.34, { fmt: fmt2, upIsGood: true, vs: 'W41' }), { kind: 'bad', text: '▼ −0.14 vs W41' });
-  assert.deepEqual(deltaChip(35.12, 30.28, { fmt: fmtMoney2, upIsGood: false, vs: 'W41' }), { kind: 'bad', text: '▲ +$4.84 vs W41' });
+  assert.deepEqual(deltaChip(26.33, 22.78, { fmt: fmtMoney2, upIsGood: false, vs: 'W41' }), { kind: 'bad', text: '▲ +$3.55 vs W41' });
   assert.deepEqual(deltaChip(100, 100, { fmt: String, upIsGood: true, vs: 'Thu' }), { kind: 'neutral', text: '= vs Thu' });
   assert.equal(deltaChip(5, null, { fmt: String, upIsGood: true, vs: 'x' }), null);
   assert.equal(deltaChip(undefined, 5, { fmt: String, upIsGood: true, vs: 'x' }), null);
@@ -67,9 +67,9 @@ test('hourTarget = effective trimmers × the row target rate × multiplier, fall
 });
 
 test('formatters', () => {
-  assert.equal(fmtInt(20530.26), '20,530');
+  assert.equal(fmtInt(15660.26), '15,660');
   assert.equal(fmtInt(-0.4), '0');
-  assert.equal(fmtMoney(20530.26), '$20,530');
+  assert.equal(fmtMoney(15660.26), '$15,660');
   assert.equal(fmt1(5.58), '5.6');
   assert.equal(fmt2(1.3399), '1.34');
 });
@@ -83,7 +83,7 @@ test('formatters never print a negative zero', () => {
 });
 
 test('negative numbers use the U+2212 minus in every formatter', () => {
-  assert.equal(fmtInt(-20530.26), '−20,530');
+  assert.equal(fmtInt(-15660.26), '−15,660');
   assert.equal(fmtMoney(-5), '−$5');
   assert.equal(fmtMoney(-1234.6), '−$1,235');
   assert.equal(fmt1(-5.58), '−5.6');

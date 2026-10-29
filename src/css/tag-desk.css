@@ -333,13 +333,22 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .pq li .np.done{background:var(--q)}
 .pq .scroll{max-height:560px;overflow:auto}
 .pq .grp.reprint{background:var(--d-bg)}
+.pq .pqt{padding:10px 12px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.pq .pqt input[type=search]{width:100%;padding:9px 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:15px}
+.pq .pqv{display:flex;flex-wrap:wrap;gap:6px}
+.pq .pqv .chip .n{font-family:var(--font-mono);font-size:12px;opacity:.75;margin-left:2px}
+.pq .pk{width:18px;height:18px;flex:none;margin:0;accent-color:var(--q);cursor:pointer}
+.pq li[data-picked="true"]{background:var(--q-bg)}
+.pq .pqempty{padding:16px;margin:0}
+.tagonly .legacy,.tag-wrap .legacy{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#fff4d6;color:#7a4b00;border:1px solid #e4aa4f;font-size:15px;font-weight:600;line-height:1.3}
+.pq .pqf{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--surface);font-size:14px;flex-wrap:wrap}
+.pq .pqf>button:last-child{margin-left:auto}
 .pv{display:grid;gap:14px}
 .pv-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .stage{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;justify-content:center;overflow:auto}
 .cap{font-size:13px;color:var(--ink-2);text-align:center;margin-top:8px}
-/* Card prints: the old kanban card (kanban.html getPrintCSS) — green/red body, gold double border. 6×4 = 576×384, sheet = 816×1056 (96 px/in), so preview and print share one size. */
+/* Card prints: the old kanban card (kanban.html getPrintCSS) in red, gold double border. Green is retired (2026-10-29). 6×4 = 576×384, sheet = 816×1056 (96 px/in), so preview and print share one size. */
 .kc{position:relative;flex:none;font-family:system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.kc.green{background:#668971;color:#1a1f16}
 .kc.red{background:#bd4a28;color:#f0cb60}
 .kc-border{position:absolute;inset:0;border:5px solid #e4aa4f;border-radius:10px}
 .kc-inner{position:absolute;inset:14px;border:4px solid #e4aa4f;border-radius:8px}
@@ -624,7 +633,15 @@ details.unmapped li .tb-btn{margin-left:auto}
   #printArea>*{box-shadow:none;page-break-after:always;break-after:page;margin:0}
   #printArea>*:last-child{page-break-after:auto;break-after:auto}
   body{background:#fff;margin:0;padding:0}
-  @page{margin:0}
+  @page{size:letter;margin:0}
+  #printArea .kc{box-shadow:none}
+  /* 6×4 cards: two per letter page, centred with ~1 in all round, so nothing lands in the printer's unprintable edge */
+  #printArea .kc-page{width:8.5in;height:11in;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly}
+  /* The dotted line sits on the card's own edge: cut on the dots = exactly 6×4, which fits a 4×6 laminating pouch with a sealed border.
+     Square corners in print, so the cut has no white corner slivers. */
+  #printArea .kc-cut{position:relative;break-inside:avoid;outline:2px dotted #6b6b6b;outline-offset:-1px}
+  #printArea .kc.c6,#printArea .kc.c6 .kc-border{border-radius:0}
+  #printArea .kc-cut::before{content:'\2702';position:absolute;top:-.12in;left:-.28in;font-size:16px;line-height:1;color:#6b6b6b}
 }
 /* Uline quick-order paste block */
 .copyline pre.paste{margin:0;font-family:var(--font-mono);font-size:13px;line-height:1.5;color:var(--ink);white-space:pre;flex:1 0 100%;padding:8px 10px;border:1px dashed var(--line-strong);border-radius:8px;background:var(--surface);max-height:160px;overflow:auto;user-select:all}

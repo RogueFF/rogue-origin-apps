@@ -1,9 +1,11 @@
 /**
  * Wholesale order board — write unlock.
  *
- * Reads on this page are public; only writes are gated. So rather than blocking
- * the whole page behind a login the way Consignment does, the board loads and
- * the password is asked for at the moment it is first needed.
+ * Reads on this page need the password too: orders, queue, coverage and notify
+ * go through makeApi('wholesale', {auth: true}). Only getCultivars and getRates
+ * stay public. So rather than blocking the whole page behind a login the way
+ * Consignment does, the board loads and the password is asked for at the
+ * moment it is first needed.
  *
  * The password is validated against /api/orders?action=validatePassword — the
  * same endpoint Consignment uses, and the reason that route survived the app

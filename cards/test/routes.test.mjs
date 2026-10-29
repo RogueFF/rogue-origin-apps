@@ -7,9 +7,10 @@ import { nodeRuntime } from '../src/runtime-node.mjs';
 import { fixture, pngSize } from './helpers.mjs';
 
 // Costs the API adds for a caller with the password (the fixtures were captured without it).
+// Synthetic, not the real figures.
 const COSTS = {
-  '2026-10-16': { laborCost: 4588.5, costPerLb: 21.84, topsCostPerLb: 27.51, smallsCostPerLb: 14.27 },
-  '2026-10-15': { laborCost: 5322.66, costPerLb: 22.51, topsCostPerLb: 30.94, smallsCostPerLb: 12.81 },
+  '2026-10-16': { laborCost: 3500, costPerLb: 16.66, topsCostPerLb: 20.5, smallsCostPerLb: 11.53 },
+  '2026-10-15': { laborCost: 4060, costPerLb: 17.17, topsCostPerLb: 23.65, smallsCostPerLb: 9.71 },
 };
 const withCosts = (d) => ({ ...d, costsLocked: false, daily: d.daily.map((day) => ({ ...day, ...COSTS[day.date] })) });
 

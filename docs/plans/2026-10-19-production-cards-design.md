@@ -51,7 +51,7 @@ cards/                       rogue-origin-cards worker (this repo)
   src/render.js              satori(tree, fonts) → svg → resvg → png; wasm + font loading abstracted for Node vs Workers
   src/fonts.js               font registry (name, weight, style, bytes loader)
   test/                      model, layout, render (real satori+resvg in Node), routes (mocked upstream)
-  test/fixtures/             real API JSON captured 2026-10-19 (W42 dashboard with and without costs, scoreboards, sack summaries)
+  test/fixtures/             API JSON captured 2026-10-19 without the password (W42 dashboard with and without costs — the cost keys are synthetic —, scoreboards, sack summaries)
 
 telegram-claude-bot/         bridge
   src/telegram.ts            + sendPhoto(env, bytes, {caption, filename}) multipart to sendPhoto

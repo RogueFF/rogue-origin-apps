@@ -318,7 +318,7 @@ CREATE INDEX IF NOT EXISTS idx_config_category ON system_config(category);
 
 -- Initialize with current hardcoded values
 INSERT OR IGNORE INTO system_config (key, value, value_type, category, description) VALUES
-('labor.base_wage_rate', '23.00', 'number', 'labor', 'Base wage rate in $/hour before taxes'),
+('labor.base_wage_rate', '0', 'number', 'labor', 'Base wage rate in $/hour before taxes. Set the real rate in D1 only; this repo is public'),
 ('labor.employer_tax_rate', '0.14', 'number', 'labor', 'Oregon employer tax rate (FICA, FUTA, SUI, Workers Comp)'),
 ('production.baseline_daily_goal', '200', 'number', 'production', 'Baseline daily production goal in lbs'),
 ('production.fallback_daily_goal', '66', 'number', 'production', 'Fallback daily goal when calculation fails'),

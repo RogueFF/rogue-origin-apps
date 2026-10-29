@@ -101,9 +101,9 @@ const signed = (body) => (v) => {
   return v < 0 && /[1-9]/.test(text) ? MINUS + text : text;
 };
 
-/** 20530.26 → "20,530"; -20530.26 → "−20,530". */
+/** 15660.26 → "15,660"; -15660.26 → "−15,660". */
 export const fmtInt = signed((v) => intFormat.format(Math.round(v)));
-/** 20530.26 → "$20,530"; -5 → "−$5". */
+/** 15660.26 → "$15,660"; -5 → "−$5". */
 export const fmtMoney = signed((v) => `$${intFormat.format(Math.round(v))}`);
 /** 5.58 → "5.6". */
 export const fmt1 = signed((v) => v.toFixed(1));
@@ -172,7 +172,7 @@ function weighted(items, valueOf, weightOf) {
 
 /** A 2-decimal figure at display precision, so a change chip is the difference of the numbers as shown. */
 const shown2 = (v) => (Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
-/** 27.514 → "$27.51". */
+/** 20.504 → "$20.50". */
 const perLb = (v) => (Number.isFinite(v) ? `$${fmt2(v)}` : DASH);
 
 const dayRate = (day) => ratio(day.totalTops, day.trimmerHours);

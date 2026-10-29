@@ -23,8 +23,8 @@ function mockEnv(rows) {
 
 describe('getLoadedLaborRate', () => {
   it('computes wage * (1 + tax) from D1 config', async () => {
-    const rate = await getLoadedLaborRate(mockEnv({ 'labor.base_wage_rate': 23, 'labor.employer_tax_rate': 0.14 }));
-    assert.equal(Math.round(rate * 100) / 100, 26.22);
+    const rate = await getLoadedLaborRate(mockEnv({ 'labor.base_wage_rate': 20, 'labor.employer_tax_rate': 0.14 }));
+    assert.equal(Math.round(rate * 100) / 100, 22.8); // synthetic wage; the real one lives in D1 config
   });
 
   it('falls back to the neutral 0 wage when the config row is missing', async () => {

@@ -15,9 +15,9 @@ const card = (o = {}) => ({
   price: '$0.85/Pc', trigger: 'ONLY <span class="big">2</span> PACKS LEFT?', qr: '<svg data-qr="1"></svg>', logo: '../assets/ro-logo-horizontal.png', foot: '#1 · v2 · Oct 28', ...o,
 });
 
-test('6×4 card is the old template: green body, double gold border, header, location, photo, fields, QR, price, logo', () => {
+test('6×4 card is the old template in red: double gold border, header, location, photo, fields, QR, price, logo', () => {
   const h = classicCard(card());
-  assert.match(h, /^<div class="kc c6 green">/);
+  assert.match(h, /^<div class="kc c6 red">/); // one red card per item since 2026-10-29: red is the default
   assert.ok(h.includes('<div class="kc-border"></div><div class="kc-inner"></div>'), 'double gold border');
   assert.ok(h.includes('<h3>Tall Trash Bags</h3>'), 'item name is the header');
   assert.ok(h.includes('<div class="kc-loc">Cleaning Rack › F-1</div>'));
@@ -30,10 +30,9 @@ test('6×4 card is the old template: green body, double gold border, header, loc
   assert.ok(h.includes('#1 · v2 · Oct 28'));
 });
 
-test('red colour and the 8.5×11 sheet wrap the same parts', () => {
-  assert.match(classicCard(card({ colour: 'red' })), /^<div class="kc c6 red">/);
+test('the 8.5×11 sheet is red too and wraps the same parts', () => {
   const s = classicCard(card({ size: 'full' }));
-  assert.match(s, /^<div class="kc-sheet"><div class="kc full green">/);
+  assert.match(s, /^<div class="kc-sheet"><div class="kc full red">/);
   assert.ok(s.includes('<div class="kc-bottom"><div class="kc-qr">'), 'QR row at the bottom like the old full card');
 });
 

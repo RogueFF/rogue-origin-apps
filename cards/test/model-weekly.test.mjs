@@ -5,13 +5,13 @@ import { weeklyModel } from '../src/model.js';
 
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-// W41 cost figures. The W41 fixture was captured without the password; these
-// were read from the live dashboard with the ops password on 2026-10-19.
+// W41 cost figures. The W41 fixture was captured without the password; these are
+// synthetic ($20 per operator hour), not the real figures.
 const W41_COSTS = {
-  '2026-10-05': { laborCost: 1730.52, costPerLb: 28.14, topsCostPerLb: 35.33, smallsCostPerLb: 20.59 },
-  '2026-10-06': { laborCost: 2307.36, costPerLb: 20.29, topsCostPerLb: 30.99, smallsCostPerLb: 10.72 },
-  '2026-10-08': { laborCost: 1179.9, costPerLb: 20.77, topsCostPerLb: 28.43, smallsCostPerLb: 14.08 },
-  '2026-10-09': { laborCost: 1546.98, costPerLb: 42.97, topsCostPerLb: 50.2, smallsCostPerLb: 24.18 },
+  '2026-10-05': { laborCost: 1320, costPerLb: 21.46, topsCostPerLb: 29.1, smallsCostPerLb: 13.44 },
+  '2026-10-06': { laborCost: 1760, costPerLb: 15.48, topsCostPerLb: 22.4, smallsCostPerLb: 9.29 },
+  '2026-10-08': { laborCost: 900, costPerLb: 15.85, topsCostPerLb: 24.8, smallsCostPerLb: 8.01 },
+  '2026-10-09': { laborCost: 1180, costPerLb: 32.78, topsCostPerLb: 32.63, smallsCostPerLb: 33.16 },
 };
 const withCosts = (dashboard, costs) => ({
   ...dashboard,
@@ -48,14 +48,14 @@ test('weekly hero tiles: weighted week figures, deltas vs the prior week, % of t
   });
   // 497.2 ÷ 377 trimmer hours = 1.319; W41 137.7 ÷ 119 = 1.157.
   assert.deepEqual(m.tiles[1], { label: 'Rate', value: '1.32', unit: 'lb/hr', chips: [{ kind: 'good', text: '▲ +0.16 vs W41' }] });
-  // Σ(topsCostPerLb × tops) ÷ Σ tops: 30.2828 vs 35.1173. The chip is the change between the two
-  // numbers as shown ($30.28 vs $35.12), so it reads 4.84, not the raw 4.8345 → 4.83.
-  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$30.28', unit: '', chips: [{ kind: 'good', text: '▼ −$4.84 vs W41' }] });
+  // Σ(topsCostPerLb × tops) ÷ Σ tops: 22.7821 vs 26.3261. The chip is the change between the two
+  // numbers as shown ($22.78 vs $26.33), so it reads 3.55, not the raw 3.5440 → 3.54.
+  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$22.78', unit: '', chips: [{ kind: 'good', text: '▼ −$3.55 vs W41' }] });
 });
 
 test('weekly cost chip needs a prior with costs; the value stays', () => {
   const noPriorCosts = weeklyModel({ ...args, prior: fixture('dashboard-2026-W41.locked.json') });
-  assert.deepEqual(noPriorCosts.tiles[2], { label: '$ per lb tops', value: '$30.28', unit: '', chips: [] });
+  assert.deepEqual(noPriorCosts.tiles[2], { label: '$ per lb tops', value: '$22.78', unit: '', chips: [] });
   assert.deepEqual(noPriorCosts.tiles[1].chips, [{ kind: 'good', text: '▲ +0.16 vs W41' }]);
   const noPrior = weeklyModel({ ...args, prior: null });
   assert.deepEqual(noPrior.tiles[0].chips, [{ kind: 'warn', text: '98% target' }]);
@@ -80,9 +80,9 @@ test('weekly chart: five weekday columns, Monday off, ticks from the scoreboard 
 
 test('weekly mini row', () => {
   assert.deepEqual(m.minis, [
-    { label: 'Smalls', value: '429', unit: 'lb', sub: '$12.76/lb' },
+    { label: 'Smalls', value: '429', unit: 'lb', sub: '$10.10/lb' },
     { label: 'Supersacks', value: '88', unit: 'opened', sub: '3,080 lb raw · 5.6 tops/sack' },
-    { label: 'Labor', value: '$20,530', unit: '', sub: 'all-in $41.29/lb' },
+    { label: 'Labor', value: '$15,660', unit: '', sub: 'all-in $31.50/lb' },
   ]);
 });
 

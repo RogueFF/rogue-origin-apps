@@ -5,16 +5,17 @@ import { weeklyModel, eodModel, middayModel } from '../src/model.js';
 /** Parsed JSON fixture from test/fixtures/. */
 export const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
-// Cost figures the fixtures were captured without (the same numbers the model tests inject).
+// Synthetic cost figures ($20 per operator hour, not the real ones) for the fixtures captured without costs;
+// the same numbers the model tests inject.
 const W41_COSTS = {
-  '2026-10-05': { laborCost: 1730.52, costPerLb: 28.14, topsCostPerLb: 35.33, smallsCostPerLb: 20.59 },
-  '2026-10-06': { laborCost: 2307.36, costPerLb: 20.29, topsCostPerLb: 30.99, smallsCostPerLb: 10.72 },
-  '2026-10-08': { laborCost: 1179.9, costPerLb: 20.77, topsCostPerLb: 28.43, smallsCostPerLb: 14.08 },
-  '2026-10-09': { laborCost: 1546.98, costPerLb: 42.97, topsCostPerLb: 50.2, smallsCostPerLb: 24.18 },
+  '2026-10-05': { laborCost: 1320, costPerLb: 21.46, topsCostPerLb: 29.1, smallsCostPerLb: 13.44 },
+  '2026-10-06': { laborCost: 1760, costPerLb: 15.48, topsCostPerLb: 22.4, smallsCostPerLb: 9.29 },
+  '2026-10-08': { laborCost: 900, costPerLb: 15.85, topsCostPerLb: 24.8, smallsCostPerLb: 8.01 },
+  '2026-10-09': { laborCost: 1180, costPerLb: 32.78, topsCostPerLb: 32.63, smallsCostPerLb: 33.16 },
 };
 const EOD_COSTS = {
-  '2026-10-16': { laborCost: 4588.5, costPerLb: 21.84, topsCostPerLb: 27.51, smallsCostPerLb: 14.27 },
-  '2026-10-15': { laborCost: 5322.66, costPerLb: 22.51, topsCostPerLb: 30.94, smallsCostPerLb: 12.81 },
+  '2026-10-16': { laborCost: 3500, costPerLb: 16.66, topsCostPerLb: 20.5, smallsCostPerLb: 11.53 },
+  '2026-10-15': { laborCost: 4060, costPerLb: 17.17, topsCostPerLb: 23.65, smallsCostPerLb: 9.71 },
 };
 const withCosts = (dashboard, costs) => ({ ...dashboard, daily: dashboard.daily.map((day) => ({ ...day, ...costs[day.date] })) });
 

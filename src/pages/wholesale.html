@@ -219,10 +219,11 @@
           <div class="field">
             <label for="f-nickname" data-i18n="nickname">Nickname</label>
             <!--
-              The nickname rides on unauthenticated reads: getOrders returns it,
-              and the queue widget and hourly-entry banner put it on screens the
-              whole floor sees. A first name or a shortened company is fine —
-              a full name is a buyer identity, which §9 keeps off open surfaces.
+              getOrders needs the password now, and without it the open queue brief
+              (getQueueBrief) drops the nickname. The queue widget and hourly-entry
+              banner put it on screens the whole floor sees. A first name or a
+              shortened company is fine — a full name is a buyer identity, which §9
+              keeps off open surfaces.
             -->
             <input id="f-nickname" type="text" placeholder="Bill's tops"
                    aria-describedby="f-nickname-hint">
@@ -328,7 +329,7 @@
     "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7",
     "../js/shared/theme.js": "../js/shared/theme.js?h=b4816114",
     "../js/shared/toast.js": "../js/shared/toast.js?h=2ff39553",
-    "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=95d9ae9d",
+    "../js/wholesale/auth.js": "../js/wholesale/auth.js?h=b0984cf4",
     "../js/wholesale/editor.js": "../js/wholesale/editor.js?h=d7906733",
     "../js/wholesale/index.js": "../js/wholesale/index.js?h=28d61e15",
     "../js/wholesale/queue.js": "../js/wholesale/queue.js?h=df26d864",

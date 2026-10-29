@@ -1,9 +1,10 @@
 /**
  * Supply card on the old kanban template (kanban.html cardHtml / getPrintCSS):
- * green or red body, gold ink on red, double gold border, uppercase name header
+ * red body, gold ink, double gold border, uppercase name header
  * with a rule, location line, white photo box, uppercase fields, gold price
  * pill, round logo bottom-left. Koa 2026-10-28: every Tag & Desk card print
- * should look like the old kanban card.
+ * should look like the old kanban card. Koa 2026-10-29: one card per item, red
+ * only — green cards are retired.
  *
  * One face only, so the QR sits on the front (the old 6×4 put it on a back
  * page) next to the scan trigger the old card never had.
@@ -25,7 +26,7 @@ export const locLine = (crumbtrail, zone, slot) => {
  * One card. `trigger` and `foot` are trusted HTML the caller builds; every
  * other value is escaped here. `fields` is [[label, value], …] (three on both sizes).
  */
-export function classicCard({ size = 'c6', colour = 'green', item, loc, picture, fields = [], price, trigger, qr, logo, foot = '' }) {
+export function classicCard({ size = 'c6', colour = 'red', item, loc, picture, fields = [], price, trigger, qr, logo, foot = '' }) {
   const long = String(item || '').length > (size === 'full' ? 34 : 26) ? ' long' : '';
   const photo = picture ? `<div class="kc-img"><img src="${esc(picture)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='📷'"></div>` : '<div class="kc-img">📷</div>';
   const flds = fields.map(([l, v]) => `<div class="kc-field"><small>${esc(l)}</small><span>${esc(v || '—')}</span></div>`).join('');

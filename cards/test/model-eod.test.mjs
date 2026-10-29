@@ -6,10 +6,10 @@ import { eodModel, hourTarget } from '../src/model.js';
 const fixture = (name) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 
 // Cost figures for the two days. The fixtures were captured without the password;
-// these were read from the live dashboard with the ops password on 2026-10-19.
+// these are synthetic ($20 per operator hour), not the real figures.
 const COSTS = {
-  '2026-10-16': { laborCost: 4588.5, costPerLb: 21.84, topsCostPerLb: 27.51, smallsCostPerLb: 14.27 },
-  '2026-10-15': { laborCost: 5322.66, costPerLb: 22.51, topsCostPerLb: 30.94, smallsCostPerLb: 12.81 },
+  '2026-10-16': { laborCost: 3500, costPerLb: 16.66, topsCostPerLb: 20.5, smallsCostPerLb: 11.53 },
+  '2026-10-15': { laborCost: 4060, costPerLb: 17.17, topsCostPerLb: 23.65, smallsCostPerLb: 9.71 },
 };
 const withCosts = (dashboard) => ({ ...dashboard, daily: dashboard.daily.map((day) => ({ ...day, ...COSTS[day.date] })) });
 
@@ -38,7 +38,7 @@ test('end-of-day hero tiles', () => {
   // todayPercentage 112.53 rounds to 113.
   assert.deepEqual(m.tiles[0], { label: 'Tops', value: '120', unit: 'lb', chips: [{ kind: 'good', text: '▲ 113% of target' }] });
   assert.deepEqual(m.tiles[1], { label: 'Rate', value: '1.62', unit: 'lb/hr', chips: [{ kind: 'good', text: '▲ +0.34 vs Thu' }] });
-  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$27.51', unit: '', chips: [{ kind: 'good', text: '▼ −$3.43 vs Thu' }] });
+  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$20.50', unit: '', chips: [{ kind: 'good', text: '▼ −$3.15 vs Thu' }] });
 });
 
 test('end-of-day percent chip turns ▼ and bands below 100', () => {
@@ -71,9 +71,9 @@ test('end-of-day chart sorts rows that arrive out of order', () => {
 
 test('end-of-day mini row', () => {
   assert.deepEqual(m.minis, [
-    { label: 'Smalls', value: '90', unit: 'lb', sub: '$14.27/lb' },
+    { label: 'Smalls', value: '90', unit: 'lb', sub: '$11.53/lb' },
     { label: 'Supersacks', value: '20', unit: 'opened', sub: '700 lb raw · 6.0 tops/sack' },
-    { label: 'Labor', value: '$4,589', unit: '', sub: 'all-in $38.21/lb' },
+    { label: 'Labor', value: '$3,500', unit: '', sub: 'all-in $29.14/lb' },
   ]);
 });
 
@@ -146,7 +146,7 @@ test('end-of-day locked costs: money becomes 🔒, nothing else changes', () => 
 
 test('end-of-day cost chip needs a prior day with costs', () => {
   const l = eodModel({ ...args, priorDay: fixture('dashboard-2026-10-15.locked.json') });
-  assert.deepEqual(l.tiles[2], { label: '$ per lb tops', value: '$27.51', unit: '', chips: [] });
+  assert.deepEqual(l.tiles[2], { label: '$ per lb tops', value: '$20.50', unit: '', chips: [] });
   const none = eodModel({ ...args, priorDay: null });
   assert.deepEqual(none.tiles[1].chips, []);
   assert.deepEqual(none.tiles[2].chips, []);

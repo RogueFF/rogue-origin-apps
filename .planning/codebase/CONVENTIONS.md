@@ -18,7 +18,7 @@
 
 **Variables:**
 - `camelCase` for local variables and constants
-- `UPPER_SNAKE_CASE` for configuration constants (e.g., `BASE_WAGE_RATE = 23.00`, `TIMEZONE = 'America/Los_Angeles'`)
+- `UPPER_SNAKE_CASE` for configuration constants (e.g., `MAX_RETRIES = 3`, `TIMEZONE = 'America/Los_Angeles'`)
 - Prefix state getter/setters: `getData()`, `setData()`, `isAppsScript()`, `setShowSkeletonsCallback()`
 - Use descriptive names for objects: `state`, `result`, `error`, `options`, `meta`
 
