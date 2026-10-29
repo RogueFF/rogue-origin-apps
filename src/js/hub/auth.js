@@ -11,7 +11,16 @@ export const hasKey = () => Boolean(localStorage.getItem(KEY));
 /** Fired on document whenever the device unlocks or forgets the password. */
 const announce = () => document.dispatchEvent(new CustomEvent('ro:authchange', { detail: { unlocked: hasKey() } }));
 
-export const forget = () => { localStorage.removeItem(KEY); announce(); };
+/**
+ * Forget the password. The Hub sits behind the page gate (shared/page-gate.js),
+ * which owns forgetting there: it clears the key, fires ro:authchange and
+ * re-gates the page. Without the gate, clear and announce here as before.
+ */
+export const forget = () => {
+  if (window.ROGate) { window.ROGate.lock(); return; }
+  localStorage.removeItem(KEY);
+  announce();
+};
 
 let pending = null;
 
