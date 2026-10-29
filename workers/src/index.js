@@ -75,13 +75,11 @@ export default {
 
     // Daily 6 AM PT: complaints sync + weather pull
     if (isDailyCron) {
-      const { handleComplaintsD1 } = await import('./handlers/complaints-d1.js');
+      // Called directly, not through handleComplaintsD1: every complaints
+      // action but `test` needs the password now, and the cron holds none.
+      const { syncFromSheets } = await import('./handlers/complaints-d1.js');
       try {
-        const request = new Request('https://internal/api/complaints?action=sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        const result = await handleComplaintsD1(request, env, ctx);
+        const result = await syncFromSheets(env.DB, env);
         const data = await result.json();
         console.log(`[Cron] Complaints sync: imported=${data.imported}, skipped=${data.skipped}`);
       } catch (e) {

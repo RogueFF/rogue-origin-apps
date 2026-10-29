@@ -11,10 +11,12 @@ import { requireAuth } from '../lib/auth.js';
 
 const SHEET_ID = 'REDACTED-COMPLAINTS-SHEET-ID';
 
-// Write actions that require authentication
-const WRITE_ACTIONS = new Set([
-  'save', 'delete',
-]);
+// DEFAULT-DENY. The only action answered without the password. Every other
+// action — the reads (customer complaints are confidential), the writes, and
+// `sync`, which INSERTs rows from Sheets — needs it, as does any action added
+// later until someone deliberately lists it here. The daily cron calls
+// syncFromSheets directly and never comes through this handler.
+const PUBLIC_ACTIONS = new Set(['test']);
 
 // Valid complaint types and statuses
 const COMPLAINT_TYPES = ['Quality', 'Shipping', 'Service', 'Billing', 'Other'];
@@ -26,8 +28,7 @@ export async function handleComplaintsD1(request, env, ctx) {
   const params = getQueryParams(request);
   const db = env.DB;
 
-  // Require auth for write actions
-  if (WRITE_ACTIONS.has(action)) {
+  if (!PUBLIC_ACTIONS.has(action)) {
     requireAuth(request, body, env, `complaints-${action}`);
   }
 
@@ -338,7 +339,12 @@ function parseCSV(text) {
   return rows;
 }
 
-async function syncFromSheets(db, env) {
+/**
+ * Pull the complaints sheet into D1. Exported for the daily cron in index.js,
+ * which calls it directly: it is a trusted internal caller and holds no
+ * password, so it must not go through the handler's auth gate.
+ */
+export async function syncFromSheets(db, env) {
   // Check if complaint_type column exists, add it if not
   const tableInfo = await query(db, "PRAGMA table_info(complaints)", []);
   const hasComplaintType = tableInfo.some(col => col.name === 'complaint_type');

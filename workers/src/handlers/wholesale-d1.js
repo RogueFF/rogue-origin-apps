@@ -22,13 +22,18 @@
  * - POST ?action=importOrder   - create an order from Shopify SKUs (bot entry point)
  * - GET  ?action=test          - health check
  *
+ * Auth: every action needs the shared password except test, getCultivars and
+ * getRates (PUBLIC_ACTIONS). getQueueBrief answers anyone, buyer names removed
+ * unless the password came with the request (BUYER_LOCKED_ACTIONS).
+ *
  * Design: docs/plans/2026-08-19-order-blocks-design.md
  */
 
 import { query, queryOne, execute, transaction } from '../lib/db.js';
 import { successResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { requireAuth } from '../lib/auth.js';
+import { requireAuth, isAuthenticated } from '../lib/auth.js';
+import { lockBuyers } from '../lib/buyer-lock.js';
 import { toLbs, fromLbs, pickRate, orderBlocks } from '../lib/wholesale.js';
 import { scheduleQueue } from '../lib/queue-schedule.js';
 import { allocate, moment, impliedStatus } from '../lib/burndown.js';
@@ -40,7 +45,21 @@ import { deriveEvents } from '../lib/wholesale-notify.js';
 import { buildQueueBrief } from '../lib/queue-brief.js';
 import { buildRates, effectiveRate, sacksFor, preferSeason } from '../lib/sack-rates.js';
 
-const WRITE_ACTIONS = new Set(['saveOrder', 'deleteOrder', 'saveQueueOrder', 'setAccrualStart', 'importOrder', 'setNotify', 'setLineCredit']);
+/**
+ * DEFAULT-DENY. These are the only actions answered without the password:
+ * none of them names a buyer or carries order terms, and the FERN bots curl
+ * them. Every other action — reads, writes and any added later — goes through
+ * requireAuth before the switch, so a new read is locked until someone
+ * deliberately lists it here.
+ */
+const PUBLIC_ACTIONS = new Set(['test', 'getCultivars', 'getRates']);
+
+/**
+ * Answered to anyone, but with buyer identity stripped unless the password
+ * came with the request (lib/buyer-lock.js). Never a 401: the open Floor
+ * Manager page reads the queue brief with no password.
+ */
+const BUYER_LOCKED_ACTIONS = new Set(['getQueueBrief']);
 
 const ORDER_STATUSES = new Set(['in_queue', 'in_production', 'finished']);
 const FORMS = new Set(['tops', 'smalls']);
@@ -66,7 +85,7 @@ export async function handleWholesaleD1(request, env) {
   const params = getQueryParams(request);
   const db = env.DB;
 
-  if (WRITE_ACTIONS.has(action)) {
+  if (!PUBLIC_ACTIONS.has(action) && !BUYER_LOCKED_ACTIONS.has(action)) {
     requireAuth(request, body, env, `wholesale-${action}`);
   }
 
@@ -77,7 +96,8 @@ export async function handleWholesaleD1(request, env) {
     case 'deleteOrder': return deleteOrder(db, body);
     case 'getRates': return getRates(db);
     case 'getQueue': return getQueue(db, params);
-    case 'getQueueBrief': return getQueueBrief(db, params);
+    case 'getQueueBrief':
+      return getQueueBrief(db, params, isAuthenticated(request, body, env));
     case 'getCoverage': return getCoverage(db);
     case 'getNotify': return getNotify(db);
     case 'setNotify': return setNotify(db, body);
@@ -867,8 +887,13 @@ async function getQueue(db, params) {
  * already hardcodes 2025 in `loadCultivars()`, which is exactly the thing that
  * will need finding at the crop-year rollover. Two of them would be worse.
  * Newest spellings sort first so the current year's wins the top slot.
+ *
+ * `authenticated` false (no password, or the wrong one) returns the same shape
+ * with buyer keys removed and `ordersLocked: true` — see lib/buyer-lock.js.
+ * The strip happens on the plain object, before the Response is built, so the
+ * no-store caching headers come from successResponse as usual.
  */
-async function getQueueBrief(db, params) {
+async function getQueueBrief(db, params, authenticated = false) {
   const q = await computeQueue(db, params.crew);
   const nameOf = new Map(q.names.map(n => [n.id, n.name]));
 
@@ -890,7 +915,8 @@ async function getQueueBrief(db, params) {
     aliases,
   });
 
-  return successResponse({ success: true, ...brief });
+  const payload = { success: true, ...brief };
+  return successResponse(authenticated ? payload : lockBuyers(payload));
 }
 
 /**

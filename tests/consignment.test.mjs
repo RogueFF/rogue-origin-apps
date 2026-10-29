@@ -2,15 +2,15 @@
  * Comprehensive test suite for consignment-d1.js handler
  * Framework: node:test + node:assert/strict
  *
- * Coverage: 36 tests across 9 test suites
+ * Coverage: 38 tests across 9 test suites
  * - Validation (9 tests): Required fields, type constraints, positive values
  * - Inventory Calculations (6 tests): Balance, on-hand calculation, enrichment
  * - Sale Availability (3 tests): Inventory checking, overflow prevention
  * - Batch Operations (2 tests): Multi-line intake validation, batch_id assignment
  * - Data Transformations (3 tests): Activity feed, partner enrichment, pagination
- * - Delete Operations (5 tests): Cascade deletes, validation, unknown actions
+ * - Delete Operations (6 tests): Cascade deletes, validation, unknown actions (authed + unauthed)
  * - Edge Cases (2 tests): Negative balance clamping, empty partners
- * - Authentication (3 tests): Write auth required, read auth optional, invalid password
+ * - Authentication (4 tests): Write auth required, read auth required, Bearer read, invalid password
  * - Strain Operations (3 tests): List strains, validation, trimming
  */
 
@@ -31,11 +31,15 @@ function makeRequest(action, { method = 'GET', body = {}, params = {}, auth = tr
 
   const headers = {
     'content-type': method === 'POST' ? 'text/plain' : null,
+    authorization: null,
   };
 
-  // Add auth for write actions
+  // Every consignment action needs the password: POSTs carry it in the body,
+  // GETs in the Authorization header, the way the page sends each.
   if (auth && method === 'POST') {
     body.password = 'test-password';
+  } else if (auth) {
+    headers.authorization = 'Bearer test-password';
   }
 
   return {
@@ -716,12 +720,21 @@ describe('Consignment API - Delete Operations', () => {
     );
   });
 
-  test('Unknown action throws NOT_FOUND', async () => {
+  test('Unknown action throws NOT_FOUND when authenticated', async () => {
     const request = makeRequest('unknownConsignmentAction');
 
     await assert.rejects(
       async () => handleConsignmentD1(request, env, {}),
-      { message: /unknown consignment action/i }
+      { code: 'NOT_FOUND', message: /unknown consignment action/i }
+    );
+  });
+
+  test('Unknown action throws UNAUTHORIZED when not authenticated', async () => {
+    const request = makeRequest('unknownConsignmentAction', { auth: false });
+
+    await assert.rejects(
+      async () => handleConsignmentD1(request, env, {}),
+      { code: 'UNAUTHORIZED' }
     );
   });
 });
@@ -798,14 +811,23 @@ describe('Consignment API - Authentication', () => {
     );
   });
 
-  test('Read actions do not require auth', async () => {
+  test('Read actions require auth', async () => {
     db.addRows('SELECT * FROM consignment_partners ORDER BY name', []);
-    db.addRows('on_hand', []);
-    db.addRows('total_owed', []);
-    db.addRows('total', []);
-    db.addRows('last_date', []);
 
     const request = makeRequest('getConsignmentPartners', { auth: false });
+
+    await assert.rejects(
+      async () => handleConsignmentD1(request, env, {}),
+      { code: 'UNAUTHORIZED', message: /password required/i }
+    );
+    // Rejected before the switch: nothing was read.
+    assert.equal(db.getQueries().length, 0);
+  });
+
+  test('Read actions succeed with a Bearer password', async () => {
+    db.addRows('SELECT * FROM consignment_partners ORDER BY name', []);
+
+    const request = makeRequest('getConsignmentPartners');
     const response = await handleConsignmentD1(request, env, {});
     const data = await parseResponse(response);
 

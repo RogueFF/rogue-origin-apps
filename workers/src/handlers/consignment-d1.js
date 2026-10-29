@@ -8,16 +8,11 @@ import { successResponse, parseBody, getAction, getQueryParams } from '../lib/re
 import { createError } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 
-// Write actions that require authentication
-const CONSIGNMENT_WRITE_ACTIONS = new Set([
-  'saveConsignmentPartner', 'saveConsignmentStrain',
-  'saveConsignmentIntake', 'saveConsignmentBatchIntake',
-  'saveConsignmentSale', 'saveConsignmentInventoryCount',
-  'saveConsignmentPayment',
-  'deleteConsignmentPartner', 'deleteConsignmentIntake',
-  'deleteConsignmentSale', 'deleteConsignmentPayment',
-  'syncConsignmentFromPool',
-]);
+// DEFAULT-DENY. No consignment action is public: partner names, balances,
+// intakes and payments are all confidential, and there is no health-check
+// action here. Every action — reads, writes and any added later — needs the
+// password before the switch runs. Add an action here only deliberately.
+const PUBLIC_ACTIONS = new Set([]);
 
 export async function handleConsignmentD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
@@ -25,8 +20,7 @@ export async function handleConsignmentD1(request, env, ctx) {
   const params = getQueryParams(request);
   const db = env.DB;
 
-  // Require auth for write actions
-  if (CONSIGNMENT_WRITE_ACTIONS.has(action)) {
+  if (!PUBLIC_ACTIONS.has(action)) {
     requireAuth(request, body, env, `consignment-${action}`);
   }
 
