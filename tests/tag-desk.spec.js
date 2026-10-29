@@ -247,6 +247,8 @@ test('print: supplier chip + search narrow the list; a ticked group prints toget
   expect(await page.textContent('#pkPrint')).toMatch(/Print 4 · Card 6×4/);
   const dlg = page.waitForEvent('dialog'); await page.click('#pkPrint'); const d = await dlg; await d.accept(); await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.__printed)).toBe(4);
+  // two 6×4 cards to a letter page, each in its own dotted cut box
+  expect(await page.$$eval('#printArea .kc-page', pg => pg.map(p => p.querySelectorAll(':scope > .kc-cut > .kc').length))).toEqual([2, 2]);
   expect(await page.$('#pkPrint')).toBeNull(); // printed cards leave the selection
   expect(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ro-tagdesk-v1')).printed).length)).toBe(4);
 });
