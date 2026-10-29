@@ -333,6 +333,15 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .pq li .np.done{background:var(--q)}
 .pq .scroll{max-height:560px;overflow:auto}
 .pq .grp.reprint{background:var(--d-bg)}
+.pq .pqt{padding:10px 12px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.pq .pqt input[type=search]{width:100%;padding:9px 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:15px}
+.pq .pqv{display:flex;flex-wrap:wrap;gap:6px}
+.pq .pqv .chip .n{font-family:var(--font-mono);font-size:12px;opacity:.75;margin-left:2px}
+.pq .pk{width:18px;height:18px;flex:none;margin:0;accent-color:var(--q);cursor:pointer}
+.pq li[data-picked="true"]{background:var(--q-bg)}
+.pq .pqempty{padding:16px;margin:0}
+.pq .pqf{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--surface);font-size:14px;flex-wrap:wrap}
+.pq .pqf>button:last-child{margin-left:auto}
 .pv{display:grid;gap:14px}
 .pv-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .stage{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;justify-content:center;overflow:auto}

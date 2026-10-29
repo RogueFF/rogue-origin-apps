@@ -226,6 +226,25 @@ test('print: cancelling the dialog keeps the card on the to-print list; Yes mark
   expect(await printed()).toBe(1);
 });
 
+test('print: supplier chip + search narrow the list; a ticked group prints together in one go', async ({ page }) => {
+  await mockApi(page);
+  await page.goto(PAGE); await page.waitForSelector('.vt');
+  await page.evaluate(() => { window.print = () => { window.__printed = document.querySelectorAll('#printArea .kc').length; window.dispatchEvent(new Event('afterprint')); }; });
+  await page.click('.tabs [data-view="print"]'); await page.waitForSelector('#pqSearch');
+  await page.click('[data-pv="Uline"]');
+  expect(await page.$$eval('.pq .grp', g => g.map(e => e.innerText.split('\n')[0].trim()))).toEqual(['Uline']);
+  expect(await page.$$eval('.pq li[data-p]', l => l.length)).toBe(20);
+  await page.fill('#pqSearch', 'glove');
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('pqSearch'); // typing keeps focus through the re-render
+  expect(await page.$$eval('.pq li[data-p]', l => l.length)).toBe(4);
+  await page.click('[data-pickg="Uline"]');
+  expect(await page.textContent('#pkPrint')).toMatch(/Print 4 · Stack 6×4/);
+  const dlg = page.waitForEvent('dialog'); await page.click('#pkPrint'); const d = await dlg; await d.accept(); await page.waitForTimeout(100);
+  expect(await page.evaluate(() => window.__printed)).toBe(4);
+  expect(await page.$('#pkPrint')).toBeNull(); // printed cards leave the selection
+  expect(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('ro-tagdesk-v1')).printed).length)).toBe(4);
+});
+
 test('tag: a Grove card goes to Damon; an unknown id says so', async ({ page }) => {
   const api = await mockApi(page);
   const grove = api.cards.find(c => c.supplier === 'Grove');
