@@ -1294,6 +1294,9 @@ function handleFlagParam() {
   var raw = params.get('flag');
   if (!raw) return;
   flagHandled = true;
+  // 2026-10-29: cards from this page are retired. A scan goes to the Tag, which still
+  // logs the reorder and tells the worker to swap in the new red card.
+  if (/^\d+$/.test(raw)) { window.location.replace('tag-desk.html?flag=' + raw); return; }
   // Strip ?flag from the URL so a refresh doesn't re-queue the item.
   params.delete('flag');
   var qs = params.toString();
@@ -1897,6 +1900,7 @@ function updatePreviewSizeInfo() {
 }
 
 function printOne() {
+  return goDeskPrint();
   if (!previewCard) return;
   var size = document.getElementById('previewPrintSize').value;
   closePreview();
@@ -2155,7 +2159,10 @@ function printOneCard(card, size) {
   win.document.close();
 }
 
+// 2026-10-29: cards print from Tag & Desk only (one red card per item); this page no longer prints.
+function goDeskPrint() { closePrint(); if (typeof closePreview === 'function') closePreview(); toast('Cards print from Tag & Desk now — one red card per item'); setTimeout(function() { window.location.href = 'tag-desk.html'; }, 900); }
 function doPrint() {
+  return goDeskPrint();
   var selectedIds = getSelectedCardIds();
   if (selectedIds.length === 0) { toast('No cards selected', 'err'); return; }
   
