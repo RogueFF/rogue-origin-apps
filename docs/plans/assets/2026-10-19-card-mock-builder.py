@@ -175,13 +175,13 @@ def eod():
     <div class="tiles">
       {tile("Tops", "120", "lb", [("good", "▲ 112% of target")])}
       {tile("Rate", "1.62", "lb/hr", [("good", "▲ +0.34 vs Thu")])}
-      {tile("$ per lb tops", "$27.51", "", [("good", "▼ −$3.43 vs Thu")])}
+      {tile("$ per lb tops", "$20.50", "", [("good", "▼ −$3.15 vs Thu")])}
     </div>
     {chart("Tops by hour", "lb · rate under the hour", cols, 48, ppl)}
     <div class="row2">
-      {mini("Smalls", "90", "lb", "$14.27/lb")}
+      {mini("Smalls", "90", "lb", "$11.53/lb")}
       {mini("Supersacks", "20", "opened", "700 lb raw · 6.0 tops/sack")}
-      {mini("Labor", "$4,589", "", "all-in $38.21/lb")}
+      {mini("Labor", "$3,500", "", "all-in $29.14/lb")}
     </div>
     <div class="watch">
       {flag("bad", "Act", "2 PM: bags stored below are very wet, spoilage risk, need a plan")}
@@ -211,13 +211,13 @@ def weekly():
     <div class="tiles">
       {tile("Tops", "497", "lb", [("good", "▲ +261% vs W41"), ("warn", f"{wk_pct:.0f}% target")])}
       {tile("Rate", "1.34", "lb/hr", [("good", "▲ +0.14 vs W41")])}
-      {tile("$ per lb tops", "$30.28", "", [("good", "▼ −$4.84 vs W41")])}
+      {tile("$ per lb tops", "$22.78", "", [("good", "▼ −$3.55 vs W41")])}
     </div>
     {chart("Tops by day", "lb · rate under the day", cols, 72, ppl)}
     <div class="row2">
-      {mini("Smalls", "429", "lb", "$12.76/lb")}
+      {mini("Smalls", "429", "lb", "$10.10/lb")}
       {mini("Supersacks", "88", "opened", "3,080 lb raw · 5.6 tops/sack")}
-      {mini("Labor", "$20,530", "", "all-in $41.29/lb")}
+      {mini("Labor", "$15,660", "", "all-in $31.50/lb")}
     </div>
     <div class="watch">
       {flag("bad", "Act", "Fri: wet bags stored below, spoilage risk")}

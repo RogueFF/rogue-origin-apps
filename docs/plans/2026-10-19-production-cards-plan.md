@@ -22,7 +22,7 @@
 - Create: `cards/package.json`
 - Create: `cards/wrangler.toml`
 - Exists: `cards/fonts/{Outfit-Medium,Outfit-SemiBold,JetBrainsMono-Regular,DMSerifDisplay-Italic}.ttf`
-- Exists: `cards/test/fixtures/*.json` (captured 2026-10-19 from the live API; `dashboard-2026-W42.unlocked.json` has cost keys, the `.locked.json` files do not)
+- Exists: `cards/test/fixtures/*.json` (captured 2026-10-19 from the live API; `dashboard-2026-W42.unlocked.json` has cost keys, synthetic since 2026-10-29, the `.locked.json` files do not)
 - Modify: `.gitignore` → add `cards/node_modules/` and `cards/.wrangler/`
 
 **Step 1: write `cards/package.json`**
@@ -188,7 +188,7 @@ test('translate keeps unknown words and maps the floor vocabulary', () => {
 test('costsLocked is true when the dashboard day has no topsCostPerLb', () => { ... locked fixture → true; unlocked → false });
 test('delta chip: direction, sign, good/bad polarity', () => {
   assert.deepEqual(deltaChip(1.34, 1.20, { fmt: v => v.toFixed(2), upIsGood: true, vs: 'W41' }), { kind: 'good', text: '▲ +0.14 vs W41' });
-  assert.deepEqual(deltaChip(30.28, 35.12, { fmt: v => '$' + v.toFixed(2), upIsGood: false, vs: 'W41' }), { kind: 'good', text: '▼ −$4.84 vs W41' });
+  assert.deepEqual(deltaChip(22.78, 26.33, { fmt: v => '$' + v.toFixed(2), upIsGood: false, vs: 'W41' }), { kind: 'good', text: '▼ −$3.55 vs W41' });
   assert.deepEqual(deltaChip(100, 100, { fmt: String, upIsGood: true, vs: 'Thu' }), { kind: 'neutral', text: '= vs Thu' });
   assert.equal(deltaChip(5, null, {...}), null);
 });
@@ -221,7 +221,7 @@ test('header', () => {
 test('hero tiles', () => {
   assert.deepEqual(m.tiles[0], { label: 'Tops', value: '497', unit: 'lb', chips: [{ kind: 'good', text: '▲ +261% vs W41' }, { kind: 'warn', text: '98% target' }] });
   assert.equal(m.tiles[1].value, '1.34');
-  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$30.28', unit: '', chips: [{ kind: 'good', text: '▼ −$4.84 vs W41' }] });
+  assert.deepEqual(m.tiles[2], { label: '$ per lb tops', value: '$22.78', unit: '', chips: [{ kind: 'good', text: '▼ −$3.55 vs W41' }] });
 });
 test('chart has five weekday columns, Monday off, ticks from the scoreboard targets', () => {
   assert.equal(m.chart.cols.length, 5);
@@ -231,9 +231,9 @@ test('chart has five weekday columns, Monday off, ticks from the scoreboard targ
   assert.equal(m.chart.cols[4].rate, '1.62');
 });
 test('mini row', () => {
-  assert.deepEqual(m.minis[0], { label: 'Smalls', value: '429', unit: 'lb', sub: '$12.76/lb' });
+  assert.deepEqual(m.minis[0], { label: 'Smalls', value: '429', unit: 'lb', sub: '$10.10/lb' });
   assert.deepEqual(m.minis[1], { label: 'Supersacks', value: '88', unit: 'opened', sub: '3,080 lb raw · 5.6 tops/sack' });
-  assert.deepEqual(m.minis[2], { label: 'Labor', value: '$20,530', unit: '', sub: 'all-in $41.29/lb' });
+  assert.deepEqual(m.minis[2], { label: 'Labor', value: '$15,660', unit: '', sub: 'all-in $31.50/lb' });
 });
 test('flags: at most three, Act first', () => {
   assert.equal(m.flags[0].kind, 'bad');
@@ -251,7 +251,7 @@ test('foot', () => assert.deepEqual(m.foot, { left: 'cards/weekly · dashboard a
 
 Rules the implementation must follow (they are the approved mock):
 - Weighted averages: rate = Σ tops ÷ Σ trimmerHours; $/lb tops = Σ(topsCostPerLb × tops) ÷ Σ tops; smalls likewise; all-in = Σ laborCost ÷ Σ tops.
-- Prior week deltas use the same formulas on `prior.daily`. Tops delta as a percentage (`+261%`), rate as `+0.14`, cost as `−$4.84`; `upIsGood` false for cost.
+- Prior week deltas use the same formulas on `prior.daily`. Tops delta as a percentage (`+261%`), rate as `+0.14`, cost as `−$3.55`; `upIsGood` false for cost.
 - `% target` = Σ tops ÷ Σ scoreboard `todayTarget` of the worked days; chip kind: ≥100 good, 90–99 warn, else bad.
 - Cultivar short name: dominant `cultivar` across days; strip a leading `YYYY - `, strip ` / Sungrown`; append `'YY` from the leading year; more than one cultivar → main one + ` +1` per extra.
 - Days: Monday..Friday of the week; a weekday missing from `daily` (or `totalTops` 0) is `kind: 'off'`.
@@ -267,13 +267,13 @@ Rules the implementation must follow (they are the approved mock):
 
 **Files:**
 - Modify: `cards/src/model.js` → export `eodModel({ date, dashboard, priorDay, scoreboard, sacks, generatedAt })`
-- Test: `cards/test/model-eod.test.mjs` (fixtures: `dashboard-2026-10-16.locked.json` + an unlocked copy built in the test by adding the known cost keys `laborCost 4588.5, costPerLb 21.84, topsCostPerLb 27.51, smallsCostPerLb 14.27`; prior `dashboard-2026-10-15.locked.json` with `topsCostPerLb 30.94` added; `scoreboard-2026-10-16.json`; `supersack-2026-10-16.json`)
+- Test: `cards/test/model-eod.test.mjs` (fixtures: `dashboard-2026-10-16.locked.json` + an unlocked copy built in the test by adding the known cost keys `laborCost 3500, costPerLb 16.66, topsCostPerLb 20.50, smallsCostPerLb 11.53`; prior `dashboard-2026-10-15.locked.json` with `topsCostPerLb 23.65` added; `scoreboard-2026-10-16.json`; `supersack-2026-10-16.json`)
 
 **Tests (same shape as A5):**
 - title `Friday`, sub `Oct 16 · Sour Lifter '26 · 8.5 h logged` (hours = scoreboard `effectiveHours` to 1 decimal), pill `Line crew peak 18 · 8 T · 9 B` (peak = `totalCrew`; T/B = the max trimmers / max buckers across hourlyRates).
-- tiles: Tops `120` lb chip `▲ 112% of target` (todayPercentage, kind by the same bands); Rate `1.62` chip `▲ +0.34 vs Thu`; `$ per lb tops` `$27.51` chip `▼ −$3.43 vs Thu`.
+- tiles: Tops `120` lb chip `▲ 112% of target` (todayPercentage, kind by the same bands); Rate `1.62` chip `▲ +0.34 vs Thu`; `$ per lb tops` `$20.50` chip `▼ −$3.15 vs Thu`.
 - chart: one column per `hourlyRates` row sorted by slot start; `lbs`, `rate` 2 decimals, `target = hourTarget(row)` (effectiveTrimmers × row.target × multiplier, the scoreboard method), `label = slotLabel`.
-- minis: Smalls `90` lb `$14.27/lb`; Supersacks `20` opened `700 lb raw · 6.0 tops/sack`; Labor `$4,589` `all-in $38.21/lb`.
+- minis: Smalls `90` lb `$11.53/lb`; Supersacks `20` opened `700 lb raw · 6.0 tops/sack`; Labor `$3,500` `all-in $29.14/lb`.
 - flags: Act from the day's bad note with the slot start prefix ("2 PM: …"), Good = `Best hour 3–4 at 2.21` or, when the day's rate beats the prior day, `Best rate since <prior day>` — keep it simple: Good = best hour line; Watch = warn note or, if none, a crew drop ("Crew fell 8 → 5 trimmers after 2 PM") when the last hour's trimmers are < 70% of the peak.
 - no rows (`hourlyRates` empty) → the function returns `null` (the route turns that into 204).
 - locked variant → 🔒 as in A5.
