@@ -159,7 +159,7 @@ export function buildModel({ cards, cart, orders, requests, today, levelsChanged
       const tagScan = ic.addedBy && /^tag/.test(ic.addedBy);
       c.scanCount = tagScan ? 1 : Math.max(1, Math.round(ic.qty / (c.suggested || 1)));
       c.bumps = tagScan ? Math.max(0, ic.qty - c.suggested) : 0;
-      c.redCard = /RED/i.test(ic.note || ''); c.urgent = /URGENT/i.test(ic.note || '');
+      c.redCard = /RED/i.test(ic.note || ''); c.urgent = /URGENT/i.test(ic.note || ''); c.oldCard = /OLD CARD/i.test(ic.note || '');
     }
     c.openRequest = openReq[c.id] || null; c.lastRequest = lastReq[c.id] || null;
     out.push(c);

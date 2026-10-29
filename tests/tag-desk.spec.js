@@ -106,8 +106,10 @@ test('desk loads the live shape: tiles, three lanes, counts, no console errors',
   expect(await page.$$eval('.pc', e => e.length)).toBe(93);
   await page.click('.tabs [data-view="print"]');
   expect(await page.$('#pstage .kc .kc-qr svg')).not.toBeNull();
-  await page.click('.pv-head [data-fmt="red"]');
-  expect(await page.$('#pstage .kc.red')).not.toBeNull();
+  // One red card per item (2026-10-29): no green, no separate red format; the QR is the v=3 Tag URL.
+  expect(await page.$('#pstage .kc.c6.red')).not.toBeNull();
+  expect(await page.$$eval('.pv-head [data-fmt]', b => b.map(x => x.dataset.fmt))).toEqual(['card', 'sheet']);
+  expect(await page.$('.kc.green')).toBeNull();
   expect(errs.filter(e => !/favicon|manifest|ro-logo|icon-apple/.test(e))).toEqual([]);
 });
 
@@ -133,24 +135,27 @@ test('desk writes: quantity, add, remove, mark ordered → receipt, receive per 
   expect(Object.keys(mem.received).length).toBe(rows);
 });
 
-test('tag: a queued card re-scan is idempotent; a fresh card queues once; the red card raises the desk alarm', async ({ page }) => {
+test('tag: a queued card re-scan is idempotent; a fresh card queues once; an old red card raises the desk alarm', async ({ page }) => {
   const api = await mockApi(page);
   const queued = api.cart.Uline[0].cardId;
-  await page.goto(`${PAGE}?flag=${queued}`); await page.waitForSelector('.band');
+  await page.goto(`${PAGE}?flag=${queued}&v=3`); await page.waitForSelector('.band');
   expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/Already on the list/);
+  expect(await page.$('.legacy')).toBeNull(); // a new red card is not an old card
   expect(api.calls.filter(c => c.action === 'addToCart').length).toBe(0);
   expect(await page.evaluate(() => document.body.classList.contains('tagonly'))).toBe(true);
   expect(await page.$('.tag-side')).toBeNull();
   const fresh = api.cards.find(c => c.supplier === 'Uline' && !api.cart.Uline.some(r => r.cardId === c.id));
-  await page.goto(`${PAGE}?flag=${fresh.id}`); await page.waitForSelector('.band');
+  await page.goto(`${PAGE}?flag=${fresh.id}&v=3`); await page.waitForSelector('.band');
   expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/Queued/);
-  const add = api.calls.filter(c => c.action === 'addToCart'); expect(add.length).toBe(1); expect(add[0].body.addedBy).toBe('tag');
+  const add = api.calls.filter(c => c.action === 'addToCart'); expect(add.length).toBe(1); expect(add[0].body.addedBy).toBe('tag'); expect(add[0].body.note).toBeNull();
+  expect(new URL(page.url()).searchParams.get('v')).toBeNull();
   expect(new URL(page.url()).searchParams.get('flag')).toBeNull();
   await page.click('#tundo'); await page.waitForTimeout(400);
   expect(api.calls.some(c => c.action === 'removeFromCart' && c.body.cardId === fresh.id)).toBe(true);
   expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/Removed/);
   await page.goto(`${PAGE}?flag=${fresh.id}&red=1`); await page.waitForSelector('.band');
-  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/OUT/);
+  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/COMPLETELY OUT/);
+  expect(await page.$eval('.legacy', e => e.innerText)).toMatch(/Old card/); // old red cards are retired too
   expect(api.calls.filter(c => c.action === 'addToCart').pop().body.note).toBe('RED CARD');
   await page.goto(PAGE); await page.waitForSelector('.vt');
   expect(await page.$eval('.outbar', e => e.innerText)).toMatch(/OUT —/);
@@ -181,20 +186,21 @@ test('tag: +1 then Undo +1 lands back on what the scan queued, not on 1', async 
   expect(inCart(picked.id).qty).toBe(picked.q + 1);
 });
 
-test('tag: a card already on order says so and is not queued twice; urgent and the red card still reach the desk', async ({ page }) => {
+test('tag: a card already on order says so and is not queued twice; Completely out and an old red card still reach the desk', async ({ page }) => {
   const api = await mockApi(page);
   await page.goto(PAGE); await page.waitForSelector('#actbar [data-mark]');
   const ordered = api.cart.Uline.map(r => r.cardId);
   await page.click('#actbar [data-mark]'); await page.waitForTimeout(700);
   const adds = () => api.calls.filter(c => c.action === 'addToCart');
   const before = adds().length;
-  await page.goto(`${PAGE}?flag=${ordered[0]}`); await page.waitForSelector('.band');
+  await page.goto(`${PAGE}?flag=${ordered[0]}&v=3`); await page.waitForSelector('.band');
   expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/Already on order/);
   expect(adds().length).toBe(before);
-  await page.click('[data-tag="urgent"]'); await page.waitForTimeout(500);
-  expect(adds().pop().body).toMatchObject({ cardId: ordered[0], note: 'URGENT', addedBy: 'tag' });
+  await page.click('[data-tag="out"]'); await page.waitForTimeout(500);
+  expect(adds().pop().body).toMatchObject({ cardId: ordered[0], note: 'RED CARD', addedBy: 'tag' });
+  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/COMPLETELY OUT/);
   await page.goto(`${PAGE}?flag=${ordered[1]}&red=1`); await page.waitForSelector('.band');
-  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/OUT/);
+  expect(await page.$eval('.band .verb', e => e.innerText)).toMatch(/COMPLETELY OUT/);
   expect(adds().pop().body).toMatchObject({ cardId: ordered[1], note: 'RED CARD' });
 });
 
@@ -238,7 +244,7 @@ test('print: supplier chip + search narrow the list; a ticked group prints toget
   expect(await page.evaluate(() => document.activeElement.id)).toBe('pqSearch'); // typing keeps focus through the re-render
   expect(await page.$$eval('.pq li[data-p]', l => l.length)).toBe(4);
   await page.click('[data-pickg="Uline"]');
-  expect(await page.textContent('#pkPrint')).toMatch(/Print 4 · Stack 6×4/);
+  expect(await page.textContent('#pkPrint')).toMatch(/Print 4 · Card 6×4/);
   const dlg = page.waitForEvent('dialog'); await page.click('#pkPrint'); const d = await dlg; await d.accept(); await page.waitForTimeout(100);
   expect(await page.evaluate(() => window.__printed)).toBe(4);
   expect(await page.$('#pkPrint')).toBeNull(); // printed cards leave the selection
