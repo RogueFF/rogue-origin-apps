@@ -1,8 +1,10 @@
 /**
  * Every network call the hub makes, in one place.
- * Reads are public; chat/tts carry the shared password as a Bearer token.
+ * Most reads are public; chat/tts carry the shared password as a Bearer token.
  * The dashboard read carries it too when the device has unlocked: the worker
- * only includes labor-cost figures for callers with the password.
+ * only includes labor-cost figures for callers with the password. So do the
+ * wholesale queue/coverage and complaint-stats reads: the worker locks those
+ * (the queue brief drops buyer names without it).
  */
 import { apiGet, apiPost, API_ROOT } from '../shared/api.js';
 
@@ -10,11 +12,11 @@ export const getDashboard = (start, end) => apiGet('production', 'dashboard', { 
 export const getScoreboard = () => apiGet('production', 'scoreboard');
 export const getMorningReport = () => apiGet('production', 'morningReport');
 
-export const getQueueBrief = () => apiGet('wholesale', 'getQueueBrief', { limit: 6 });
-export const getCoverage = () => apiGet('wholesale', 'getCoverage');
+export const getQueueBrief = () => apiGet('wholesale', 'getQueueBrief', { limit: 6 }, { auth: true });
+export const getCoverage = () => apiGet('wholesale', 'getCoverage', {}, { auth: true });
 export const getTopsRemaining = () => apiGet('supersack', 'tops_remaining');
 
-export const getComplaintStats = () => apiGet('complaints', 'stats');
+export const getComplaintStats = () => apiGet('complaints', 'stats', {}, { auth: true });
 export const getReorderRequests = () => apiGet('kanban', 'getReorderRequests', { status: 'open' });
 export const getCart = () => apiGet('kanban', 'getCart');
 

@@ -520,7 +520,7 @@
     }
 
     function getPassword() {
-      return localStorage.getItem('ro-auth-token') || '';
+      return localStorage.getItem('ro_api_password') || '';
     }
 
     function formatDate(dateStr) {
@@ -565,7 +565,11 @@
 
     async function apiGet(action, params = {}) {
       const qs = new URLSearchParams({ action, ...params });
-      const res = await fetch(`${API}?${qs}`);
+      // Reads are password-gated on the worker; send the key this device unlocked with.
+      const headers = {};
+      const pw = getPassword();
+      if (pw) headers.Authorization = `Bearer ${pw}`;
+      const res = await fetch(`${API}?${qs}`, { headers });
       const raw = await res.json();
       if (raw.success === false) throw new Error(raw.error || 'Request failed');
       return raw.data || raw;

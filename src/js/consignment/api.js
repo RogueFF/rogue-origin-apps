@@ -47,7 +47,11 @@ async function apiGet(action, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v != null) url.searchParams.set(k, v);
   });
-  const res = await fetch(url.toString());
+  // Reads are password-gated on the worker; send the key this device unlocked with.
+  const headers = {};
+  const pw = localStorage.getItem('ro_api_password') || '';
+  if (pw) headers.Authorization = 'Bearer ' + pw;
+  const res = await fetch(url.toString(), { headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'API request failed');

@@ -55,9 +55,45 @@ function setupMockAPI(page, existingProduction = []) {
   });
 }
 
+// What the worker answers to an unlocked caller of getQueueBrief: buyer nicknames
+// removed and `ordersLocked: true`. Floor Manager is an open page and must work on it.
+const LOCKED_QUEUE_BRIEF = {
+  success: true,
+  data: { ordersLocked: true, headline: { mode: 'clear' }, next: null, blocks: [], blocksTotal: 0, queueAliases: [] },
+};
+
+/**
+ * Cut the page off from the live API at the browser-CONTEXT level.
+ * Registered first, so every `*.workers.dev` request not claimed below is aborted
+ * (and recorded in `blocked`); the wholesale mock is registered after it and wins.
+ * Page-level routes (setupMockAPI) take precedence over both.
+ */
+async function isolateFromLiveApi(context) {
+  const blocked = [];
+  const queueBriefHeaders = [];
+  await context.route(/^https?:\/\/[^/]*\.workers\.dev\//, (route) => {
+    blocked.push(route.request().url());
+    return route.abort();
+  });
+  await context.route('**/api/wholesale**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('action') === 'getQueueBrief') {
+      queueBriefHeaders.push(route.request().headers());
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(LOCKED_QUEUE_BRIEF) });
+    }
+    blocked.push(route.request().url());
+    return route.abort();
+  });
+  return { blocked, queueBriefHeaders };
+}
+
 test.describe('Hourly Entry - Goal Fixes & Crew Changes', () => {
 
+  /** @type {{ blocked: string[], queueBriefHeaders: Record<string,string>[] }} */
+  let live;
+
   test.beforeEach(async ({ page }) => {
+    live = await isolateFromLiveApi(page.context());
     await page.addInitScript(() => {
       localStorage.setItem('hourlyEntry_tutorialComplete', 'true');
       localStorage.setItem('hourlyEntry_tooltipsDismissed', 'true');
@@ -256,6 +292,19 @@ test.describe('Hourly Entry - Goal Fixes & Crew Changes', () => {
     // With raw 4 trimmers: 4 * 1.35 * 1.0 = 5.4
     expect(targetValue).toBeGreaterThan(5.8);
     expect(targetValue).toBeLessThan(6.5);
+  });
+
+  test('Floor Manager reads the queue brief without a password and asks the board for nothing else', async ({ page }) => {
+    await setupMockAPI(page);
+    await page.goto(BASE_URL);
+    await page.waitForLoadState('networkidle');
+    await page.locator('.timeline-slot').first().click();
+    await page.waitForTimeout(500);
+
+    expect(live.queueBriefHeaders.length).toBeGreaterThan(0);
+    for (const headers of live.queueBriefHeaders) expect(headers.authorization).toBeUndefined();
+    // Only getQueueBrief may reach the wholesale API; any other wholesale call was aborted and recorded.
+    expect(live.blocked.filter((u) => u.includes('/api/wholesale'))).toEqual([]);
   });
 
   test('page loads without JS errors', async ({ page }) => {
