@@ -87,9 +87,14 @@ async function optionsFor(db, cultivar) {
   return { proposed, options: filled };
 }
 
+/**
+ * Real rows are untouchable in test mode. `s` is always a row from the table,
+ * so it is a real bag even when its number matches an example tag: the season
+ * printed both (26-SLIFT-142, 26-LIFT-87), and asking demoKey here refused the
+ * real Sour Lifter #142 as "Test mode" (2026-11-02). Real first, as on /s/.
+ */
 function refused(env, deps, s) {
-  // Real rows are untouchable in test mode, and the example sacks never write.
-  return (deps.isTestMode(env) && Number(s.is_test) === 0) || deps.demoKey(s.sack_id);
+  return deps.isTestMode(env) && Number(s.is_test) === 0;
 }
 
 /** A repeat scan answers with what the sack is already doing, and how to change it. */
