@@ -9462,6 +9462,6 @@ ${noteList}
 }
 
 const SACK_OUT_DEPS = {
-  isTestMode, getSeason, normalizeSackId, demoKey, pacificToday, pacificDayRange,
+  isTestMode, getSeason, normalizeSackId, pacificToday, pacificDayRange,
   takeSackOut: (...a) => takeSackOut(...a), adjustSupersackCount,
 };

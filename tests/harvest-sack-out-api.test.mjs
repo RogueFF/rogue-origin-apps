@@ -204,14 +204,28 @@ test('sack_out_today: groups, can_undo, tz, chips, and a null-cultivar row does 
   assert.deepEqual(r.chips.map(c => [c.cultivar, c.in_inventory]), [['Purple Snowman', 2]]);
 });
 
-test('the example sacks never write; refused follows lang', async () => {
+// The season printed both example numbers for real (Sour Lifter #142, Lifter
+// #87), and on 2026-11-02 the scanner refused the real #142 as "Test mode".
+// Real first, as everywhere else: a row in the table is a real bag.
+test('a real bag that carries an example number goes out', async () => {
   const { sqlite, env, ctx, settle } = freshDb(); const calls = poolStub();
   seed(sqlite, { id: '26-SLIFT-142', serial: 142, cultivar: 'Sour Lifter' });
-  const en = await post(env, ctx, 'sack_out', { q: '26-SLIFT-142' }, { qs: '&lang=en' });
-  const es = await post(env, ctx, 'sack_out', { q: '26-SLIFT-142' }, { qs: '&lang=es' });
+  const r = await post(env, ctx, 'sack_out', { q: '26-SLIFT-142' });
+  await quiet(settle);
+  assert.equal(r.state, 'out'); assert.equal(r.sack.sack_id, '26-SLIFT-142');
+  assert.ok(row(sqlite, '26-SLIFT-142').opened_at);
+  assert.equal(adjusts(calls).length, 1);
+});
+
+test('test mode refuses a real bag; refused follows lang', async () => {
+  const { sqlite, env, ctx, settle } = freshDb(); const calls = poolStub();
+  env.HARVEST_TEST_MODE = 'true';
+  seed(sqlite);
+  const en = await post(env, ctx, 'sack_out', { q: `${YY}-PURPSNOW-2` }, { qs: '&lang=en' });
+  const es = await post(env, ctx, 'sack_out', { q: `${YY}-PURPSNOW-2` }, { qs: '&lang=es' });
   await quiet(settle);
   assert.equal(en.state, 'refused'); assert.match(en.message, /^Test mode/); assert.match(es.message, /^Modo de prueba/);
-  assert.equal(row(sqlite, '26-SLIFT-142').opened_at, null); assert.equal(calls.length, 0);
+  assert.equal(row(sqlite).opened_at, null); assert.equal(adjusts(calls).length, 0);
 });
 
 // Queue objects shaped like computeQueue output (blocks[].orderId, passes[].cultivarId/remainingTopsLbs/sacksNeeded).
