@@ -1,6 +1,6 @@
 /**
  * The hourly-entry cultivar dropdown: the whole 2026 crop from the Super Sack
- * variants, plus only the 2025 strains still being trimmed.
+ * variants, plus only the older strains still being trimmed (none since 2026-11-02).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,6 +39,11 @@ test('2025 is the carryover list only, whatever history or Shopify hold', () => 
     [variant('2025 - Mix', 'Sungrown', '1st Cut', 114), variant('2024 - Bubba Kush 18', 'Sungrown', '1st Cut', 1)],
   );
   assert.deepEqual(opts, [...CARRYOVER].sort());
+});
+
+test('the 2025 carryover is finished: no 2025 strain is offered', () => {
+  const opts = buildCultivarOptions(['2025 - Lifter / Sungrown'], [variant('2025 - Sugar Shaker', 'Sungrown', '1st Cut', 3)]);
+  assert.equal(opts.filter((c) => c.startsWith('2025')).length, 0);
 });
 
 test('Shopify down: carryover plus any 2026 spelling already logged', () => {

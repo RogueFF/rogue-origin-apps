@@ -12,16 +12,12 @@
  * sit in the "2025 - Mix" variant, and the floor logged 2025 Lifter on
  * 2026-10-06 while Shopify showed none. So the carryover list is written down
  * here, and a strain comes off it when its bags are gone (Koa, 2026-10-06).
+ * The 2025 carryover is done; the list is empty (Koa, 2026-11-02).
  */
 
 export const CURRENT_CROP = '2026';
 
-export const CARRYOVER = [
-  '2025 - Lifter / Sungrown',
-  '2025 - Passion Fruit OG / Sungrown',
-  '2025 - Sugar Cookez (Cookies) / Sungrown',
-  '2025 - Sugar Shaker / Sungrown',
-];
+export const CARRYOVER = [];
 
 /** "2026 - X / Sungrown / 1st Cut" variant -> "2026 - X / Sungrown". */
 export function variantCultivar(variant) {
