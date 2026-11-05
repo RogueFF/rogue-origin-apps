@@ -72,7 +72,7 @@ export async function handleProductionD1(request, env, ctx) {
         return await logResume(body, env);
       case 'scaleWeight':
         if (request.method === 'POST') {
-          return await setScaleWeight(body, env);
+          return await setScaleWeight(body, env, request);
         }
         return await getScaleWeight(params, env);
       case 'setBagMode':

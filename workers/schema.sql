@@ -289,6 +289,7 @@ CREATE TABLE IF NOT EXISTS scale_readings (
   weight REAL NOT NULL DEFAULT 0,
   target_weight REAL DEFAULT 5.0,
   unit TEXT DEFAULT 'g',
+  stable INTEGER,                                -- 1 settled, 0 moving, NULL not sent (migration 0049)
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -299,6 +300,27 @@ CREATE TABLE IF NOT EXISTS scale_readings (
 -- Initialize default station
 INSERT OR IGNORE INTO scale_readings (station_id, weight, target_weight, updated_at)
 VALUES ('line1', 0, 5.0, datetime('now'));
+
+-- Cell table scales (migration 0049): a station registered with kind 'table'
+-- must send Authorization: Bearer <token>; only the SHA-256 hex is stored.
+CREATE TABLE IF NOT EXISTS scale_stations (
+  station_id    TEXT PRIMARY KEY,
+  label         TEXT,
+  kind          TEXT NOT NULL DEFAULT 'table',
+  token_hash    TEXT,
+  stale_after_s INTEGER NOT NULL DEFAULT 45,
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT DEFAULT (datetime('now'))
+);
+
+-- One row per settled weight that moved 0.2 g or more (registered stations only).
+CREATE TABLE IF NOT EXISTS scale_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  station_id TEXT NOT NULL,
+  ts         TEXT NOT NULL DEFAULT (datetime('now')),
+  weight_kg  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_scale_events_station ON scale_events (station_id, id);
 
 -- ============================================
 -- SYSTEM CONFIGURATION

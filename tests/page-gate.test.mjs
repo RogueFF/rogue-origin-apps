@@ -32,6 +32,7 @@ const OPEN = [
   'scoreboard-v2.html',       // Scoreboard
   'scoreboard-v3.html',       // Scoreboard sibling
   'scale-display.html',
+  'cell.html',                // Cell table screen (pilot), a floor screen like scale-display
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',
