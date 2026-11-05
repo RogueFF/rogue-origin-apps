@@ -143,7 +143,10 @@ function renderCycle() {
 
 async function poll() {
   clearTimeout(timer);
-  if (document.hidden) return;
+  // Hidden (screen off, tab in the background): don't fetch, but keep a slow
+  // retry alive. A page that loaded while hidden may never get a visibilitychange,
+  // and would otherwise sit on "Waiting for scale" until someone reloads it.
+  if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
   try {
     const r = await fetch(`${API}?action=scaleWeight&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
     const d = await r.json();
