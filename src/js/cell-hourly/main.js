@@ -24,7 +24,8 @@ registerLabels({
     title: 'Cell hourly log', roomCultivar: 'Cultivar this hour', roomSmalls: 'Smalls, whole room (lb)',
     wholesaleToday: 'Wholesale tops today', bagsFull: '5 kg bags', nextBag: 'Next 5 kg bag',
     edit: 'Edit', nameLabel: 'Name or label', wholesale: 'Wholesale', retail: 'Retail', save: 'Save', cancel: 'Cancel',
-    removeCell: 'Remove cell', topsLabel: 'Tops this hour', quality: 'Quality', notChecked: 'Not checked',
+    removeCell: 'Remove cell', topsLabel: 'Tops this hour', quality: 'Quality checks', notChecked: 'Not checked',
+    chkTrim: 'Trim job', chkStems: 'Cut stems', chkMold: 'Mold', chkInsects: 'Insects',
     pass: 'Pass', fail: 'Fail', failNeedsNote: 'Write what failed in the notes first', notes: 'Notes',
     cellCultivar: 'Cultivar at this cell', jump: 'All cells this hour', addCell: '+ Add cell',
     saving: 'Saving…', saved: 'Saved', notSaved: 'Not saved: no connection. It will retry.', perHour: 'lb/hr',
@@ -39,7 +40,8 @@ registerLabels({
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
     wholesaleToday: 'Tops de mayoreo hoy', bagsFull: 'Bolsas de 5 kg', nextBag: 'Siguiente bolsa de 5 kg',
     edit: 'Editar', nameLabel: 'Nombre o etiqueta', wholesale: 'Mayoreo', retail: 'Menudeo', save: 'Guardar', cancel: 'Cancelar',
-    removeCell: 'Quitar celda', topsLabel: 'Tops de esta hora', quality: 'Calidad', notChecked: 'Sin revisar',
+    removeCell: 'Quitar celda', topsLabel: 'Tops de esta hora', quality: 'Revisión de calidad', notChecked: 'Sin revisar',
+    chkTrim: 'Trabajo de trim', chkStems: 'Tallos cortados', chkMold: 'Moho', chkInsects: 'Insectos',
     pass: 'Pasa', fail: 'No pasa', failNeedsNote: 'Escriba primero en notas qué falló', notes: 'Notas',
     cellCultivar: 'Variedad en esta celda', jump: 'Todas las celdas esta hora', addCell: '+ Agregar celda',
     saving: 'Guardando…', saved: 'Guardado', notSaved: 'No se guardó: sin conexión. Se reintentará.', perHour: 'lb/h',
@@ -87,7 +89,7 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   tops: $('tops'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
-  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), qNone: $('qNone'), qPass: $('qPass'), qFail: $('qFail'), failNote: $('failNeedsNote'),
+  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), failNote: $('failNeedsNote'),
   notes: $('notes'), cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -158,10 +160,23 @@ function renderStatus() {
 const pending = (slot, station, field) => queue.has(`setCellHourly|${slot}|${station}|${field}`);
 
 // ---- local edits (optimistic) ----
+// The four quality checks (Koa 2026-11-09); the overall result follows them,
+// the same rule the Worker applies: fail if any fails, pass once all four pass.
+const CHECKS = [['qTrim', 'chkTrim'], ['qStems', 'chkStems'], ['qMold', 'chkMold'], ['qInsects', 'chkInsects']];
+function overall(checks = {}) {
+  const v = CHECKS.map(([k]) => checks[k]);
+  if (v.includes('fail')) return 'fail';
+  return v.every(x => x === 'pass') ? 'pass' : null;
+}
 function setCellField(field, value) {
   const c = cell(); if (!c) return;
   const key = rowKey(state.slot, c.stationId);
-  const r = { ...(state.rows.get(key) || {}), stationId: c.stationId, slot: state.slot, [field]: value };
+  const isCheck = CHECKS.some(([k]) => k === field);
+  const prev = state.rows.get(key) || {};
+  const r = isCheck
+    ? { ...prev, stationId: c.stationId, slot: state.slot, checks: { ...(prev.checks || {}), [field]: value } }
+    : { ...prev, stationId: c.stationId, slot: state.slot, [field]: value };
+  if (isCheck) r.quality = overall(r.checks);
   state.rows.set(key, r);
   const payload = { slot: state.slot, stationId: c.stationId, [field]: value };
   // A row's cultivar defaults to the room's: stamp it with the first weight.
@@ -172,6 +187,33 @@ function setCellField(field, value) {
   renderGrid(); renderBag();
 }
 const roomCultivar = (slot = state.slot) => state.room.get(slot)?.cultivar || '';
+
+// One row per check: tap Pass or Fail; tap the lit one again to clear it.
+// A fail needs a note first, same rule as a paused job.
+function renderChecks(r) {
+  el.checks.innerHTML = '';
+  for (const [key, label] of CHECKS) {
+    const v = (r.checks || {})[key] || null;
+    const rowEl = document.createElement('div');
+    rowEl.className = 'check-row';
+    const name = document.createElement('span');
+    name.className = 'check-name'; name.textContent = t(label);
+    const pass = document.createElement('button');
+    pass.className = 'btn pass' + (v === 'pass' ? ' on' : ''); pass.textContent = t('pass');
+    const fail = document.createElement('button');
+    fail.className = 'btn fail' + (v === 'fail' ? ' on' : ''); fail.textContent = t('fail');
+    pass.addEventListener('click', () => { setCellField(key, v === 'pass' ? null : 'pass'); renderCell(); });
+    fail.addEventListener('click', () => {
+      if (v === 'fail') { setCellField(key, null); renderCell(); return; }
+      if (!(el.notes.value.trim() || row().notes)) {
+        el.failNote.hidden = false; el.failNote.dataset.waiting = key; el.notes.focus(); return;
+      }
+      setCellField(key, 'fail'); renderCell();
+    });
+    rowEl.append(name, pass, fail);
+    el.checks.appendChild(rowEl);
+  }
+}
 
 // ---- rendering ----
 function currentSlotIndex() {
@@ -259,9 +301,7 @@ function renderCell() {
     el.diffFlag.textContent = tf('differ', { pct: Math.round(off * 100) });
     el.tareFlag.hidden = a.flag !== 'scaleTared';
   }
-  el.qNone.classList.toggle('on', !r.quality);
-  el.qPass.classList.toggle('on', r.quality === 'pass');
-  el.qFail.classList.toggle('on', r.quality === 'fail');
+  renderChecks(r);
   fillCultivars(el.cellCultivar, r.cultivar && r.cultivar !== roomCultivar() ? r.cultivar : '', true);
   el.failNote.hidden = true;
   el.editBox.hidden = true;
@@ -299,7 +339,10 @@ async function load() {
     const local = state.rows.get(key) || {};
     const merged = { ...r };
     // Keep this tablet's unsaved edits over what the server had.
-    for (const f of ['tops', 'quality', 'notes', 'cultivar']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
+    for (const f of ['tops', 'notes', 'cultivar']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
+    merged.checks = { ...(r.checks || {}) };
+    for (const [k] of CHECKS) if (pending(r.slot, r.stationId, k)) merged.checks[k] = (local.checks || {})[k] ?? null;
+    merged.quality = overall(merged.checks) ?? r.quality ?? null;
     state.rows.set(key, merged);
   }
   for (const r of d.room) {
@@ -342,16 +385,8 @@ el.tops.addEventListener('change', () => {
 el.notes.addEventListener('change', () => {
   const v = el.notes.value.trim() || null;
   setCellField('notes', v);
-  if (v && el.failNote.dataset.waiting === '1') { el.failNote.dataset.waiting = ''; setCellField('quality', 'fail'); renderCell(); }
-});
-el.qNone.addEventListener('click', () => { setCellField('quality', null); renderCell(); });
-el.qPass.addEventListener('click', () => { setCellField('quality', 'pass'); renderCell(); });
-el.qFail.addEventListener('click', () => {
-  // A fail needs a reason, same rule as a paused job.
-  if (!(el.notes.value.trim() || row().notes)) {
-    el.failNote.hidden = false; el.failNote.dataset.waiting = '1'; el.notes.focus(); return;
-  }
-  setCellField('quality', 'fail'); renderCell();
+  const waiting = el.failNote.dataset.waiting;
+  if (v && waiting) { el.failNote.dataset.waiting = ''; setCellField(waiting, 'fail'); renderCell(); }
 });
 el.cellCultivar.addEventListener('change', () => { setCellField('cultivar', el.cellCultivar.value || roomCultivar() || null); renderCell(); });
 

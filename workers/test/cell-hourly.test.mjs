@@ -14,6 +14,7 @@ import {
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../migrations/0050-cell-hourly.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0051-cell-quality-checks.sql', import.meta.url), 'utf8'));
   // Prepared lazily, like D1: a missing table fails when the statement runs.
   const stmt = (sql, params) => ({
     first: async () => db.prepare(sql).get(...params) ?? null,
@@ -165,4 +166,30 @@ test('scale marks are refused for a station without a scale, or with a bad kind 
 test('without the 0049 scale tables the day still loads, with no auto values', async () => {
   const { body } = await json(await getCellHourly({ date: DAY }, { DB: d1() }));
   assert.deepEqual(body.auto, []);
+});
+
+test('four quality checks, each pass/fail; the overall result follows them', async () => {
+  const env = { DB: d1() };
+  const base = { date: DAY, slot: SLOT, stationId: 'table4' };
+  const overall = async () => (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
+  await setCellHourly({ ...base, qTrim: 'pass', qStems: 'pass' }, env);
+  assert.equal((await overall()).quality, null, 'two of four checked: not checked yet');
+  await setCellHourly({ ...base, qMold: 'pass', qInsects: 'pass' }, env);
+  let r = await overall();
+  assert.equal(r.quality, 'pass');
+  assert.deepEqual(r.checks, { qTrim: 'pass', qStems: 'pass', qMold: 'pass', qInsects: 'pass' });
+  const res = (await json(await setCellHourly({ ...base, qMold: 'fail', notes: 'spots on two buds' }, env))).body;
+  assert.equal(res.quality, 'fail', 'the save answers with the new overall result');
+  r = await overall();
+  assert.equal(r.quality, 'fail');
+  assert.equal(r.checks.qMold, 'fail');
+  await setCellHourly({ ...base, qMold: null }, env);
+  assert.equal((await overall()).quality, null, 'cleared back to not checked');
+});
+
+test('a bad check value is refused and nothing is written', async () => {
+  const env = { DB: d1() };
+  const r = await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table4', qInsects: 'maybe' }, env);
+  assert.equal(r.status, 400);
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM cell_hourly').get().n, 0);
 });

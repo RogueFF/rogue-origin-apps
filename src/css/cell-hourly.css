@@ -48,7 +48,10 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .unit { font: 700 26px var(--font-mono); color: var(--text-secondary); }
 
 .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
-.quality .btn.on { background: var(--text-secondary); border-color: var(--text-secondary); color: #fff; }
+.checks { display: grid; gap: 8px; }
+.check-row { display: grid; grid-template-columns: minmax(0, 1fr) 104px 104px; gap: 8px; align-items: center; }
+.check-name { font: 600 18px var(--font-ui); }
+.quality .btn.on { color: #fff; }
 .quality .btn.pass.on { background: var(--success); border-color: var(--success); }
 .quality .btn.fail.on { background: var(--danger); border-color: var(--danger); }
 .error { color: var(--danger); font-weight: 600; }

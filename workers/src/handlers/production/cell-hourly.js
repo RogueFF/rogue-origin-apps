@@ -4,7 +4,8 @@
  * key the scale rollup will write later with source = 'scale'.
  *
  *   GET  ?action=cellHourly&date=YYYY-MM-DD   roster, the day's rows, room smalls, slots
- *   POST ?action=setCellHourly   { date, slot, stationId, tops?, quality?, notes?, cultivar? }
+ *   POST ?action=setCellHourly   { date, slot, stationId, tops?, notes?, cultivar?,
+ *                                  qTrim?, qStems?, qMold?, qInsects? }   (each check 'pass'|'fail'|null)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
  *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg }   from the cell screen
@@ -29,6 +30,13 @@ const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
 const MAX_LABEL = 40;
 const MAX_CULTIVAR = 80;
+// The four quality checks per cell-hour (migration 0051). `quality` is their
+// overall result: fail if any fails, pass once all four pass, else not checked.
+const CHECKS = { qTrim: 'q_trim', qStems: 'q_stems', qMold: 'q_mold', qInsects: 'q_insects' };
+const OVERALL_SQL = `CASE
+  WHEN q_trim = 'fail' OR q_stems = 'fail' OR q_mold = 'fail' OR q_insects = 'fail' THEN 'fail'
+  WHEN q_trim = 'pass' AND q_stems = 'pass' AND q_mold = 'pass' AND q_insects = 'pass' THEN 'pass'
+  ELSE NULL END`;
 
 const norm = s => String(s || '').replace(/[-–—]/g, '-').replace(/\s+/g, ' ').trim();
 const SLOT_BY_NORM = new Map(ALL_TIME_SLOTS.map(s => [norm(s), s]));
@@ -130,7 +138,8 @@ async function getCellHourly(params, env) {
   const [roster, rows, room] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort, active FROM cell_roster ORDER BY sort, station_id`).all(),
     env.DB.prepare(
-      `SELECT station_id, time_slot, cultivar, tops_lbs, quality, notes, source, updated_at
+      `SELECT station_id, time_slot, cultivar, tops_lbs, quality, q_trim, q_stems, q_mold, q_insects,
+              notes, source, updated_at
        FROM cell_hourly WHERE production_date = ?`
     ).bind(date).all(),
     env.DB.prepare(
@@ -146,6 +155,7 @@ async function getCellHourly(params, env) {
     rows: (rows.results || []).map(r => ({
       stationId: r.station_id, slot: r.time_slot, cultivar: r.cultivar, tops: r.tops_lbs,
       quality: r.quality, notes: r.notes, source: r.source, updatedAt: r.updated_at,
+      checks: { qTrim: r.q_trim, qStems: r.q_stems, qMold: r.q_mold, qInsects: r.q_insects },
     })),
     room: (room.results || []).map(r => ({
       slot: r.time_slot, smalls: r.smalls_lbs, cultivar: r.cultivar, updatedAt: r.updated_at,
@@ -177,6 +187,14 @@ async function setCellHourly(body, env) {
     }
     cols.push('quality'); vals.push(q);
   }
+  for (const [key, col] of Object.entries(CHECKS)) {
+    if (!has(body, key)) continue;
+    const q = body[key] === null || body[key] === '' ? null : String(body[key]);
+    if (q !== null && q !== 'pass' && q !== 'fail') {
+      return errorResponse(`${key} must be pass, fail or empty`, 'VALIDATION_ERROR', 400);
+    }
+    cols.push(col); vals.push(q);
+  }
   if (has(body, 'notes')) { cols.push('notes'); vals.push(cleanText(body.notes, MAX_NOTE)); }
   if (has(body, 'cultivar')) { cols.push('cultivar'); vals.push(cleanText(body.cultivar, MAX_CULTIVAR)); }
   if (!cols.length) return errorResponse('Nothing to save', 'VALIDATION_ERROR', 400);
@@ -188,7 +206,19 @@ async function setCellHourly(body, env) {
        ${cols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`
   ).bind(date, slot, cell.station_id, ...vals).run();
 
-  return successResponse({ success: true, date, slot, stationId: cell.station_id, saved: cols });
+  // A check changed: the overall result follows the four checks.
+  let quality;
+  if (cols.some(c => Object.values(CHECKS).includes(c))) {
+    await env.DB.prepare(
+      `UPDATE cell_hourly SET quality = ${OVERALL_SQL}
+       WHERE production_date = ? AND time_slot = ? AND station_id = ?`
+    ).bind(date, slot, cell.station_id).run();
+    quality = (await env.DB.prepare(
+      `SELECT quality FROM cell_hourly WHERE production_date = ? AND time_slot = ? AND station_id = ?`
+    ).bind(date, slot, cell.station_id).first())?.quality ?? null;
+  }
+
+  return successResponse({ success: true, date, slot, stationId: cell.station_id, saved: cols, ...(quality !== undefined ? { quality } : {}) });
 }
 
 async function setRoomSmalls(body, env) {
