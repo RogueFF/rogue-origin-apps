@@ -47,6 +47,19 @@ CREATE TABLE IF NOT EXISTS cell_room_hourly (
   PRIMARY KEY (production_date, time_slot)
 );
 
+-- Marks the cell screen sends for a scale station, so the Worker can work out
+-- hourly tops from settled readings (workers/src/lib/cell-auto.js):
+--   tare   = the empty basket's gross when Tare was pressed (the Worker only sees gross)
+--   pickup = the finished job was lifted off for bagging
+CREATE TABLE IF NOT EXISTS scale_marks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  station_id TEXT NOT NULL,
+  ts         TEXT NOT NULL DEFAULT (datetime('now')),
+  kind       TEXT NOT NULL CHECK (kind IN ('tare', 'pickup')),
+  kg         REAL
+);
+CREATE INDEX IF NOT EXISTS idx_scale_marks_station ON scale_marks (station_id, ts);
+
 -- The 21 cells working on 2026-11-09. 12-14 sit above retail fulfillment.
 INSERT OR IGNORE INTO cell_roster (station_id, label, lane, sort) VALUES
   ('table1', 'Cell 1', 'wholesale', 1),   ('table2', 'Cell 2', 'wholesale', 2),

@@ -7,6 +7,11 @@
  *   POST ?action=setCellHourly   { date, slot, stationId, tops?, quality?, notes?, cultivar? }
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
+ *   POST ?action=scaleMark       { stationId, kind: 'tare'|'pickup', kg }   from the cell screen
+ *
+ * Cells with a scale also get an `auto` value per hour, worked out from their
+ * settled readings (scale_events) and the screen's marks (lib/cell-auto.js).
+ * It is computed on read, never stored; a typed value still wins on the page.
  *
  * Saves are field by field: only the keys present in the body are written, so
  * two people on two tablets never overwrite each other's other fields.
@@ -14,7 +19,9 @@
  */
 
 import { successResponse, errorResponse } from '../../lib/response.js';
-import { ALL_TIME_SLOTS, TIME_SLOT_MULTIPLIERS } from '../../lib/production-helpers.js';
+import { ALL_TIME_SLOTS, TIME_SLOT_MULTIPLIERS, parseSlotTimeToMinutes } from '../../lib/production-helpers.js';
+import { autoTops } from '../../lib/cell-auto.js';
+import { pacificParts } from '../../lib/pacific.js';
 
 const MAX_TOPS_LBS = 50;      // a cell-hour is a few lb; this only stops nonsense
 const MAX_SMALLS_LBS = 200;
@@ -54,6 +61,67 @@ function cleanLbs(v, max) {
   return { ok: true, value: Math.round(n * 100) / 100 };
 }
 
+const SLOT_MINUTES = ALL_TIME_SLOTS.map(slot => {
+  const [a, b] = slot.split('–').map(x => x.trim());
+  return { slot, startMin: parseSlotTimeToMinutes(a), endMin: parseSlotTimeToMinutes(b) };
+});
+
+// A missing table (migration not applied yet) means no scale data, not an error.
+async function allOrEmpty(stmt) {
+  try { return (await stmt.all()).results || []; } catch (e) {
+    if (/no such table/i.test(String(e && e.message))) return [];
+    throw e;
+  }
+}
+
+// Hourly tops worked out from each station's scale, for the given Pacific day.
+async function autoRows(env, date, stationIds, now = new Date()) {
+  if (!stationIds.length) return [];
+  // A UTC window wide enough for any Pacific day; autoTops keeps only that day.
+  const d = new Date(`${date}T12:00:00Z`);
+  const from = new Date(d.getTime() - 24 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+  const to = new Date(d.getTime() + 24 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
+  const marks = stationIds.map(() => '?').join(', ');
+  const [readings, screenMarks] = await Promise.all([
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, ts, weight_kg AS kg FROM scale_events
+       WHERE station_id IN (${marks}) AND ts >= ? AND ts < ? ORDER BY ts, id`
+    ).bind(...stationIds, from, to)),
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, ts, kind, kg FROM scale_marks
+       WHERE station_id IN (${marks}) AND ts >= ? AND ts < ? ORDER BY ts, id`
+    ).bind(...stationIds, from, to)),
+  ]);
+  const p = pacificParts(now);
+  const nowMin = p.hour * 60 + p.minute;
+  const out = [];
+  for (const id of stationIds) {
+    const rs = readings.filter(r => r.station_id === id);
+    if (!rs.length) continue;
+    const { bySlot } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES });
+    for (const s of SLOT_MINUTES) {
+      if (!(s.slot in bySlot)) continue;
+      // An hour locks at its end; until then it's "so far".
+      const final = date < p.day || (date === p.day && nowMin >= s.endMin);
+      out.push({ stationId: id, slot: s.slot, tops: bySlot[s.slot], final });
+    }
+  }
+  return out;
+}
+
+async function scaleMark(body, env) {
+  const kind = body.kind === 'tare' || body.kind === 'pickup' ? body.kind : null;
+  if (!kind) return errorResponse('kind must be tare or pickup', 'VALIDATION_ERROR', 400);
+  const kg = Number(body.kg);
+  if (!Number.isFinite(kg) || kg < 0 || kg > 10) return errorResponse('kg must be 0-10', 'VALIDATION_ERROR', 400);
+  const station = await env.DB.prepare(`SELECT station_id FROM scale_stations WHERE station_id = ? AND kind = 'table'`)
+    .bind(String(body.stationId || '')).first();
+  if (!station) return errorResponse('Not a scale station', 'VALIDATION_ERROR', 400);
+  await env.DB.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES (?, datetime('now'), ?, ?)`)
+    .bind(station.station_id, kind, kg).run();
+  return successResponse({ success: true });
+}
+
 async function getCellHourly(params, env) {
   const date = params.date;
   if (!validDate(date)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
@@ -80,6 +148,7 @@ async function getCellHourly(params, env) {
     room: (room.results || []).map(r => ({
       slot: r.time_slot, smalls: r.smalls_lbs, cultivar: r.cultivar, updatedAt: r.updated_at,
     })),
+    auto: await autoRows(env, date, (roster.results || []).map(r => r.station_id)),
   });
 }
 
@@ -174,4 +243,4 @@ async function saveCellRoster(body, env) {
   return successResponse({ success: true, stationId: cell.station_id, label, lane, active: active === 1 });
 }
 
-export { getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, canonicalSlot };
+export { getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, scaleMark, canonicalSlot, autoRows };

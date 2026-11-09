@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster,
+  getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, scaleMark,
 } from '../src/handlers/production/cell-hourly.js';
 
 /**
@@ -14,14 +14,12 @@ import {
 function d1() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../migrations/0050-cell-hourly.sql', import.meta.url), 'utf8'));
-  const stmt = (sql, params) => {
-    const s = db.prepare(sql);
-    return {
-      first: async () => s.get(...params) ?? null,
-      all: async () => ({ results: s.all(...params) }),
-      run: async () => { const r = s.run(...params); return { meta: { changes: r.changes } }; },
-    };
-  };
+  // Prepared lazily, like D1: a missing table fails when the statement runs.
+  const stmt = (sql, params) => ({
+    first: async () => db.prepare(sql).get(...params) ?? null,
+    all: async () => ({ results: db.prepare(sql).all(...params) }),
+    run: async () => { const r = db.prepare(sql).run(...params); return { meta: { changes: r.changes } }; },
+  });
   return {
     raw: db,
     prepare: sql => ({ bind: (...p) => stmt(sql, p), ...stmt(sql, []) }),
@@ -131,4 +129,39 @@ test('the migration is safe to run twice', () => {
   const db = d1().raw;
   db.exec(readFileSync(new URL('../migrations/0050-cell-hourly.sql', import.meta.url), 'utf8'));
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cell_roster').get().n, 21);
+});
+
+// With the scale tables from 0049 present, cells with a scale get hourly auto values.
+function d1WithScale() {
+  const env = { DB: d1() };
+  env.DB.raw.exec(`CREATE TABLE scale_readings (station_id TEXT PRIMARY KEY, weight REAL, target_weight REAL, unit TEXT, updated_at TEXT);`);
+  env.DB.raw.exec(readFileSync(new URL('../migrations/0049-cell-table-stations.sql', import.meta.url), 'utf8'));
+  env.DB.raw.exec(`INSERT INTO scale_stations (station_id, label, kind, token_hash) VALUES ('table1', 'Cell 1', 'table', 'x');`);
+  return env;
+}
+
+test('a cell with a scale gets hourly auto tops from its readings and the screen\'s tare', async () => {
+  const env = d1WithScale();
+  // 2026-11-02 (PST, UTC-8): basket 50 g tared at 9:00, net grows to 160 g by 9:40, 220 g by 10:10.
+  const ev = (utc, g) => env.DB.raw.prepare('INSERT INTO scale_events (station_id, ts, weight_kg) VALUES (?, ?, ?)').run('table1', utc, g / 1000);
+  ev('2026-11-02 17:00:00', 50); ev('2026-11-02 17:40:00', 210); ev('2026-11-02 18:10:00', 270);
+  assert.equal((await scaleMark({ stationId: 'table1', kind: 'tare', kg: 0.05 }, env)).status, 200);
+  env.DB.raw.exec(`UPDATE scale_marks SET ts = '2026-11-02 17:00:05'`);
+  const { body } = await json(await getCellHourly({ date: '2026-11-02' }, env));
+  assert.deepEqual(body.auto.map(a => [a.stationId, a.slot, a.tops, a.final]), [
+    ['table1', '9:00 AM – 10:00 AM', 0.35, true],
+    ['table1', '10:00 AM – 11:00 AM', 0.13, true],
+  ]);
+});
+
+test('scale marks are refused for a station without a scale, or with a bad kind or weight', async () => {
+  const env = d1WithScale();
+  for (const b of [{ stationId: 'table2', kind: 'tare', kg: 0.05 }, { stationId: 'table1', kind: 'zero', kg: 0 }, { stationId: 'table1', kind: 'tare', kg: 11 }]) {
+    assert.equal((await scaleMark(b, env)).status, 400, JSON.stringify(b));
+  }
+});
+
+test('without the 0049 scale tables the day still loads, with no auto values', async () => {
+  const { body } = await json(await getCellHourly({ date: DAY }, { DB: d1() }));
+  assert.deepEqual(body.auto, []);
 });

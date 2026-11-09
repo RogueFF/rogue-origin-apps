@@ -52,6 +52,12 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .quality .btn.pass.on { background: var(--success); border-color: var(--success); }
 .quality .btn.fail.on { background: var(--danger); border-color: var(--danger); }
 .error { color: var(--danger); font-weight: 600; }
+.error[hidden] { display: none; }
+.auto { border: 1px solid var(--green); background: var(--green-dim); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; }
+.auto[hidden] { display: none; }
+.auto-val { font: 700 26px var(--font-mono); }
+.hour-total { font-size: 16px; }
+.jump.scale b::before { content: '⚖ '; font-size: 12px; }
 
 .save-status { font-size: 15px; min-height: 20px; }
 .save-status.ok { color: var(--success); }

@@ -49,6 +49,8 @@ registerLabels({
     customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare the container to start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
     liftOff: 'lift it off for the next one', lastJob: 'Last job',
+    holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
+    scaleButtons: "Don't press the scale's own TARE or ZERO buttons",
     bannerTare: 'Tap Tare to start the job', bannerOff: 'Container off the scale: put it back',
     bannerSignal: 'No scale signal: tell the lead', confirmRetare: 'A job is running. Restart it from zero?',
     pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
@@ -67,6 +69,8 @@ registerLabels({
     customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga tara al contenedor para empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
     liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo',
+    holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
+    scaleButtons: 'No presione los botones TARE o ZERO de la báscula',
     bannerTare: 'Toque Tara para empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
     bannerSignal: 'Sin señal de la báscula: avise al líder', confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
     pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
@@ -218,7 +222,7 @@ function step() {
     if (n >= state.targetG) {
       if (overSince === null) overSince = Date.now();
       if (stable === true || Date.now() - overSince >= HOLD_MS) {
-        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null;
+        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n;
         chime();
       }
     } else {
@@ -227,6 +231,7 @@ function step() {
   } else if (state.phase === 'finished' && n < state.targetG / 2) {
     // Container lifted off: the job is closed, the next order moves up.
     state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null;
+    mark('pickup', (state.finishedNetG || 0) / 1000);
     state.working = state.next; state.next = '';
     el.working.value = state.working; el.next.value = '';
   } else {
@@ -305,6 +310,19 @@ el.working.value = state.working;
 el.next.value = state.next;
 el.working.addEventListener('input', () => { state.working = el.working.value; save(); });
 el.next.addEventListener('input', () => { state.next = el.next.value; save(); });
+// The Worker only sees gross weight (basket included). Tare and pickup marks let
+// it tell a pickup from a basket shaken out when it works out hourly tops
+// (lib/cell-auto.js). Best effort, one retry: the job here never waits on it.
+async function mark(kind, kg) {
+  const send = () => fetch(`${API}?action=scaleMark`, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ stationId: station, kind, kg: Math.max(0, Math.round(kg * 100000) / 100000) }),
+  });
+  try { const r = await send(); if (!r.ok && r.status >= 500) throw new Error(); } catch {
+    setTimeout(() => send().catch(() => {}), 10000);
+  }
+}
+
 // Tare arms the timer for a new job (and re-arms it mid-job if pressed again).
 el.tare.addEventListener('click', async () => {
   unlockAudio();
@@ -316,7 +334,32 @@ el.tare.addEventListener('click', async () => {
   if (gross === null || !live) { render(); return; }
   state.tareG = gross; state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
   save(); render();
+  mark('tare', gross / 1000);
 });
+
+// Reset puts this job back to idle: timer, pauses and tare clear. Press and hold,
+// so a stray tap can't do it; a running job also asks. Hour counts the Worker
+// already logged are never touched.
+const HOLD_RESET_MS = 1200;
+el.resetBtn = $('resetBtn');
+let holdTimer = null;
+function resetJob() {
+  if (state.phase === 'running' && !window.confirm(t('confirmReset'))) return;
+  state.phase = 'idle'; state.tareG = 0; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
+  save(); render();
+}
+function holdStart(e) {
+  e.preventDefault();
+  el.resetBtn.classList.add('holding');
+  holdTimer = setTimeout(() => { holdEnd(); resetJob(); }, HOLD_RESET_MS);
+}
+function holdEnd() {
+  clearTimeout(holdTimer); holdTimer = null;
+  el.resetBtn.classList.remove('holding');
+}
+el.resetBtn.addEventListener('pointerdown', holdStart);
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.resetBtn.addEventListener(ev, holdEnd));
+el.resetBtn.addEventListener('click', () => { if (!holdTimer) el.cycleSub.textContent = t('holdHint'); });
 el.custom.addEventListener('change', () => {
   const v = parseFloat(el.custom.value);
   if (v > 0) { state.targetG = v; save(); renderPresets(); render(); }

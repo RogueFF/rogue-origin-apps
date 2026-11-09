@@ -30,6 +30,9 @@ registerLabels({
     saving: 'Saving…', saved: 'Saved', notSaved: 'Not saved: no connection. It will retry.', perHour: 'lb/hr',
     confirmBig: 'That is {lb} lb in one hour. Keep it?', confirmRemove: 'Remove {name}? Its saved hours stay.',
     entered: 'entered', sameAsRoom: 'Same as the room', none: '—', loadFail: 'Could not load. Check the connection.',
+    hourTotal: 'Tops this hour, all cells', scaleAuto: 'From the scale', soFar: 'so far · locks at the end of the hour',
+    finalVal: 'final', typedOverride: 'Typed (overrides the scale)', overrideNote: 'Manual override: the typed value counts.',
+    differ: 'Typed and scale differ by {pct}%', partsTyped: '{n} typed', partsScale: '{n} from scale',
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -41,6 +44,9 @@ registerLabels({
     saving: 'Guardando…', saved: 'Guardado', notSaved: 'No se guardó: sin conexión. Se reintentará.', perHour: 'lb/h',
     confirmBig: 'Son {lb} lb en una hora. ¿Lo deja así?', confirmRemove: '¿Quitar {name}? Sus horas guardadas se quedan.',
     entered: 'llenas', sameAsRoom: 'Igual que el cuarto', none: '—', loadFail: 'No cargó. Revise la conexión.',
+    hourTotal: 'Tops esta hora, todas las celdas', scaleAuto: 'De la báscula', soFar: 'hasta ahora · se fija al terminar la hora',
+    finalVal: 'final', typedOverride: 'Escrito (reemplaza a la báscula)', overrideNote: 'Reemplazo manual: cuenta el valor escrito.',
+    differ: 'Lo escrito y la báscula difieren {pct}%', partsTyped: '{n} escritas', partsScale: '{n} de báscula',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -78,13 +84,14 @@ const el = {
   prev: $('prevBtn'), next: $('nextBtn'), label: $('cellLabel'), cellId: $('cellId'), lane: $('cellLane'),
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
-  tops: $('tops'), rate: $('rate'), qNone: $('qNone'), qPass: $('qPass'), qFail: $('qFail'), failNote: $('failNeedsNote'),
+  tops: $('tops'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
+  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), qNone: $('qNone'), qPass: $('qPass'), qFail: $('qFail'), failNote: $('failNeedsNote'),
   notes: $('notes'), cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
 
 const state = {
-  slots: [], roster: [], rows: new Map(), room: new Map(),
+  slots: [], roster: [], rows: new Map(), room: new Map(), auto: new Map(),
   slot: null, cellIdx: 0, cultivars: [], editLane: 'wholesale',
 };
 const rowKey = (slot, station) => `${slot}|${station}`;
@@ -92,6 +99,17 @@ const cells = () => state.roster.filter(c => c.active);
 const cell = () => cells()[Math.min(state.cellIdx, cells().length - 1)];
 const row = (station = cell()?.stationId, slot = state.slot) => state.rows.get(rowKey(slot, station)) || {};
 const fmtLb = n => `${(Number(n) || 0).toFixed(2)} lb`;
+const DIFF_FLAG = 0.10;   // typed vs scale more than 10% apart gets flagged
+// Scale value for a cell-hour (computed by the Worker from its readings), if any.
+const autoOf = (station = cell()?.stationId, slot = state.slot) => state.auto.get(rowKey(slot, station));
+const hasScale = station => [...state.auto.values()].some(a => a.stationId === station);
+// What counts: a typed value wins; otherwise the scale's.
+function eff(station = cell()?.stationId, slot = state.slot) {
+  const typed = row(station, slot).tops;
+  if (typed != null) return typed;
+  const a = autoOf(station, slot);
+  return a ? a.tops : null;
+}
 
 // ---- save queue: one entry per (target, field); the newest value wins ----
 const queue = new Map();   // key -> { kind, payload, scope }
@@ -166,7 +184,7 @@ function renderHours() {
   const nowIdx = DATE === pacificToday().day ? currentSlotIndex() : -1;
   state.slots.forEach((s, i) => {
     const b = document.createElement('button');
-    const done = cells().filter(c => row(c.stationId, s.slot).tops != null).length;
+    const done = cells().filter(c => eff(c.stationId, s.slot) != null).length;
     b.className = 'hour-chip' + (s.slot === state.slot ? ' on' : '') + (i === nowIdx ? ' now' : '');
     b.innerHTML = `<span>${s.slot.replace(/:00/g, '').replace(' – ', '–')}</span><small>${done}/${cells().length}</small>`;
     b.addEventListener('click', () => { state.slot = s.slot; renderAll(); });
@@ -191,7 +209,19 @@ function renderRoom() {
 function renderBag() {
   const ws = new Set(state.roster.filter(c => c.lane === 'wholesale').map(c => c.stationId));
   let total = 0;
-  for (const r of state.rows.values()) if (ws.has(r.stationId) && r.quality !== 'fail') total += Number(r.tops) || 0;
+  for (const c of state.roster) {
+    if (!ws.has(c.stationId)) continue;
+    for (const s of state.slots) if (row(c.stationId, s.slot).quality !== 'fail') total += Number(eff(c.stationId, s.slot)) || 0;
+  }
+  // The room's hour: every active cell, typed or from its scale.
+  let hour = 0, typedN = 0, scaleN = 0;
+  for (const c of cells()) {
+    const v = eff(c.stationId); if (v == null) continue;
+    hour += Number(v) || 0;
+    if (row(c.stationId).tops != null) typedN++; else scaleN++;
+  }
+  el.hourTotal.textContent = fmtLb(hour);
+  el.hourTotalParts.textContent = `(${tf('partsTyped', { n: typedN })}${scaleN ? `, ${tf('partsScale', { n: scaleN })}` : ''})`;
   const bags = Math.floor(total / BAG_NET_LB);
   const into = total - bags * BAG_NET_LB;
   el.wsTotal.textContent = fmtLb(total);
@@ -210,7 +240,22 @@ function renderCell() {
   if (document.activeElement !== el.tops) el.tops.value = r.tops ?? '';
   if (document.activeElement !== el.notes) el.notes.value = r.notes ?? '';
   const hours = state.slots.find(s => s.slot === state.slot)?.hours || 1;
-  el.rate.textContent = r.tops != null ? `${(r.tops / hours).toFixed(2)} ${t('perHour')} (${hours} h)` : '';
+  const v = eff();
+  el.rate.textContent = v != null ? `${(v / hours).toFixed(2)} ${t('perHour')} (${hours} h)` : '';
+  const a = autoOf();
+  const scaled = hasScale(c.stationId);
+  el.topsLabel.textContent = scaled ? t('typedOverride') : t('topsLabel');
+  el.autoBox.hidden = !a;
+  if (a) {
+    el.autoVal.textContent = fmtLb(a.tops);
+    el.autoState.textContent = a.final ? t('finalVal') : t('soFar');
+    const typed = r.tops;
+    el.overrideNote.hidden = typed == null;
+    el.overrideNote.textContent = t('overrideNote');
+    const off = typed != null && a.tops > 0 ? Math.abs(typed - a.tops) / a.tops : 0;
+    el.diffFlag.hidden = !(off > DIFF_FLAG);
+    el.diffFlag.textContent = tf('differ', { pct: Math.round(off * 100) });
+  }
   el.qNone.classList.toggle('on', !r.quality);
   el.qPass.classList.toggle('on', r.quality === 'pass');
   el.qFail.classList.toggle('on', r.quality === 'fail');
@@ -225,10 +270,11 @@ function renderGrid() {
   let done = 0;
   list.forEach((c, i) => {
     const r = row(c.stationId);
-    if (r.tops != null) done++;
+    const has = eff(c.stationId) != null;
+    if (has) done++;
     const b = document.createElement('button');
-    b.className = 'jump' + (r.tops != null ? ' done' : '') + (r.quality === 'fail' ? ' failq' : '')
-      + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '');
+    b.className = 'jump' + (has ? ' done' : '') + (r.quality === 'fail' ? ' failq' : '')
+      + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '') + (hasScale(c.stationId) ? ' scale' : '');
     b.innerHTML = `<b>${c.stationId.replace(/^table/, '')}</b>`;
     b.appendChild(document.createTextNode(c.label));
     b.title = c.label;
@@ -244,6 +290,7 @@ function renderAll() { renderRoom(); renderCell(); renderGrid(); renderBag(); }
 async function load() {
   const d = await api('GET', 'cellHourly', null, { date: DATE });
   state.slots = d.slots; state.roster = d.roster;
+  state.auto = new Map((d.auto || []).map(a => [rowKey(a.slot, a.stationId), a]));
   for (const r of d.rows) {
     const key = rowKey(r.slot, r.stationId);
     const local = state.rows.get(key) || {};
@@ -353,4 +400,4 @@ document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 el.date.textContent = DATE;
 load().then(() => { renderAll(); loadCultivars(); }).catch(() => { el.cellStatus.className = 'save-status bad'; el.cellStatus.textContent = t('loadFail'); });
-setInterval(() => { if (!document.hidden) load().then(() => { renderRoom(); renderGrid(); renderBag(); if (!el.editBox.hidden) return; renderCell(); }).catch(() => {}); }, REFRESH_MS);
+setInterval(() => { if (!document.hidden) load().then(() => { renderRoom(); renderGrid(); renderBag(); if (!el.editBox.hidden || !el.failNote.hidden) return; renderCell(); }).catch(() => {}); }, REFRESH_MS);
