@@ -1,15 +1,19 @@
 /**
  * Cell table screen: live net weight toward a target, a job timer that runs
- * itself off the scale, and the working / next order typed in by hand for the pilot.
+ * itself off the scale, and the order picked from two dropdowns: cultivar and
+ * bag size. Made-to-order retail trial (Koa 2026-11-09): the target is the bag
+ * size's fill standard, set automatically; there is no next order for now.
  *
  *   cell.html?station=table1
  *
  * Reads ?action=scaleWeight (GET, no token) once a second while the page is
- * visible and the scale is live, every 5 s while it is stale. Target,
- * orders and the timer live in this tablet's localStorage, per station, until
- * the cell job records (cell_chunks) exist on the Worker.
+ * visible and the scale is live, every 5 s while it is stale. The order and the
+ * timer live in this tablet's localStorage, per station. Each finished job posts
+ * a pickup mark carrying its cultivar, bag size and working time (migration 0052),
+ * so the Worker keeps a record of what every job was.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
+import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const FAST_MS = 1000;
@@ -19,8 +23,8 @@ const NEAR = 0.9;
 //   Start (or the scale's own TARE with the basket on) -> armed; the first START_G
 //   of product starts the clock; reaching the
 //   target and settling (stable flag, or HOLD_MS at/over target) stops it; lifting
-//   the container off (net under half the target) closes the job, moves the next
-//   order up and waits for the next Start.
+//   the container off (net under half the target) closes the job, records it and
+//   waits for the next Start. The order stays picked for the next bag.
 const START_G = 1.0;     // two steps of the 0.5 g bench scale, so last-digit noise can't start it
 const HOLD_MS = 3000;
 // Fail-safes (Koa 2026-11-05: "make everything fool-proof"):
@@ -40,7 +44,8 @@ const REASONS = ['rScale', 'rWait', 'rEquip', 'rHelp'];
 // Fill weight standards, NET with the bag tared (wiki operations/fill-weight-standards.md,
 // Koa 2026-11-05). Every size sits a little over label on purpose. 10 lb and 5 kg are
 // never filled at a cell: several cells' jobs go to bagging, which checks them and
-// fills the big bag.
+// fills the big bag. The bag size picked for the order sets the target; there is
+// no other way to set it (Koa 2026-11-09).
 const PRESETS = [
   { key: 'qOz', g: 7.5 }, { key: 'hOz', g: 15.0 }, { key: 'oz1', g: 30.0 },
   { key: 'qLb', g: 115.0 }, { key: 'hLb', g: 230.0 }, { key: 'lb1', g: 460.0 },
@@ -49,10 +54,9 @@ const PRESETS = [
 registerLabels({
   en: {
     waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
-    workingOn: 'Working on', workingPlaceholder: 'Order · cultivar · weight',
-    nextOrder: 'Next order', nextPlaceholder: 'Next order · cultivar · weight',
-    of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', target: 'Target',
-    customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
+    cultivar: 'Cultivar', bagSize: 'Bag size', chooseCultivar: 'Choose the cultivar',
+    bannerOrder: 'Choose the cultivar for this order',
+    of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
     liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
@@ -63,16 +67,15 @@ registerLabels({
     notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
     bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
     rScale: 'Scale problem', rWait: 'Waiting for product', rEquip: 'Equipment problem', rHelp: 'Need help',
-    pilotNote: 'Pilot: orders are typed here until the order board is connected. The scale weight is live.',
+    pilotNote: 'Made-to-order trial: pick the cultivar and bag size for each order. The target follows the bag size. The scale weight is live.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Cell',
     netHint: 'net · container tared',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
-    workingOn: 'Trabajando en', workingPlaceholder: 'Orden · variedad · peso',
-    nextOrder: 'Siguiente orden', nextPlaceholder: 'Siguiente orden · variedad · peso',
-    of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', target: 'Meta',
-    customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
+    cultivar: 'Variedad', bagSize: 'Tamaño de bolsa', chooseCultivar: 'Elija la variedad',
+    bannerOrder: 'Elija la variedad de esta orden',
+    of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
     liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
@@ -83,7 +86,7 @@ registerLabels({
     notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
     bannerPaused: 'En pausa: toque Continuar para seguir', autoNote: 'Limpieza 4:20',
     rScale: 'Problema con la báscula', rWait: 'Esperando producto', rEquip: 'Problema de equipo', rHelp: 'Necesito ayuda',
-    pilotNote: 'Prueba: las órdenes se escriben aquí hasta conectar el tablero de órdenes. El peso de la báscula es en vivo.',
+    pilotNote: 'Prueba de órdenes: elija la variedad y el tamaño de bolsa de cada orden. La meta sigue al tamaño de bolsa. El peso de la báscula es en vivo.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Celda',
     netHint: 'neto · contenedor en tara',
   },
@@ -101,13 +104,14 @@ try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode: fal
 const apiParam = params.get('api') || '';
 const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
 const KEY = `ro-cell:${station}`;
+const API_ROOT = API.replace(/\/production$/, '');
 
 const $ = id => document.getElementById(id);
 const el = {
   name: $('cellName'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
-  working: $('workingInput'), next: $('nextInput'),
+  cultivar: $('cultivarSelect'), bag: $('bagSelect'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
-  tare: $('tareBtn'), presets: $('presets'), custom: $('customTarget'),
+  tare: $('tareBtn'),
   cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
   pauseBtn: $('pauseBtn'), resumeBtn: $('resumeBtn'), dialog: $('pauseDialog'), chips: $('pauseChips'),
   note: $('pauseNote'), noteErr: $('pauseError'), pauseOk: $('pauseOk'), pauseCancel: $('pauseCancel'),
@@ -118,9 +122,15 @@ function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
 // phase: idle (needs a tare) -> armed -> running -> finished -> idle
-const state = { working: '', next: '', targetG: 460.0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
+const state = { cultivar: '', bag: 'lb1', targetG: 460.0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
   pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '', ...load() };
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
+// The target is always the picked bag size's fill standard.
+const bagOf = key => PRESETS.find(p => p.key === key);
+if (!bagOf(state.bag)) state.bag = 'lb1';
+state.targetG = bagOf(state.bag).g;
+delete state.working; delete state.next;   // the old typed order fields
+let cultivars = [];
 let gross = null;       // grams, latest reading
 let stable = null;      // the scale's settled flag, when it sends one
 let overSince = null;   // when net first reached the target this job
@@ -156,15 +166,36 @@ function pacificNow() {
 }
 const fmtTarget = g => `${g.toLocaleString('en-US', { maximumFractionDigits: 2 })} g`;
 
-function renderPresets() {
-  el.presets.innerHTML = '';
+// The order: cultivar (the Shopify 2026 list the hourly log uses) and bag size.
+function renderOrder() {
+  const opts = [...cultivars];
+  if (state.cultivar && !opts.includes(state.cultivar)) opts.unshift(state.cultivar);
+  el.cultivar.innerHTML = '';
+  const first = document.createElement('option');
+  first.value = ''; first.textContent = t('chooseCultivar');
+  el.cultivar.appendChild(first);
+  for (const c of opts) { const o = document.createElement('option'); o.value = c; o.textContent = c; el.cultivar.appendChild(o); }
+  el.cultivar.value = state.cultivar || '';
+  el.cultivar.classList.toggle('missing', !state.cultivar);
+  el.bag.innerHTML = '';
   for (const p of PRESETS) {
-    const b = document.createElement('button');
-    b.className = 'btn chip' + (Math.abs(p.g - state.targetG) < 0.01 ? ' on' : '');
-    b.textContent = t(p.key);
-    b.addEventListener('click', () => { state.targetG = p.g; el.custom.value = ''; save(); renderPresets(); render(); });
-    el.presets.appendChild(b);
+    const o = document.createElement('option');
+    o.value = p.key; o.textContent = `${t(p.key)} · ${fmtTarget(p.g)}`;
+    el.bag.appendChild(o);
   }
+  el.bag.value = state.bag;
+}
+async function loadCultivars() {
+  let history = [];
+  try { history = (await (await fetch(`${API}?action=getCultivars`, { cache: 'no-store' })).json()).cultivars || []; } catch { /* stays short */ }
+  let variants = [];
+  try {
+    const r = await fetch(`${API_ROOT}/pool?action=get_supersack_variants`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
+    const v = await r.json();
+    variants = (v.data || v).variants || [];
+  } catch { /* history only */ }
+  cultivars = buildCultivarOptions(history, variants);
+  renderOrder();
 }
 
 function render() {
@@ -192,11 +223,12 @@ function renderBanner() {
   else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
+  else if ((state.phase === 'idle' || state.phase === 'armed') && !state.cultivar) kind = 'order';
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
   el.banner.className = `banner ${kind}`;
-  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared' }[kind])
+  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared', order: 'bannerOrder' }[kind])
     .replace('{g}', fmtG(state.tareFlagG || 0));
 }
 
@@ -243,8 +275,8 @@ function step() {
   if (confirmed) {
     const before = tareCandidate.from;
     tareCandidate = null;
-    if (state.phase === 'idle') {
-      // Basket on, scale tared: the job is ready, same as tapping Start.
+    if (state.phase === 'idle' && state.cultivar) {
+      // Basket on, scale tared, order picked: the job is ready, same as tapping Start.
       state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
       state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
       return;
@@ -273,11 +305,11 @@ function step() {
   } else if (state.phase === 'finished' && gross < (state.panAtFinishG ?? state.targetG) / 2) {
     // The pan lost over half of what it held at the finish (a mid-job TARE may have
     // banked part of the job off the pan): the basket was lifted for pickup.
-    // Container lifted off: the job is closed, the next order moves up.
+    // Container lifted off: the job is closed.
+    // The pickup mark is the job's record: what it was and how long it took.
+    mark('pickup', (state.finishedNetG || 0) / 1000,
+      { cultivar: state.cultivar || null, bag: state.bag, cycleS: state.finishedMs ? state.finishedMs / 1000 : null });
     state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null; state.bankedG = 0; state.tareFlagG = 0;
-    mark('pickup', (state.finishedNetG || 0) / 1000);
-    state.working = state.next; state.next = '';
-    el.working.value = state.working; el.next.value = '';
   } else {
     return;
   }
@@ -350,17 +382,19 @@ async function read() {
   }
 }
 
-el.working.value = state.working;
-el.next.value = state.next;
-el.working.addEventListener('input', () => { state.working = el.working.value; save(); });
-el.next.addEventListener('input', () => { state.next = el.next.value; save(); });
+el.cultivar.addEventListener('change', () => { state.cultivar = el.cultivar.value; save(); renderOrder(); render(); });
+// Picking a bag size sets the target (mid-job too: the ring follows it).
+el.bag.addEventListener('change', () => {
+  const p = bagOf(el.bag.value); if (!p) return;
+  state.bag = p.key; state.targetG = p.g; overSince = null; save(); render();
+});
 // The Worker only sees gross weight (basket included). Tare and pickup marks let
 // it tell a pickup from a basket shaken out when it works out hourly tops
 // (lib/cell-auto.js). Best effort, one retry: the job here never waits on it.
-async function mark(kind, kg) {
+async function mark(kind, kg, job = {}) {
   const send = () => fetch(`${API}?action=scaleMark`, {
     method: 'POST', headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ stationId: station, kind, kg: Math.max(0, Math.round(kg * 100000) / 100000) }),
+    body: JSON.stringify({ stationId: station, kind, kg: Math.max(0, Math.round(kg * 100000) / 100000), ...job }),
   });
   try { const r = await send(); if (!r.ok && r.status >= 500) throw new Error(); } catch {
     setTimeout(() => send().catch(() => {}), 10000);
@@ -376,6 +410,8 @@ el.tare.addEventListener('click', async () => {
   // set down a moment ago is what gets zeroed. No live scale, no tare.
   await read();
   if (gross === null || !live) { render(); return; }
+  // Every job needs its order: no cultivar, no start.
+  if (!state.cultivar) { render(); el.cultivar.focus(); return; }
   // Start needs a tared scale: an untared basket would count as tops.
   if (Math.abs(gross) > ON_SCALE_G) { el.banner.hidden = false; el.banner.className = 'banner tare'; el.banner.textContent = t('bannerTare'); return; }
   state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
@@ -406,12 +442,8 @@ function holdEnd() {
 el.resetBtn.addEventListener('pointerdown', holdStart);
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.resetBtn.addEventListener(ev, holdEnd));
 el.resetBtn.addEventListener('click', () => { if (!holdTimer) el.cycleSub.textContent = t('holdHint'); });
-el.custom.addEventListener('change', () => {
-  const v = parseFloat(el.custom.value);
-  if (v > 0) { state.targetG = v; save(); renderPresets(); render(); }
-});
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
-document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderPresets(); render(); });
+document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderOrder(); render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); keepAwake(); } });
 
 // Keep the tablet's screen on while the page is up, on battery too (Samsung's
@@ -475,6 +507,8 @@ function autoPause() {
 setInterval(() => { autoPause(); renderCycle(); }, 1000);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
-renderPresets();
+save();
+renderOrder();
 render();
 poll();
+loadCultivars();

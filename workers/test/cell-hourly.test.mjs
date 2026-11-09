@@ -141,6 +141,10 @@ function d1WithScale() {
   env.DB.raw.exec(`INSERT INTO scale_stations (station_id, label, kind, token_hash) VALUES ('table1', 'Cell 1', 'table', 'x');`);
   return env;
 }
+const withJobColumns = env => {
+  env.DB.raw.exec(readFileSync(new URL('../migrations/0052-cell-job-order.sql', import.meta.url), 'utf8'));
+  return env;
+};
 
 test('a cell with a scale gets hourly auto tops from its net readings, and a mid-job TARE is flagged', async () => {
   const env = d1WithScale();
@@ -250,4 +254,31 @@ test('without migration 0051 the day still loads, with no batches', async () => 
   const r = await json(await getCellHourly({ date: DAY }, env));
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.batches, []);
+});
+
+test('a pickup mark carries what the job was: cultivar, bag size and working time', async () => {
+  const env = withJobColumns(d1WithScale());
+  const r = await json(await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.0151, cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycleS: 312.4 }, env));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.job, { cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycleS: 312 });
+  const row = env.DB.raw.prepare('SELECT kind, kg, cultivar, bag, cycle_s FROM scale_marks').get();
+  assert.deepEqual({ ...row }, { kind: 'pickup', kg: 0.0151, cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycle_s: 312 });
+});
+
+test('a bad bag or cycle time is dropped, never the mark; tare marks carry no order', async () => {
+  const env = withJobColumns(d1WithScale());
+  await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.46, cultivar: 'Lifter', bag: '10lb', cycleS: -5 }, env);
+  await scaleMark({ stationId: 'table1', kind: 'tare', kg: 0.05, cultivar: 'Lifter', bag: 'lb1', cycleS: 60 }, env);
+  const rows = env.DB.raw.prepare('SELECT kind, cultivar, bag, cycle_s FROM scale_marks ORDER BY id').all().map(r => ({ ...r }));
+  assert.deepEqual(rows, [
+    { kind: 'pickup', cultivar: 'Lifter', bag: null, cycle_s: null },
+    { kind: 'tare', cultivar: null, bag: null, cycle_s: null },
+  ]);
+});
+
+test('before migration 0052 a pickup with an order still saves the plain mark', async () => {
+  const env = d1WithScale();
+  const r = await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.115, cultivar: 'Lifter', bag: 'qLb', cycleS: 200 }, env);
+  assert.equal(r.status, 200);
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM scale_marks').get().n, 1);
 });
