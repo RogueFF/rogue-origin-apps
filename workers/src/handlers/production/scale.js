@@ -56,6 +56,7 @@ async function setBagMode(body, env) {
 // with kind 'table' must send its device token; anything unregistered (line1,
 // the QC bag scale) keeps the original behaviour: no token, 3 s stale.
 const LEGACY_STALE_MS = 3000;
+const MIN_TABLE_KG = -10; // the lowest a tared table scale may read (basket lifted)
 const EVENT_MIN_MOVE_KG = 0.0002; // log a settled weight only when it moved 0.2 g or more
 
 // { migrated, station }. Until 0049 is applied there is no scale_stations
@@ -123,7 +124,7 @@ async function getScaleWeight(params, env) {
     const now = new Date();
     const isStale = (now - updatedAt) > STALE_THRESHOLD_MS;
     const percentComplete = result.target_weight > 0
-      ? Math.min(100, Math.round((result.weight / result.target_weight) * 100))
+      ? Math.max(0, Math.min(100, Math.round((result.weight / result.target_weight) * 100)))
       : 0;
 
     return successResponse({
@@ -149,7 +150,7 @@ async function setScaleWeight(body, env, request) {
   const weight = parseFloat(body.weight);
   const unit = normalizeUnit(body.unit);
 
-  if (isNaN(weight) || weight < 0) {
+  if (isNaN(weight)) {
     return errorResponse('Invalid weight value', 'VALIDATION_ERROR', 400);
   }
 
@@ -157,6 +158,13 @@ async function setScaleWeight(body, env, request) {
 
   try {
     const { migrated, station } = await findStation(env, stationId);
+
+    // A cell scale tared with the basket on reads negative while the basket is
+    // lifted (Koa 2026-11-09: tare on the scale itself). Only registered table
+    // stations may post that, down to -MIN_TABLE_KG; line1 and the rest keep >= 0.
+    if (weight < 0 && !(station && station.kind === 'table' && weight >= MIN_TABLE_KG)) {
+      return errorResponse('Invalid weight value', 'VALIDATION_ERROR', 400);
+    }
 
     if (station && station.kind === 'table') {
       if (!station.active) {
