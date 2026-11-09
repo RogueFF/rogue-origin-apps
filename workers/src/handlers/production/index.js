@@ -18,7 +18,7 @@ import { analyzeStrain } from './strain.js';
 import { inventoryWebhook } from './inventory.js';
 import { setShiftStart, getShiftStart } from './shift.js';
 import { getScaleWeight, setScaleWeight, setBagMode } from './scale.js';
-import { getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, scaleMark } from './cell-hourly.js';
+import { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark } from './cell-hourly.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -80,6 +80,8 @@ export async function handleProductionD1(request, env, ctx) {
         return await getCellHourly(params, env);
       case 'setCellHourly':
         return await setCellHourly(body, env);
+      case 'setCellQuality':
+        return await setCellQuality(body, env);
       case 'setRoomSmalls':
         return await setRoomSmalls(body, env);
       case 'saveCellRoster':

@@ -1,8 +1,9 @@
 /**
- * Cell hourly log: hour-by-hour tops, quality scores and notes per cell, plus one
- * shared smalls number per hour for the room. Used until every table has a
- * live scale; the rows are keyed (date, slot, station) like the scale rollup
- * will write them (Koa 2026-11-09).
+ * Cell hourly log: hour-by-hour tops per cell, plus one shared smalls number per
+ * hour for the room. Used until every table has a live scale; the rows are keyed
+ * (date, slot, station) like the scale rollup will write them (Koa 2026-11-09).
+ * Quality is by batch, not by hour: each cell starts the day at batch 1, and
+ * once a batch's four checks are scored the next check is the next batch.
  *
  *   cell-hourly.html            today, the current hour
  *   cell-hourly.html?date=...   another day
@@ -28,9 +29,10 @@ registerLabels({
     removeCell: 'Remove cell', topsLabel: 'Tops this hour', quality: 'Quality checks: score each one 1 to 4',
     chkTrim: 'Trim job', chkStems: 'Stems cut right', chkMold: 'No mold', chkInsects: 'No insects',
     notes: 'Notes', viewWeights: 'Weights', viewQuality: 'Quality', checkedBy: 'Checked by (initials)',
-    overallPass: 'Pass: every check 3 or 4', overallRedo: "Redo: this hour's tops go back to the cell",
-    stopAlert: 'STOP: mold or insects in the tops. Set the basket aside and call the lead.', scored: 'scored',
-    cellCultivar: 'Cultivar at this cell', jump: 'All cells this hour', addCell: '+ Add cell',
+    overallPass: 'Pass: every check 3 or 4', overallRedo: "Redo: this batch's tops go back to the cell",
+    stopAlert: 'STOP: mold or insects in the tops. Set the basket aside and call the lead.',
+    batch: 'Batch {n}', startBatch: 'Start batch {n}', batchesChecked: '{n} batches checked today',
+    cellCultivar: 'Cultivar at this cell', jump: 'All cells this hour', jumpToday: 'All cells today', addCell: '+ Add cell',
     saving: 'Saving…', saved: 'Saved', notSaved: 'Not saved: no connection. It will retry.', perHour: 'lb/hr',
     confirmBig: 'That is {lb} lb in one hour. Keep it?', confirmRemove: 'Remove {name}? Its saved hours stay.',
     entered: 'entered', sameAsRoom: 'Same as the room', none: '—', loadFail: 'Could not load. Check the connection.',
@@ -46,9 +48,10 @@ registerLabels({
     removeCell: 'Quitar celda', topsLabel: 'Tops de esta hora', quality: 'Revisión de calidad: califique cada una del 1 al 4',
     chkTrim: 'Recorte', chkStems: 'Tallos bien cortados', chkMold: 'Sin moho', chkInsects: 'Sin insectos',
     notes: 'Notas', viewWeights: 'Pesos', viewQuality: 'Calidad', checkedBy: 'Revisó (iniciales)',
-    overallPass: 'Pasa: todas en 3 o 4', overallRedo: 'Rehacer: los tops de esta hora regresan a la celda',
-    stopAlert: 'PARE: moho o insectos en los tops. Aparte la canasta y llame al líder.', scored: 'calificadas',
-    cellCultivar: 'Variedad en esta celda', jump: 'Todas las celdas esta hora', addCell: '+ Agregar celda',
+    overallPass: 'Pasa: todas en 3 o 4', overallRedo: 'Rehacer: los tops de este lote regresan a la celda',
+    stopAlert: 'PARE: moho o insectos en los tops. Aparte la canasta y llame al líder.',
+    batch: 'Lote {n}', startBatch: 'Empezar lote {n}', batchesChecked: '{n} lotes revisados hoy',
+    cellCultivar: 'Variedad en esta celda', jump: 'Todas las celdas esta hora', jumpToday: 'Todas las celdas hoy', addCell: '+ Agregar celda',
     saving: 'Guardando…', saved: 'Guardado', notSaved: 'No se guardó: sin conexión. Se reintentará.', perHour: 'lb/h',
     confirmBig: 'Son {lb} lb en una hora. ¿Lo deja así?', confirmRemove: '¿Quitar {name}? Sus horas guardadas se quedan.',
     entered: 'llenas', sameAsRoom: 'Igual que el cuarto', none: '—', loadFail: 'No cargó. Revise la conexión.',
@@ -95,6 +98,7 @@ const el = {
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   tops: $('tops'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), qOverall: $('qOverall'), stopAlert: $('stopAlert'), checkedBy: $('checkedBy'),
+  batchTitle: $('batchTitle'), batchHistory: $('batchHistory'), nextBatch: $('nextBatchBtn'), gridTitle: $('gridTitle'),
   tabWeights: $('tabWeights'), tabQuality: $('tabQuality'),
   notes: $('notes'), cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
@@ -102,6 +106,8 @@ const el = {
 
 const state = {
   slots: [], roster: [], rows: new Map(), room: new Map(), auto: new Map(),
+  batches: new Map(),   // `${station}|${batch}` -> the batch's scores, notes, initials
+  shownBatch: new Map(), // station -> the batch on screen; picked when the cell opens
   slot: null, cellIdx: 0, cultivars: [], editLane: 'wholesale',
   view: ['weights', 'quality'].includes(params.get('view')) ? params.get('view') : (readView() || 'weights'),
 };
@@ -136,7 +142,7 @@ function eff(station = cell()?.stationId, slot = state.slot) {
 const queue = new Map();   // key -> { kind, payload, scope }
 let flushing = false;
 function enqueue(kind, payload, field, scope) {
-  queue.set(`${kind}|${payload.slot}|${payload.stationId || 'room'}|${field}`, { kind, payload, scope });
+  queue.set(`${kind}|${payload.slot ?? `b${payload.batch}`}|${payload.stationId || 'room'}|${field}`, { kind, payload, scope });
   renderStatus();
   flush();
 }
@@ -169,12 +175,13 @@ function statusFor(scope) {
 }
 function renderStatus() {
   const c = cell();
-  const s = c ? statusFor(`${state.slot}|${c.stationId}`) : null;
+  const s = c ? statusFor(state.view === 'quality' ? qScope(c.stationId) : `${state.slot}|${c.stationId}`) : null;
   if (s) { el.cellStatus.className = `save-status ${s.cls}`; el.cellStatus.textContent = s.text; }
   const r = statusFor(`${state.slot}|room`);
   el.roomStatus.className = `save-status ${r.cls}`; el.roomStatus.textContent = r.text;
 }
 const pending = (slot, station, field) => queue.has(`setCellHourly|${slot}|${station}|${field}`);
+const qPending = (station, batch, field) => queue.has(`setCellQuality|b${batch}|${station}|${field}`);
 
 // ---- local edits (optimistic) ----
 // The four quality checks, each scored 1-4 (Koa 2026-11-09: "3-4 is passing
@@ -204,15 +211,62 @@ function overall(checks = {}) {
   return v.every(x => x != null && x >= 3) ? 'pass' : null;
 }
 const stopFor = (checks = {}) => checks.qMold === 1 || checks.qInsects === 1;
+const scoredAll = b => CHECKS.every(([k]) => (b?.checks || {})[k] != null);
+
+// ---- quality batches ----
+const batchKey = (station, n) => `${station}|${n}`;
+const batchesFor = station => [...state.batches.values()].filter(b => b.stationId === station).sort((a, b) => a.batch - b.batch);
+// The batch to show when a cell opens: the latest one still being scored, or
+// the next number once the latest has all four scores (batch 1 to start the day).
+function pickBatch(station) {
+  const list = batchesFor(station);
+  const last = list[list.length - 1];
+  if (!last) return 1;
+  return scoredAll(last) ? last.batch + 1 : last.batch;
+}
+// Held fixed while the cell stays open (refreshes, edits), so a finished
+// batch's result stays on screen until the checker moves on.
+function shownBatch(station = cell()?.stationId) {
+  if (!state.shownBatch.has(station)) state.shownBatch.set(station, pickBatch(station));
+  return state.shownBatch.get(station);
+}
+const qb = (station = cell()?.stationId) => state.batches.get(batchKey(station, shownBatch(station))) || {};
+const qScope = station => `q|${station}|${shownBatch(station)}`;
+function openCell(i) {
+  state.cellIdx = i;
+  const c = cell(); if (c) state.shownBatch.delete(c.stationId);
+}
+// The checker's initials, remembered on this tablet for the next batch.
+function lastInitials() { try { return localStorage.getItem('ro-cell-hourly:initials') || ''; } catch { return ''; } }
+function rememberInitials(v) { try { if (v) localStorage.setItem('ro-cell-hourly:initials', v); } catch { /* per visit only */ } }
+function nowSlot() { return state.slots.length ? state.slots[currentSlotIndex()].slot : state.slot; }
+function setQualityField(field, value) {
+  const c = cell(); if (!c) return;
+  const n = shownBatch(c.stationId);
+  const key = batchKey(c.stationId, n);
+  const prev = state.batches.get(key) || { stationId: c.stationId, batch: n, checks: {} };
+  const isCheck = CHECKS.some(([k]) => k === field);
+  const b = isCheck ? { ...prev, checks: { ...(prev.checks || {}), [field]: value } } : { ...prev, [field]: value };
+  b.quality = overall(b.checks);
+  const save = (f, v) => enqueue('setCellQuality', { stationId: c.stationId, batch: n, [f]: v }, f, qScope(c.stationId));
+  save(field, value);
+  // A new batch takes the cultivar at the cell right now, and this tablet's initials.
+  if (!prev.updatedAt && !prev.cultivar) {
+    const slot = DATE === pacificToday().day ? nowSlot() : state.slot;
+    const cv = row(c.stationId, slot).cultivar || roomCultivar(slot);
+    if (cv) { b.cultivar = cv; save('cultivar', cv); }
+  }
+  if (field !== 'checkedBy' && !b.checkedBy && lastInitials()) { b.checkedBy = lastInitials(); save('checkedBy', b.checkedBy); }
+  b.updatedAt = b.updatedAt || 'local';
+  state.batches.set(key, b);
+  renderGrid();
+}
+
 function setCellField(field, value) {
   const c = cell(); if (!c) return;
   const key = rowKey(state.slot, c.stationId);
-  const isCheck = CHECKS.some(([k]) => k === field);
   const prev = state.rows.get(key) || {};
-  const r = isCheck
-    ? { ...prev, stationId: c.stationId, slot: state.slot, checks: { ...(prev.checks || {}), [field]: value } }
-    : { ...prev, stationId: c.stationId, slot: state.slot, [field]: value };
-  if (isCheck) r.quality = overall(r.checks);
+  const r = { ...prev, stationId: c.stationId, slot: state.slot, [field]: value };
   state.rows.set(key, r);
   const payload = { slot: state.slot, stationId: c.stationId, [field]: value };
   // A row's cultivar defaults to the room's: stamp it with the first weight.
@@ -240,7 +294,7 @@ function renderChecks(r) {
       const b = document.createElement('button');
       b.className = 'btn score' + (v === n ? ` on ${n >= 3 ? 'ok' : 'redo'}` : '');
       b.textContent = String(n);
-      b.addEventListener('click', () => { setCellField(key, v === n ? null : n); renderCell(); });
+      b.addEventListener('click', () => { setQualityField(key, v === n ? null : n); renderCell(); });
       scores.appendChild(b);
     }
     const desc = document.createElement('div');
@@ -252,6 +306,35 @@ function renderChecks(r) {
   const o = overall(r.checks);
   el.qOverall.className = 'overall' + (o === 'pass' ? ' pass' : o === 'fail' ? ' redo' : '');
   el.qOverall.textContent = o === 'pass' ? t('overallPass') : o === 'fail' ? t('overallRedo') : '';
+}
+
+// Batch number, today's batches at this cell (tap one to fix a typo), and a
+// button to start the next batch once this one has all four scores.
+function renderBatch(station) {
+  const n = shownBatch(station);
+  const b = qb(station);
+  el.batchTitle.textContent = tf('batch', { n });
+  el.batchHistory.innerHTML = '';
+  const list = batchesFor(station);
+  // Today's batches, the one on screen, and the one a new visit would open.
+  const nums = [...new Set([...list.map(x => x.batch), n, pickBatch(station)])].sort((a, c) => a - c);
+  if (nums.length > 1) {
+    for (const k of nums) {
+      const x = state.batches.get(batchKey(station, k));
+      const chip = document.createElement('button');
+      const q = x ? overall(x.checks) : null;
+      chip.className = 'bchip' + (q ? ` ${q}` : '') + (k === n ? ' on' : '');
+      chip.textContent = `${k} ${q === 'pass' ? '✓' : q === 'fail' ? '✕' : '…'}`;
+      chip.addEventListener('click', () => { state.shownBatch.set(station, k); renderCell(); });
+      el.batchHistory.appendChild(chip);
+    }
+  }
+  const latest = Math.max(n, ...list.map(x => x.batch));
+  el.nextBatch.hidden = !(scoredAll(b) && n === latest);
+  el.nextBatch.textContent = tf('startBatch', { n: latest + 1 });
+  el.stopAlert.hidden = !stopFor(b.checks);
+  if (document.activeElement !== el.notes) el.notes.value = b.notes ?? '';
+  if (document.activeElement !== el.checkedBy) el.checkedBy.value = b.checkedBy ?? lastInitials();
 }
 
 // ---- rendering ----
@@ -267,7 +350,7 @@ function renderHours() {
   const nowIdx = DATE === pacificToday().day ? currentSlotIndex() : -1;
   state.slots.forEach((s, i) => {
     const b = document.createElement('button');
-    const done = cells().filter(c => (state.view === 'quality' ? row(c.stationId, s.slot).quality != null : eff(c.stationId, s.slot) != null)).length;
+    const done = cells().filter(c => eff(c.stationId, s.slot) != null).length;
     b.className = 'hour-chip' + (s.slot === state.slot ? ' on' : '') + (i === nowIdx ? ' now' : '');
     b.innerHTML = `<span>${s.slot.replace(/:00/g, '').replace(' – ', '–')}</span><small>${done}/${cells().length}</small>`;
     b.addEventListener('click', () => { state.slot = s.slot; renderAll(); });
@@ -294,7 +377,7 @@ function renderBag() {
   let total = 0;
   for (const c of state.roster) {
     if (!ws.has(c.stationId)) continue;
-    for (const s of state.slots) if (row(c.stationId, s.slot).quality !== 'fail') total += Number(eff(c.stationId, s.slot)) || 0;
+    for (const s of state.slots) total += Number(eff(c.stationId, s.slot)) || 0;
   }
   // The room's hour: every active cell, typed or from its scale.
   let hour = 0, typedN = 0, scaleN = 0;
@@ -321,9 +404,6 @@ function renderCell() {
   el.lane.textContent = t(c.lane);
   el.lane.className = `lane ${c.lane}`;
   if (document.activeElement !== el.tops) el.tops.value = r.tops ?? '';
-  if (document.activeElement !== el.notes) el.notes.value = r.notes ?? '';
-  if (document.activeElement !== el.checkedBy) el.checkedBy.value = r.checkedBy ?? '';
-  el.stopAlert.hidden = !stopFor(r.checks);
   const hours = state.slots.find(s => s.slot === state.slot)?.hours || 1;
   const v = eff();
   el.rate.textContent = v != null ? `${(v / hours).toFixed(2)} ${t('perHour')} (${hours} h)` : '';
@@ -342,7 +422,8 @@ function renderCell() {
     el.diffFlag.textContent = tf('differ', { pct: Math.round(off * 100) });
     el.tareFlag.hidden = a.flag !== 'scaleTared';
   }
-  renderChecks(r);
+  renderChecks(qb(c.stationId));
+  renderBatch(c.stationId);
   fillCultivars(el.cellCultivar, r.cultivar && r.cultivar !== roomCultivar() ? r.cultivar : '', true);
   el.editBox.hidden = true;
   renderStatus();
@@ -351,21 +432,28 @@ function renderGrid() {
   el.grid.innerHTML = '';
   const list = cells();
   let done = 0;
+  const quality = state.view === 'quality';
+  let checked = 0;
   list.forEach((c, i) => {
-    const r = row(c.stationId);
-    // Weights view: green once tops are in. Quality view: green = pass, red = redo.
-    const has = state.view === 'quality' ? r.quality === 'pass' : eff(c.stationId) != null;
-    if (state.view === 'quality' ? r.quality != null : has) done++;
+    // Weights view: green once tops are in. Quality view: the cell's latest
+    // fully scored batch, green = pass, red = redo.
+    const scored = batchesFor(c.stationId).filter(scoredAll);
+    checked += scored.length;
+    const last = scored[scored.length - 1];
+    const has = quality ? last?.quality === 'pass' : eff(c.stationId) != null;
+    if (has) done++;
     const b = document.createElement('button');
-    b.className = 'jump' + (has ? ' done' : '') + (r.quality === 'fail' ? ' failq' : '')
+    b.className = 'jump' + (has ? ' done' : '') + (quality && last?.quality === 'fail' ? ' failq' : '')
       + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '') + (hasScale(c.stationId) ? ' scale' : '');
     b.innerHTML = `<b>${c.stationId.replace(/^table/, '')}</b>`;
     b.appendChild(document.createTextNode(c.label));
+    if (quality && scored.length) { const s = document.createElement('small'); s.textContent = `× ${scored.length}`; b.appendChild(s); }
     b.title = c.label;
-    b.addEventListener('click', () => { state.cellIdx = i; renderCell(); renderGrid(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    b.addEventListener('click', () => { openCell(i); renderCell(); renderGrid(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
     el.grid.appendChild(b);
   });
-  el.doneCount.textContent = `${done}/${list.length} ${t(state.view === 'quality' ? 'scored' : 'entered')}`;
+  el.gridTitle.textContent = t(quality ? 'jumpToday' : 'jump');
+  el.doneCount.textContent = quality ? tf('batchesChecked', { n: checked }) : `${done}/${list.length} ${t('entered')}`;
   renderHours();
 }
 function renderAll() { renderRoom(); renderCell(); renderGrid(); renderBag(); }
@@ -380,11 +468,18 @@ async function load() {
     const local = state.rows.get(key) || {};
     const merged = { ...r };
     // Keep this tablet's unsaved edits over what the server had.
-    for (const f of ['tops', 'notes', 'cultivar', 'checkedBy']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
-    merged.checks = { ...(r.checks || {}) };
-    for (const [k] of CHECKS) if (pending(r.slot, r.stationId, k)) merged.checks[k] = (local.checks || {})[k] ?? null;
-    merged.quality = overall(merged.checks) ?? r.quality ?? null;
+    for (const f of ['tops', 'notes', 'cultivar']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
     state.rows.set(key, merged);
+  }
+  for (const b of d.batches || []) {
+    const key = batchKey(b.stationId, b.batch);
+    const local = state.batches.get(key) || {};
+    const merged = { ...b, checks: { ...(b.checks || {}) } };
+    // Keep this tablet's unsaved scores over what the server had.
+    for (const f of ['notes', 'checkedBy', 'cultivar']) if (qPending(b.stationId, b.batch, f)) merged[f] = local[f];
+    for (const [k] of CHECKS) if (qPending(b.stationId, b.batch, k)) merged.checks[k] = (local.checks || {})[k] ?? null;
+    merged.quality = overall(merged.checks);
+    state.batches.set(key, merged);
   }
   for (const r of d.room) {
     const local = state.room.get(r.slot) || {};
@@ -412,8 +507,14 @@ async function loadCultivars() {
 }
 
 // ---- events ----
-el.prev.addEventListener('click', () => { state.cellIdx = (state.cellIdx - 1 + cells().length) % cells().length; renderCell(); renderGrid(); });
-el.next.addEventListener('click', () => { state.cellIdx = (state.cellIdx + 1) % cells().length; renderCell(); renderGrid(); });
+el.prev.addEventListener('click', () => { openCell((state.cellIdx - 1 + cells().length) % cells().length); renderCell(); renderGrid(); });
+el.next.addEventListener('click', () => { openCell((state.cellIdx + 1) % cells().length); renderCell(); renderGrid(); });
+el.nextBatch.addEventListener('click', () => {
+  const c = cell(); if (!c) return;
+  const latest = Math.max(shownBatch(c.stationId), ...batchesFor(c.stationId).map(x => x.batch));
+  state.shownBatch.set(c.stationId, latest + 1);
+  renderCell(); window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 el.tops.addEventListener('change', () => {
   const raw = el.tops.value.trim();
@@ -425,9 +526,12 @@ el.tops.addEventListener('change', () => {
 });
 el.notes.addEventListener('change', () => {
   const v = el.notes.value.trim() || null;
-  setCellField('notes', v);
+  setQualityField('notes', v);
 });
-el.checkedBy.addEventListener('change', () => { setCellField('checkedBy', el.checkedBy.value.trim().toUpperCase() || null); renderCell(); });
+el.checkedBy.addEventListener('change', () => {
+  const v = el.checkedBy.value.trim().toUpperCase() || null;
+  rememberInitials(v); setQualityField('checkedBy', v); renderCell();
+});
 el.tabWeights.addEventListener('click', () => { setView('weights'); renderGrid(); });
 el.tabQuality.addEventListener('click', () => { setView('quality'); renderGrid(); });
 el.cellCultivar.addEventListener('change', () => { setCellField('cultivar', el.cellCultivar.value || roomCultivar() || null); renderCell(); });
@@ -481,4 +585,10 @@ el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 el.date.textContent = DATE;
 setView(state.view);
 load().then(() => { renderAll(); loadCultivars(); }).catch(() => { el.cellStatus.className = 'save-status bad'; el.cellStatus.textContent = t('loadFail'); });
+// Coming back to the tablet counts as a new visit: each cell re-picks its batch.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !state.slots.length) return;
+  state.shownBatch.clear();
+  load().then(renderAll).catch(() => {});
+});
 setInterval(() => { if (!document.hidden) load().then(() => { renderRoom(); renderGrid(); renderBag(); if (!el.editBox.hidden) return; renderCell(); }).catch(() => {}); }, REFRESH_MS);

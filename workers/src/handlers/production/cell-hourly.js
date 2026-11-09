@@ -3,9 +3,10 @@
  * live scale. Rows are keyed (production_date, time_slot, station_id), the same
  * key the scale rollup will write later with source = 'scale'.
  *
- *   GET  ?action=cellHourly&date=YYYY-MM-DD   roster, the day's rows, room smalls, slots
- *   POST ?action=setCellHourly   { date, slot, stationId, tops?, notes?, cultivar?,
- *                                  qTrim?, qStems?, qMold?, qInsects?, checkedBy? }   (each check 1-4 or null)
+ *   GET  ?action=cellHourly&date=YYYY-MM-DD   roster, the day's rows, room smalls, slots, quality batches
+ *   POST ?action=setCellHourly   { date, slot, stationId, tops?, notes?, cultivar?, quality? }
+ *   POST ?action=setCellQuality  { date, stationId, batch, qTrim?, qStems?, qMold?, qInsects?,
+ *                                  checkedBy?, notes?, cultivar? }   (each check 1-4 or null; migration 0051)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
  *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg }   from the cell screen
@@ -30,10 +31,13 @@ const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
 const MAX_LABEL = 40;
 const MAX_CULTIVAR = 80;
-// The four quality checks per cell-hour, each scored 1-4 (migration 0051; Koa
-// 2026-11-09: "3-4 is passing quality, 1-2 is needing to be redone"). `quality`
-// is the hour's overall result: 'fail' (redo) if any check is 1 or 2, 'pass'
-// once all four are 3 or 4, NULL until then.
+// Quality checks per cell by batch, not by hour (migration 0051; Koa 2026-11-09):
+// each cell starts the day at batch 1 and the next check after a fully scored
+// batch is the next number. Four checks, each scored 1-4: "3-4 is passing
+// quality, 1-2 is needing to be redone". `quality` is the batch's overall
+// result: 'fail' (redo) if any check is 1 or 2, 'pass' once all four are 3 or 4,
+// NULL until then.
+const MAX_BATCH = 500;
 const CHECKS = { qTrim: 'q_trim', qStems: 'q_stems', qMold: 'q_mold', qInsects: 'q_insects' };
 const MAX_INITIALS = 10;
 const OVERALL_SQL = `CASE
@@ -138,16 +142,20 @@ async function scaleMark(body, env) {
 async function getCellHourly(params, env) {
   const date = params.date;
   if (!validDate(date)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
-  const [roster, rows, room] = await Promise.all([
+  const [roster, rows, room, batches] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort, active FROM cell_roster ORDER BY sort, station_id`).all(),
     env.DB.prepare(
-      `SELECT station_id, time_slot, cultivar, tops_lbs, quality, q_trim, q_stems, q_mold, q_insects,
-              checked_by, notes, source, updated_at
+      `SELECT station_id, time_slot, cultivar, tops_lbs, quality, notes, source, updated_at
        FROM cell_hourly WHERE production_date = ?`
     ).bind(date).all(),
     env.DB.prepare(
       `SELECT time_slot, smalls_lbs, cultivar, updated_at FROM cell_room_hourly WHERE production_date = ?`
     ).bind(date).all(),
+    // Before 0051 is applied the day still loads, with no batches.
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, batch_no, cultivar, q_trim, q_stems, q_mold, q_insects, quality, checked_by, notes, updated_at
+       FROM cell_quality WHERE production_date = ? ORDER BY station_id, batch_no`
+    ).bind(date)),
   ]);
   return successResponse({
     date,
@@ -158,10 +166,13 @@ async function getCellHourly(params, env) {
     rows: (rows.results || []).map(r => ({
       stationId: r.station_id, slot: r.time_slot, cultivar: r.cultivar, tops: r.tops_lbs,
       quality: r.quality, notes: r.notes, source: r.source, updatedAt: r.updated_at,
-      checks: { qTrim: r.q_trim, qStems: r.q_stems, qMold: r.q_mold, qInsects: r.q_insects },
-      checkedBy: r.checked_by,
+    })),
+    batches: batches.map(b => ({
+      stationId: b.station_id, batch: b.batch_no, cultivar: b.cultivar, quality: b.quality,
+      checks: { qTrim: b.q_trim, qStems: b.q_stems, qMold: b.q_mold, qInsects: b.q_insects },
+      checkedBy: b.checked_by, notes: b.notes, updatedAt: b.updated_at,
       // A 1 on mold or insects: stop, call the lead.
-      alert: r.q_mold === 1 || r.q_insects === 1 ? 'stop' : null,
+      alert: b.q_mold === 1 || b.q_insects === 1 ? 'stop' : null,
     })),
     room: (room.results || []).map(r => ({
       slot: r.time_slot, smalls: r.smalls_lbs, cultivar: r.cultivar, updatedAt: r.updated_at,
@@ -193,6 +204,36 @@ async function setCellHourly(body, env) {
     }
     cols.push('quality'); vals.push(q);
   }
+  if (has(body, 'notes')) { cols.push('notes'); vals.push(cleanText(body.notes, MAX_NOTE)); }
+  if (has(body, 'cultivar')) { cols.push('cultivar'); vals.push(cleanText(body.cultivar, MAX_CULTIVAR)); }
+  if (!cols.length) return errorResponse('Nothing to save', 'VALIDATION_ERROR', 400);
+
+  await env.DB.prepare(
+    `INSERT INTO cell_hourly (production_date, time_slot, station_id, ${cols.join(', ')}, source, updated_at)
+     VALUES (?, ?, ?, ${cols.map(() => '?').join(', ')}, 'manual', datetime('now'))
+     ON CONFLICT (production_date, time_slot, station_id) DO UPDATE SET
+       ${cols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`
+  ).bind(date, slot, cell.station_id, ...vals).run();
+
+  return successResponse({ success: true, date, slot, stationId: cell.station_id, saved: cols });
+}
+
+// One quality batch at one cell. Field by field like the hourly saves, so two
+// checkers never wipe each other's scores. The page picks the batch number:
+// the next one after a fully scored batch.
+async function setCellQuality(body, env) {
+  const { date } = body;
+  if (!validDate(date)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
+  const batch = Number(body.batch);
+  if (!Number.isInteger(batch) || batch < 1 || batch > MAX_BATCH) {
+    return errorResponse(`batch must be a whole number from 1 to ${MAX_BATCH}`, 'VALIDATION_ERROR', 400);
+  }
+  const cell = await env.DB.prepare(`SELECT station_id FROM cell_roster WHERE station_id = ?`)
+    .bind(String(body.stationId || '')).first();
+  if (!cell) return errorResponse('Unknown cell', 'VALIDATION_ERROR', 400);
+
+  const cols = [];
+  const vals = [];
   for (const [key, col] of Object.entries(CHECKS)) {
     if (!has(body, key)) continue;
     const q = body[key] === null || body[key] === '' ? null : Number(body[key]);
@@ -206,26 +247,23 @@ async function setCellHourly(body, env) {
   if (has(body, 'cultivar')) { cols.push('cultivar'); vals.push(cleanText(body.cultivar, MAX_CULTIVAR)); }
   if (!cols.length) return errorResponse('Nothing to save', 'VALIDATION_ERROR', 400);
 
+  const key = [date, cell.station_id, batch];
   await env.DB.prepare(
-    `INSERT INTO cell_hourly (production_date, time_slot, station_id, ${cols.join(', ')}, source, updated_at)
-     VALUES (?, ?, ?, ${cols.map(() => '?').join(', ')}, 'manual', datetime('now'))
-     ON CONFLICT (production_date, time_slot, station_id) DO UPDATE SET
+    `INSERT INTO cell_quality (production_date, station_id, batch_no, ${cols.join(', ')}, updated_at)
+     VALUES (?, ?, ?, ${cols.map(() => '?').join(', ')}, datetime('now'))
+     ON CONFLICT (production_date, station_id, batch_no) DO UPDATE SET
        ${cols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`
-  ).bind(date, slot, cell.station_id, ...vals).run();
+  ).bind(...key, ...vals).run();
+  // The overall result follows the four checks.
+  await env.DB.prepare(
+    `UPDATE cell_quality SET quality = ${OVERALL_SQL}
+     WHERE production_date = ? AND station_id = ? AND batch_no = ?`
+  ).bind(...key).run();
+  const quality = (await env.DB.prepare(
+    `SELECT quality FROM cell_quality WHERE production_date = ? AND station_id = ? AND batch_no = ?`
+  ).bind(...key).first())?.quality ?? null;
 
-  // A check changed: the overall result follows the four checks.
-  let quality;
-  if (cols.some(c => Object.values(CHECKS).includes(c))) {
-    await env.DB.prepare(
-      `UPDATE cell_hourly SET quality = ${OVERALL_SQL}
-       WHERE production_date = ? AND time_slot = ? AND station_id = ?`
-    ).bind(date, slot, cell.station_id).run();
-    quality = (await env.DB.prepare(
-      `SELECT quality FROM cell_hourly WHERE production_date = ? AND time_slot = ? AND station_id = ?`
-    ).bind(date, slot, cell.station_id).first())?.quality ?? null;
-  }
-
-  return successResponse({ success: true, date, slot, stationId: cell.station_id, saved: cols, ...(quality !== undefined ? { quality } : {}) });
+  return successResponse({ success: true, date, stationId: cell.station_id, batch, saved: cols, quality });
 }
 
 async function setRoomSmalls(body, env) {
@@ -282,4 +320,4 @@ async function saveCellRoster(body, env) {
   return successResponse({ success: true, stationId: cell.station_id, label, lane, active: active === 1 });
 }
 
-export { getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, scaleMark, canonicalSlot, autoRows };
+export { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark, canonicalSlot, autoRows };

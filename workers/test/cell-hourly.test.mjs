@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  getCellHourly, setCellHourly, setRoomSmalls, saveCellRoster, scaleMark,
+  getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark,
 } from '../src/handlers/production/cell-hourly.js';
 
 /**
@@ -126,9 +126,10 @@ test('renaming keeps the station id and its rows; a bad lane is refused', async 
   assert.equal((await saveCellRoster({ stationId: 'table12', label: 'x', lane: 'bulk' }, env)).status, 400);
 });
 
-test('the migration is safe to run twice', () => {
+test('the migrations are safe to run twice', () => {
   const db = d1().raw;
   db.exec(readFileSync(new URL('../migrations/0050-cell-hourly.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../migrations/0051-cell-quality-checks.sql', import.meta.url), 'utf8'));
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cell_roster').get().n, 21);
 });
 
@@ -168,47 +169,85 @@ test('without the 0049 scale tables the day still loads, with no auto values', a
   assert.deepEqual(body.auto, []);
 });
 
-test('four checks scored 1-4: every check 3 or 4 = pass, any 1 or 2 = redo', async () => {
+const batchesOf = async (env, stationId) =>
+  (await json(await getCellHourly({ date: DAY }, env))).body.batches.filter(b => b.stationId === stationId);
+
+test('quality is by batch: four checks scored 1-4, all 3 or 4 = pass, any 1 or 2 = redo', async () => {
   const env = { DB: d1() };
-  const base = { date: DAY, slot: SLOT, stationId: 'table4' };
-  const row = async () => (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
-  await setCellHourly({ ...base, qTrim: 4, qStems: 3, checkedBy: 'MG' }, env);
-  assert.equal((await row()).quality, null, 'two of four scored, both passing: not done yet');
-  await setCellHourly({ ...base, qMold: 4, qInsects: 3 }, env);
-  let r = await row();
-  assert.equal(r.quality, 'pass');
-  assert.deepEqual(r.checks, { qTrim: 4, qStems: 3, qMold: 4, qInsects: 3 });
-  assert.equal(r.checkedBy, 'MG');
-  assert.equal(r.alert, null);
-  const res = (await json(await setCellHourly({ ...base, qTrim: 2 }, env))).body;
+  const base = { date: DAY, stationId: 'table4', batch: 1 };
+  await setCellQuality({ ...base, qTrim: 4, qStems: 3, checkedBy: 'MG', cultivar: '2026 - Lifter' }, env);
+  assert.equal((await batchesOf(env, 'table4'))[0].quality, null, 'two of four scored: not done yet');
+  await setCellQuality({ ...base, qMold: 4, qInsects: 3 }, env);
+  let [b] = await batchesOf(env, 'table4');
+  assert.equal(b.batch, 1);
+  assert.equal(b.quality, 'pass');
+  assert.deepEqual(b.checks, { qTrim: 4, qStems: 3, qMold: 4, qInsects: 3 });
+  assert.equal(b.checkedBy, 'MG');
+  assert.equal(b.cultivar, '2026 - Lifter');
+  assert.equal(b.alert, null);
+  const res = (await json(await setCellQuality({ ...base, qTrim: 2 }, env))).body;
   assert.equal(res.quality, 'fail', 'a 2 means redo, and the save says so');
-  await setCellHourly({ ...base, qTrim: 3 }, env);
-  assert.equal((await row()).quality, 'pass', 'a re-score that passes clears it');
+  await setCellQuality({ ...base, qTrim: 3 }, env);
+  assert.equal((await batchesOf(env, 'table4'))[0].quality, 'pass', 'fixing a typo re-scores the batch');
 });
 
-test('one low score is a redo even before the other checks are scored', async () => {
+test('batches are kept apart: batch 2 never touches batch 1, and the hourly rows stay empty', async () => {
   const env = { DB: d1() };
-  await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table6', qStems: 1 }, env);
-  const r = (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
-  assert.equal(r.quality, 'fail');
-  assert.equal(r.alert, null, 'a 1 on stems is a redo, not a stop');
+  await setCellQuality({ date: DAY, stationId: 'table4', batch: 1, qTrim: 1, qStems: 4, qMold: 4, qInsects: 4 }, env);
+  await setCellQuality({ date: DAY, stationId: 'table4', batch: 2, qTrim: 4, qStems: 4, qMold: 4, qInsects: 4 }, env);
+  await setCellQuality({ date: DAY, stationId: 'table5', batch: 1, qMold: 3 }, env);
+  const b = await batchesOf(env, 'table4');
+  assert.deepEqual(b.map(x => [x.batch, x.quality]), [[1, 'fail'], [2, 'pass']], 'the redo stays on record');
+  assert.equal((await batchesOf(env, 'table5')).length, 1);
+  assert.equal((await json(await getCellHourly({ date: DAY }, env))).body.rows.length, 0);
 });
 
-test('a 1 on mold or insects raises the stop alert', async () => {
-  for (const key of ['qMold', 'qInsects']) {
-    const env = { DB: d1() };
-    await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table6', [key]: 1 }, env);
-    const r = (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
-    assert.equal(r.alert, 'stop', key);
-    assert.equal(r.quality, 'fail', key);
+test('one low score is a redo before the rest are scored; a 1 on mold or insects is a stop', async () => {
+  const env = { DB: d1() };
+  await setCellQuality({ date: DAY, stationId: 'table6', batch: 1, qStems: 1 }, env);
+  let [b] = await batchesOf(env, 'table6');
+  assert.equal(b.quality, 'fail');
+  assert.equal(b.alert, null, 'a 1 on stems is a redo, not a stop');
+  for (const [n, key] of [[2, 'qMold'], [3, 'qInsects']]) {
+    await setCellQuality({ date: DAY, stationId: 'table6', batch: n, [key]: 1 }, env);
+    b = (await batchesOf(env, 'table6')).find(x => x.batch === n);
+    assert.equal(b.alert, 'stop', key);
+    assert.equal(b.quality, 'fail', key);
   }
 });
 
-test('scores outside 1-4 are refused and nothing is written', async () => {
+test('bad scores, batch numbers and cells are refused and nothing is written', async () => {
   const env = { DB: d1() };
+  const base = { date: DAY, stationId: 'table4', batch: 1 };
   for (const v of [0, 5, 2.5, 'pass', 'fail']) {
-    const r = await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table4', qTrim: v }, env);
-    assert.equal(r.status, 400, String(v));
+    assert.equal((await setCellQuality({ ...base, qTrim: v }, env)).status, 400, String(v));
   }
-  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM cell_hourly').get().n, 0);
+  for (const batch of [0, -1, 1.5, 501, 'x', undefined]) {
+    assert.equal((await setCellQuality({ ...base, batch, qTrim: 3 }, env)).status, 400, String(batch));
+  }
+  assert.equal((await setCellQuality({ ...base, stationId: 'table99', qTrim: 3 }, env)).status, 400);
+  assert.equal((await setCellQuality(base, env)).status, 400, 'nothing to save');
+  assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM cell_quality').get().n, 0);
+});
+
+test('the hourly save no longer takes scores', async () => {
+  const env = { DB: d1() };
+  await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table4', tops: 0.5, qTrim: 1 }, env);
+  const { body } = await json(await getCellHourly({ date: DAY }, env));
+  assert.equal(body.rows[0].quality, null);
+  assert.equal(body.batches.length, 0);
+});
+
+test('without migration 0051 the day still loads, with no batches', async () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(readFileSync(new URL('../migrations/0050-cell-hourly.sql', import.meta.url), 'utf8'));
+  const stmt = (sql, params) => ({
+    first: async () => db.prepare(sql).get(...params) ?? null,
+    all: async () => ({ results: db.prepare(sql).all(...params) }),
+    run: async () => ({ meta: { changes: db.prepare(sql).run(...params).changes } }),
+  });
+  const env = { DB: { prepare: sql => ({ bind: (...p) => stmt(sql, p), ...stmt(sql, []) }) } };
+  const r = await json(await getCellHourly({ date: DAY }, env));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.batches, []);
 });
