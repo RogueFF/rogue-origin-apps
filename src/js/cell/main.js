@@ -1,6 +1,6 @@
 /**
- * Cell table screen: live net weight toward a target, a job timer, and the
- * working / next order typed in by hand for the pilot.
+ * Cell table screen: live net weight toward a target, a job timer that runs
+ * itself off the scale, and the working / next order typed in by hand for the pilot.
  *
  *   cell.html?station=table1
  *
@@ -15,6 +15,22 @@ const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/prod
 const FAST_MS = 1000;
 const SLOW_MS = 5000;
 const NEAR = 0.9;
+// The job timer runs itself off the scale (Koa 2026-11-05: "couldn't it be automatic?"):
+//   Tare -> armed; the first START_G of product starts the clock; reaching the
+//   target and settling (stable flag, or HOLD_MS at/over target) stops it; lifting
+//   the container off (net under half the target) closes the job, moves the next
+//   order up and waits for the next Tare.
+const START_G = 1.0;     // two steps of the 0.5 g bench scale, so last-digit noise can't start it
+const HOLD_MS = 3000;
+// Fail-safes (Koa 2026-11-05: "make everything fool-proof"):
+const ON_SCALE_G = 2.0;  // something heavier than this on an idle scale -> "Tap Tare"
+const OFF_SCALE_G = 5.0; // gross this far under the tare mid-job -> container is off the scale
+// Pauses (Koa 2026-11-05): a running job pauses itself at 4:20 pm Pacific (cleanup),
+// and the Pause button only works with a note saying why. Paused time is left out
+// of the cycle time.
+const AUTO_PAUSE_MIN = 16 * 60 + 20;
+const NOTE_MIN_CHARS = 3;
+const REASONS = ['rScale', 'rWait', 'rEquip', 'rHelp'];
 // Fill weight standards, NET with the bag tared (wiki operations/fill-weight-standards.md,
 // Koa 2026-11-05). Every size sits a little over label on purpose. 10 lb and 5 kg are
 // never filled at a cell: several cells' jobs go to bagging, which checks them and
@@ -30,27 +46,47 @@ registerLabels({
     workingOn: 'Working on', workingPlaceholder: 'Order · cultivar · weight',
     nextOrder: 'Next order', nextPlaceholder: 'Next order · cultivar · weight',
     of: 'of', toGo: 'To go', done: 'Done', tare: 'Tare', target: 'Target',
-    customG: 'Custom (g)', liveCycle: 'Live cycle time', notStarted: 'Not started',
-    start: 'Start', finish: 'Done', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
+    customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare the container to start',
+    armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
+    liftOff: 'lift it off for the next one', lastJob: 'Last job',
+    bannerTare: 'Tap Tare to start the job', bannerOff: 'Container off the scale: put it back',
+    bannerSignal: 'No scale signal: tell the lead', confirmRetare: 'A job is running. Restart it from zero?',
+    pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
+    notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
+    bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
+    rScale: 'Scale problem', rWait: 'Waiting for product', rEquip: 'Equipment problem', rHelp: 'Need help',
     pilotNote: 'Pilot: orders are typed here until the order board is connected. The scale weight is live.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Cell',
-    netHint: 'net · bag tared',
+    netHint: 'net · container tared',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
     workingOn: 'Trabajando en', workingPlaceholder: 'Orden · variedad · peso',
     nextOrder: 'Siguiente orden', nextPlaceholder: 'Siguiente orden · variedad · peso',
     of: 'de', toGo: 'Faltan', done: 'Hecho', tare: 'Tara', target: 'Meta',
-    customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', notStarted: 'Sin empezar',
-    start: 'Empezar', finish: 'Terminar', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
+    customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga tara al contenedor para empezar',
+    armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
+    liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo',
+    bannerTare: 'Toque Tara para empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
+    bannerSignal: 'Sin señal de la báscula: avise al líder', confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
+    pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
+    notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
+    bannerPaused: 'En pausa: toque Continuar para seguir', autoNote: 'Limpieza 4:20',
+    rScale: 'Problema con la báscula', rWait: 'Esperando producto', rEquip: 'Problema de equipo', rHelp: 'Necesito ayuda',
     pilotNote: 'Prueba: las órdenes se escriben aquí hasta conectar el tablero de órdenes. El peso de la báscula es en vivo.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Celda',
-    netHint: 'neto · bolsa en tara',
+    netHint: 'neto · contenedor en tara',
   },
 });
 
 const params = new URLSearchParams(location.search);
-const station = (params.get('station') || 'table1').replace(/[^a-z0-9_-]/gi, '').slice(0, 32) || 'table1';
+// The home-screen app opens cell.html with no ?station=, so the tablet remembers
+// the station it was last opened for (one manifest serves table1..table8).
+const STATION_KEY = 'ro-cell:station';
+const clean = v => String(v || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 32);
+function rememberedStation() { try { return localStorage.getItem(STATION_KEY); } catch { return null; } }
+const station = clean(params.get('station')) || clean(rememberedStation()) || 'table1';
+try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode: falls back to the link each time */ }
 // Local testing only: ?api=http://localhost:8799/api/production. Never another host.
 const apiParam = params.get('api') || '';
 const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
@@ -62,15 +98,22 @@ const el = {
   working: $('workingInput'), next: $('nextInput'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'), presets: $('presets'), custom: $('customTarget'),
-  cycle: $('cycleTime'), cycleSub: $('cycleSub'), start: $('startBtn'), done: $('doneBtn'),
+  cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
+  pauseBtn: $('pauseBtn'), resumeBtn: $('resumeBtn'), dialog: $('pauseDialog'), chips: $('pauseChips'),
+  note: $('pauseNote'), noteErr: $('pauseError'), pauseOk: $('pauseOk'), pauseCancel: $('pauseCancel'),
 };
 const RING_LEN = 597;
 
 function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
-const state = { working: '', next: '', targetG: 460.0, tareG: 0, startedAt: null, finishedMs: null, ...load() };
+// phase: idle (needs a tare) -> armed -> running -> finished -> idle
+const state = { working: '', next: '', targetG: 460.0, tareG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
+  pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '', ...load() };
+if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
 let gross = null;       // grams, latest reading
+let stable = null;      // the scale's settled flag, when it sends one
+let overSince = null;   // when net first reached the target this job
 let live = false;
 let timer = null;
 
@@ -86,6 +129,16 @@ function fmtClock(ms) {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 const net = () => (gross === null ? 0 : Math.max(0, gross - state.tareG));
+// Working time on the job: wall time minus every pause, including one in progress.
+const elapsedMs = () => Date.now() - state.startedAt - (state.pausedMs || 0) - (state.pausedAt ? Date.now() - state.pausedAt : 0);
+function clearPauses() { state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = []; }
+function pacificNow() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
+}
 const fmtTarget = g => `${g.toLocaleString('en-US', { maximumFractionDigits: 2 })} g`;
 
 function renderPresets() {
@@ -113,23 +166,98 @@ function render() {
 
   el.dot.className = `live-dot ${gross === null ? 'stale' : live ? 'live' : 'stale'}`;
   el.liveText.textContent = gross === null ? t('waiting') : live ? t('live') : t('stale');
+  renderBanner();
   renderCycle();
+}
+
+// One banner at a time, most urgent first.
+function renderBanner() {
+  let kind = null;
+  if (!live && gross !== null) kind = 'signal';
+  else if (live && state.phase === 'running' && state.tareG >= OFF_SCALE_G && gross < state.tareG - OFF_SCALE_G) kind = 'off';
+  else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
+  else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
+  el.banner.hidden = !kind;
+  if (!kind) return;
+  el.banner.className = `banner ${kind}`;
+  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused' }[kind]);
+}
+
+// Finish chime. Browsers only allow sound after a tap, so the Tare tap unlocks it.
+let audio = null;
+function unlockAudio() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+  } catch { audio = null; }
+}
+function chime() {
+  if (!audio) return;
+  try {
+    const now = audio.currentTime;
+    [[880, 0], [1320, 0.18]].forEach(([hz, at]) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.exponentialRampToValueAtTime(0.5, now + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.45);
+      o.connect(g).connect(audio.destination);
+      o.start(now + at); o.stop(now + at + 0.5);
+    });
+  } catch { /* no sound is never a reason to stop the job */ }
+}
+
+// Move the job along from the latest reading. Called after every poll.
+function step() {
+  if (gross === null) return;
+  const n = net();
+  if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume
+  if (state.phase === 'armed' && n >= START_G) {
+    state.phase = 'running'; state.startedAt = Date.now(); state.finishedMs = null; overSince = null; clearPauses();
+  } else if (state.phase === 'running') {
+    if (n >= state.targetG) {
+      if (overSince === null) overSince = Date.now();
+      if (stable === true || Date.now() - overSince >= HOLD_MS) {
+        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null;
+        chime();
+      }
+    } else {
+      overSince = null;
+    }
+  } else if (state.phase === 'finished' && n < state.targetG / 2) {
+    // Container lifted off: the job is closed, the next order moves up.
+    state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null;
+    state.working = state.next; state.next = '';
+    el.working.value = state.working; el.next.value = '';
+  } else {
+    return;
+  }
+  save();
 }
 
 function renderCycle() {
   el.cycleSub.className = 'sub';
-  if (state.finishedMs !== null) {
+  const running = state.phase === 'running' && !!state.startedAt;
+  el.pauseBtn.hidden = !running || !!state.pausedAt;
+  el.resumeBtn.hidden = !running || !state.pausedAt;
+  if (state.phase === 'finished' && state.finishedMs !== null) {
     el.cycle.textContent = fmtClock(state.finishedMs);
-    el.cycleSub.textContent = t('finished');
+    el.cycleSub.textContent = `${t('finished')} · ${t('liftOff')}`;
     return;
   }
-  if (!state.startedAt) {
+  if (state.phase !== 'running' || !state.startedAt) {
     el.cycle.textContent = '--:--';
-    el.cycleSub.textContent = t('notStarted');
+    const hint = state.phase === 'armed' ? t('armed') : t('tareToStart');
+    // The finished time stays readable after the container leaves the scale.
+    el.cycleSub.textContent = state.lastMs ? `${hint} · ${t('lastJob')} ${fmtClock(state.lastMs)}` : hint;
     return;
   }
-  const elapsed = Date.now() - state.startedAt;
+  const elapsed = elapsedMs();
   el.cycle.textContent = fmtClock(elapsed);
+  if (state.pausedAt) {
+    el.cycleSub.textContent = `${t('paused')}: ${state.pauseNote}`;
+    return;
+  }
   const mins = elapsed / 60000;
   const n = net();
   if (mins > 0.5 && n > 0) {
@@ -147,11 +275,20 @@ async function poll() {
   // retry alive. A page that loaded while hidden may never get a visibilitychange,
   // and would otherwise sit on "Waiting for scale" until someone reloads it.
   if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
+  await read();
+  if (live) step();
+  render();
+  timer = setTimeout(poll, live ? FAST_MS : SLOW_MS);
+}
+
+// One fresh reading from the Worker into gross / stable / live.
+async function read() {
   try {
     const r = await fetch(`${API}?action=scaleWeight&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
     const d = await r.json();
     if (d && d.updatedAt) {
       gross = Number(d.weight) * 1000; // the API's weight is always kg; unit is only a tag
+      stable = d.stable === undefined ? null : d.stable;
       // A still scale only posts every 30 s, so give unregistered stations
       // (3 s server stale time) the table's 45 s before showing no signal.
       const age = Date.now() - Date.parse(d.updatedAt);
@@ -162,37 +299,75 @@ async function poll() {
   } catch {
     live = false;
   }
-  render();
-  timer = setTimeout(poll, live ? FAST_MS : SLOW_MS);
 }
 
 el.working.value = state.working;
 el.next.value = state.next;
 el.working.addEventListener('input', () => { state.working = el.working.value; save(); });
 el.next.addEventListener('input', () => { state.next = el.next.value; save(); });
-el.tare.addEventListener('click', () => { if (gross !== null) { state.tareG = gross; save(); render(); } });
+// Tare arms the timer for a new job (and re-arms it mid-job if pressed again).
+el.tare.addEventListener('click', async () => {
+  unlockAudio();
+  // A stray tap mid-job would wipe the timer: ask first.
+  if (state.phase === 'running' && !window.confirm(t('confirmRetare'))) return;
+  // Tare on a reading taken now, not the last poll (up to 5 s old), so a container
+  // set down a moment ago is what gets zeroed. No live scale, no tare.
+  await read();
+  if (gross === null || !live) { render(); return; }
+  state.tareG = gross; state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
+  save(); render();
+});
 el.custom.addEventListener('change', () => {
   const v = parseFloat(el.custom.value);
   if (v > 0) { state.targetG = v; save(); renderPresets(); render(); }
 });
-el.start.addEventListener('click', () => {
-  state.startedAt = Date.now(); state.finishedMs = null;
-  if (gross !== null) state.tareG = gross;
-  save(); render();
-});
-el.done.addEventListener('click', () => {
-  if (!state.startedAt) return;
-  state.finishedMs = Date.now() - state.startedAt;
-  state.startedAt = null;
-  // The next order moves up; the lead types the one after it.
-  state.working = state.next; state.next = '';
-  el.working.value = state.working; el.next.value = '';
-  save(); render();
-});
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
 document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderPresets(); render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-setInterval(renderCycle, 1000);
+function pauseJob(note) {
+  if (state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
+  state.pausedAt = Date.now(); state.pauseNote = note; save(); render();
+}
+function resumeJob() {
+  if (!state.pausedAt) return;
+  const ms = Date.now() - state.pausedAt;
+  state.pausedMs = (state.pausedMs || 0) + ms;
+  (state.pauseLog = state.pauseLog || []).push({ note: state.pauseNote, ms, at: new Date(state.pausedAt).toISOString() });
+  state.pausedAt = null; state.pauseNote = ''; save(); render();
+}
+
+// Pause needs a reason: tap one, or write it.
+function openPause() {
+  el.chips.innerHTML = '';
+  for (const key of REASONS) {
+    const b = document.createElement('button');
+    b.className = 'btn chip'; b.textContent = t(key);
+    b.addEventListener('click', () => { el.note.value = t(key); el.noteErr.hidden = true; });
+    el.chips.appendChild(b);
+  }
+  el.note.value = ''; el.noteErr.hidden = true; el.dialog.hidden = false; el.note.focus();
+}
+el.pauseBtn.addEventListener('click', openPause);
+el.pauseCancel.addEventListener('click', () => { el.dialog.hidden = true; });
+el.note.addEventListener('input', () => { el.noteErr.hidden = true; });
+el.pauseOk.addEventListener('click', () => {
+  const note = el.note.value.trim();
+  if (note.length < NOTE_MIN_CHARS) { el.noteErr.hidden = false; el.note.focus(); return; }
+  el.dialog.hidden = true;
+  pauseJob(note);
+});
+el.resumeBtn.addEventListener('click', resumeJob);
+
+// 4:20 pm Pacific: a job still running pauses itself for cleanup, once a day.
+function autoPause() {
+  const now = pacificNow();
+  if (now.minutes >= AUTO_PAUSE_MIN && state.autoPausedOn !== now.day && state.phase === 'running' && !state.pausedAt) {
+    state.autoPausedOn = now.day;
+    pauseJob(t('autoNote'));
+  }
+}
+
+setInterval(() => { autoPause(); renderCycle(); }, 1000);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 renderPresets();

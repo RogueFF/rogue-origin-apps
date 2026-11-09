@@ -50,6 +50,19 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .btn.chip.on { background: var(--green-dim); border-color: var(--green); }
 .btn:active { transform: scale(.98); }
 
+.banner { font: 700 26px var(--font-ui); text-align: center; padding: 18px 16px; border-radius: 16px; color: #fff; }
+.banner.tare { background: var(--gold); color: #2d3a32; }
+.banner.off { background: var(--gold); color: #2d3a32; }
+.banner.signal { background: var(--danger); }
+.banner.paused { background: var(--info); }
+
+.dialog { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.dialog[hidden] { display: none; }
+.dialog-card { background: var(--bg-card); border-radius: 16px; padding: 20px; width: min(560px, 100%); display: grid; gap: 12px; }
+.dialog-card h2 { margin: 0; font-size: 24px; }
+.dialog-card textarea { font: 18px var(--font-ui); padding: 10px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); color: var(--text); resize: vertical; }
+.error { color: var(--danger); font-size: 16px; font-weight: 600; }
+
 .pilot-note { font-size: 13px; color: var(--text-muted); margin: 0; }
 
 @media (max-width: 640px) {
