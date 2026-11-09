@@ -7,7 +7,8 @@
  *   POST ?action=setCellHourly   { date, slot, stationId, tops?, quality?, notes?, cultivar? }
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
- *   POST ?action=scaleMark       { stationId, kind: 'tare'|'pickup', kg }   from the cell screen
+ *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg }   from the cell screen
+ *                                (the auto rule uses pickups; readings are net since the crew tare on the scale)
  *
  * Cells with a scale also get an `auto` value per hour, worked out from their
  * settled readings (scale_events) and the screen's marks (lib/cell-auto.js).
@@ -98,12 +99,13 @@ async function autoRows(env, date, stationIds, now = new Date()) {
   for (const id of stationIds) {
     const rs = readings.filter(r => r.station_id === id);
     if (!rs.length) continue;
-    const { bySlot } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES });
+    const { bySlot, flags } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES });
     for (const s of SLOT_MINUTES) {
       if (!(s.slot in bySlot)) continue;
       // An hour locks at its end; until then it's "so far".
       const final = date < p.day || (date === p.day && nowMin >= s.endMin);
-      out.push({ stationId: id, slot: s.slot, tops: bySlot[s.slot], final });
+      // flag 'scaleTared': the scale's own TARE was pressed mid-job; a lead should check the hour.
+      out.push({ stationId: id, slot: s.slot, tops: bySlot[s.slot], final, flag: (flags[s.slot] || [])[0] || null });
     }
   }
   return out;

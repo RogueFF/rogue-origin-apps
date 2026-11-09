@@ -140,17 +140,18 @@ function d1WithScale() {
   return env;
 }
 
-test('a cell with a scale gets hourly auto tops from its readings and the screen\'s tare', async () => {
+test('a cell with a scale gets hourly auto tops from its net readings, and a mid-job TARE is flagged', async () => {
   const env = d1WithScale();
-  // 2026-11-02 (PST, UTC-8): basket 50 g tared at 9:00, net grows to 160 g by 9:40, 220 g by 10:10.
+  // 2026-11-02 (PST, UTC-8): basket tared on the scale at 9:00 (reads 0), net 160 g by 9:40,
+  // 220 g by 10:10, then the scale's TARE pressed mid-job (straight to 0) and 30 g more.
   const ev = (utc, g) => env.DB.raw.prepare('INSERT INTO scale_events (station_id, ts, weight_kg) VALUES (?, ?, ?)').run('table1', utc, g / 1000);
-  ev('2026-11-02 17:00:00', 50); ev('2026-11-02 17:40:00', 210); ev('2026-11-02 18:10:00', 270);
-  assert.equal((await scaleMark({ stationId: 'table1', kind: 'tare', kg: 0.05 }, env)).status, 200);
-  env.DB.raw.exec(`UPDATE scale_marks SET ts = '2026-11-02 17:00:05'`);
+  ev('2026-11-02 17:00:00', 0); ev('2026-11-02 17:20:00', 70); ev('2026-11-02 17:40:00', 160);
+  ev('2026-11-02 18:10:00', 220); ev('2026-11-02 18:20:00', 0); ev('2026-11-02 18:30:00', 30);
+  assert.equal((await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.22 }, env)).status, 200);
   const { body } = await json(await getCellHourly({ date: '2026-11-02' }, env));
-  assert.deepEqual(body.auto.map(a => [a.stationId, a.slot, a.tops, a.final]), [
-    ['table1', '9:00 AM – 10:00 AM', 0.35, true],
-    ['table1', '10:00 AM – 11:00 AM', 0.13, true],
+  assert.deepEqual(body.auto.map(a => [a.stationId, a.slot, a.tops, a.final, a.flag]), [
+    ['table1', '9:00 AM – 10:00 AM', 0.35, true, null],
+    ['table1', '10:00 AM – 11:00 AM', 0.2, true, 'scaleTared'],
   ]);
 });
 

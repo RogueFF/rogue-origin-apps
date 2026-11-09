@@ -5,7 +5,7 @@
  *   cell.html?station=table1
  *
  * Reads ?action=scaleWeight (GET, no token) once a second while the page is
- * visible and the scale is live, every 5 s while it is stale. Tare, target,
+ * visible and the scale is live, every 5 s while it is stale. Target,
  * orders and the timer live in this tablet's localStorage, per station, until
  * the cell job records (cell_chunks) exist on the Worker.
  */
@@ -16,15 +16,21 @@ const FAST_MS = 1000;
 const SLOW_MS = 5000;
 const NEAR = 0.9;
 // The job timer runs itself off the scale (Koa 2026-11-05: "couldn't it be automatic?"):
-//   Tare -> armed; the first START_G of product starts the clock; reaching the
+//   Start (or the scale's own TARE with the basket on) -> armed; the first START_G
+//   of product starts the clock; reaching the
 //   target and settling (stable flag, or HOLD_MS at/over target) stops it; lifting
 //   the container off (net under half the target) closes the job, moves the next
-//   order up and waits for the next Tare.
+//   order up and waits for the next Start.
 const START_G = 1.0;     // two steps of the 0.5 g bench scale, so last-digit noise can't start it
 const HOLD_MS = 3000;
 // Fail-safes (Koa 2026-11-05: "make everything fool-proof"):
-const ON_SCALE_G = 2.0;  // something heavier than this on an idle scale -> "Tap Tare"
-const OFF_SCALE_G = 5.0; // gross this far under the tare mid-job -> container is off the scale
+// Tare happens on the scale itself (Koa 2026-11-09): with the basket on, the crew
+// press the scale's TARE, and the scale then sends NET weight. The screen shows
+// exactly the number the scale shows (grams, 2 decimals), with no offset of its own.
+// An empty tared basket reads about 0; a lifted basket reads negative.
+const ON_SCALE_G = 2.0;  // more than this on an idle, untared scale -> "Tare on the scale, then tap Start"
+const ZERO_G = 0.5;      // the scale's TARE reads 0.00: "about 0"
+const LIFT_G = 1.0;      // below -1 g mid-job: the basket is off the scale
 // Pauses (Koa 2026-11-05): a running job pauses itself at 4:20 pm Pacific (cleanup),
 // and the Pause button only works with a note saying why. Paused time is left out
 // of the cycle time.
@@ -45,14 +51,14 @@ registerLabels({
     waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
     workingOn: 'Working on', workingPlaceholder: 'Order · cultivar · weight',
     nextOrder: 'Next order', nextPlaceholder: 'Next order · cultivar · weight',
-    of: 'of', toGo: 'To go', done: 'Done', tare: 'Tare', target: 'Target',
-    customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare the container to start',
+    of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', target: 'Target',
+    customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
     liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
-    scaleButtons: "Don't press the scale's own TARE or ZERO buttons",
-    bannerTare: 'Tap Tare to start the job', bannerOff: 'Container off the scale: put it back',
-    bannerSignal: 'No scale signal: tell the lead', confirmRetare: 'A job is running. Restart it from zero?',
+    bannerTared: 'Scale TARE pressed mid-job: {g} kept. Tell the lead.',
+    bannerTare: 'Tare on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
+    bannerSignal: 'No scale signal: tell the lead', confirmRetare: 'A job is running. Start over from zero?',
     pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
     notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
     bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
@@ -65,13 +71,13 @@ registerLabels({
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
     workingOn: 'Trabajando en', workingPlaceholder: 'Orden · variedad · peso',
     nextOrder: 'Siguiente orden', nextPlaceholder: 'Siguiente orden · variedad · peso',
-    of: 'de', toGo: 'Faltan', done: 'Hecho', tare: 'Tara', target: 'Meta',
-    customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga tara al contenedor para empezar',
+    of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', target: 'Meta',
+    customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
     liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
-    scaleButtons: 'No presione los botones TARE o ZERO de la báscula',
-    bannerTare: 'Toque Tara para empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
+    bannerTared: 'TARA de la báscula a mitad del trabajo: se guardaron {g}. Avise al líder.',
+    bannerTare: 'Haga TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
     bannerSignal: 'Sin señal de la báscula: avise al líder', confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
     pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
     notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
@@ -112,12 +118,14 @@ function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
 // phase: idle (needs a tare) -> armed -> running -> finished -> idle
-const state = { working: '', next: '', targetG: 460.0, tareG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
+const state = { working: '', next: '', targetG: 460.0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
   pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '', ...load() };
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
 let gross = null;       // grams, latest reading
 let stable = null;      // the scale's settled flag, when it sends one
 let overSince = null;   // when net first reached the target this job
+let prevReading = null; // the reading before this one, to spot a scale TARE (a straight drop to 0)
+let wentNegative = false; // a lift (negative) since the reading was last up
 let live = false;
 let timer = null;
 
@@ -125,14 +133,15 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: still works for this visit */ }
 }
 
-const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`;
+const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`;
 function fmtClock(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
-const net = () => (gross === null ? 0 : Math.max(0, gross - state.tareG));
+// Progress on the job: what is on the pan now, plus anything banked by a mid-job TARE.
+const net = () => (gross === null ? 0 : Math.max(0, gross) + (state.bankedG || 0));
 // Working time on the job: wall time minus every pause, including one in progress.
 const elapsedMs = () => Date.now() - state.startedAt - (state.pausedMs || 0) - (state.pausedAt ? Date.now() - state.pausedAt : 0);
 function clearPauses() { state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = []; }
@@ -160,7 +169,7 @@ function render() {
   el.name.textContent = `${t('cell')} ${station.replace(/^\D+/, '') || station}`;
   const n = net();
   const frac = state.targetG > 0 ? n / state.targetG : 0;
-  el.net.textContent = gross === null ? '—' : fmtG(n);
+  el.net.textContent = gross === null ? '—' : fmtG(gross); // the scale's own number, nothing added
   el.targetText.textContent = `${fmtTarget(state.targetG)} ${t('netHint')}`;
   el.toGo.textContent = gross === null ? '—' : fmtG(Math.max(0, state.targetG - n));
   el.pct.textContent = `${Math.min(999, Math.round(frac * 100))}%`;
@@ -178,16 +187,18 @@ function render() {
 function renderBanner() {
   let kind = null;
   if (!live && gross !== null) kind = 'signal';
-  else if (live && state.phase === 'running' && state.tareG >= OFF_SCALE_G && gross < state.tareG - OFF_SCALE_G) kind = 'off';
+  else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
+  else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
   el.banner.className = `banner ${kind}`;
-  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused' }[kind]);
+  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared' }[kind])
+    .replace('{g}', fmtG(state.tareFlagG || 0));
 }
 
-// Finish chime. Browsers only allow sound after a tap, so the Tare tap unlocks it.
+// Finish chime. Browsers only allow sound after a tap, so the Start tap unlocks it.
 let audio = null;
 function unlockAudio() {
   try {
@@ -214,6 +225,24 @@ function chime() {
 // Move the job along from the latest reading. Called after every poll.
 function step() {
   if (gross === null) return;
+  // A straight drop to about 0 with no lift between is someone pressing the scale's TARE.
+  const scaleTared = prevReading !== null && prevReading > ON_SCALE_G && Math.abs(gross) <= ZERO_G && !wentNegative;
+  if (gross < -LIFT_G) wentNegative = true;
+  else if (gross > ON_SCALE_G) wentNegative = false;
+  const before = prevReading;
+  prevReading = gross;
+  if (scaleTared && state.phase === 'idle') {
+    // Basket on, scale tared: the job is ready, same as tapping Start.
+    state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
+    state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
+    return;
+  }
+  if (scaleTared && state.phase === 'running') {
+    // TARE pressed mid-job with tops in the basket: keep what was there, and say so.
+    state.bankedG = (state.bankedG || 0) + before;
+    state.tareFlagG = (state.tareFlagG || 0) + before;
+    save();
+  }
   const n = net();
   if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume
   if (state.phase === 'armed' && n >= START_G) {
@@ -222,15 +251,17 @@ function step() {
     if (n >= state.targetG) {
       if (overSince === null) overSince = Date.now();
       if (stable === true || Date.now() - overSince >= HOLD_MS) {
-        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n;
+        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n; state.panAtFinishG = gross;
         chime();
       }
     } else {
       overSince = null;
     }
-  } else if (state.phase === 'finished' && n < state.targetG / 2) {
+  } else if (state.phase === 'finished' && gross < (state.panAtFinishG ?? state.targetG) / 2) {
+    // The pan lost over half of what it held at the finish (a mid-job TARE may have
+    // banked part of the job off the pan): the basket was lifted for pickup.
     // Container lifted off: the job is closed, the next order moves up.
-    state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null;
+    state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null; state.bankedG = 0; state.tareFlagG = 0;
     mark('pickup', (state.finishedNetG || 0) / 1000);
     state.working = state.next; state.next = '';
     el.working.value = state.working; el.next.value = '';
@@ -332,9 +363,11 @@ el.tare.addEventListener('click', async () => {
   // set down a moment ago is what gets zeroed. No live scale, no tare.
   await read();
   if (gross === null || !live) { render(); return; }
-  state.tareG = gross; state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
+  // Start needs a tared scale: an untared basket would count as tops.
+  if (Math.abs(gross) > ON_SCALE_G) { el.banner.hidden = false; el.banner.className = 'banner tare'; el.banner.textContent = t('bannerTare'); return; }
+  state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
+  state.bankedG = 0; state.tareFlagG = 0; clearPauses();
   save(); render();
-  mark('tare', gross / 1000);
 });
 
 // Reset puts this job back to idle: timer, pauses and tare clear. Press and hold,
@@ -345,7 +378,7 @@ el.resetBtn = $('resetBtn');
 let holdTimer = null;
 function resetJob() {
   if (state.phase === 'running' && !window.confirm(t('confirmReset'))) return;
-  state.phase = 'idle'; state.tareG = 0; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
+  state.phase = 'idle'; state.bankedG = 0; state.tareFlagG = 0; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
   save(); render();
 }
 function holdStart(e) {

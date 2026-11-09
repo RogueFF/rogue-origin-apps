@@ -33,6 +33,7 @@ registerLabels({
     hourTotal: 'Tops this hour, all cells', scaleAuto: 'From the scale', soFar: 'so far · locks at the end of the hour',
     finalVal: 'final', typedOverride: 'Typed (overrides the scale)', overrideNote: 'Manual override: the typed value counts.',
     differ: 'Typed and scale differ by {pct}%', partsTyped: '{n} typed', partsScale: '{n} from scale',
+    tareFlag: "The scale's TARE was pressed mid-job this hour: check it",
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -47,6 +48,7 @@ registerLabels({
     hourTotal: 'Tops esta hora, todas las celdas', scaleAuto: 'De la báscula', soFar: 'hasta ahora · se fija al terminar la hora',
     finalVal: 'final', typedOverride: 'Escrito (reemplaza a la báscula)', overrideNote: 'Reemplazo manual: cuenta el valor escrito.',
     differ: 'Lo escrito y la báscula difieren {pct}%', partsTyped: '{n} escritas', partsScale: '{n} de báscula',
+    tareFlag: 'Se presionó TARA en la báscula a mitad del trabajo esta hora: revíselo',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -85,7 +87,7 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   tops: $('tops'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
-  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), qNone: $('qNone'), qPass: $('qPass'), qFail: $('qFail'), failNote: $('failNeedsNote'),
+  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), qNone: $('qNone'), qPass: $('qPass'), qFail: $('qFail'), failNote: $('failNeedsNote'),
   notes: $('notes'), cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -255,6 +257,7 @@ function renderCell() {
     const off = typed != null && a.tops > 0 ? Math.abs(typed - a.tops) / a.tops : 0;
     el.diffFlag.hidden = !(off > DIFF_FLAG);
     el.diffFlag.textContent = tf('differ', { pct: Math.round(off * 100) });
+    el.tareFlag.hidden = a.flag !== 'scaleTared';
   }
   el.qNone.classList.toggle('on', !r.quality);
   el.qPass.classList.toggle('on', r.quality === 'pass');
