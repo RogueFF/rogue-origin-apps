@@ -195,3 +195,29 @@ test('registering from a shared hash gives the same row as registering from the 
   assert.throws(() => stationSqlFromHash('table1', 'x', 'not-a-hash'));
   assert.throws(() => stationSqlFromHash('table1', 'x', hashOf(TOKEN).toUpperCase()));
 });
+
+test('a tared table scale may post a negative weight (basket lifted); it is stored and logged', async () => {
+  const DB = fakeDb({ stations: [TABLE1] });
+  const w = await post({ DB }, { stationId: 'table1', weight: -0.0525, unit: 'kg', stable: true }, TOKEN);
+  assert.equal(w.status, 200);
+  assert.equal(DB.readings.get('table1').weight, -0.0525);
+  assert.deepEqual(DB.events.map(e => e.weight_kg), [-0.0525]);
+  const r = await get({ DB }, 'table1');
+  assert.equal(r.json.percentComplete, 0, 'never a negative percent');
+});
+
+test('negative weights stay refused for line1, unregistered ids, and below -10 kg', async () => {
+  for (const [stationId, weight, token] of [['line1', -0.1, null], ['cell1', -0.1, null], ['table1', -10.5, TOKEN]]) {
+    const DB = fakeDb({ stations: [TABLE1] });
+    const w = await post({ DB }, { stationId, weight, unit: 'kg', stable: true }, token);
+    assert.equal(w.status, 400, `${stationId} ${weight}`);
+    assert.equal(DB.writes.length, 0);
+  }
+});
+
+test('a negative weight from a table without its token is a 401, never written', async () => {
+  const DB = fakeDb({ stations: [TABLE1] });
+  const w = await post({ DB }, { stationId: 'table1', weight: -0.05, unit: 'kg', stable: true }, null);
+  assert.equal(w.status, 401);
+  assert.equal(DB.writes.length, 0);
+});
