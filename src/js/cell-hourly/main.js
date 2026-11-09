@@ -14,6 +14,7 @@
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
+import { enhanceSelect } from '../shared/select-search.js';
 
 const PROD_ROOT = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api';
 const BAG_NET_LB = 5090.72 / 453.59237; // 5 kg bag, net fill standard (fill-weight-standards)
@@ -39,7 +40,7 @@ registerLabels({
     hourTotal: 'Tops this hour, all cells', scaleAuto: 'From the scale', soFar: 'so far · locks at the end of the hour',
     finalVal: 'final', typedOverride: 'Typed (overrides the scale)', overrideNote: 'Manual override: the typed value counts.',
     differ: 'Typed and scale differ by {pct}%', partsTyped: '{n} typed', partsScale: '{n} from scale',
-    tareFlag: "The scale's TARE was pressed mid-job this hour: check it",
+    tareFlag: "The scale's TARE was pressed mid-job this hour: check it", searchCultivar: 'Type to search',
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -58,7 +59,7 @@ registerLabels({
     hourTotal: 'Tops esta hora, todas las celdas', scaleAuto: 'De la báscula', soFar: 'hasta ahora · se fija al terminar la hora',
     finalVal: 'final', typedOverride: 'Escrito (reemplaza a la báscula)', overrideNote: 'Reemplazo manual: cuenta el valor escrito.',
     differ: 'Lo escrito y la báscula difieren {pct}%', partsTyped: '{n} escritas', partsScale: '{n} de báscula',
-    tareFlag: 'Se presionó TARA en la báscula a mitad del trabajo esta hora: revíselo',
+    tareFlag: 'Se presionó TARA en la báscula a mitad del trabajo esta hora: revíselo', searchCultivar: 'Escriba para buscar',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -584,6 +585,8 @@ document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 el.date.textContent = DATE;
 setView(state.view);
+// Type-to-search on both cultivar pickers (Koa 2026-11-09).
+for (const s of [el.roomCultivar, el.cellCultivar]) enhanceSelect(s, { placeholder: () => t('searchCultivar') });
 load().then(() => { renderAll(); loadCultivars(); }).catch(() => { el.cellStatus.className = 'save-status bad'; el.cellStatus.textContent = t('loadFail'); });
 // Coming back to the tablet counts as a new visit: each cell re-picks its batch.
 document.addEventListener('visibilitychange', () => {

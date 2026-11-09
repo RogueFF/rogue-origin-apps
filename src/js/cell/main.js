@@ -6,18 +6,30 @@
  *
  *   cell.html?station=table1
  *
- * Reads ?action=scaleWeight (GET, no token) once a second while the page is
- * visible and the scale is live, every 5 s while it is stale. The order and the
+ * Reads ?action=scaleWeight (GET, no token) every 250 ms while a job is armed
+ * or running, every second otherwise, every 2 s while the scale is disconnected,
+ * and every 5 s while the page is hidden (Koa 2026-11-09: follow the scale closer). The order and the
  * timer live in this tablet's localStorage, per station. Each finished job posts
  * a pickup mark carrying its cultivar, bag size and working time (migration 0052),
  * so the Worker keeps a record of what every job was.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
+import { enhanceSelect } from '../shared/select-search.js';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
-const FAST_MS = 1000;
-const SLOW_MS = 5000;
+// Reads cost one Worker request each, so the fast rate is kept to the moments
+// that need it. A read takes ~0.23 s, so 250 ms means a fresh number about
+// every half second during a job.
+const JOB_MS = 250;      // a job is armed or running
+const IDLE_MS = 1000;    // waiting for the next job, or finished
+const DOWN_MS = 2000;    // scale disconnected: keep checking for it to come back
+const SLOW_MS = 5000;    // page hidden
+// Scale disconnected: no fresh post from the scale for the station's stale
+// time (scale_stations.stale_after_s, 45 s while the node's heartbeat is 30 s).
+// No alarm on the tablet (Koa 2026-11-09: the alert goes to Koa on Telegram,
+// lib/scale-watch.js on the Worker); the screen only shows it in the status dot,
+// holds a running job's clock, and starts nothing until the scale is back.
 const NEAR = 0.9;
 // The job timer runs itself off the scale (Koa 2026-11-05: "couldn't it be automatic?"):
 //   Start (or the scale's own TARE with the basket on) -> armed; the first START_G
@@ -62,7 +74,8 @@ registerLabels({
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
     bannerTared: 'Scale TARE pressed mid-job: {g} kept. Tell the lead.',
     bannerTare: 'Tare on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
-    bannerSignal: 'No scale signal: tell the lead', confirmRetare: 'A job is running. Start over from zero?',
+    bannerSignal: 'Scale disconnected: tell the lead', disconnected: 'Scale disconnected', searchCultivar: 'Type to search', clockHeld: 'Clock held until the scale is back',
+    confirmRetare: 'A job is running. Start over from zero?',
     pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
     notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
     bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
@@ -81,7 +94,8 @@ registerLabels({
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
     bannerTared: 'TARA de la báscula a mitad del trabajo: se guardaron {g}. Avise al líder.',
     bannerTare: 'Haga TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
-    bannerSignal: 'Sin señal de la báscula: avise al líder', confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
+    bannerSignal: 'Báscula desconectada: avise al líder', disconnected: 'Báscula desconectada', searchCultivar: 'Escriba para buscar', clockHeld: 'Reloj detenido hasta que vuelva la báscula',
+    confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
     pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
     notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
     bannerPaused: 'En pausa: toque Continuar para seguir', autoNote: 'Limpieza 4:20',
@@ -140,6 +154,12 @@ let tareCandidate = null;  // { from, since }: a drop to 0 waiting to prove it i
 const TARE_HOLD_MS = 1800;
 let live = false;
 let timer = null;
+// Disconnected: the Worker says the scale's last post is older than its stale
+// time, or this tablet couldn't reach the Worker for that long.
+let serverStale = false;
+let staleAfterMs = 45000;
+let failingSince = null;
+const disconnected = () => serverStale || (failingSince !== null && Date.now() - failingSince >= staleAfterMs);
 
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: still works for this visit */ }
@@ -210,8 +230,8 @@ function render() {
   el.ring.classList.toggle('near', frac >= NEAR && frac < 1);
   el.ring.classList.toggle('over', frac > 1.02);
 
-  el.dot.className = `live-dot ${gross === null ? 'stale' : live ? 'live' : 'stale'}`;
-  el.liveText.textContent = gross === null ? t('waiting') : live ? t('live') : t('stale');
+  el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
+  el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
   renderBanner();
   renderCycle();
 }
@@ -219,7 +239,7 @@ function render() {
 // One banner at a time, most urgent first.
 function renderBanner() {
   let kind = null;
-  if (!live && gross !== null) kind = 'signal';
+  if (disconnected()) kind = null;   // the dot says it; Koa gets the Telegram
   else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
@@ -339,6 +359,7 @@ function renderCycle() {
     el.cycleSub.textContent = `${t('paused')}: ${state.pauseNote}`;
     return;
   }
+  if (disconnected()) { el.cycleSub.textContent = t('clockHeld'); return; }
   const mins = elapsed / 60000;
   const n = net();
   if (mins > 0.5 && n > 0) {
@@ -357,28 +378,35 @@ async function poll() {
   // and would otherwise sit on "Waiting for scale" until someone reloads it.
   if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
   await read();
-  if (live) step();
+  if (live) step();   // disconnected: no job starts, nothing is logged
   render();
-  timer = setTimeout(poll, live ? FAST_MS : SLOW_MS);
+  const delay = disconnected() ? DOWN_MS : !live ? IDLE_MS
+    : (state.phase === 'armed' || state.phase === 'running') ? JOB_MS : IDLE_MS;
+  timer = setTimeout(poll, delay);
 }
 
 // One fresh reading from the Worker into gross / stable / live.
 async function read() {
   try {
     const r = await fetch(`${API}?action=scaleWeight&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(String(r.status));   // a Worker error is not the scale's fault
     const d = await r.json();
+    failingSince = null;
+    if (d && d.staleAfterS > 0) staleAfterMs = d.staleAfterS * 1000;
     if (d && d.updatedAt) {
       gross = Number(d.weight) * 1000; // the API's weight is always kg; unit is only a tag
       stable = d.stable === undefined ? null : d.stable;
-      // A still scale only posts every 30 s, so give unregistered stations
-      // (3 s server stale time) the table's 45 s before showing no signal.
-      const age = Date.now() - Date.parse(d.updatedAt);
-      live = !d.isStale || age < 45000;
+      // The Worker judges staleness against the station's own stale time
+      // (scale_stations.stale_after_s), with its own clock, not the tablet's.
+      live = !d.isStale;
+      serverStale = !!d.isStale;
     } else {
       live = false;
+      serverStale = true;   // the scale has never posted
     }
   } catch {
     live = false;
+    if (failingSince === null) failingSince = Date.now();
   }
 }
 
@@ -459,7 +487,9 @@ async function keepAwake() {
     wakeLock.addEventListener('release', () => { wakeLock = null; $('awake').hidden = true; });
   } catch { wakeLock = null; }
 }
-document.addEventListener('pointerdown', keepAwake);
+// Any tap turns sound on (browsers block it until one), so the finish chime
+// works without the Start button.
+document.addEventListener('pointerdown', () => { keepAwake(); unlockAudio(); });
 keepAwake();
 function pauseJob(note) {
   if (state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
@@ -504,10 +534,23 @@ function autoPause() {
   }
 }
 
-setInterval(() => { autoPause(); renderCycle(); }, 1000);
+// A job running while the scale is disconnected holds its clock: the time is
+// added to the paused time, so the saved cycle time leaves the outage out. It
+// carries on by itself when posts resume, with no Resume tap.
+let lastTickAt = Date.now();
+function holdWhileDisconnected() {
+  const now = Date.now();
+  if (state.phase === 'running' && state.startedAt && !state.pausedAt && disconnected()) {
+    state.pausedMs = (state.pausedMs || 0) + (now - lastTickAt);
+    save();
+  }
+  lastTickAt = now;
+}
+setInterval(() => { holdWhileDisconnected(); autoPause(); renderCycle(); }, 1000);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 save();
+enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });
 renderOrder();
 render();
 poll();

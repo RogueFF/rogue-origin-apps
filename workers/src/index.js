@@ -126,6 +126,13 @@ export default {
       } catch (e) {
         console.error(`[Cron] Inventory heal failed: ${e.message}`);
       }
+      // Cell scales: tell Koa on Telegram when one goes silent mid-shift, and when it's back.
+      try {
+        const { runScaleWatch } = await import('./lib/scale-watch.js');
+        await runScaleWatch(env);
+      } catch (e) {
+        console.error(`[Cron] Scale watch failed: ${e.message}`);
+      }
     }
 
     // Every 5 min: JD Operations Center telemetry ingest (Field Ops Tracking, Phase 1)
