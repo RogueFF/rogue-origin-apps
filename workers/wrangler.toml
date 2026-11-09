@@ -43,6 +43,8 @@ name = "rogue-origin-api"
 #                                  sms_poll / sms_send / hourly_set. NOT the farm password:
 #                                  this key lives on the FERN bot host and on the
 #                                  farm-bridge MCP worker. Same value in all three places.)
+# - TELEGRAM_CELL_ALERT_CHAT_ID (OPTIONAL — cell scale went silent mid-shift / is back,
+#                                  lib/scale-watch.js on the 5-min cron; unset = nothing sent)
 # - TELEGRAM_HARVEST_HOURLY_CHAT_ID  (OPTIONAL — missed-hour and Capataz-stale alerts;
 #                                  falls back to TELEGRAM_TEST_CHAT_ID)
 # - TWILIO_WEBHOOK_URL           (OPTIONAL var — only behind a custom domain or proxy.
