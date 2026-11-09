@@ -1,0 +1,31 @@
+{
+  "id": "/rogue-origin-apps/src/pages/cell.html",
+  "name": "Rogue Origin Cell",
+  "short_name": "RO Cell",
+  "description": "Cell table screen: live weight, target and cycle time",
+  "start_url": "/rogue-origin-apps/src/pages/cell.html",
+  "scope": "/rogue-origin-apps/src/pages/cell.html",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#2d3a2e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/rogue-origin-apps/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/rogue-origin-apps/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/rogue-origin-apps/assets/icon-apple-touch.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
