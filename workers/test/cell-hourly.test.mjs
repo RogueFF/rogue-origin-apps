@@ -168,28 +168,47 @@ test('without the 0049 scale tables the day still loads, with no auto values', a
   assert.deepEqual(body.auto, []);
 });
 
-test('four quality checks, each pass/fail; the overall result follows them', async () => {
+test('four checks scored 1-4: every check 3 or 4 = pass, any 1 or 2 = redo', async () => {
   const env = { DB: d1() };
   const base = { date: DAY, slot: SLOT, stationId: 'table4' };
-  const overall = async () => (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
-  await setCellHourly({ ...base, qTrim: 'pass', qStems: 'pass' }, env);
-  assert.equal((await overall()).quality, null, 'two of four checked: not checked yet');
-  await setCellHourly({ ...base, qMold: 'pass', qInsects: 'pass' }, env);
-  let r = await overall();
+  const row = async () => (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
+  await setCellHourly({ ...base, qTrim: 4, qStems: 3, checkedBy: 'MG' }, env);
+  assert.equal((await row()).quality, null, 'two of four scored, both passing: not done yet');
+  await setCellHourly({ ...base, qMold: 4, qInsects: 3 }, env);
+  let r = await row();
   assert.equal(r.quality, 'pass');
-  assert.deepEqual(r.checks, { qTrim: 'pass', qStems: 'pass', qMold: 'pass', qInsects: 'pass' });
-  const res = (await json(await setCellHourly({ ...base, qMold: 'fail', notes: 'spots on two buds' }, env))).body;
-  assert.equal(res.quality, 'fail', 'the save answers with the new overall result');
-  r = await overall();
-  assert.equal(r.quality, 'fail');
-  assert.equal(r.checks.qMold, 'fail');
-  await setCellHourly({ ...base, qMold: null }, env);
-  assert.equal((await overall()).quality, null, 'cleared back to not checked');
+  assert.deepEqual(r.checks, { qTrim: 4, qStems: 3, qMold: 4, qInsects: 3 });
+  assert.equal(r.checkedBy, 'MG');
+  assert.equal(r.alert, null);
+  const res = (await json(await setCellHourly({ ...base, qTrim: 2 }, env))).body;
+  assert.equal(res.quality, 'fail', 'a 2 means redo, and the save says so');
+  await setCellHourly({ ...base, qTrim: 3 }, env);
+  assert.equal((await row()).quality, 'pass', 'a re-score that passes clears it');
 });
 
-test('a bad check value is refused and nothing is written', async () => {
+test('one low score is a redo even before the other checks are scored', async () => {
   const env = { DB: d1() };
-  const r = await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table4', qInsects: 'maybe' }, env);
-  assert.equal(r.status, 400);
+  await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table6', qStems: 1 }, env);
+  const r = (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
+  assert.equal(r.quality, 'fail');
+  assert.equal(r.alert, null, 'a 1 on stems is a redo, not a stop');
+});
+
+test('a 1 on mold or insects raises the stop alert', async () => {
+  for (const key of ['qMold', 'qInsects']) {
+    const env = { DB: d1() };
+    await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table6', [key]: 1 }, env);
+    const r = (await json(await getCellHourly({ date: DAY }, env))).body.rows[0];
+    assert.equal(r.alert, 'stop', key);
+    assert.equal(r.quality, 'fail', key);
+  }
+});
+
+test('scores outside 1-4 are refused and nothing is written', async () => {
+  const env = { DB: d1() };
+  for (const v of [0, 5, 2.5, 'pass', 'fail']) {
+    const r = await setCellHourly({ date: DAY, slot: SLOT, stationId: 'table4', qTrim: v }, env);
+    assert.equal(r.status, 400, String(v));
+  }
   assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM cell_hourly').get().n, 0);
 });

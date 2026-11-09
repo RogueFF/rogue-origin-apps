@@ -5,7 +5,7 @@
  *
  *   GET  ?action=cellHourly&date=YYYY-MM-DD   roster, the day's rows, room smalls, slots
  *   POST ?action=setCellHourly   { date, slot, stationId, tops?, notes?, cultivar?,
- *                                  qTrim?, qStems?, qMold?, qInsects? }   (each check 'pass'|'fail'|null)
+ *                                  qTrim?, qStems?, qMold?, qInsects?, checkedBy? }   (each check 1-4 or null)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
  *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg }   from the cell screen
@@ -30,12 +30,15 @@ const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
 const MAX_LABEL = 40;
 const MAX_CULTIVAR = 80;
-// The four quality checks per cell-hour (migration 0051). `quality` is their
-// overall result: fail if any fails, pass once all four pass, else not checked.
+// The four quality checks per cell-hour, each scored 1-4 (migration 0051; Koa
+// 2026-11-09: "3-4 is passing quality, 1-2 is needing to be redone"). `quality`
+// is the hour's overall result: 'fail' (redo) if any check is 1 or 2, 'pass'
+// once all four are 3 or 4, NULL until then.
 const CHECKS = { qTrim: 'q_trim', qStems: 'q_stems', qMold: 'q_mold', qInsects: 'q_insects' };
+const MAX_INITIALS = 10;
 const OVERALL_SQL = `CASE
-  WHEN q_trim = 'fail' OR q_stems = 'fail' OR q_mold = 'fail' OR q_insects = 'fail' THEN 'fail'
-  WHEN q_trim = 'pass' AND q_stems = 'pass' AND q_mold = 'pass' AND q_insects = 'pass' THEN 'pass'
+  WHEN q_trim <= 2 OR q_stems <= 2 OR q_mold <= 2 OR q_insects <= 2 THEN 'fail'
+  WHEN q_trim >= 3 AND q_stems >= 3 AND q_mold >= 3 AND q_insects >= 3 THEN 'pass'
   ELSE NULL END`;
 
 const norm = s => String(s || '').replace(/[-–—]/g, '-').replace(/\s+/g, ' ').trim();
@@ -139,7 +142,7 @@ async function getCellHourly(params, env) {
     env.DB.prepare(`SELECT station_id, label, lane, sort, active FROM cell_roster ORDER BY sort, station_id`).all(),
     env.DB.prepare(
       `SELECT station_id, time_slot, cultivar, tops_lbs, quality, q_trim, q_stems, q_mold, q_insects,
-              notes, source, updated_at
+              checked_by, notes, source, updated_at
        FROM cell_hourly WHERE production_date = ?`
     ).bind(date).all(),
     env.DB.prepare(
@@ -156,6 +159,9 @@ async function getCellHourly(params, env) {
       stationId: r.station_id, slot: r.time_slot, cultivar: r.cultivar, tops: r.tops_lbs,
       quality: r.quality, notes: r.notes, source: r.source, updatedAt: r.updated_at,
       checks: { qTrim: r.q_trim, qStems: r.q_stems, qMold: r.q_mold, qInsects: r.q_insects },
+      checkedBy: r.checked_by,
+      // A 1 on mold or insects: stop, call the lead.
+      alert: r.q_mold === 1 || r.q_insects === 1 ? 'stop' : null,
     })),
     room: (room.results || []).map(r => ({
       slot: r.time_slot, smalls: r.smalls_lbs, cultivar: r.cultivar, updatedAt: r.updated_at,
@@ -189,12 +195,13 @@ async function setCellHourly(body, env) {
   }
   for (const [key, col] of Object.entries(CHECKS)) {
     if (!has(body, key)) continue;
-    const q = body[key] === null || body[key] === '' ? null : String(body[key]);
-    if (q !== null && q !== 'pass' && q !== 'fail') {
-      return errorResponse(`${key} must be pass, fail or empty`, 'VALIDATION_ERROR', 400);
+    const q = body[key] === null || body[key] === '' ? null : Number(body[key]);
+    if (q !== null && !(Number.isInteger(q) && q >= 1 && q <= 4)) {
+      return errorResponse(`${key} must be a score from 1 to 4, or empty`, 'VALIDATION_ERROR', 400);
     }
     cols.push(col); vals.push(q);
   }
+  if (has(body, 'checkedBy')) { cols.push('checked_by'); vals.push(cleanText(body.checkedBy, MAX_INITIALS)); }
   if (has(body, 'notes')) { cols.push('notes'); vals.push(cleanText(body.notes, MAX_NOTE)); }
   if (has(body, 'cultivar')) { cols.push('cultivar'); vals.push(cleanText(body.cultivar, MAX_CULTIVAR)); }
   if (!cols.length) return errorResponse('Nothing to save', 'VALIDATION_ERROR', 400);

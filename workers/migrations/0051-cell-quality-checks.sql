@@ -1,15 +1,17 @@
--- Four quality checks per cell-hour instead of one pass/fail.
--- Koa 2026-11-09: "Trim Job, Cut Stems, Mold, and Insect check. each one can be
--- pressed to pass/fail". NULL = not checked yet.
--- The existing `quality` column stays as the overall result, kept up to date by
--- setCellHourly (workers/src/handlers/production/cell-hourly.js): 'fail' if any
--- check fails, 'pass' once all four pass, NULL otherwise. The page's grid, the
--- 5 kg tracker and anything else reading `quality` keep working unchanged.
+-- Four quality checks per cell-hour, each scored 1 to 4, plus who checked.
+-- Koa 2026-11-09: trim job, stems cut right, no mold, no insects; "3-4 is
+-- passing quality, 1-2 is needing to be redone". Same scale and wording as the
+-- paper quality sheet (scripts/throughput-test-pdf.py --test q). NULL = not scored.
+-- The existing `quality` column stays as the hour's overall result, kept up to
+-- date by setCellHourly (workers/src/handlers/production/cell-hourly.js):
+-- 'fail' (redo) if any check is 1 or 2, 'pass' once all four are 3 or 4, NULL
+-- otherwise. The grid, the 5 kg tracker and older callers keep reading it.
 --
 -- Run ONCE: ALTER TABLE ADD COLUMN is not idempotent in SQLite.
 -- Apply by hand: cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0051-cell-quality-checks.sql
 
-ALTER TABLE cell_hourly ADD COLUMN q_trim TEXT CHECK (q_trim IN ('pass', 'fail'));
-ALTER TABLE cell_hourly ADD COLUMN q_stems TEXT CHECK (q_stems IN ('pass', 'fail'));
-ALTER TABLE cell_hourly ADD COLUMN q_mold TEXT CHECK (q_mold IN ('pass', 'fail'));
-ALTER TABLE cell_hourly ADD COLUMN q_insects TEXT CHECK (q_insects IN ('pass', 'fail'));
+ALTER TABLE cell_hourly ADD COLUMN q_trim INTEGER CHECK (q_trim BETWEEN 1 AND 4);
+ALTER TABLE cell_hourly ADD COLUMN q_stems INTEGER CHECK (q_stems BETWEEN 1 AND 4);
+ALTER TABLE cell_hourly ADD COLUMN q_mold INTEGER CHECK (q_mold BETWEEN 1 AND 4);
+ALTER TABLE cell_hourly ADD COLUMN q_insects INTEGER CHECK (q_insects BETWEEN 1 AND 4);
+ALTER TABLE cell_hourly ADD COLUMN checked_by TEXT;

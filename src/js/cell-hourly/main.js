@@ -1,11 +1,12 @@
 /**
- * Cell hourly log: hour-by-hour tops, quality and notes per cell, plus one
+ * Cell hourly log: hour-by-hour tops, quality scores and notes per cell, plus one
  * shared smalls number per hour for the room. Used until every table has a
  * live scale; the rows are keyed (date, slot, station) like the scale rollup
  * will write them (Koa 2026-11-09).
  *
  *   cell-hourly.html            today, the current hour
  *   cell-hourly.html?date=...   another day
+ *   cell-hourly.html?view=quality   the quality view: scores only, no weights
  *
  * Every field saves on its own as soon as it changes, and the save state shows
  * on screen. A failed save stays queued and retries; nothing is lost silently.
@@ -24,9 +25,11 @@ registerLabels({
     title: 'Cell hourly log', roomCultivar: 'Cultivar this hour', roomSmalls: 'Smalls, whole room (lb)',
     wholesaleToday: 'Wholesale tops today', bagsFull: '5 kg bags', nextBag: 'Next 5 kg bag',
     edit: 'Edit', nameLabel: 'Name or label', wholesale: 'Wholesale', retail: 'Retail', save: 'Save', cancel: 'Cancel',
-    removeCell: 'Remove cell', topsLabel: 'Tops this hour', quality: 'Quality checks', notChecked: 'Not checked',
-    chkTrim: 'Trim job', chkStems: 'Cut stems', chkMold: 'Mold', chkInsects: 'Insects',
-    pass: 'Pass', fail: 'Fail', failNeedsNote: 'Write what failed in the notes first', notes: 'Notes',
+    removeCell: 'Remove cell', topsLabel: 'Tops this hour', quality: 'Quality checks: score each one 1 to 4',
+    chkTrim: 'Trim job', chkStems: 'Stems cut right', chkMold: 'No mold', chkInsects: 'No insects',
+    notes: 'Notes', viewWeights: 'Weights', viewQuality: 'Quality', checkedBy: 'Checked by (initials)',
+    overallPass: 'Pass: every check 3 or 4', overallRedo: "Redo: this hour's tops go back to the cell",
+    stopAlert: 'STOP: mold or insects in the tops. Set the basket aside and call the lead.', scored: 'scored',
     cellCultivar: 'Cultivar at this cell', jump: 'All cells this hour', addCell: '+ Add cell',
     saving: 'Saving…', saved: 'Saved', notSaved: 'Not saved: no connection. It will retry.', perHour: 'lb/hr',
     confirmBig: 'That is {lb} lb in one hour. Keep it?', confirmRemove: 'Remove {name}? Its saved hours stay.',
@@ -40,9 +43,11 @@ registerLabels({
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
     wholesaleToday: 'Tops de mayoreo hoy', bagsFull: 'Bolsas de 5 kg', nextBag: 'Siguiente bolsa de 5 kg',
     edit: 'Editar', nameLabel: 'Nombre o etiqueta', wholesale: 'Mayoreo', retail: 'Menudeo', save: 'Guardar', cancel: 'Cancelar',
-    removeCell: 'Quitar celda', topsLabel: 'Tops de esta hora', quality: 'Revisión de calidad', notChecked: 'Sin revisar',
-    chkTrim: 'Trabajo de trim', chkStems: 'Tallos cortados', chkMold: 'Moho', chkInsects: 'Insectos',
-    pass: 'Pasa', fail: 'No pasa', failNeedsNote: 'Escriba primero en notas qué falló', notes: 'Notas',
+    removeCell: 'Quitar celda', topsLabel: 'Tops de esta hora', quality: 'Revisión de calidad: califique cada una del 1 al 4',
+    chkTrim: 'Recorte', chkStems: 'Tallos bien cortados', chkMold: 'Sin moho', chkInsects: 'Sin insectos',
+    notes: 'Notas', viewWeights: 'Pesos', viewQuality: 'Calidad', checkedBy: 'Revisó (iniciales)',
+    overallPass: 'Pasa: todas en 3 o 4', overallRedo: 'Rehacer: los tops de esta hora regresan a la celda',
+    stopAlert: 'PARE: moho o insectos en los tops. Aparte la canasta y llame al líder.', scored: 'calificadas',
     cellCultivar: 'Variedad en esta celda', jump: 'Todas las celdas esta hora', addCell: '+ Agregar celda',
     saving: 'Guardando…', saved: 'Guardado', notSaved: 'No se guardó: sin conexión. Se reintentará.', perHour: 'lb/h',
     confirmBig: 'Son {lb} lb en una hora. ¿Lo deja así?', confirmRemove: '¿Quitar {name}? Sus horas guardadas se quedan.',
@@ -89,7 +94,8 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   tops: $('tops'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
-  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), failNote: $('failNeedsNote'),
+  overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), qOverall: $('qOverall'), stopAlert: $('stopAlert'), checkedBy: $('checkedBy'),
+  tabWeights: $('tabWeights'), tabQuality: $('tabQuality'),
   notes: $('notes'), cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -97,7 +103,18 @@ const el = {
 const state = {
   slots: [], roster: [], rows: new Map(), room: new Map(), auto: new Map(),
   slot: null, cellIdx: 0, cultivars: [], editLane: 'wholesale',
+  view: ['weights', 'quality'].includes(params.get('view')) ? params.get('view') : (readView() || 'weights'),
 };
+// Two views on one page: weights, and quality with no pounds on screen (Koa
+// 2026-11-09: quality without the crew watching weight). Remembered per tablet.
+function readView() { try { return localStorage.getItem('ro-cell-hourly:view'); } catch { return null; } }
+function setView(v) {
+  state.view = v;
+  document.body.dataset.view = v;
+  el.tabWeights.classList.toggle('on', v === 'weights');
+  el.tabQuality.classList.toggle('on', v === 'quality');
+  try { localStorage.setItem('ro-cell-hourly:view', v); } catch { /* per visit only */ }
+}
 const rowKey = (slot, station) => `${slot}|${station}`;
 const cells = () => state.roster.filter(c => c.active);
 const cell = () => cells()[Math.min(state.cellIdx, cells().length - 1)];
@@ -160,14 +177,33 @@ function renderStatus() {
 const pending = (slot, station, field) => queue.has(`setCellHourly|${slot}|${station}|${field}`);
 
 // ---- local edits (optimistic) ----
-// The four quality checks (Koa 2026-11-09); the overall result follows them,
-// the same rule the Worker applies: fail if any fails, pass once all four pass.
+// The four quality checks, each scored 1-4 (Koa 2026-11-09: "3-4 is passing
+// quality, 1-2 is needing to be redone"). The overall result follows the same
+// rule the Worker applies: any 1 or 2 = redo ('fail'), all four 3 or 4 = pass.
+// Wording matches the paper quality sheet (scripts/throughput-test-pdf.py --test q).
 const CHECKS = [['qTrim', 'chkTrim'], ['qStems', 'chkStems'], ['qMold', 'chkMold'], ['qInsects', 'chkInsects']];
+const SEEN = {
+  en: ['', 'In the tops: stop, call the lead', 'Found some: pick through it again', 'Checked a spot, it was fine', 'None seen'],
+  es: ['', 'En los tops: pare, llame al líder', 'Encontré algo: revíselo otra vez', 'Revisé un punto, estaba bien', 'No se ve nada'],
+};
+const SCORE_WORDS = {
+  en: {
+    qTrim: ['', 'Rough or untrimmed: redo it', 'Lots of leaf or uneven: touch it up', 'A few leaves sticking out', 'Clean and even all the way round'],
+    qStems: ['', 'Stems left on most buds', 'Lots of long stems: recut', 'A few stems a little long', 'Every stem cut flush'],
+    qMold: SEEN.en, qInsects: SEEN.en,
+  },
+  es: {
+    qTrim: ['', 'Sin recortar o muy mal: repítalo', 'Mucha hoja o disparejo: retóquelo', 'Unas hojitas salidas', 'Limpio y parejo por todos lados'],
+    qStems: ['', 'Tallos en casi todos los cogollos', 'Muchos tallos largos: córtelos', 'Unos tallos un poco largos', 'Todos los tallos cortados al ras'],
+    qMold: SEEN.es, qInsects: SEEN.es,
+  },
+};
 function overall(checks = {}) {
   const v = CHECKS.map(([k]) => checks[k]);
-  if (v.includes('fail')) return 'fail';
-  return v.every(x => x === 'pass') ? 'pass' : null;
+  if (v.some(x => x != null && x <= 2)) return 'fail';
+  return v.every(x => x != null && x >= 3) ? 'pass' : null;
 }
+const stopFor = (checks = {}) => checks.qMold === 1 || checks.qInsects === 1;
 function setCellField(field, value) {
   const c = cell(); if (!c) return;
   const key = rowKey(state.slot, c.stationId);
@@ -188,31 +224,34 @@ function setCellField(field, value) {
 }
 const roomCultivar = (slot = state.slot) => state.room.get(slot)?.cultivar || '';
 
-// One row per check: tap Pass or Fail; tap the lit one again to clear it.
-// A fail needs a note first, same rule as a paused job.
+// One block per check: four score buttons, 1 to 4; tap the lit one again to
+// clear it. What the chosen score means shows under it.
 function renderChecks(r) {
   el.checks.innerHTML = '';
   for (const [key, label] of CHECKS) {
-    const v = (r.checks || {})[key] || null;
-    const rowEl = document.createElement('div');
-    rowEl.className = 'check-row';
+    const v = (r.checks || {})[key] ?? null;
+    const block = document.createElement('div');
+    block.className = 'check';
     const name = document.createElement('span');
     name.className = 'check-name'; name.textContent = t(label);
-    const pass = document.createElement('button');
-    pass.className = 'btn pass' + (v === 'pass' ? ' on' : ''); pass.textContent = t('pass');
-    const fail = document.createElement('button');
-    fail.className = 'btn fail' + (v === 'fail' ? ' on' : ''); fail.textContent = t('fail');
-    pass.addEventListener('click', () => { setCellField(key, v === 'pass' ? null : 'pass'); renderCell(); });
-    fail.addEventListener('click', () => {
-      if (v === 'fail') { setCellField(key, null); renderCell(); return; }
-      if (!(el.notes.value.trim() || row().notes)) {
-        el.failNote.hidden = false; el.failNote.dataset.waiting = key; el.notes.focus(); return;
-      }
-      setCellField(key, 'fail'); renderCell();
-    });
-    rowEl.append(name, pass, fail);
-    el.checks.appendChild(rowEl);
+    const scores = document.createElement('div');
+    scores.className = 'scores';
+    for (const n of [1, 2, 3, 4]) {
+      const b = document.createElement('button');
+      b.className = 'btn score' + (v === n ? ` on ${n >= 3 ? 'ok' : 'redo'}` : '');
+      b.textContent = String(n);
+      b.addEventListener('click', () => { setCellField(key, v === n ? null : n); renderCell(); });
+      scores.appendChild(b);
+    }
+    const desc = document.createElement('div');
+    desc.className = 'score-desc';
+    desc.textContent = v ? `${v} · ${SCORE_WORDS[getLang() === 'es' ? 'es' : 'en'][key][v]}` : '';
+    block.append(name, scores, desc);
+    el.checks.appendChild(block);
   }
+  const o = overall(r.checks);
+  el.qOverall.className = 'overall' + (o === 'pass' ? ' pass' : o === 'fail' ? ' redo' : '');
+  el.qOverall.textContent = o === 'pass' ? t('overallPass') : o === 'fail' ? t('overallRedo') : '';
 }
 
 // ---- rendering ----
@@ -228,7 +267,7 @@ function renderHours() {
   const nowIdx = DATE === pacificToday().day ? currentSlotIndex() : -1;
   state.slots.forEach((s, i) => {
     const b = document.createElement('button');
-    const done = cells().filter(c => eff(c.stationId, s.slot) != null).length;
+    const done = cells().filter(c => (state.view === 'quality' ? row(c.stationId, s.slot).quality != null : eff(c.stationId, s.slot) != null)).length;
     b.className = 'hour-chip' + (s.slot === state.slot ? ' on' : '') + (i === nowIdx ? ' now' : '');
     b.innerHTML = `<span>${s.slot.replace(/:00/g, '').replace(' – ', '–')}</span><small>${done}/${cells().length}</small>`;
     b.addEventListener('click', () => { state.slot = s.slot; renderAll(); });
@@ -283,6 +322,8 @@ function renderCell() {
   el.lane.className = `lane ${c.lane}`;
   if (document.activeElement !== el.tops) el.tops.value = r.tops ?? '';
   if (document.activeElement !== el.notes) el.notes.value = r.notes ?? '';
+  if (document.activeElement !== el.checkedBy) el.checkedBy.value = r.checkedBy ?? '';
+  el.stopAlert.hidden = !stopFor(r.checks);
   const hours = state.slots.find(s => s.slot === state.slot)?.hours || 1;
   const v = eff();
   el.rate.textContent = v != null ? `${(v / hours).toFixed(2)} ${t('perHour')} (${hours} h)` : '';
@@ -303,7 +344,6 @@ function renderCell() {
   }
   renderChecks(r);
   fillCultivars(el.cellCultivar, r.cultivar && r.cultivar !== roomCultivar() ? r.cultivar : '', true);
-  el.failNote.hidden = true;
   el.editBox.hidden = true;
   renderStatus();
 }
@@ -313,8 +353,9 @@ function renderGrid() {
   let done = 0;
   list.forEach((c, i) => {
     const r = row(c.stationId);
-    const has = eff(c.stationId) != null;
-    if (has) done++;
+    // Weights view: green once tops are in. Quality view: green = pass, red = redo.
+    const has = state.view === 'quality' ? r.quality === 'pass' : eff(c.stationId) != null;
+    if (state.view === 'quality' ? r.quality != null : has) done++;
     const b = document.createElement('button');
     b.className = 'jump' + (has ? ' done' : '') + (r.quality === 'fail' ? ' failq' : '')
       + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '') + (hasScale(c.stationId) ? ' scale' : '');
@@ -324,7 +365,7 @@ function renderGrid() {
     b.addEventListener('click', () => { state.cellIdx = i; renderCell(); renderGrid(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
     el.grid.appendChild(b);
   });
-  el.doneCount.textContent = `${done}/${list.length} ${t('entered')}`;
+  el.doneCount.textContent = `${done}/${list.length} ${t(state.view === 'quality' ? 'scored' : 'entered')}`;
   renderHours();
 }
 function renderAll() { renderRoom(); renderCell(); renderGrid(); renderBag(); }
@@ -339,7 +380,7 @@ async function load() {
     const local = state.rows.get(key) || {};
     const merged = { ...r };
     // Keep this tablet's unsaved edits over what the server had.
-    for (const f of ['tops', 'notes', 'cultivar']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
+    for (const f of ['tops', 'notes', 'cultivar', 'checkedBy']) if (pending(r.slot, r.stationId, f)) merged[f] = local[f];
     merged.checks = { ...(r.checks || {}) };
     for (const [k] of CHECKS) if (pending(r.slot, r.stationId, k)) merged.checks[k] = (local.checks || {})[k] ?? null;
     merged.quality = overall(merged.checks) ?? r.quality ?? null;
@@ -385,9 +426,10 @@ el.tops.addEventListener('change', () => {
 el.notes.addEventListener('change', () => {
   const v = el.notes.value.trim() || null;
   setCellField('notes', v);
-  const waiting = el.failNote.dataset.waiting;
-  if (v && waiting) { el.failNote.dataset.waiting = ''; setCellField(waiting, 'fail'); renderCell(); }
 });
+el.checkedBy.addEventListener('change', () => { setCellField('checkedBy', el.checkedBy.value.trim().toUpperCase() || null); renderCell(); });
+el.tabWeights.addEventListener('click', () => { setView('weights'); renderGrid(); });
+el.tabQuality.addEventListener('click', () => { setView('quality'); renderGrid(); });
 el.cellCultivar.addEventListener('change', () => { setCellField('cultivar', el.cellCultivar.value || roomCultivar() || null); renderCell(); });
 
 el.roomCultivar.addEventListener('change', () => {
@@ -437,5 +479,6 @@ document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang
 // ---- start ----
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 el.date.textContent = DATE;
+setView(state.view);
 load().then(() => { renderAll(); loadCultivars(); }).catch(() => { el.cellStatus.className = 'save-status bad'; el.cellStatus.textContent = t('loadFail'); });
-setInterval(() => { if (!document.hidden) load().then(() => { renderRoom(); renderGrid(); renderBag(); if (!el.editBox.hidden || !el.failNote.hidden) return; renderCell(); }).catch(() => {}); }, REFRESH_MS);
+setInterval(() => { if (!document.hidden) load().then(() => { renderRoom(); renderGrid(); renderBag(); if (!el.editBox.hidden) return; renderCell(); }).catch(() => {}); }, REFRESH_MS);

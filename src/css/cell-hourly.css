@@ -48,10 +48,23 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .unit { font: 700 26px var(--font-mono); color: var(--text-secondary); }
 
 .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
-.checks { display: grid; gap: 8px; }
-.check-row { display: grid; grid-template-columns: minmax(0, 1fr) 104px 104px; gap: 8px; align-items: center; }
+.view-tabs { display: flex; gap: 8px; }
+body[data-view="quality"] .w-only { display: none; }
+body[data-view="weights"] .q-only { display: none; }
+.checks { display: grid; gap: 14px; }
+.check { display: grid; gap: 6px; }
 .check-name { font: 600 18px var(--font-ui); }
-.quality .btn.on { color: #fff; }
+.scores { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.score { min-height: 56px; font: 700 24px var(--font-mono); }
+.score.on.ok { background: var(--success); border-color: var(--success); color: #fff; }
+.score.on.redo { background: var(--danger); border-color: var(--danger); color: #fff; }
+.score-desc { font-size: 15px; color: var(--text-secondary); min-height: 20px; }
+.overall { font: 700 18px var(--font-ui); padding: 10px 12px; border-radius: 12px; text-align: center; }
+.overall:empty { display: none; }
+.overall.pass { background: var(--green-dim); color: var(--success); }
+.overall.redo { background: var(--danger-dim); color: var(--danger); }
+.stop { background: var(--danger); color: #fff; font: 700 20px var(--font-ui); padding: 14px; border-radius: 12px; text-align: center; }
+.stop[hidden] { display: none; }
 .quality .btn.pass.on { background: var(--success); border-color: var(--success); }
 .quality .btn.fail.on { background: var(--danger); border-color: var(--danger); }
 .error { color: var(--danger); font-weight: 600; }
