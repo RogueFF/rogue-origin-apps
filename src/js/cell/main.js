@@ -48,7 +48,7 @@ registerLabels({
     of: 'of', toGo: 'To go', done: 'Done', tare: 'Tare', target: 'Target',
     customG: 'Custom (g)', liveCycle: 'Live cycle time', tareToStart: 'Tare the container to start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
-    liftOff: 'lift it off for the next one', lastJob: 'Last job',
+    liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
     scaleButtons: "Don't press the scale's own TARE or ZERO buttons",
     bannerTare: 'Tap Tare to start the job', bannerOff: 'Container off the scale: put it back',
@@ -68,7 +68,7 @@ registerLabels({
     of: 'de', toGo: 'Faltan', done: 'Hecho', tare: 'Tara', target: 'Meta',
     customG: 'Otra (g)', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga tara al contenedor para empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
-    liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo',
+    liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
     scaleButtons: 'No presione los botones TARE o ZERO de la báscula',
     bannerTare: 'Toque Tara para empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
@@ -366,7 +366,23 @@ el.custom.addEventListener('change', () => {
 });
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
 document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderPresets(); render(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); keepAwake(); } });
+
+// Keep the tablet's screen on while the page is up, on battery too (Samsung's
+// Stay awake only works while charging). The lock drops whenever the page is
+// hidden, so it is asked for again each time the page comes back, and on any
+// tap in case the browser wanted a gesture first. Unsupported: fails quietly.
+let wakeLock = null;
+async function keepAwake() {
+  if (!('wakeLock' in navigator) || document.hidden || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    $('awake').hidden = false;
+    wakeLock.addEventListener('release', () => { wakeLock = null; $('awake').hidden = true; });
+  } catch { wakeLock = null; }
+}
+document.addEventListener('pointerdown', keepAwake);
+keepAwake();
 function pauseJob(note) {
   if (state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
   state.pausedAt = Date.now(); state.pauseNote = note; save(); render();
