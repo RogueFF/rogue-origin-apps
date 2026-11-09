@@ -458,18 +458,36 @@ function resetJob() {
   state.phase = 'idle'; state.bankedG = 0; state.tareFlagG = 0; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
   save(); render();
 }
+// On a tablet the hold used to break (Koa 2026-11-09: "wonky and hard to get it
+// to fill the bar all the way"): a finger that slid a little turned the press
+// into a scroll (pointercancel), drifting off the button ended it (pointerleave),
+// and Android's long-press menu cut in. Now the button keeps the pointer
+// (setPointerCapture) wherever the finger drifts, the CSS turns off scrolling,
+// selection and the long-press callout on it, and only lifting the finger ends
+// the hold.
+const holdLabel = () => el.resetBtn.querySelector('[data-i18n]');
+let hintTimer = null;
 function holdStart(e) {
+  if (e.button > 0) return;
   e.preventDefault();
+  try { el.resetBtn.setPointerCapture(e.pointerId); } catch { /* old browser: still works without */ }
   el.resetBtn.classList.add('holding');
-  holdTimer = setTimeout(() => { holdEnd(); resetJob(); }, HOLD_RESET_MS);
+  holdTimer = setTimeout(() => { holdTimer = null; el.resetBtn.classList.remove('holding'); resetJob(); }, HOLD_RESET_MS);
 }
 function holdEnd() {
+  const early = holdTimer !== null;
   clearTimeout(holdTimer); holdTimer = null;
   el.resetBtn.classList.remove('holding');
+  // Let go too soon: say so on the button itself for 2 s.
+  if (early) {
+    holdLabel().textContent = t('holdHint');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => { holdLabel().textContent = t('holdReset'); }, 2000);
+  }
 }
 el.resetBtn.addEventListener('pointerdown', holdStart);
-['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.resetBtn.addEventListener(ev, holdEnd));
-el.resetBtn.addEventListener('click', () => { if (!holdTimer) el.cycleSub.textContent = t('holdHint'); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.resetBtn.addEventListener(ev, holdEnd));
+el.resetBtn.addEventListener('contextmenu', e => e.preventDefault());
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
 document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderOrder(); render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); keepAwake(); } });

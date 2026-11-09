@@ -69,7 +69,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .error { color: var(--danger); font-size: 16px; font-weight: 600; }
 
 .btn.hold > span:last-child { position: relative; }
-.btn.hold { min-height: 40px; font-size: 14px; color: var(--text-secondary); position: relative; overflow: hidden; }
+.btn.hold { min-height: 52px; font-size: 16px; color: var(--text-secondary); position: relative; overflow: hidden;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .btn.hold .fill { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--danger-dim); transition: width 1.2s linear; }
 .btn.hold.holding .fill { width: 100%; }
 .scale-hint { font-size: 13px; color: var(--text-secondary); }
