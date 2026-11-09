@@ -126,6 +126,8 @@ let stable = null;      // the scale's settled flag, when it sends one
 let overSince = null;   // when net first reached the target this job
 let prevReading = null; // the reading before this one, to spot a scale TARE (a straight drop to 0)
 let wentNegative = false; // a lift (negative) since the reading was last up
+let tareCandidate = null;  // { from, since }: a drop to 0 waiting to prove it is a TARE
+const TARE_HOLD_MS = 1800;
 let live = false;
 let timer = null;
 
@@ -225,23 +227,34 @@ function chime() {
 // Move the job along from the latest reading. Called after every poll.
 function step() {
   if (gross === null) return;
-  // A straight drop to about 0 with no lift between is someone pressing the scale's TARE.
-  const scaleTared = prevReading !== null && prevReading > ON_SCALE_G && Math.abs(gross) <= ZERO_G && !wentNegative;
-  if (gross < -LIFT_G) wentNegative = true;
+  // A drop to about 0 with no lift between is someone pressing the scale's TARE.
+  // The scale sends no settle flag and a basket being lifted passes through 0 on
+  // its way negative, so the 0 must hold TARE_HOLD_MS (two polls) before it counts.
+  const now = Date.now();
+  if (gross < -LIFT_G) { wentNegative = true; tareCandidate = null; }
   else if (gross > ON_SCALE_G) wentNegative = false;
-  const before = prevReading;
-  prevReading = gross;
-  if (scaleTared && state.phase === 'idle') {
-    // Basket on, scale tared: the job is ready, same as tapping Start.
-    state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
-    state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
-    return;
+  if (!tareCandidate && prevReading !== null && prevReading > ON_SCALE_G && Math.abs(gross) <= ZERO_G && !wentNegative) {
+    tareCandidate = { from: prevReading, since: now };
+  } else if (tareCandidate && Math.abs(gross) > ZERO_G && now - tareCandidate.since < TARE_HOLD_MS) {
+    tareCandidate = null;                       // didn't hold at 0: passing through
   }
-  if (scaleTared && state.phase === 'running') {
-    // TARE pressed mid-job with tops in the basket: keep what was there, and say so.
-    state.bankedG = (state.bankedG || 0) + before;
-    state.tareFlagG = (state.tareFlagG || 0) + before;
-    save();
+  prevReading = gross;
+  const confirmed = tareCandidate && Math.abs(gross) <= ZERO_G && now - tareCandidate.since >= TARE_HOLD_MS;
+  if (confirmed) {
+    const before = tareCandidate.from;
+    tareCandidate = null;
+    if (state.phase === 'idle') {
+      // Basket on, scale tared: the job is ready, same as tapping Start.
+      state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
+      state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
+      return;
+    }
+    if (state.phase === 'running') {
+      // TARE pressed mid-job with tops in the basket: keep what was there, and say so.
+      state.bankedG = (state.bankedG || 0) + before;
+      state.tareFlagG = (state.tareFlagG || 0) + before;
+      save();
+    }
   }
   const n = net();
   if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume

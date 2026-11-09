@@ -88,3 +88,21 @@ test('a reading in the lunch gap counts toward the next slot', () => {
   const out = run([r(11, 50, 0), r(12, 10, 40)]);
   assert.deepEqual(out.bySlot, { '12:30-1': LB(40) });
 });
+
+test('readings passing through during a lift are skipped (the scale sends no settle flag)', () => {
+  // 200 g held; lifting passes through 120, 30 and 0.3 within a second, then the
+  // empty pan (-50) holds; putting it back passes 150 and settles at 190: a shake.
+  const out = run([
+    r(9, 0, 0), r(9, 10, 100), r(9, 30, 200),
+    r(9, 31, 120, 0), r(9, 31, 30, 0), r(9, 31, 0.3, 1), r(9, 31, -50, 1),
+    r(9, 32, 150, 0), r(9, 32, 190, 1),
+  ]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(190) });
+  assert.deepEqual(out.flags, {}, 'a lift is not a scale TARE');
+});
+
+test('a scale TARE that holds at 0 is still seen through the settle filter', () => {
+  const out = run([r(9, 0, 0), r(9, 10, 40, 0), r(9, 10, 60, 0), r(9, 20, 120), r(9, 30, 0), r(9, 45, 30)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(150) });
+  assert.deepEqual(out.flags, { '9-10': ['scaleTared'] });
+});

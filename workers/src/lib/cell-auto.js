@@ -36,6 +36,11 @@ export const LIFT_G = 1.0;       // net below -1 g: the basket is off the pan
 export const ZERO_G = 0.5;       // a TARE'd scale reads 0.00; this is "about 0"
 export const EMPTY_G = 2.0;      // a basket back within 2 g of zero is empty
 export const GRACE_MS = 90 * 1000;
+// The JINXUAN streams ~10 lines/s with no stability marker, so every reading
+// arrives marked stable. A reading only counts as settled if the scale held it:
+// the next logged reading is at least SETTLE_MS later (logs are to the second).
+// Readings passing through while a basket goes on or off are skipped.
+export const SETTLE_MS = 2000;
 const G_PER_LB = 453.59237;
 
 /** Pacific day + minutes of a SQLite UTC timestamp. */
@@ -63,7 +68,13 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
   ]
     .map(e => ({ ...e, at: pacificAt(e.ts) }))
     .filter(e => e.at.day === day)
-    .sort((a, b) => a.at.ms - b.at.ms || (a.type === 'reading' ? -1 : 1));
+    // Same second: keep log order (ts, id); a reading sorts before a mark.
+    .sort((a, b) => a.at.ms - b.at.ms || (b.type === 'reading') - (a.type === 'reading'))
+    .filter((e, i, all) => {
+      if (e.type !== 'reading') return true;
+      const next = all.slice(i + 1).find(x => x.type === 'reading');
+      return !next || next.at.ms - e.at.ms >= SETTLE_MS;
+    });
 
   const gBySlot = {};
   const flags = {};
