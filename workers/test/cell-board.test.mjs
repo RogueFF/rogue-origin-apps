@@ -57,7 +57,7 @@ test('the board carries each scale\'s live weight and goes stale on the station\
   const { raw, env } = d1();
   raw.prepare(`INSERT INTO scale_readings (station_id, weight, unit, stable, updated_at) VALUES ('table1', 0.00981, 'kg', 1, '2026-11-09 22:00:00')`).run();
   let c = await cell1(env, T0 + 10000);
-  assert.deepEqual(c.scale, { weightG: 9.81, stable: true, live: true, updatedAt: T0 });
+  assert.deepEqual(c.scale, { weightG: 9.81, stable: true, live: true, updatedAt: T0, battery: null });
   c = await cell1(env, T0 + 46000);
   assert.equal(c.scale.live, false, 'past 45 s');
   const other = (await json(await getCellBoard({}, env, T0))).body.cells.find(x => x.stationId === 'table2');

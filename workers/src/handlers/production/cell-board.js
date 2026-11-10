@@ -12,6 +12,7 @@
  * and holds no buyer data. Times are this Worker's clock, never the tablet's.
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
+import { batteryOf } from '../../lib/battery.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
 const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
@@ -79,7 +80,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
   const [roster, states, readings, stations] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
-    allOrEmpty(env.DB.prepare(`SELECT station_id, weight, stable, updated_at FROM scale_readings`)),
+    allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
     allOrEmpty(env.DB.prepare(`SELECT station_id, stale_after_s FROM scale_stations WHERE kind = 'table' AND active = 1`)),
   ]);
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
@@ -97,6 +98,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
         stable: r ? r.stable === 1 : null,
         live: at !== null && now - at <= staleS * 1000,
         updatedAt: at,
+        battery: batteryOf(r, now),
       } : null,
       job: s ? {
         phase: s.phase, cultivar: s.cultivar, bag: s.bag, targetG: s.target_g,

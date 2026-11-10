@@ -10,7 +10,7 @@ import { stationSql, stationSqlFromHash } from '../scripts/scale-station-sql.mjs
  * settled weight is logged), not SQLite itself. `migrated: false` mimics prod
  * before 0049 is applied: no scale_stations / scale_events, no stable column.
  */
-function fakeDb({ migrated = true, stations = [], readings = {} } = {}) {
+function fakeDb({ migrated = true, stations = [], readings = {}, battery = true } = {}) {
   const db = {
     stations: new Map(stations.map(s => [s.station_id, s])),
     readings: new Map(Object.entries(readings)),
@@ -43,6 +43,13 @@ function fakeDb({ migrated = true, stations = [], readings = {} } = {}) {
             station_id, weight, unit, target_weight: 5.0,
             ...(withStable ? { stable } : {}),
             updated_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          });
+          return { meta: { changes: 1 } };
+        }
+        if (sql.includes('UPDATE scale_readings SET batt_mv')) {
+          if (!battery) throw new Error('D1_ERROR: no such column: batt_mv: SQLITE_ERROR');
+          Object.assign(db.readings.get(p[2]), {
+            batt_mv: p[0], rssi: p[1], batt_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
           });
           return { meta: { changes: 1 } };
         }
@@ -220,4 +227,34 @@ test('a negative weight from a table without its token is a 401, never written',
   const w = await post({ DB }, { stationId: 'table1', weight: -0.05, unit: 'kg', stable: true }, null);
   assert.equal(w.status, 401);
   assert.equal(DB.writes.length, 0);
+});
+
+test('a table node\'s battery and Wi-Fi ride along: stored, and read back as a percent', async () => {
+  const env = { DB: fakeDb({ stations: [TABLE1] }) };
+  const r = await post(env, { stationId: 'table1', weight: 0.0123, unit: 'kg', stable: true, battMv: 3870, rssi: -61 }, TOKEN);
+  assert.equal(r.status, 200);
+  const g = await get(env, 'table1');
+  assert.equal(g.json.battery.mv, 3870);
+  assert.equal(g.json.battery.rssi, -61);
+  assert.equal(g.json.battery.pct, 64);
+});
+
+test('no battery fields, nonsense values, or a database before 0055: posts exactly as before', async () => {
+  const env = { DB: fakeDb({ stations: [TABLE1] }) };
+  await post(env, { stationId: 'table1', weight: 0.01, unit: 'kg', stable: true }, TOKEN);
+  assert.equal((await get(env, 'table1')).json.battery, null);
+  await post(env, { stationId: 'table1', weight: 0.01, unit: 'kg', stable: true, battMv: 99999, rssi: 5 }, TOKEN);
+  assert.equal((await get(env, 'table1')).json.battery, null, 'out of range is ignored');
+  assert.ok(!env.DB.writes.some(w => w.includes('batt_mv')));
+  const old = { DB: fakeDb({ stations: [TABLE1], battery: false }) };
+  const r = await post(old, { stationId: 'table1', weight: 0.01, unit: 'kg', stable: true, battMv: 3900 }, TOKEN);
+  assert.equal(r.status, 200, 'before 0055 the battery is dropped, the weight still lands');
+  assert.equal(old.DB.readings.get('table1').weight, 0.01);
+});
+
+test('line1 and unregistered ids never write battery fields', async () => {
+  const env = { DB: fakeDb({ stations: [TABLE1] }) };
+  await post(env, { stationId: 'line1', weight: 1, battMv: 3900 });
+  await post(env, { stationId: 'cell1', weight: 1, battMv: 3900 });
+  assert.ok(!env.DB.writes.some(w => w.includes('batt_mv')));
 });

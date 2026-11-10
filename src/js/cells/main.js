@@ -20,6 +20,8 @@ const POLL_MS = 2000;
 const REMIND_MS = 120000;   // a bag still waiting: chime again every 2 min
 const NEAR = 0.9;
 
+const BATT_LOW_PCT = 20;   // red on the tile; Koa gets a Telegram under 15%
+
 registerLabels({
   en: {
     title: 'Cells', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
@@ -155,7 +157,7 @@ function tileFor(c) {
   if (!tile) {
     tile = document.createElement('article');
     tile.innerHTML = `
-      <div class="t-top"><div class="t-name"><span class="n"></span><small></small></div><span class="pill"></span></div>
+      <div class="t-top"><div class="t-name"><span class="n"></span><small></small></div><span class="batt"></span><span class="pill"></span></div>
       <div class="t-order"><span class="o"></span><small></small></div>
       <div class="t-weight"><b></b><span></span></div>
       <div class="bar"><i></i></div>
@@ -183,6 +185,11 @@ function renderGrid() {
     tile.querySelector('.t-name .n').textContent = c.label;
     tile.querySelector('.t-name small').textContent = c.lane === 'retail' ? t('retail') : '';
     tile.querySelector('.pill').textContent = t(st);
+    // Scale node battery (lib/battery.js), when the node sends it; red when low.
+    const b = c.scale && c.scale.live ? c.scale.battery : null;
+    const batt = tile.querySelector('.batt');
+    batt.textContent = b && b.pct != null ? `🔋 ${b.pct}%` : '';
+    batt.classList.toggle('low', !!b && b.pct < BATT_LOW_PCT);
     tile.querySelector('.t-order .o').textContent = j.cultivar || j.bag ? (shortCultivar(j.cultivar) || '—') : (c.job ? t('noOrder') : '');
     tile.querySelector('.t-order small').textContent = j.bag ? ` · ${t(j.bag)}` : '';
     tile.querySelector('.t-weight b').textContent = shown == null ? '—' : fmtG(shown);

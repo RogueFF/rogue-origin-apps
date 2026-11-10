@@ -133,6 +133,13 @@ export default {
       } catch (e) {
         console.error(`[Cron] Scale watch failed: ${e.message}`);
       }
+      // ...and when a scale node's battery runs low (migration 0055).
+      try {
+        const { runBatteryWatch } = await import('./lib/scale-watch.js');
+        await runBatteryWatch(env);
+      } catch (e) {
+        console.error(`[Cron] Battery watch failed: ${e.message}`);
+      }
     }
 
     // Every 5 min: JD Operations Center telemetry ingest (Field Ops Tracking, Phase 1)
