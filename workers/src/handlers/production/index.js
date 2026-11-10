@@ -20,6 +20,7 @@ import { setShiftStart, getShiftStart } from './shift.js';
 import { getScaleWeight, setScaleWeight, setBagMode } from './scale.js';
 import { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark } from './cell-hourly.js';
 import { setCellState, getCellBoard } from './cell-board.js';
+import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -91,6 +92,14 @@ export async function handleProductionD1(request, env, ctx) {
         return await scaleMark(body, env);
       case 'setCellState':
         return await setCellState(body, env);
+      case 'rawOut':
+        return await rawOut(body, env);
+      case 'rawBack':
+        return await rawBack(body, env);
+      case 'rawUndo':
+        return await rawUndo(body, env);
+      case 'rawBoard':
+        return await getRawBoard(params, env);
       case 'cellBoard':
         return await getCellBoard(params, env);
       case 'setBagMode':

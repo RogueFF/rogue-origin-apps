@@ -35,6 +35,7 @@ const OPEN = [
   'cell.html',                // Cell table screen (pilot), a floor screen like scale-display
   'cell-hourly.html',         // Cell hourly log (manual entry until every table has a scale)
   'cells.html',               // Cells board: every cell's screen + ready-for-pickup, for bagging and the office
+  'rawout.html',              // Raw hand-out: the water spider types raw out / back per cell at the WIP bench
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',
