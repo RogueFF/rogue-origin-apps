@@ -9,13 +9,14 @@
  * Reads ?action=scaleWeight (GET, no token) every 250 ms while a job is armed
  * or running, every second otherwise, every 2 s while the scale is disconnected,
  * and every 5 s while the page is hidden (Koa 2026-11-09: follow the scale closer). The order and the
- * timer live in this tablet's localStorage, per station. Each finished job posts
+ * timer live in this tablet's localStorage, per station. Each pickup (finished or not) posts
  * a pickup mark carrying its cultivar, bag size and working time (migration 0052),
  * so the Worker keeps a record of what every job was.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
+import { createLiftWatch } from './lift.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // Reads cost one Worker request each, so the fast rate is kept to the moments
@@ -34,9 +35,11 @@ const NEAR = 0.9;
 // The job timer runs itself off the scale (Koa 2026-11-05: "couldn't it be automatic?"):
 //   Start (or the scale's own TARE with the basket on) -> armed; the first START_G
 //   of product starts the clock; reaching the
-//   target and settling (stable flag, or HOLD_MS at/over target) stops it; lifting
-//   the container off (net under half the target) closes the job, records it and
-//   waits for the next Start. The order stays picked for the next bag.
+//   target and settling (stable flag, or HOLD_MS at/over target) stops it. A basket
+//   lifted off and set back down about empty is a pickup, before or after the
+//   target (Koa 2026-11-10: the bagger's cart takes tops on rounds): the job is
+//   recorded and the next one is armed on the same basket. Set back with weight
+//   in it is a shake: the job carries on (lift.mjs). The order stays picked.
 const START_G = 1.0;     // two steps of the 0.5 g bench scale, so last-digit noise can't start it
 const HOLD_MS = 3000;
 // Fail-safes (Koa 2026-11-05: "make everything fool-proof"):
@@ -152,6 +155,7 @@ let prevReading = null; // the reading before this one, to spot a scale TARE (a 
 let wentNegative = false; // a lift (negative) since the reading was last up
 let tareCandidate = null;  // { from, since }: a drop to 0 waiting to prove it is a TARE
 const TARE_HOLD_MS = 1800;
+const watch = createLiftWatch(); // basket lifts: pickup or shake (lift.mjs)
 let live = false;
 let timer = null;
 // Disconnected: the Worker says the scale's last post is older than its stale
@@ -292,9 +296,14 @@ function step() {
   }
   prevReading = gross;
   const confirmed = tareCandidate && Math.abs(gross) <= ZERO_G && now - tareCandidate.since >= TARE_HOLD_MS;
+  const lift = watch.reading(now, gross, net());
   if (confirmed) {
     const before = tareCandidate.from;
     tareCandidate = null;
+    // A TARE right after a basket came back heavy: a new basket went on, so the
+    // lift before it was a pickup (same rule as the Worker's hourly tops).
+    const swap = watch.tare(now);
+    if (swap && (state.phase === 'running' || state.phase === 'finished')) { closeJob(swap.g); save(); return; }
     if (state.phase === 'idle' && state.cultivar) {
       // Basket on, scale tared, order picked: the job is ready, same as tapping Start.
       state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
@@ -308,6 +317,9 @@ function step() {
       save();
     }
   }
+  if (lift && onLift(lift)) { save(); return; }
+  // Basket off the pan, or still coming down: nothing starts or finishes on it.
+  if (watch.lifted) return;
   const n = net();
   if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume
   if (state.phase === 'armed' && n >= START_G) {
@@ -316,24 +328,49 @@ function step() {
     if (n >= state.targetG) {
       if (overSince === null) overSince = Date.now();
       if (stable === true || Date.now() - overSince >= HOLD_MS) {
-        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n; state.panAtFinishG = gross;
+        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n;
         chime();
       }
     } else {
       overSince = null;
     }
-  } else if (state.phase === 'finished' && gross < (state.panAtFinishG ?? state.targetG) / 2) {
-    // The pan lost over half of what it held at the finish (a mid-job TARE may have
-    // banked part of the job off the pan): the basket was lifted for pickup.
-    // Container lifted off: the job is closed.
-    // The pickup mark is the job's record: what it was and how long it took.
-    mark('pickup', (state.finishedNetG || 0) / 1000,
-      { cultivar: state.cultivar || null, bag: state.bag, cycleS: state.finishedMs ? state.finishedMs / 1000 : null });
-    state.phase = 'idle'; state.lastMs = state.finishedMs; state.finishedMs = null; state.bankedG = 0; state.tareFlagG = 0;
   } else {
     return;
   }
   save();
+}
+
+// A lift settled (lift.mjs). Returns true when it changed the job.
+//   Pickup, before or after the chime: the job closes with what the basket held,
+//   and the next one is ready on the same basket (Koa 2026-11-10: the bagger's
+//   cart takes tops on rounds, so a pickup before the target is normal).
+//   Shake: the job carries on with what came back. After the chime, a basket
+//   that shook out below the target goes back to running on the same clock.
+function onLift(ev) {
+  if (ev.kind === 'pickup') {
+    if (state.phase !== 'running' && state.phase !== 'finished') return false;
+    closeJob(ev.g);
+    return true;
+  }
+  if (state.phase !== 'finished') return false;
+  if (ev.backNet >= state.targetG) { state.finishedNetG = ev.backNet; return true; }
+  state.phase = 'running';
+  state.startedAt = Date.now() - (state.finishedMs || 0) - (state.pausedMs || 0);
+  state.finishedMs = null; state.finishedNetG = null; overSince = null;
+  return true;
+}
+
+// The pickup mark is the job's record: what it was, what the basket held and
+// how long it took.
+function closeJob(g) {
+  const ms = state.phase === 'finished' ? state.finishedMs : state.startedAt ? elapsedMs() : null;
+  mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null });
+  state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
+  state.tareFlagG = 0; clearPauses();
+  // The basket is back on the tared scale, so the next job is ready with no Start
+  // tap. Crumbs left in it (under 2 g) aren't the next job's tops.
+  state.bankedG = state.cultivar ? -Math.max(0, gross) : 0;
+  state.phase = state.cultivar ? 'armed' : 'idle';
 }
 
 function renderCycle() {
