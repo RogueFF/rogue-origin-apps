@@ -61,6 +61,10 @@ const REASONS = ['rScale', 'rWait', 'rEquip', 'rHelp'];
 // never filled at a cell: several cells' jobs go to bagging, which checks them and
 // fills the big bag. The bag size picked for the order sets the target; there is
 // no other way to set it (Koa 2026-11-09).
+// One order per job (Koa 2026-11-10): every pickup clears the cultivar and bag
+// size, so each job is entered fresh. Flip to false once orders are assigned to
+// cells automatically; the order then carries over to the next job again.
+const ORDER_PER_JOB = true;
 const PRESETS = [
   { key: 'qOz', g: 7.5 }, { key: 'hOz', g: 15.0 }, { key: 'oz1', g: 30.0 },
   { key: 'qLb', g: 115.0 }, { key: 'hLb', g: 230.0 }, { key: 'lb1', g: 460.0 },
@@ -70,7 +74,7 @@ registerLabels({
   en: {
     waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
     cultivar: 'Cultivar', bagSize: 'Bag size', chooseCultivar: 'Choose the cultivar',
-    bannerOrder: 'Choose the cultivar for this order',
+    bannerOrder: 'Choose the cultivar and bag size for this order', chooseBag: 'Choose the bag size',
     notRecording: 'NOT RECORDING', orderLocked: 'Locked during the job. To change it: Hold to reset.',
     of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
@@ -91,7 +95,7 @@ registerLabels({
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
     cultivar: 'Variedad', bagSize: 'Tamaño de bolsa', chooseCultivar: 'Elija la variedad',
-    bannerOrder: 'Elija la variedad de esta orden',
+    bannerOrder: 'Elija la variedad y el tamaño de bolsa de esta orden', chooseBag: 'Elija el tamaño de bolsa',
     notRecording: 'NO SE ESTÁ GRABANDO', orderLocked: 'Bloqueado durante el trabajo. Para cambiarlo: Mantenga para reiniciar.',
     of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
@@ -141,13 +145,15 @@ function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
 }
 // phase: idle (needs a tare) -> armed -> running -> finished -> idle
-const state = { cultivar: '', bag: 'lb1', targetG: 460.0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
+const state = { cultivar: '', bag: '', targetG: 0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
   pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '', ...load() };
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
 // The target is always the picked bag size's fill standard.
 const bagOf = key => PRESETS.find(p => p.key === key);
-if (!bagOf(state.bag)) state.bag = 'lb1';
-state.targetG = bagOf(state.bag).g;
+if (state.bag && !bagOf(state.bag)) state.bag = '';
+state.targetG = state.bag ? bagOf(state.bag).g : 0;
+// A job needs both halves of its order: no cultivar or no bag size, nothing records.
+const hasOrder = () => !!state.cultivar && !!bagOf(state.bag);
 delete state.working; delete state.next;   // the old typed order fields
 let cultivars = [];
 let gross = null;       // grams, latest reading
@@ -205,12 +211,16 @@ function renderOrder() {
   el.cultivar.value = state.cultivar || '';
   el.cultivar.classList.toggle('missing', !state.cultivar);
   el.bag.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = t('chooseBag');
+  el.bag.appendChild(none);
   for (const p of PRESETS) {
     const o = document.createElement('option');
     o.value = p.key; o.textContent = `${t(p.key)} · ${fmtTarget(p.g)}`;
     el.bag.appendChild(o);
   }
-  el.bag.value = state.bag;
+  el.bag.value = state.bag || '';
+  el.bag.classList.toggle('missing', !state.bag);
 }
 async function loadCultivars() {
   let history = [];
@@ -230,8 +240,8 @@ function render() {
   const n = net();
   const frac = state.targetG > 0 ? n / state.targetG : 0;
   el.net.textContent = gross === null ? '—' : fmtG(gross); // the scale's own number, nothing added
-  el.targetText.textContent = `${fmtTarget(state.targetG)} ${t('netHint')}`;
-  el.toGo.textContent = gross === null ? '—' : fmtG(Math.max(0, state.targetG - n));
+  el.targetText.textContent = state.targetG > 0 ? `${fmtTarget(state.targetG)} ${t('netHint')}` : '—';
+  el.toGo.textContent = gross === null || !(state.targetG > 0) ? '—' : fmtG(Math.max(0, state.targetG - n));
   el.pct.textContent = `${Math.min(999, Math.round(frac * 100))}%`;
   el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - Math.min(1, frac))));
   el.ring.classList.toggle('near', frac >= NEAR && frac < 1);
@@ -275,7 +285,7 @@ function renderBanner() {
   else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
-  else if ((state.phase === 'idle' || state.phase === 'armed') && !state.cultivar) kind = 'order';
+  else if ((state.phase === 'idle' || state.phase === 'armed') && !hasOrder()) kind = 'order';
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
@@ -342,7 +352,7 @@ function step() {
     // lift before it was a pickup (same rule as the Worker's hourly tops).
     const swap = watch.tare(now);
     if (swap && (state.phase === 'running' || state.phase === 'finished')) { closeJob(swap.g); save(); return; }
-    if (state.phase === 'idle' && state.cultivar) {
+    if (state.phase === 'idle' && hasOrder()) {
       // Basket on, scale tared, order picked: the job is ready, same as tapping Start.
       state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
       state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
@@ -358,6 +368,7 @@ function step() {
   if (lift && onLift(lift)) { save(); return; }
   // Basket off the pan, or still coming down: nothing starts or finishes on it.
   if (watch.lifted) return;
+  if (state.phase === 'idle' && state.basketBack) { armIfReady(); if (state.phase === 'armed') { save(); return; } }
   const n = net();
   if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume
   if (state.phase === 'armed' && n >= START_G) {
@@ -405,10 +416,25 @@ function closeJob(g) {
   mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null });
   state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
   state.tareFlagG = 0; clearPauses();
-  // The basket is back on the tared scale, so the next job is ready with no Start
-  // tap. Crumbs left in it (under 2 g) aren't the next job's tops.
-  state.bankedG = state.cultivar ? -Math.max(0, gross) : 0;
-  state.phase = state.cultivar ? 'armed' : 'idle';
+  // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be
+  // re-inputted. shouldn't matter once auto assign is working"): the pickup
+  // clears the order, and the next job records only once one is picked.
+  if (ORDER_PER_JOB) { state.cultivar = ''; state.bag = ''; state.targetG = 0; renderOrder(); }
+  // The basket is back on the tared scale, so once the order is there the next
+  // job is ready with no Start tap. Crumbs in it (under 2 g) aren't the next job's tops.
+  state.basketBack = true;
+  state.bankedG = 0;
+  state.phase = 'idle';
+  armIfReady();
+}
+
+// After a pickup the basket is back about empty on the tared scale, so a fresh
+// order is all the next job needs: picking it arms the job, no TARE or Start.
+// At the start of the shift (no pickup yet) it's still TARE then Start.
+function armIfReady() {
+  if (!state.basketBack || state.phase !== 'idle' || !hasOrder() || !live || gross === null || Math.abs(gross) > ON_SCALE_G) return;
+  state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
+  state.bankedG = -Math.max(0, gross); state.tareFlagG = 0; state.basketBack = false; clearPauses();
 }
 
 function renderCycle() {
@@ -489,13 +515,14 @@ async function read() {
 function orderLocked() { return state.phase === 'running' || state.phase === 'finished'; }
 el.cultivar.addEventListener('change', () => {
   if (orderLocked()) { renderOrder(); return; }   // locked: put the picker back
-  state.cultivar = el.cultivar.value; save(); renderOrder(); render();
+  state.cultivar = el.cultivar.value; armIfReady(); save(); renderOrder(); render();
 });
 // Picking a bag size sets the target. Only while no job is running (renderLock).
 el.bag.addEventListener('change', () => {
   const p = bagOf(el.bag.value);
-  if (!p || orderLocked()) { renderOrder(); return; }
-  state.bag = p.key; state.targetG = p.g; overSince = null; save(); render();
+  if (orderLocked()) { renderOrder(); return; }
+  state.bag = p ? p.key : ''; state.targetG = p ? p.g : 0; overSince = null;
+  armIfReady(); save(); renderOrder(); render();
 });
 // The Worker only sees gross weight (basket included). Tare and pickup marks let
 // it tell a pickup from a basket shaken out when it works out hourly tops
@@ -519,12 +546,13 @@ el.tare.addEventListener('click', async () => {
   // set down a moment ago is what gets zeroed. No live scale, no tare.
   await read();
   if (gross === null || !live) { render(); return; }
-  // Every job needs its order: no cultivar, no start.
+  // Every job needs its order: no cultivar or bag size, no start.
   if (!state.cultivar) { render(); el.cultivar.focus(); return; }
+  if (!bagOf(state.bag)) { render(); el.bag.focus(); return; }
   // Start needs a tared scale: an untared basket would count as tops.
   if (Math.abs(gross) > ON_SCALE_G) { el.banner.hidden = false; el.banner.className = 'banner tare'; el.banner.textContent = t('bannerTare'); return; }
   state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
-  state.bankedG = 0; state.tareFlagG = 0; clearPauses();
+  state.bankedG = 0; state.tareFlagG = 0; state.basketBack = false; clearPauses();
   save(); render();
 });
 
@@ -536,7 +564,8 @@ el.resetBtn = $('resetBtn');
 let holdTimer = null;
 function resetJob() {
   if (state.phase === 'running' && !window.confirm(t('confirmReset'))) return;
-  state.phase = 'idle'; state.bankedG = 0; state.tareFlagG = 0; state.startedAt = null; state.finishedMs = null; overSince = null; clearPauses();
+  state.phase = 'idle'; state.bankedG = 0; state.tareFlagG = 0; state.startedAt = null; state.finishedMs = null; overSince = null;
+  state.basketBack = false; clearPauses();
   save(); render();
 }
 // On a tablet the hold used to break (Koa 2026-11-09: "wonky and hard to get it
@@ -657,7 +686,7 @@ function jobSnapshot() {
   const held = running && disconnected();
   const elapsed = running ? elapsedMs() : state.phase === 'finished' ? state.finishedMs : null;
   return {
-    stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: state.bag, targetG: state.targetG,
+    stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: state.bag || null, targetG: state.targetG || null,
     elapsedMs: elapsed == null ? null : Math.max(0, Math.round(elapsed)),
     paused: !!state.pausedAt || held,
     pauseNote: state.pausedAt ? state.pauseNote : held ? 'Scale disconnected' : null,
