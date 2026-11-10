@@ -54,6 +54,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .tile.paused { border-left-color: var(--info); } .tile.paused .pill { background: var(--info); color: #fff; }
 .tile.finished { border-left-color: var(--gold); background: #fff7e6; } .tile.finished .pill { background: var(--gold); color: #2d3a32; }
 .tile.down { border-left-color: var(--danger); } .tile.down .pill { background: var(--danger); color: #fff; }
+.tile.notrec { border-left-color: var(--danger); border-color: var(--danger); background: #fdecec; }
+.tile.notrec .pill { background: var(--danger); color: #fff; }
+.tile.notrec .t-note { color: var(--danger); font-weight: 700; }
 .tile.offline { border-left-color: #a3a79c; border-style: dashed; opacity: .8; } .tile.offline .pill { background: transparent; color: var(--text-secondary); border: 1px dashed var(--border-strong); }
 
 .quiet { margin: 0; font-size: 15px; color: var(--text-secondary); }

@@ -27,6 +27,7 @@ registerLabels({
     title: 'Cells', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
     idle: 'Idle', armed: 'Ready', running: 'Filling', paused: 'Paused', finished: 'Ready for pickup',
     down: 'Scale disconnected', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
+    notrec: 'NOT RECORDING', noScreen: 'trimming, no cell screen open', tabletOff: 'trimming, tablet not reporting', noJob: 'trimming, no job started',
     retail: 'retail', notOnScreen: 'Not on a screen yet', loadFail: 'Can\'t reach the server. Retrying…',
     cellsLive: '{n} cell(s) on a screen', ago: '{m} min ago', justNow: 'just now', startsAt: 'starts on the first gram',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
@@ -35,6 +36,7 @@ registerLabels({
     title: 'Celdas', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
     idle: 'Sin trabajo', armed: 'Lista', running: 'Llenando', paused: 'En pausa', finished: 'Listo para recoger',
     down: 'Báscula desconectada', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
+    notrec: 'NO SE GRABA', noScreen: 'recortando, sin pantalla abierta', tabletOff: 'recortando, la tableta no reporta', noJob: 'recortando, sin trabajo iniciado',
     retail: 'menudeo', notOnScreen: 'Todavía sin pantalla', loadFail: 'No hay conexión con el servidor. Reintentando…',
     cellsLive: '{n} celda(s) con pantalla', ago: 'hace {m} min', justNow: 'ahora', startsAt: 'empieza con el primer gramo',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
@@ -96,6 +98,8 @@ document.addEventListener('pointerdown', () => { unlock(); if (audio && audio.st
 
 // ---- what each tile shows ----
 function statusOf(c) {
+  // Trimming with no job recorded (Worker, lib/untracked.js) outranks everything.
+  if (c.notRecording) return 'notrec';
   const j = c.job;
   if (!j) return null;                                   // never on a screen
   if (!j.tabletOnline) return 'offline';
@@ -202,7 +206,8 @@ function renderGrid() {
     tile.querySelector('.t-note').textContent =
       st === 'paused' ? (j.pauseNote || '') :
       st === 'armed' ? t('startsAt') :
-      st === 'finished' ? t('waiting') : '';
+      st === 'finished' ? t('waiting') :
+      st === 'notrec' ? `${t(c.notRecording.why)} · +${c.notRecording.riseG} g` : '';
     place(el.grid, tile, keep.size - 1);   // roster order
   }
   for (const [id, tile] of tileEls) if (!keep.has(id)) { tile.remove(); tileEls.delete(id); }

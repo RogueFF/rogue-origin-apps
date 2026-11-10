@@ -20,6 +20,7 @@
 import { HARVEST_TZ, pacificDay, pacificParts } from './pacific.js';
 import { sendTelegramMessage } from './telegram.js';
 import { batteryOf, LOW_PCT, CHARGED_PCT } from './battery.js';
+import { recentEvents, notRecording, recording } from './untracked.js';
 
 export const SILENT_MIN = 3;
 const SHIFT_FROM_MIN = 6 * 60;
@@ -124,6 +125,80 @@ export async function runBatteryWatch(env, now = new Date()) {
   for (const r of rearm) {
     await env.DB.prepare(`UPDATE scale_stations SET batt_low_at = NULL WHERE station_id = ?`).bind(r.stationId).run();
     sent.rearm.push(r.stationId);
+  }
+  return sent;
+}
+
+/**
+ * Trimming with no job on the screen (lib/untracked.js, migration 0056). One
+ * Telegram per episode in shift; cleared, silently, once the cell records a job.
+ * Pure decision.
+ * @param {Array<{stationId,label,scaleLive,events,job,untrackedSince}>} rows
+ */
+export function untrackedWatch(rows, now) {
+  const alert = [];
+  const clear = [];
+  const ms = now.getTime();
+  for (const r of rows) {
+    if (r.untrackedSince) { if (recording(r.job, ms)) clear.push(r); continue; }
+    if (!inShift(now)) continue;
+    const n = notRecording({ scaleLive: r.scaleLive, events: r.events, job: r.job, now: ms });
+    if (n) alert.push({ ...r, ...n });
+  }
+  return { alert, clear };
+}
+
+const WHY = {
+  noScreen: 'no cell screen is open',
+  tabletOff: 'the tablet stopped reporting (asleep, closed, or an old page)',
+  noJob: 'no job is started on the screen (cultivar, TARE, Start)',
+};
+export function untrackedText(r) {
+  return `⛔ *${r.label}* is trimming but nothing is being recorded: ${WHY[r.why]}. The scale gained ${r.riseG} g in the last few minutes.`;
+}
+
+export async function runUntrackedWatch(env, now = new Date()) {
+  const ms = now.getTime();
+  let rows;
+  try {
+    rows = (await env.DB.prepare(
+      `SELECT s.station_id, COALESCE(c.label, s.label, s.station_id) AS label, s.stale_after_s,
+              sr.updated_at, s.untracked_since
+       FROM scale_stations s
+       LEFT JOIN scale_readings sr ON sr.station_id = s.station_id
+       LEFT JOIN cell_roster c ON c.station_id = s.station_id
+       WHERE s.kind = 'table' AND s.active = 1`
+    ).all()).results || [];
+  } catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return { alert: [], clear: [] };   // before 0056
+    throw e;
+  }
+  let jobs = [];
+  try { jobs = (await env.DB.prepare(`SELECT * FROM cell_screen_state`).all()).results || []; } catch (e) {
+    if (!/no such table/i.test(String(e && e.message))) throw e;
+  }
+  const jobBy = new Map(jobs.map(j => [j.station_id, j]));
+  const events = await recentEvents(env, ms);
+  const list = rows.map(r => {
+    const at = parseUtc(r.updated_at);
+    return {
+      stationId: r.station_id, label: r.label, untrackedSince: r.untracked_since,
+      scaleLive: at !== null && ms - at <= (r.stale_after_s > 0 ? r.stale_after_s : 45) * 1000,
+      events: events.get(r.station_id) || [], job: jobBy.get(r.station_id) || null,
+    };
+  });
+  const { alert, clear } = untrackedWatch(list, now);
+  const sent = { alert: [], clear: [] };
+  for (const r of alert) {
+    const ok = await sendTelegramMessage(env, { chatId: env.TELEGRAM_CELL_ALERT_CHAT_ID, text: untrackedText(r) })
+      .catch(e => { console.error('[untracked-watch]', e); return false; });
+    if (!ok) continue;
+    await env.DB.prepare(`UPDATE scale_stations SET untracked_since = datetime('now') WHERE station_id = ?`).bind(r.stationId).run();
+    sent.alert.push(r.stationId);
+  }
+  for (const r of clear) {
+    await env.DB.prepare(`UPDATE scale_stations SET untracked_since = NULL WHERE station_id = ?`).bind(r.stationId).run();
+    sent.clear.push(r.stationId);
   }
   return sent;
 }

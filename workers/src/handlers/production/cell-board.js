@@ -13,6 +13,7 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { batteryOf } from '../../lib/battery.js';
+import { recentEvents, notRecording } from '../../lib/untracked.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
 const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
@@ -77,11 +78,12 @@ export async function setCellState(body, env, now = Date.now()) {
 }
 
 export async function getCellBoard(params, env, now = Date.now()) {
-  const [roster, states, readings, stations] = await Promise.all([
+  const [roster, states, readings, stations, events] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
     allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
     allOrEmpty(env.DB.prepare(`SELECT station_id, stale_after_s FROM scale_stations WHERE kind = 'table' AND active = 1`)),
+    recentEvents(env, now),
   ]);
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
   const st = byId(states), rd = byId(readings), sc = byId(stations);
@@ -91,12 +93,15 @@ export async function getCellBoard(params, env, now = Date.now()) {
     const r = station ? rd.get(c.station_id) : null;
     const at = r ? Date.parse(String(r.updated_at).replace(' ', 'T') + 'Z') : null;
     const staleS = station && station.stale_after_s > 0 ? station.stale_after_s : LEGACY_STALE_S;
+    const live = at !== null && now - at <= staleS * 1000;
     return {
       stationId: c.station_id, label: c.label, lane: c.lane,
+      // Trimming with no job on the screen (lib/untracked.js): { riseG, why } or null.
+      notRecording: station ? notRecording({ scaleLive: live, events: events.get(c.station_id) || [], job: s || null, now }) : null,
       scale: station ? {
         weightG: r ? Math.round(r.weight * 100000) / 100 : null,
         stable: r ? r.stable === 1 : null,
-        live: at !== null && now - at <= staleS * 1000,
+        live,
         updatedAt: at,
         battery: batteryOf(r, now),
       } : null,
