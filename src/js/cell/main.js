@@ -17,6 +17,7 @@ import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
 import { createLiftWatch } from './lift.mjs';
+import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // Reads cost one Worker request each, so the fast rate is kept to the moments
@@ -52,7 +53,9 @@ const ZERO_G = 0.5;      // the scale's TARE reads 0.00: "about 0"
 const LIFT_G = 1.0;      // below -1 g mid-job: the basket is off the scale
 // Pauses (Koa 2026-11-05): a running job pauses itself at 4:20 pm Pacific (cleanup),
 // and the Pause button only works with a note saying why. Paused time is left out
-// of the cycle time.
+// of the cycle time. Breaks (Koa 2026-11-10, breaks.mjs: 9:00-9:10, 12:00-12:30,
+// 2:30-2:40) stop a running job's clock and start it again at the break's end,
+// with no tap; break time a sleeping tablet missed is left out too.
 const AUTO_PAUSE_MIN = 16 * 60 + 20;
 const NOTE_MIN_CHARS = 3;
 const REASONS = ['rScale', 'rWait', 'rEquip', 'rHelp'];
@@ -87,6 +90,9 @@ registerLabels({
     pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
     notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
     bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
+    breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
+    bannerBreak: 'Break until {to}: the clock is stopped. It starts again by itself.',
+    bannerLunch: 'Lunch until {to}: the clock is stopped. It starts again by itself.',
     rScale: 'Scale problem', rWait: 'Waiting for product', rEquip: 'Equipment problem', rHelp: 'Need help',
     pilotNote: 'Pick the cultivar and the bag size this order goes into. The bag size sets the target for the basket. The scale weight is live.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Cell',
@@ -108,6 +114,9 @@ registerLabels({
     pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
     notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
     bannerPaused: 'En pausa: toque Continuar para seguir', autoNote: 'Limpieza 4:20',
+    breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
+    bannerBreak: 'Descanso hasta las {to}: el reloj está parado. Sigue solo.',
+    bannerLunch: 'Almuerzo hasta las {to}: el reloj está parado. Sigue solo.',
     rScale: 'Problema con la báscula', rWait: 'Esperando producto', rEquip: 'Problema de equipo', rHelp: 'Necesito ayuda',
     pilotNote: 'Elija la variedad y el tamaño de bolsa donde va esta orden. El tamaño de bolsa fija la meta de la canasta. El peso de la báscula es en vivo.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Celda',
@@ -146,7 +155,8 @@ function load() {
 }
 // phase: idle (needs a tare) -> armed -> running -> finished -> idle
 const state = { cultivar: '', bag: '', targetG: 0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
-  pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '', ...load() };
+  pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '',
+  breakKey: '', breakPause: false, breakEndsAt: null, tickAt: null, ...load() };
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
 // The target is always the picked bag size's fill standard.
 const bagOf = key => PRESETS.find(p => p.key === key);
@@ -189,7 +199,10 @@ function fmtClock(ms) {
 const net = () => (gross === null ? 0 : Math.max(0, gross) + (state.bankedG || 0));
 // Working time on the job: wall time minus every pause, including one in progress.
 const elapsedMs = () => Date.now() - state.startedAt - (state.pausedMs || 0) - (state.pausedAt ? Date.now() - state.pausedAt : 0);
-function clearPauses() { state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = []; }
+function clearPauses() {
+  state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = [];
+  state.breakPause = false; state.breakEndsAt = null;
+}
 function pacificNow() {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -283,12 +296,20 @@ function renderBanner() {
   let kind = null;
   if (disconnected()) kind = null;   // the dot says it; Koa gets the Telegram
   else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
+  else if (state.phase === 'running' && state.pausedAt && state.breakPause) kind = 'break';
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
+  else if ((state.phase === 'idle' || state.phase === 'armed') && breakAt(pacificMinutes(Date.now()))) kind = 'break';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
   else if ((state.phase === 'idle' || state.phase === 'armed') && !hasOrder()) kind = 'order';
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
+  if (kind === 'break') {
+    const b = breakAt(pacificMinutes(Date.now()));
+    el.banner.className = 'banner break';
+    el.banner.textContent = b ? t(b.kind === 'lunch' ? 'bannerLunch' : 'bannerBreak').replace('{to}', clockOf(b.end)) : state.pauseNote;
+    return;
+  }
   const text = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared', order: 'bannerOrder' }[kind])
     .replace('{g}', fmtG(state.tareFlagG || 0));
   // No job, no cultivar: whatever goes in the basket now is not recorded. Red,
@@ -619,16 +640,22 @@ async function keepAwake() {
 // works without the Start button.
 document.addEventListener('pointerdown', () => { keepAwake(); unlockAudio(); });
 keepAwake();
-function pauseJob(note) {
+// endsAt: set for a break pause, the moment the break ends.
+function pauseJob(note, endsAt = null) {
   if (state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
-  state.pausedAt = Date.now(); state.pauseNote = note; save(); render();
+  state.pausedAt = Date.now(); state.pauseNote = note;
+  state.breakPause = endsAt !== null; state.breakEndsAt = endsAt; save(); render();
 }
 function resumeJob() {
   if (!state.pausedAt) return;
-  const ms = Date.now() - state.pausedAt;
-  state.pausedMs = (state.pausedMs || 0) + ms;
+  const now = Date.now();
+  // A break pause counts only to the break's end, even if the tablet slept past
+  // it; any later break inside that gap is left out as well.
+  const end = state.breakPause && state.breakEndsAt ? Math.min(now, state.breakEndsAt) : now;
+  const ms = Math.max(0, end - state.pausedAt);
+  state.pausedMs = (state.pausedMs || 0) + ms + (end < now ? breakMsBetween(end, now) : 0);
   (state.pauseLog = state.pauseLog || []).push({ note: state.pauseNote, ms, at: new Date(state.pausedAt).toISOString() });
-  state.pausedAt = null; state.pauseNote = ''; save(); render();
+  state.pausedAt = null; state.pauseNote = ''; state.breakPause = false; state.breakEndsAt = null; save(); render();
 }
 
 // Pause needs a reason: tap one, or write it.
@@ -660,6 +687,35 @@ function autoPause() {
     state.autoPausedOn = now.day;
     pauseJob(t('autoNote'));
   }
+}
+
+// Breaks (breaks.mjs): a running job stops its clock when a break starts and
+// starts again when it ends, with no tap. Resume during a break keeps the job
+// running for the rest of that break; a pause the crew made themselves is theirs.
+const breakText = (b, key) => t(key).replace('{from}', clockOf(b.start)).replace('{to}', clockOf(b.end));
+function autoBreak() {
+  const now = Date.now();
+  const m = pacificMinutes(now);
+  const b = breakAt(m);
+  if (state.pausedAt && state.breakPause) {
+    if (!b || now >= state.breakEndsAt) resumeJob();
+    return;
+  }
+  if (!b || state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
+  const key = `${pacificNow().day}:${b.start}`;
+  if (state.breakKey === key) return;
+  state.breakKey = key;
+  pauseJob(breakText(b, b.kind === 'lunch' ? 'lunchNote' : 'breakNote'), Math.round(now + (b.end - m) * 60000));
+}
+// A tablet that slept, or a page reopened, misses those ticks: the break time
+// inside the gap is left out of the clock all the same.
+function catchUpBreaks() {
+  const now = Date.now();
+  const from = state.tickAt || now;
+  const running = state.phase === 'running' && !!state.startedAt && !state.pausedAt;
+  if (running && now - from > 5000) state.pausedMs = (state.pausedMs || 0) + breakMsBetween(Math.max(from, state.startedAt), now);
+  state.tickAt = now;
+  if (running) save();
 }
 
 // A job running while the scale is disconnected holds its clock: the time is
@@ -703,7 +759,7 @@ function reportJob(force = false) {
   fetch(`${API}?action=setCellState`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(snap) })
     .catch(() => { lastReportKey = ''; });   // retry on the next tick
 }
-setInterval(() => { holdWhileDisconnected(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
+setInterval(() => { catchUpBreaks(); holdWhileDisconnected(); autoBreak(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
 
 // A tablet left open keeps running the code it loaded (Koa 2026-11-10: Cell 1
 // read "Tablet off" all morning while trimming). Every few minutes, ask Pages
