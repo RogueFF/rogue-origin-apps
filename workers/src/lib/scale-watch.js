@@ -19,6 +19,7 @@
  */
 import { HARVEST_TZ, pacificDay, pacificParts } from './pacific.js';
 import { sendTelegramMessage } from './telegram.js';
+import { batteryOf, LOW_PCT, CHARGED_PCT } from './battery.js';
 
 export const SILENT_MIN = 3;
 const SHIFT_FROM_MIN = 6 * 60;
@@ -68,6 +69,63 @@ export function downText(r) {
 }
 export function backText(r) {
   return `✅ *${r.label}* scale back after ${r.downMin} min.`;
+}
+
+/**
+ * Node battery (migration 0055, lib/battery.js). One Telegram per discharge: sent
+ * in shift when a fresh reading is under LOW_PCT, re-armed (no message) once it
+ * reads CHARGED_PCT again. Pure decision.
+ * @param {Array<{stationId,label,battMv,battAt,battLowAt}>} rows
+ * @returns {{low: object[], rearm: object[]}}
+ */
+export function batteryWatch(rows, now) {
+  const low = [];
+  const rearm = [];
+  for (const r of rows) {
+    const b = batteryOf({ batt_mv: r.battMv, batt_at: r.battAt }, now.getTime());
+    if (!b) continue;
+    if (r.battLowAt) { if (b.pct >= CHARGED_PCT) rearm.push(r); continue; }
+    if (inShift(now) && b.pct < LOW_PCT) low.push({ ...r, pct: b.pct });
+  }
+  return { low, rearm };
+}
+
+export function lowText(r) {
+  return `🔋 *${r.label}* scale node battery ${r.pct}% (${(r.battMv / 1000).toFixed(2)} V). Charge it at the end of the shift.`;
+}
+
+export async function runBatteryWatch(env, now = new Date()) {
+  let res;
+  try {
+    res = await env.DB.prepare(
+      `SELECT s.station_id, COALESCE(c.label, s.label, s.station_id) AS label,
+              sr.batt_mv, sr.batt_at, s.batt_low_at
+       FROM scale_stations s
+       LEFT JOIN scale_readings sr ON sr.station_id = s.station_id
+       LEFT JOIN cell_roster c ON c.station_id = s.station_id
+       WHERE s.kind = 'table' AND s.active = 1`
+    ).all();
+  } catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return { low: [], rearm: [] };   // before 0055
+    throw e;
+  }
+  const rows = (res.results || []).map(r => ({
+    stationId: r.station_id, label: r.label, battMv: r.batt_mv, battAt: r.batt_at, battLowAt: r.batt_low_at,
+  }));
+  const { low, rearm } = batteryWatch(rows, now);
+  const sent = { low: [], rearm: [] };
+  for (const r of low) {
+    const ok = await sendTelegramMessage(env, { chatId: env.TELEGRAM_CELL_ALERT_CHAT_ID, text: lowText(r) })
+      .catch(e => { console.error('[battery-watch]', e); return false; });
+    if (!ok) continue;
+    await env.DB.prepare(`UPDATE scale_stations SET batt_low_at = datetime('now') WHERE station_id = ?`).bind(r.stationId).run();
+    sent.low.push(r.stationId);
+  }
+  for (const r of rearm) {
+    await env.DB.prepare(`UPDATE scale_stations SET batt_low_at = NULL WHERE station_id = ?`).bind(r.stationId).run();
+    sent.rearm.push(r.stationId);
+  }
+  return sent;
 }
 
 export async function runScaleWatch(env, now = new Date()) {

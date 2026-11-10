@@ -32,6 +32,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .tile .t-name { font: 800 26px var(--font-ui); }
 .tile .t-name small { font: 600 13px var(--font-ui); color: var(--indoor); margin-left: 6px; }
 .pill { font: 700 14px var(--font-ui); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.tile .batt { margin-left: auto; font: 600 14px var(--font-ui); color: var(--text-secondary); white-space: nowrap; }
+.tile .batt:empty { display: none; }
+.tile .batt.low { color: var(--danger); font-weight: 700; }
 .tile .t-order { font: 700 18px var(--font-ui); min-height: 24px; }
 .tile .t-order small { font-weight: 600; color: var(--text-secondary); }
 .tile .t-weight { display: flex; align-items: baseline; gap: 8px; }

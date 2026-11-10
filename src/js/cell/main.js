@@ -73,7 +73,7 @@ registerLabels({
     bannerOrder: 'Choose the cultivar for this order',
     of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
-    liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on',
+    liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on', battery: 'Scale node battery',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
     bannerTared: 'Scale TARE pressed mid-job: {g} kept. Tell the lead.',
     bannerTare: 'Tare on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
@@ -93,7 +93,7 @@ registerLabels({
     bannerOrder: 'Elija la variedad de esta orden',
     of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
-    liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida',
+    liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida', battery: 'Batería del nodo de la báscula',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
     bannerTared: 'TARA de la báscula a mitad del trabajo: se guardaron {g}. Avise al líder.',
     bannerTare: 'Haga TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
@@ -125,7 +125,7 @@ const API_ROOT = API.replace(/\/production$/, '');
 
 const $ = id => document.getElementById(id);
 const el = {
-  name: $('cellName'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
+  name: $('cellName'), batt: $('batt'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
   cultivar: $('cultivarSelect'), bag: $('bagSelect'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'),
@@ -150,6 +150,7 @@ delete state.working; delete state.next;   // the old typed order fields
 let cultivars = [];
 let gross = null;       // grams, latest reading
 let stable = null;      // the scale's settled flag, when it sends one
+let battery = null;     // the scale node's battery { pct, mv, rssi } (firmware v6.5+), or null
 let overSince = null;   // when net first reached the target this job
 let prevReading = null; // the reading before this one, to spot a scale TARE (a straight drop to 0)
 let wentNegative = false; // a lift (negative) since the reading was last up
@@ -236,8 +237,21 @@ function render() {
 
   el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
   el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
+  renderBattery();
   renderBanner();
   renderCycle();
+}
+
+// Scale node battery, beside the live dot. Red under BATT_LOW_PCT: charge it at
+// the end of the shift (Koa gets a Telegram under 15%).
+const BATT_LOW_PCT = 20;
+function renderBattery() {
+  const b = live ? battery : null;
+  el.batt.hidden = !b || b.pct == null;
+  if (el.batt.hidden) return;
+  el.batt.textContent = `🔋 ${b.pct}%`;
+  el.batt.title = `${t('battery')} ${(b.mv / 1000).toFixed(2)} V${b.rssi != null ? ` · Wi-Fi ${b.rssi} dBm` : ''}`;
+  el.batt.classList.toggle('low', b.pct < BATT_LOW_PCT);
 }
 
 // One banner at a time, most urgent first.
@@ -433,6 +447,7 @@ async function read() {
     if (d && d.updatedAt) {
       gross = Number(d.weight) * 1000; // the API's weight is always kg; unit is only a tag
       stable = d.stable === undefined ? null : d.stable;
+      battery = d.battery || null;
       // The Worker judges staleness against the station's own stale time
       // (scale_stations.stale_after_s), with its own clock, not the tablet's.
       live = !d.isStale;

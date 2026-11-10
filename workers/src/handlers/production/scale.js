@@ -5,6 +5,7 @@
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { getConfig, setConfig, incrementDataVersion } from '../../lib/production-utils.js';
 import { constantTimeEqual } from '../../lib/auth.js';
+import { parseNodeHealth, batteryOf } from '../../lib/battery.js';
 
 // Scale unit tag (kept as metadata on readings for debug/audit — no longer
 // drives button visibility).
@@ -138,6 +139,7 @@ async function getScaleWeight(params, env) {
       isStale,
       stable: result.stable === undefined || result.stable === null ? null : result.stable === 1,
       staleAfterS: STALE_THRESHOLD_MS / 1000,
+      battery: batteryOf(result, now.getTime()),   // { pct, mv, rssi, at } or null
     });
   } catch (error) {
     console.error('Error getting scale weight:', error);
@@ -199,6 +201,20 @@ async function setScaleWeight(body, env, request) {
          stable = excluded.stable,
          updated_at = datetime('now')`
     ).bind(stationId, safeWeight, unit, stable).run();
+
+    // Battery and Wi-Fi signal, when the node sends them (firmware v6.5+,
+    // migration 0055). Kept apart from the weight upsert so a node without them,
+    // or a database before 0055, posts exactly as before.
+    const health = station && station.kind === 'table' ? parseNodeHealth(body) : { battMv: null, rssi: null };
+    if (health.battMv !== null) {
+      try {
+        await env.DB.prepare(
+          `UPDATE scale_readings SET batt_mv = ?, rssi = ?, batt_at = datetime('now') WHERE station_id = ?`
+        ).bind(health.battMv, health.rssi, stationId).run();
+      } catch (e) {
+        if (!/no such column/i.test(String(e && e.message))) throw e;
+      }
+    }
 
     // Settled weights of registered stations only, so an unregistered caller
     // can't fill the log. Heartbeats repeat the last value and are skipped.
