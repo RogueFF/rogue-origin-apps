@@ -140,6 +140,13 @@ export default {
       } catch (e) {
         console.error(`[Cron] Battery watch failed: ${e.message}`);
       }
+      // ...and when a cell is trimming with no job on its screen (migration 0056).
+      try {
+        const { runUntrackedWatch } = await import('./lib/scale-watch.js');
+        await runUntrackedWatch(env);
+      } catch (e) {
+        console.error(`[Cron] Untracked watch failed: ${e.message}`);
+      }
     }
 
     // Every 5 min: JD Operations Center telemetry ingest (Field Ops Tracking, Phase 1)

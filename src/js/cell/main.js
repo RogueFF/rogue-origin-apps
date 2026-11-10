@@ -71,12 +71,13 @@ registerLabels({
     waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
     cultivar: 'Cultivar', bagSize: 'Bag size', chooseCultivar: 'Choose the cultivar',
     bannerOrder: 'Choose the cultivar for this order',
+    notRecording: 'NOT RECORDING', orderLocked: 'Locked during the job. To change it: Hold to reset.',
     of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
     liftOff: 'lift it off for the next one', lastJob: 'Last job', awake: 'Screen stays on', battery: 'Scale node battery',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
     bannerTared: 'Scale TARE pressed mid-job: {g} kept. Tell the lead.',
-    bannerTare: 'Tare on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
+    bannerTare: 'Empty basket on, TARE on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
     bannerSignal: 'Scale disconnected: tell the lead', disconnected: 'Scale disconnected', searchCultivar: 'Type to search', clockHeld: 'Clock held until the scale is back',
     confirmRetare: 'A job is running. Start over from zero?',
     pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
@@ -91,12 +92,13 @@ registerLabels({
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
     cultivar: 'Variedad', bagSize: 'Tamaño de bolsa', chooseCultivar: 'Elija la variedad',
     bannerOrder: 'Elija la variedad de esta orden',
+    notRecording: 'NO SE ESTÁ GRABANDO', orderLocked: 'Bloqueado durante el trabajo. Para cambiarlo: Mantenga para reiniciar.',
     of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
     liftOff: 'quítelo para el siguiente', lastJob: 'Último trabajo', awake: 'Pantalla encendida', battery: 'Batería del nodo de la báscula',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
     bannerTared: 'TARA de la báscula a mitad del trabajo: se guardaron {g}. Avise al líder.',
-    bannerTare: 'Haga TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
+    bannerTare: 'Canasta vacía, TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
     bannerSignal: 'Báscula desconectada: avise al líder', disconnected: 'Báscula desconectada', searchCultivar: 'Escriba para buscar', clockHeld: 'Reloj detenido hasta que vuelva la báscula',
     confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
     pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
@@ -125,7 +127,7 @@ const API_ROOT = API.replace(/\/production$/, '');
 
 const $ = id => document.getElementById(id);
 const el = {
-  name: $('cellName'), batt: $('batt'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
+  name: $('cellName'), batt: $('batt'), orderLock: $('orderLock'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
   cultivar: $('cultivarSelect'), bag: $('bagSelect'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'),
@@ -240,6 +242,18 @@ function render() {
   renderBattery();
   renderBanner();
   renderCycle();
+  renderLock();
+}
+
+// The order can't change under a running or finished job (Koa 2026-11-10: hard
+// restrictions): what it was recorded as is what was picked at Start. Idle or
+// armed (nothing trimmed yet) it stays open, so the next order can be set after
+// a pickup. A wrong pick mid-job means Hold to reset.
+function renderLock() {
+  const locked = orderLocked();
+  if (el.cultivar.disabled !== locked) el.cultivar.disabled = locked;
+  if (el.bag.disabled !== locked) el.bag.disabled = locked;
+  el.orderLock.hidden = !locked;
 }
 
 // Scale node battery, beside the live dot. Red under BATT_LOW_PCT: charge it at
@@ -265,9 +279,19 @@ function renderBanner() {
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
-  el.banner.className = `banner ${kind}`;
-  el.banner.textContent = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared', order: 'bannerOrder' }[kind])
+  const text = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared', order: 'bannerOrder' }[kind])
     .replace('{g}', fmtG(state.tareFlagG || 0));
+  // No job, no cultivar: whatever goes in the basket now is not recorded. Red,
+  // pulsing, headed NOT RECORDING (Koa 2026-11-10: hard restrictions).
+  if (kind === 'order' || kind === 'tare') {
+    el.banner.className = 'banner notrec';
+    el.banner.innerHTML = '';
+    const b = document.createElement('b'); b.textContent = t('notRecording');
+    el.banner.append(b, text);
+    return;
+  }
+  el.banner.className = `banner ${kind}`;
+  el.banner.textContent = text;
 }
 
 // Finish chime. Browsers only allow sound after a tap, so the Start tap unlocks it.
@@ -462,10 +486,15 @@ async function read() {
   }
 }
 
-el.cultivar.addEventListener('change', () => { state.cultivar = el.cultivar.value; save(); renderOrder(); render(); });
-// Picking a bag size sets the target (mid-job too: the ring follows it).
+function orderLocked() { return state.phase === 'running' || state.phase === 'finished'; }
+el.cultivar.addEventListener('change', () => {
+  if (orderLocked()) { renderOrder(); return; }   // locked: put the picker back
+  state.cultivar = el.cultivar.value; save(); renderOrder(); render();
+});
+// Picking a bag size sets the target. Only while no job is running (renderLock).
 el.bag.addEventListener('change', () => {
-  const p = bagOf(el.bag.value); if (!p) return;
+  const p = bagOf(el.bag.value);
+  if (!p || orderLocked()) { renderOrder(); return; }
   state.bag = p.key; state.targetG = p.g; overSince = null; save(); render();
 });
 // The Worker only sees gross weight (basket included). Tare and pickup marks let
@@ -646,6 +675,23 @@ function reportJob(force = false) {
     .catch(() => { lastReportKey = ''; });   // retry on the next tick
 }
 setInterval(() => { holdWhileDisconnected(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
+
+// A tablet left open keeps running the code it loaded (Koa 2026-11-10: Cell 1
+// read "Tablet off" all morning while trimming). Every few minutes, ask Pages
+// which build is current and reload onto it while no job is running. The order
+// and timer live in localStorage, so a reload loses nothing.
+const BUILD = new URL(import.meta.url).searchParams.get('h');
+const BUILD_CHECK_MS = 3 * 60 * 1000;
+async function checkBuild() {
+  if (!BUILD || document.hidden || orderLocked() || watch.lifted) return;
+  try {
+    const r = await fetch(`${location.pathname}?build=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const m = (await r.text()).match(/js\/cell\/main\.js\?h=([0-9a-f]+)/);
+    if (m && m[1] !== BUILD) location.reload();
+  } catch { /* offline: try again next time */ }
+}
+setInterval(checkBuild, BUILD_CHECK_MS);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 save();
