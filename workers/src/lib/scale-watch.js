@@ -21,6 +21,7 @@ import { HARVEST_TZ, pacificDay, pacificParts } from './pacific.js';
 import { sendTelegramMessage } from './telegram.js';
 import { batteryOf, LOW_PCT, CHARGED_PCT } from './battery.js';
 import { recentEvents, notRecording, recording } from './untracked.js';
+import { WORK_DAY } from './work-calendar.js';
 
 export const SILENT_MIN = 3;
 const SHIFT_FROM_MIN = 6 * 60;
@@ -30,6 +31,17 @@ const parseUtc = s => (s ? Date.parse(String(s).replace(' ', 'T') + (/[zZ]|[+-]\
 const minutesOfDay = d => { const p = pacificParts(d); return p.hour * 60 + p.minute; };
 const weekday = d => d.toLocaleDateString('en-US', { timeZone: HARVEST_TZ, weekday: 'short' });
 const clock = d => d.toLocaleTimeString('en-US', { timeZone: HARVEST_TZ, hour: 'numeric', minute: '2-digit' }).toLowerCase();
+
+/**
+ * Breaks (Koa 2026-11-10: 9:00-9:10, 12:00-12:30, 2:30-2:40; WORK_DAY.breaks).
+ * A scale switched off for a break is not an outage: no "disconnected" alert
+ * from the break's start until SILENT_MIN after it ends. Still off after that,
+ * it is reported as usual.
+ */
+export function breakQuiet(now) {
+  const m = minutesOfDay(now);
+  return WORK_DAY.breaks.some(([s, e]) => m >= s && m < e + SILENT_MIN);
+}
 
 export function inShift(now) {
   const m = minutesOfDay(now);
@@ -46,7 +58,7 @@ export function scaleWatch(rows, now) {
   const down = [];
   const back = [];
   const today = pacificDay(now);
-  const shift = inShift(now);
+  const shift = inShift(now) && !breakQuiet(now);
   for (const r of rows) {
     const last = parseUtc(r.updatedAt);
     const downSince = parseUtc(r.downSince);

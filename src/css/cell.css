@@ -66,6 +66,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .banner.off { background: var(--gold); color: #2d3a32; }
 .banner.signal { background: var(--danger); }
 .banner.paused { background: var(--info); }
+.banner.break { background: var(--info); }
 .banner.tared { background: var(--gold); color: #2d3a32; }
 .banner.order { background: var(--gold); color: #2d3a32; }
 /* No job is being recorded while product may be going in (Koa 2026-11-10: hard restrictions). */

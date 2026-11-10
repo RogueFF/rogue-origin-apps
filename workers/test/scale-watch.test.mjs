@@ -90,3 +90,15 @@ test('no chat set, or Telegram refuses: nothing is marked, so it tries again nex
     } finally { tg.restore(); }
   }
 });
+
+test('breaks (9:00-9:10, 12:00-12:30, 2:30-2:40): a scale switched off for one is not reported until 3 min after it ends', () => {
+  const lunch = row({ updatedAt: '2026-11-09 20:01:00' });                              // last post 12:01 pm
+  assert.equal(scaleWatch([lunch], AT('20:20:00')).down.length, 0, '12:20, at lunch');
+  assert.equal(scaleWatch([lunch], AT('20:32:00')).down.length, 0, '12:32, 2 min after');
+  assert.equal(scaleWatch([lunch], AT('20:33:00')).down.length, 1, '12:33, still off: reported');
+  assert.equal(scaleWatch([row({ updatedAt: '2026-11-09 17:01:00' })], AT('17:08:00')).down.length, 0, '9:08, morning break');
+  assert.equal(scaleWatch([row({ updatedAt: '2026-11-09 22:31:00' })], AT('22:38:00')).down.length, 0, '2:38, afternoon break');
+  assert.equal(scaleWatch([row({ updatedAt: '2026-11-09 18:40:00' })], AT('18:45:00')).down.length, 1, '10:45, no break: reported');
+  const back = scaleWatch([row({ updatedAt: '2026-11-09 20:10:00', downSince: '2026-11-09 19:50:00' })], AT('20:15:00'));
+  assert.equal(back.back.length, 1, 'a scale already reported down still reports back during a break');
+});
