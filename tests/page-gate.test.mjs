@@ -34,6 +34,7 @@ const OPEN = [
   'scale-display.html',
   'cell.html',                // Cell table screen (pilot), a floor screen like scale-display
   'cell-hourly.html',         // Cell hourly log (manual entry until every table has a scale)
+  'cells.html',               // Cells board: every cell's screen + ready-for-pickup, for bagging and the office
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',

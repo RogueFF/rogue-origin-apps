@@ -564,10 +564,40 @@ function holdWhileDisconnected() {
   }
   lastTickAt = now;
 }
-setInterval(() => { holdWhileDisconnected(); autoPause(); renderCycle(); }, 1000);
+// Report the job to the Worker so other computers see it on the Cells board
+// (Koa 2026-11-09; cells.html, setCellState). Sent when anything on the job
+// changes, and every 30 s anyway so the board can tell a tablet that's off.
+// Best effort: the next change or heartbeat repairs a lost one.
+const REPORT_EVERY_MS = 30000;
+let lastReportKey = '';
+let lastReportAt = 0;
+function jobSnapshot() {
+  const running = state.phase === 'running' && !!state.startedAt;
+  const held = running && disconnected();
+  const elapsed = running ? elapsedMs() : state.phase === 'finished' ? state.finishedMs : null;
+  return {
+    stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: state.bag, targetG: state.targetG,
+    elapsedMs: elapsed == null ? null : Math.max(0, Math.round(elapsed)),
+    paused: !!state.pausedAt || held,
+    pauseNote: state.pausedAt ? state.pauseNote : held ? 'Scale disconnected' : null,
+    finishedNetG: state.phase === 'finished' ? (state.finishedNetG ?? null) : null,
+  };
+}
+function reportJob(force = false) {
+  const snap = jobSnapshot();
+  // A ticking clock isn't a change: the board ticks it from the start time.
+  const ticking = snap.phase === 'running' && !snap.paused;
+  const key = JSON.stringify({ ...snap, elapsedMs: ticking || snap.elapsedMs == null ? null : Math.floor(snap.elapsedMs / 1000) });
+  if (!force && key === lastReportKey && Date.now() - lastReportAt < REPORT_EVERY_MS) return;
+  lastReportKey = key; lastReportAt = Date.now();
+  fetch(`${API}?action=setCellState`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(snap) })
+    .catch(() => { lastReportKey = ''; });   // retry on the next tick
+}
+setInterval(() => { holdWhileDisconnected(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 save();
+reportJob(true);
 enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });
 renderOrder();
 render();
