@@ -256,7 +256,9 @@ export async function sackOutToday(db, env, params, deps) {
     }
     const g = groups.get(k);
     g.sacks_today++;
-    g.sacks.push({ sack_id: r.sack_id, serial: r.serial, zone: r.zone, cut_number: r.cut_number, opened_at: r.opened_at, out_by: r.out_by, can_undo: !pastUndo(r) });
+    // fill_lbs: a takedown-weighed light sack (null = a full sack); the
+    // analytics page sums raw pounds from it.
+    g.sacks.push({ sack_id: r.sack_id, serial: r.serial, zone: r.zone, cut_number: r.cut_number, fill_lbs: r.fill_lbs ?? null, opened_at: r.opened_at, out_by: r.out_by, can_undo: !pastUndo(r) });
   }
   const chipRows = await query(db, `
     SELECT cultivar, cultivar_code, COUNT(*) AS n FROM harvest_sacks

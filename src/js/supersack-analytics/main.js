@@ -6,7 +6,7 @@
 // hourly log. The merge rules live in ../js/shared/supersack-days.js
 // (tests/supersack-days.test.mjs pins them).
 import {
-  SCAN_START, buildDays, scanDays, unclosedDays, cultivarTotals, projectVariant, mapLimit,
+  SCAN_START, buildDays, lbsFillMap, scanDays, unclosedDays, cultivarTotals, projectVariant, mapLimit,
 } from '../shared/supersack-days.js';
 
 (function() {
@@ -41,11 +41,11 @@ import {
       never: 'N/A', errorLoad: 'Failed to load data',
       sectionDays: 'Day by Day', daysSub: 'Sacks scanned out at salida. Tops from the hourly log.',
       closed: 'Closed', notClosed: 'Not closed', inProgress: 'In progress', fromTracker: 'Tracker count',
-      sacksWord: 'sacks', perSack: '/sack', topsPerSack: 'tops/sack', lbTops: 'lb tops', other: 'Other',
+      sacksWord: 'sacks', perSack: '/sack', lbRaw: 'lb raw', lbSmalls: 'lb smalls', light: '{n} light', topsPerSack: 'tops/sack', lbTops: 'lb tops', other: 'Other',
       showAll: 'Show all {n} days', showLess: 'Show fewer',
       unclosed: 'Not closed yet, so no biomass or trim weights: {days}.',
       scanGaps: 'Scan-out did not answer for {n} day(s); those days use the tracker only.',
-      rawEst: 'lbs · est. from sacks', rawLbs: 'lbs', yieldSubN: 'tops only · {n} lb tops/sack',
+      rawEst: 'lbs · some est. from sacks', rawLbs: 'lbs · sacks opened', yieldSubN: 'tops only · {n} lb tops/sack',
       yearFix: 'Hourly log used another crop year for this cultivar',
       noTops: 'no tops logged', thinTitle: 'Only {n} sacks in this range, too few to project',
     },
@@ -76,11 +76,11 @@ import {
       never: 'N/A', errorLoad: 'Error al cargar datos',
       sectionDays: 'Dia por Dia', daysSub: 'Sacos escaneados en salida. Tops del registro por hora.',
       closed: 'Cerrado', notClosed: 'Sin cerrar', inProgress: 'En curso', fromTracker: 'Conteo del registro',
-      sacksWord: 'sacos', perSack: '/saco', topsPerSack: 'tops/saco', lbTops: 'lb tops', other: 'Otros',
+      sacksWord: 'sacos', perSack: '/saco', lbRaw: 'lb bruto', lbSmalls: 'lb smalls', light: '{n} livianos', topsPerSack: 'tops/saco', lbTops: 'lb tops', other: 'Otros',
       showAll: 'Ver los {n} dias', showLess: 'Ver menos',
       unclosed: 'Sin cerrar, sin pesos de biomasa ni recorte: {days}.',
       scanGaps: 'El escaneo de salida no respondio para {n} dia(s); esos dias usan solo el registro.',
-      rawEst: 'lbs · est. por sacos', rawLbs: 'lbs', yieldSubN: 'solo tops · {n} lb tops/saco',
+      rawEst: 'lbs · parte est. por sacos', rawLbs: 'lbs · sacos abiertos', yieldSubN: 'solo tops · {n} lb tops/saco',
       yearFix: 'El registro por hora uso otro ano de cosecha para esta variedad',
       noTops: 'sin tops registrados', thinTitle: 'Solo {n} sacos en este rango, muy pocos para proyectar',
     }
@@ -119,7 +119,7 @@ import {
   // -- State --
   const state = {
     startDate: '', endDate: '', activePreset: 'month',
-    days: null, hourlyByDate: {}, scanGaps: 0, showAllDays: false,
+    days: null, hourlyByDate: {}, scanGaps: 0, showAllDays: false, fills: null,
     inventoryData: null, costData: undefined,
   };
   let loadSeq = 0;
@@ -246,6 +246,17 @@ import {
       let scanGaps = 0;
       scanDates.forEach((d, i) => { if (scans[i] === undefined) scanGaps++; else scansByDate[d] = scans[i]; });
 
+      // Takedown weights of light sacks. The scan payload carries fill_lbs once
+      // the worker that adds it is deployed; until then one read of every
+      // opened sack supplies them. A failed read means full sacks.
+      const needFills = scans.some(p => (p?.groups || []).some(g => (g.sacks || []).some(x => !('fill_lbs' in x))));
+      if (needFills && !state.fills) {
+        state.fills = await fetchJSON(`${HARVEST_API}?action=sacks&opened=true&limit=1000`)
+          .then(r => lbsFillMap(Array.isArray(r) ? r : (r.data || [])))
+          .catch(() => ({}));
+        if (stale()) return;
+      }
+
       // Hourly rows only for days that opened sacks.
       const sackDates = [...new Set([...entries.map(x => x.date), ...scanDates.filter(d => (scansByDate[d]?.total || 0) > 0)])].sort();
       const hourly = await mapLimit(sackDates, CONCURRENCY,
@@ -256,7 +267,7 @@ import {
 
       state.hourlyByDate = hourlyByDate;
       state.scanGaps = scanGaps;
-      state.days = buildDays({ entries, scansByDate, hourlyByDate });
+      state.days = buildDays({ entries, scansByDate, hourlyByDate, fills: state.fills || {} });
       renderAll();
     } catch (err) {
       if (stale()) return;
@@ -389,16 +400,21 @@ import {
       const maxSacks = Math.max(...d.cultivars.map(c => c.sacks), 1);
       html += `<div class="day-card">`;
       html += `<div class="day-head"><span class="day-date">${esc(dayLabel(d.date))}</span><span class="day-badge ${status[0]}">${esc(status[1])}</span></div>`;
-      html += `<div class="day-total"><span class="day-big">${fmt(d.sacks)}</span><span class="day-unit">${t('sacksWord')}</span></div>`;
-      html += `<div class="day-line">${fmt(d.tops, 1)} ${t('lbTops')} · ${d.sacks ? fmt(d.tops / d.sacks, 1) : '--'} ${t('topsPerSack')}</div>`;
+      html += `<div class="day-total"><span class="day-big">${fmt(d.sacks)}</span><span class="day-unit">${t('sacksWord')}</span>`
+        + `<span class="day-big day-raw">${fmt(d.raw)}</span><span class="day-unit">${t('lbRaw')}${d.rawEstimated ? ' (est.)' : ''}</span></div>`;
+      html += `<div class="day-line">${fmt(d.tops, 1)} ${t('lbTops')} · ${fmt(d.smalls, 1)} ${t('lbSmalls')} · ${d.sacks ? fmt(d.tops / d.sacks, 1) : '--'} ${t('topsPerSack')}</div>`;
       html += `<div class="day-cults">`;
       for (const c of d.cultivars) {
         if (!c.sacks) continue;
         const flags = (c.sacksFrom === 'tracker' && d.scanned ? `<span class="cult-flag" title="${esc(t('fromTracker'))}">✎</span>` : '')
           + (c.seasonFallback ? `<span class="cult-flag" title="${esc(t('yearFix'))}">⚑</span>` : '');
-        const tps = c.tops > 0 ? `${fmt(c.tops, 1)} lb · ${fmt(c.tops / c.sacks, 1)}${t('perSack')}` : t('noTops');
+        const yieldTxt = c.tops > 0 || c.smalls > 0
+          ? `${fmt(c.tops, 1)} tops · ${fmt(c.smalls, 1)} smalls · ${fmt(c.tops / c.sacks, 1)}${t('perSack')}`
+          : t('noTops');
+        const lightTxt = c.lightSacks ? ` (${t('light', { n: c.lightSacks })})` : '';
+        const tps = `${yieldTxt}${lightTxt}`;
         html += `<div class="cult-row">`
-          + `<div class="cult-top"><span class="cult-name">${esc(cultivarLabel(c))}${flags}</span><span class="cult-sacks">${fmt(c.sacks)}</span></div>`
+          + `<div class="cult-top"><span class="cult-name">${esc(cultivarLabel(c))}${flags}</span><span class="cult-sacks">${fmt(c.sacks)}<span class="cult-raw">${fmt(c.raw)} lb</span></span></div>`
           + `<div class="cult-bar"><div class="cult-fill" style="width:${(c.sacks / maxSacks * 100).toFixed(0)}%"></div></div>`
           + `<div class="cult-tops">${esc(tps)}</div>`
           + `</div>`;

@@ -33,7 +33,8 @@ test('scan-only day (tracker not closed): sacks from scans, tops from hourly, ra
   });
   assert.equal(d.sacks, 22);
   assert.equal(d.raw, 22 * 35);
-  assert.equal(d.rawEstimated, true);
+  assert.equal(d.processed, 22 * 35);
+  assert.equal(d.rawEstimated, false); // scanned sacks x their weight is the definition, not a guess
   assert.equal(d.weighed, false);
   assert.equal(d.waste, null);
   assert.equal(d.trackerFilled, false);
@@ -75,7 +76,45 @@ test('scan count wins over a disagreeing tracker count, and raw follows the scan
   });
   assert.equal(d.sacks, 12);
   assert.equal(d.raw, 12 * 35);
-  assert.equal(d.rawEstimated, true);
+  assert.equal(d.rawEstimated, false);
+});
+
+test('raw: a light sack weighs its takedown fill_lbs, from the payload or the sacks list; 2025 sacks are 37 lb', () => {
+  const day = D.mergeDay({
+    date: '2030-01-13',
+    scan: { date: '2030-01-13', total: 5, groups: [
+      { season: 2026, cultivar: 'Alpha', sacks_today: 3, sacks: [{ sack_id: 'A1' }, { sack_id: 'A2' }, { sack_id: 'A3', fill_lbs: 18 }] },
+      { season: 2025, cultivar: 'Beta', sacks_today: 2, sacks: [{ sack_id: 'B1', fill_lbs: null }, { sack_id: 'B2' }] },
+    ] },
+    fills: { A2: 20, B1: 12 },
+    hourly: [],
+  });
+  const a = day.cultivars.find(c => c.cultivar === 'Alpha'), b = day.cultivars.find(c => c.cultivar === 'Beta');
+  assert.deepEqual([a.raw, a.lightSacks], [35 + 20 + 18, 2]);
+  // B1's payload says null (a full sack), which wins over the list.
+  assert.deepEqual([b.raw, b.lightSacks], [37 + 37, 0]);
+  assert.equal(day.raw, 73 + 74);
+  assert.equal(day.lightSacks, 2);
+});
+
+test('raw: sacks the payload counts but does not list are full sacks', () => {
+  const day = D.mergeDay({ date: '2030-01-14', scan: scan('2030-01-14', [[2026, 'Alpha', 4]]), hourly: [] });
+  assert.equal(day.raw, 140);
+});
+
+test('raw: a tracker-only day keeps the tracker raw; no raw anywhere is sacks x weight, flagged', () => {
+  const t = D.mergeDay({ date: '2030-01-15', tracker: [row('2030-01-15', '2025 - Gamma / Sungrown', 3, { raw: 100 })] });
+  assert.deepEqual([t.raw, t.rawEstimated], [100, false]);
+  const e = D.mergeDay({ date: '2030-01-15', tracker: [row('2030-01-15', '2025 - Gamma / Sungrown', 3, { raw: 0 })] });
+  assert.deepEqual([e.raw, e.rawEstimated], [111, true]);
+});
+
+test("processed = raw until leftover is recorded; then minus today's leftover, plus the last working day's", () => {
+  const scans = { '2030-03-02': scan('2030-03-02', [[2026, 'Alpha', 10]]), '2030-03-03': scan('2030-03-03', [[2026, 'Alpha', 10]]) };
+  const plain = D.buildDays({ scansByDate: scans });
+  assert.deepEqual(plain.map(d => [d.raw, d.processed, d.leftover, d.carriedIn]), [[350, 350, null, null], [350, 350, null, null]]);
+  const withLeft = D.buildDays({ scansByDate: scans, leftoverByDate: { '2030-03-02': 20, '2030-03-03': 5 } });
+  assert.deepEqual(withLeft.map(d => [d.raw, d.processed]), [[350, 330], [350, 365]]);
 });
 
 test('a 2025 strain typed on a scan day keeps its tracker count beside the 2026 scans', () => {
@@ -186,4 +225,8 @@ test('mapLimit keeps order and caps concurrency', async () => {
   });
   assert.deepEqual(out, [2, 4, 6, 8, 10, 12, 14]);
   assert.ok(peak <= 3);
+});
+
+test('lbsFillMap keeps only real takedown weights', () => {
+  assert.deepEqual(D.lbsFillMap([{ sack_id: 'A', fill_lbs: 18 }, { sack_id: 'B', fill_lbs: null }, { sack_id: 'C', fill_lbs: 0 }, { fill_lbs: 9 }]), { A: 18 });
 });

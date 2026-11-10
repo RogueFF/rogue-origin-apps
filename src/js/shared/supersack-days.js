@@ -17,6 +17,13 @@
  * of another year when exactly one such cultivar opened sacks (2026-10-30: 2026
  * Lifter sacks, hourly logged as "2025 - Lifter"). That match is flagged.
  *
+ * RAW POUNDS. A scanned sack weighs its takedown fill_lbs when it has one (a
+ * light last sack), else a full sack for its crop year (35 lb 2026, 37 lb
+ * 2025). Raw is what was OPENED that day. A future "leftover lb in open sacks
+ * at 4:20" value would make processed = raw - today's leftover + yesterday's;
+ * mergeDay takes both (null until that field exists) so nothing here assumes
+ * opened = processed.
+ *
  * Pure functions, no imports, so tests/supersack-days.test.mjs can load this
  * very file and the page imports it with no build step.
  */
@@ -75,6 +82,27 @@ export function scanDays(start, end, scanStart = SCAN_START) {
   return daysBetween(start < scanStart ? scanStart : start, end);
 }
 
+/** A finite positive pound value, else null. */
+const lbsOrNull = (v) => (v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+/**
+ * Pounds in one scanned sack: its own fill_lbs when the scan payload carries
+ * the field, else the takedown weight from `fills` (sack_id -> fill_lbs), else
+ * a full sack. Returns { lbs, light }.
+ */
+export function sackLbs(sack, season, fills = {}) {
+  const own = sack && Object.prototype.hasOwnProperty.call(sack, 'fill_lbs') ? lbsOrNull(sack.fill_lbs) : undefined;
+  const fill = own !== undefined ? own : lbsOrNull(fills[sack?.sack_id]);
+  return fill != null ? { lbs: fill, light: true } : { lbs: fullSackLbs(season), light: false };
+}
+
+/** Opened-sack rows (harvest `sacks`) -> { sack_id: fill_lbs } for the light ones. */
+export function lbsFillMap(rows) {
+  const out = {};
+  for (const r of rows || []) { const f = lbsOrNull(r?.fill_lbs); if (r?.sack_id && f != null) out[r.sack_id] = f; }
+  return out;
+}
+
 /** Hourly rows -> [{ season, cultivar, title, tops, smalls }], one per line per row. */
 function hourlyLines(rows) {
   const out = [];
@@ -97,20 +125,23 @@ function hourlyLines(rows) {
  * @param tracker    supersack history entries for that date
  * @param scan       the sack_out_today payload, or null when not read / before SCAN_START
  * @param hourly     getProduction rows, or null when not read (tracker tops are used instead)
+ * @param fills      { sack_id: fill_lbs } for scanned sacks whose payload lacks fill_lbs
+ * @param leftover   lb left in open sacks at day end (null: not recorded; no such field yet)
+ * @param carriedIn  the previous working day's leftover (null: not recorded)
  * @returns {
- *   date, sacks, raw, rawEstimated, tops, smalls, biomass, trim, waste, weighed,
+ *   date, sacks, raw, processed, leftover, carriedIn, lightSacks, rawEstimated, tops, smalls, biomass, trim, waste, weighed,
  *   topsFrom: 'hourly'|'tracker', scanned, trackerFilled,
  *   cultivars: [{ season, cultivar, sacks, sacksFrom, raw, rawEstimated, tops, smalls,
  *                 biomass, trim, weighed, seasonFallback }],
  *   unmatched: [{ title, tops, smalls }]   hourly pounds with no sacks to land on
  * }
  */
-export function mergeDay({ date, tracker = [], scan = null, hourly = null }) {
+export function mergeDay({ date, tracker = [], scan = null, hourly = null, fills = {}, leftover = null, carriedIn = null }) {
   const groups = new Map();
   const group = (season, cultivar) => {
     const k = keyOf(season, cultivar);
     if (!groups.has(k)) {
-      groups.set(k, { season, cultivar, scanSacks: 0, scanned: false, trackerSacks: 0, trackerRaw: 0,
+      groups.set(k, { season, cultivar, scanSacks: 0, scanLbs: 0, lightSacks: 0, scanned: false, trackerSacks: 0, trackerRaw: 0,
         trackerTops: 0, trackerSmalls: 0, biomass: 0, trim: 0, weighed: false, tracked: false,
         hourlyTops: 0, hourlySmalls: 0, seasonFallback: false });
     }
@@ -120,8 +151,13 @@ export function mergeDay({ date, tracker = [], scan = null, hourly = null }) {
   for (const g of (scan?.groups || [])) {
     const n = num(g.sacks_today);
     if (!n) continue;
-    const x = group(num(g.season) || null, g.cultivar);
+    const season = num(g.season) || null;
+    const x = group(season, g.cultivar);
     x.scanSacks += n; x.scanned = true;
+    // Weigh each listed sack; any the payload counts but does not list are full.
+    const listed = (g.sacks || []).slice(0, n);
+    for (const s of listed) { const w = sackLbs(s, season, fills); x.scanLbs += w.lbs; if (w.light) x.lightSacks++; }
+    x.scanLbs += (n - listed.length) * fullSackLbs(season);
   }
 
   for (const e of tracker) {
@@ -158,15 +194,17 @@ export function mergeDay({ date, tracker = [], scan = null, hourly = null }) {
   for (const g of groups.values()) {
     const sacks = g.scanned ? g.scanSacks : g.trackerSacks;
     const sacksFrom = g.scanned ? 'scan' : 'tracker';
-    // The tracker's raw is good when it describes the same sacks; otherwise sacks x a full sack.
-    const trackerRawFits = g.tracked && g.trackerSacks === sacks && g.trackerRaw > 0;
-    const raw = trackerRawFits ? g.trackerRaw : sacks * fullSackLbs(g.season);
+    // Scanned: the sacks' own weights. Not scanned: the tracker's raw, else
+    // sacks x a full sack (flagged as an estimate).
+    const trackerRawFits = !g.scanned && g.tracked && g.trackerRaw > 0;
+    const raw = g.scanned ? g.scanLbs : trackerRawFits ? g.trackerRaw : sacks * fullSackLbs(g.season);
+    const rawEstimated = !g.scanned && !trackerRawFits;
     const tops = haveHourly ? g.hourlyTops : g.trackerTops;
     const smalls = haveHourly ? g.hourlySmalls : g.trackerSmalls;
     if (!sacks && !tops && !smalls) continue;
     cultivars.push({
       season: g.season, cultivar: g.cultivar, sacks, sacksFrom,
-      raw: r1(raw), rawEstimated: !trackerRawFits,
+      raw: r1(raw), rawEstimated, lightSacks: g.lightSacks,
       tops: r1(tops), smalls: r1(smalls),
       biomass: r1(g.biomass), trim: r1(g.trim), weighed: g.weighed,
       seasonFallback: g.seasonFallback,
@@ -178,8 +216,14 @@ export function mergeDay({ date, tracker = [], scan = null, hourly = null }) {
   const sacks = cultivars.reduce((n, c) => n + c.sacks, 0);
   const raw = sum('raw'), tops = sum('tops'), smalls = sum('smalls'), biomass = sum('biomass'), trim = sum('trim');
   const weighed = cultivars.some(c => c.weighed);
+  const left = lbsOrNull(leftover), carried = lbsOrNull(carriedIn);
   return {
-    date, sacks, raw, rawEstimated: cultivars.some(c => c.rawEstimated && c.sacks > 0),
+    date, sacks, raw,
+    // Opened today, minus what is still in open sacks tonight, plus what last
+    // night's open sacks carried in. Equal to raw until leftover is recorded.
+    processed: r1(raw - (left || 0) + (carried || 0)), leftover: left, carriedIn: carried,
+    lightSacks: cultivars.reduce((n, c) => n + c.lightSacks, 0),
+    rawEstimated: cultivars.some(c => c.rawEstimated && c.sacks > 0),
     tops, smalls, biomass, trim,
     // Waste is never weighed: the remainder once tops, smalls, biomass and trim are off raw.
     waste: weighed ? r1(Math.max(0, raw - tops - smalls - biomass - trim)) : null,
@@ -196,7 +240,7 @@ export function mergeDay({ date, tracker = [], scan = null, hourly = null }) {
  * All days in range with anything to show, oldest first.
  * scansByDate / hourlyByDate: { [date]: payload | rows | null }.
  */
-export function buildDays({ entries = [], scansByDate = {}, hourlyByDate = {} } = {}) {
+export function buildDays({ entries = [], scansByDate = {}, hourlyByDate = {}, fills = {}, leftoverByDate = {} } = {}) {
   const byDate = new Map();
   for (const e of entries) {
     if (!e?.date) continue;
@@ -204,12 +248,19 @@ export function buildDays({ entries = [], scansByDate = {}, hourlyByDate = {} } 
     byDate.get(e.date).push(e);
   }
   const dates = new Set([...byDate.keys(), ...Object.keys(scansByDate).filter(d => num(scansByDate[d]?.total) > 0)]);
-  return [...dates].sort().map(date => mergeDay({
-    date,
-    tracker: byDate.get(date) || [],
-    scan: scansByDate[date] || null,
-    hourly: Object.prototype.hasOwnProperty.call(hourlyByDate, date) ? hourlyByDate[date] : null,
-  })).filter(d => d.sacks > 0 || d.tops > 0);
+  let prevLeftover = null;
+  return [...dates].sort().map(date => {
+    const leftover = leftoverByDate[date] ?? null;
+    const day = mergeDay({
+      date,
+      tracker: byDate.get(date) || [],
+      scan: scansByDate[date] || null,
+      hourly: Object.prototype.hasOwnProperty.call(hourlyByDate, date) ? hourlyByDate[date] : null,
+      fills, leftover, carriedIn: prevLeftover,
+    });
+    prevLeftover = leftover;
+    return day;
+  }).filter(d => d.sacks > 0 || d.tops > 0);
 }
 
 /** Days that opened sacks but have no bio/trim weights yet (not closed), excluding `today`. */
