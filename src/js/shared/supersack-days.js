@@ -270,51 +270,93 @@ export function unclosedDays(days, today) {
 
 /**
  * Per (season, cultivar) totals over the range, for the strain chart and the
- * inventory projection. effectiveDays weights each day by the cultivar's share
- * of that day's sacks, so "sacks per full day" answers "if we ran this one
- * full-time" without diluting by days it sat idle.
+ * inventory yield projection. `thin` = too few sacks to trust tops per sack.
  */
 export function cultivarTotals(days) {
   const m = new Map();
   for (const d of days) {
     for (const c of d.cultivars) {
       const k = keyOf(c.season, c.cultivar);
-      if (!m.has(k)) m.set(k, { season: c.season, cultivar: c.cultivar, sacks: 0, raw: 0, tops: 0, smalls: 0, effectiveDays: 0, days: 0 });
+      if (!m.has(k)) m.set(k, { season: c.season, cultivar: c.cultivar, sacks: 0, raw: 0, tops: 0, smalls: 0, days: 0 });
       const t = m.get(k);
       t.sacks += c.sacks; t.raw += c.raw; t.tops += c.tops; t.smalls += c.smalls;
-      if (c.sacks > 0 && d.sacks > 0) { t.effectiveDays += c.sacks / d.sacks; t.days += 1; }
+      if (c.sacks > 0) t.days += 1;
     }
   }
   return [...m.values()].map(t => ({
     ...t, raw: r1(t.raw), tops: r1(t.tops), smalls: r1(t.smalls),
     topsPerSack: t.sacks > 0 ? t.tops / t.sacks : null,
     smallsPerSack: t.sacks > 0 ? t.smalls / t.sacks : null,
-    sacksPerDay: t.effectiveDays > 0 ? t.sacks / t.effectiveDays : null,
     thin: t.sacks < MIN_SACKS_FOR_PREDICTION,
   })).sort((a, b) => b.sacks - a.sacks);
 }
 
 /**
- * Projection for one inventory variant (Shopify title + quantity) from the
- * range's cultivar totals. Null fields when the sample is too thin: a
- * one-sack cultivar must never read "0 days, depletes today".
+ * The line's pace: sacks opened per working day (a day that opened any), over
+ * the range. Null when nothing was opened. Koa, 2026-11-10: days supply is
+ * line time, the same rate for every cultivar, not a "run it full-time" rate
+ * that made a cultivar mixed into a big day look like it ran 39 sacks a day.
  */
-export function projectVariant(title, quantity, totals) {
+export function lineSacksPerDay(days) {
+  const worked = days.filter(d => d.sacks > 0);
+  return worked.length ? worked.reduce((n, d) => n + d.sacks, 0) / worked.length : null;
+}
+
+/**
+ * Projection for one inventory variant (Shopify title + quantity).
+ * daysLeft: line time at `lineRate` sacks/day ("<1" for under a day, never 0).
+ * topsLbs/smallsLbs: this cultivar's tops/smalls per sack, only from a sample
+ * of at least MIN_SACKS_FOR_PREDICTION sacks; otherwise null and `thin`.
+ */
+export function projectVariant(title, quantity, totals, lineRate) {
   const { season, cultivar } = parseTitle(title);
   const t = totals.find(x => x.season === season && lc(x.cultivar) === lc(cultivar));
   const qty = num(quantity);
-  if (!t || t.thin || !t.sacksPerDay) {
-    return { season, cultivar, quantity: qty, daysLeft: null, topsLbs: null, smallsLbs: null, sample: t ? t.sacks : 0 };
-  }
-  const days = qty / t.sacksPerDay;
+  const rate = Number(lineRate) > 0 ? Number(lineRate) : null;
+  const yields = t && !t.thin;
   return {
     season, cultivar, quantity: qty,
-    // Under a day of supply reads as "<1", never 0.
-    daysLeft: qty > 0 ? Math.max(days, 0.5) : 0,
-    topsLbs: t.topsPerSack != null ? qty * t.topsPerSack : null,
-    smallsLbs: t.smallsPerSack != null ? qty * t.smallsPerSack : null,
-    sample: t.sacks,
+    daysLeft: rate && qty > 0 ? Math.max(qty / rate, 0.5) : null,
+    topsLbs: yields && t.topsPerSack != null ? qty * t.topsPerSack : null,
+    smallsLbs: yields && t.smallsPerSack != null ? qty * t.smallsPerSack : null,
+    sample: t ? t.sacks : 0,
+    thin: !!t && t.thin,
   };
+}
+
+/** "7:03 AM – 8:00 AM" -> [423, 480] minutes; null when unreadable. */
+export function slotMinutes(slot) {
+  const m = String(slot || '').match(/(\d{1,2}):(\d{2})\s*([AP]M)\s*[–—-]\s*(\d{1,2}):(\d{2})\s*([AP]M)/i);
+  if (!m) return null;
+  const at = (h, mm, ap) => ((Number(h) % 12) + (/p/i.test(ap) ? 12 : 0)) * 60 + Number(mm);
+  const start = at(m[1], m[2], m[3]), end = at(m[4], m[5], m[6]);
+  return end > start ? [start, end] : null;
+}
+
+/**
+ * Hours the floor logged that day: the union of the time slots of hourly rows
+ * that had crew or output. Union, so a cell row and a line row for the same
+ * hour ("7:00 AM – 8:00 AM" and "7:03 AM – 8:00 AM") count once. Null when no
+ * row qualifies.
+ */
+export function loggedHours(rows) {
+  const spans = [];
+  for (const r of rows || []) {
+    const crew = num(r.trimmers1) + num(r.trimmers2) + num(r.buckers1) + num(r.buckers2);
+    const out = num(r.tops1) + num(r.tops2) + num(r.smalls1) + num(r.smalls2);
+    if (!crew && !out) continue;
+    const s = slotMinutes(r.timeSlot);
+    if (s) spans.push(s);
+  }
+  if (!spans.length) return null;
+  spans.sort((a, b) => a[0] - b[0]);
+  let total = 0, [cs, ce] = spans[0];
+  for (const [s, e] of spans.slice(1)) {
+    if (s <= ce) ce = Math.max(ce, e);
+    else { total += ce - cs; cs = s; ce = e; }
+  }
+  total += ce - cs;
+  return total / 60;
 }
 
 /** Run fn over items with at most `limit` in flight; results in input order. */

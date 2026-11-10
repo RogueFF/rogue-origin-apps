@@ -180,7 +180,7 @@ test('scanDays never asks before scan-out began', () => {
   assert.equal(D.daysBetween('2025-01-01', '2025-12-31').length, 365);
 });
 
-test('cultivarTotals: effective days weight by share of the day; tops per sack from hourly', () => {
+test('cultivarTotals: tops per sack from hourly; line rate is sacks per working day', () => {
   const days = D.buildDays({
     scansByDate: {
       '2030-02-02': scan('2030-02-02', [[2026, 'Alpha', 10], [2026, 'Beta', 10]]),
@@ -193,27 +193,49 @@ test('cultivarTotals: effective days weight by share of the day; tops per sack f
   });
   const t = D.cultivarTotals(days);
   const a = t.find(x => x.cultivar === 'Alpha');
-  assert.equal(a.sacks, 30);
-  assert.equal(a.effectiveDays, 1.5);
-  assert.equal(a.sacksPerDay, 20);
-  assert.equal(a.topsPerSack, 5);
-  assert.equal(a.thin, false);
+  assert.deepEqual([a.sacks, a.days, a.topsPerSack, a.thin], [30, 2, 5, false]);
   assert.equal(t.find(x => x.cultivar === 'Beta').thin, false);
+  assert.equal(D.lineSacksPerDay(days), 20);
+  assert.equal(D.lineSacksPerDay([]), null);
 });
 
-test('projectVariant: a thin sample gets no days supply (no "0 days, depletes today")', () => {
-  const totals = [{ season: 2026, cultivar: 'Tiny', sacks: 1, effectiveDays: 1 / 30, sacksPerDay: 30, topsPerSack: 0, smallsPerSack: 0, thin: true }];
-  const p = D.projectVariant('2026 - Tiny / Sungrown / 1st Cut', 13, totals);
-  assert.equal(p.daysLeft, null);
-  assert.equal(p.topsLbs, null);
+test('projectVariant: days supply is line time for every cultivar; a thin sample gets no yield projection', () => {
+  const totals = [{ season: 2026, cultivar: 'Tiny', sacks: 1, topsPerSack: 0, smallsPerSack: 0, thin: true }];
+  const p = D.projectVariant('2026 - Tiny / Sungrown / 1st Cut', 48, totals, 24);
+  assert.deepEqual([p.daysLeft, p.topsLbs, p.thin], [2, null, true]);
+  // A cultivar never opened in the range still has line time.
+  assert.equal(D.projectVariant('2026 - Unopened / Sungrown / 1st Cut', 12, totals, 24).daysLeft, 0.5);
+  assert.equal(D.projectVariant('2026 - Unopened / Sungrown / 1st Cut', 12, totals, null).daysLeft, null);
 });
 
-test('projectVariant: matches by year and cultivar across cuts; under a day is never 0', () => {
-  const totals = [{ season: 2026, cultivar: 'Alpha', sacks: 40, sacksPerDay: 20, topsPerSack: 5, smallsPerSack: 2, thin: false }];
-  const p = D.projectVariant('2026 - Alpha / Sungrown / 2nd Cut', 100, totals);
+test('projectVariant: yields match by year and cultivar across cuts; under a day is never 0; empty is null', () => {
+  const totals = [{ season: 2026, cultivar: 'Alpha', sacks: 40, topsPerSack: 5, smallsPerSack: 2, thin: false }];
+  const p = D.projectVariant('2026 - Alpha / Sungrown / 2nd Cut', 100, totals, 20);
   assert.deepEqual([p.daysLeft, p.topsLbs, p.smallsLbs], [5, 500, 200]);
-  assert.equal(D.projectVariant('2026 - Alpha / Sungrown / 1st Cut', 3, totals).daysLeft, 0.5);
-  assert.equal(D.projectVariant('2025 - Alpha / Sungrown', 100, totals).daysLeft, null);
+  assert.equal(D.projectVariant('2026 - Alpha / Sungrown / 1st Cut', 3, totals, 20).daysLeft, 0.5);
+  assert.equal(D.projectVariant('2026 - Alpha / Sungrown / 1st Cut', 0, totals, 20).daysLeft, null);
+  assert.equal(D.projectVariant('2025 - Alpha / Sungrown', 100, totals, 20).topsLbs, null);
+});
+
+test('slotMinutes reads the hourly slot labels', () => {
+  assert.deepEqual(D.slotMinutes('7:03 AM – 8:00 AM'), [423, 480]);
+  assert.deepEqual(D.slotMinutes('12:30 PM – 1:00 PM'), [750, 780]);
+  assert.deepEqual(D.slotMinutes('4:00 PM - 4:30 PM'), [960, 990]);
+  assert.equal(D.slotMinutes('lunch'), null);
+});
+
+test('loggedHours: union of slots with crew or output; overlapping cell and line rows count once', () => {
+  const r = (timeSlot, o = {}) => ({ timeSlot, trimmers1: 0, buckers1: 0, tops1: 0, smalls1: 0, ...o });
+  const rows = [
+    r('7:00 AM – 8:00 AM', { trimmers1: 5 }),
+    r('7:03 AM – 8:00 AM', { tops1: 10 }),
+    r('8:00 AM – 9:00 AM', { tops1: 12 }),
+    r('9:00 AM – 10:00 AM'),                      // nobody, nothing: not counted
+    r('12:30 PM – 1:00 PM', { trimmers1: 4 }),
+  ];
+  assert.equal(D.loggedHours(rows), 2.5);
+  assert.equal(D.loggedHours([r('9:00 AM – 10:00 AM')]), null);
+  assert.equal(D.loggedHours(null), null);
 });
 
 test('mapLimit keeps order and caps concurrency', async () => {

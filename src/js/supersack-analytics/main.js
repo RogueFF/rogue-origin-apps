@@ -6,7 +6,7 @@
 // hourly log. The merge rules live in ../js/shared/supersack-days.js
 // (tests/supersack-days.test.mjs pins them).
 import {
-  SCAN_START, buildDays, lbsFillMap, scanDays, unclosedDays, cultivarTotals, projectVariant, mapLimit,
+  SCAN_START, buildDays, lbsFillMap, lineSacksPerDay, loggedHours, scanDays, unclosedDays, cultivarTotals, projectVariant, mapLimit,
 } from '../shared/supersack-days.js';
 
 (function() {
@@ -41,13 +41,13 @@ import {
       never: 'N/A', errorLoad: 'Failed to load data',
       sectionDays: 'Day by Day', daysSub: 'Sacks scanned out at salida. Tops from the hourly log.',
       closed: 'Closed', notClosed: 'Not closed', inProgress: 'In progress', fromTracker: 'Tracker count',
-      sacksWord: 'sacks', perSack: '/sack', lbRaw: 'lb raw', lbSmalls: 'lb smalls', light: '{n} light', topsPerSack: 'tops/sack', lbTops: 'lb tops', other: 'Other',
+      sacksWord: 'sacks', hLogged: 'h logged', perSack: '/sack', lbRaw: 'lb raw', lbSmalls: 'lb smalls', light: '{n} light', topsPerSack: 'tops/sack', lbTops: 'lb tops', other: 'Other',
       showAll: 'Show all {n} days', showLess: 'Show fewer',
       unclosed: 'Not closed yet, so no biomass or trim weights: {days}.',
       scanGaps: 'Scan-out did not answer for {n} day(s); those days use the tracker only.',
       rawEst: 'lbs · some est. from sacks', rawLbs: 'lbs · sacks opened', yieldSubN: 'tops only · {n} lb tops/sack',
       yearFix: 'Hourly log used another crop year for this cultivar',
-      noTops: 'no tops logged', thinTitle: 'Only {n} sacks in this range, too few to project',
+      noTops: 'no tops logged', thinTitle: 'Only {n} sacks in this range, too few to project tops',
     },
     es: {
       title: 'Analisis de Supersacos', entryLink: 'Entrada', today: 'Hoy',
@@ -76,13 +76,13 @@ import {
       never: 'N/A', errorLoad: 'Error al cargar datos',
       sectionDays: 'Dia por Dia', daysSub: 'Sacos escaneados en salida. Tops del registro por hora.',
       closed: 'Cerrado', notClosed: 'Sin cerrar', inProgress: 'En curso', fromTracker: 'Conteo del registro',
-      sacksWord: 'sacos', perSack: '/saco', lbRaw: 'lb bruto', lbSmalls: 'lb smalls', light: '{n} livianos', topsPerSack: 'tops/saco', lbTops: 'lb tops', other: 'Otros',
+      sacksWord: 'sacos', hLogged: 'h registradas', perSack: '/saco', lbRaw: 'lb bruto', lbSmalls: 'lb smalls', light: '{n} livianos', topsPerSack: 'tops/saco', lbTops: 'lb tops', other: 'Otros',
       showAll: 'Ver los {n} dias', showLess: 'Ver menos',
       unclosed: 'Sin cerrar, sin pesos de biomasa ni recorte: {days}.',
       scanGaps: 'El escaneo de salida no respondio para {n} dia(s); esos dias usan solo el registro.',
       rawEst: 'lbs · parte est. por sacos', rawLbs: 'lbs · sacos abiertos', yieldSubN: 'solo tops · {n} lb tops/saco',
       yearFix: 'El registro por hora uso otro ano de cosecha para esta variedad',
-      noTops: 'sin tops registrados', thinTitle: 'Solo {n} sacos en este rango, muy pocos para proyectar',
+      noTops: 'sin tops registrados', thinTitle: 'Solo {n} sacos en este rango, muy pocos para proyectar tops',
     }
   };
   const lang = () => (window.getLang && window.getLang()) || 'en';
@@ -566,8 +566,10 @@ import {
 
   function renderRateChart(days, labels) {
     if (!days.length) return;
-    // Estimate lbs/hr: assume 7.5 effective hours per day
-    const HOURS_PER_DAY = 7.5;
+    // Lbs per hour the floor logged that day (union of hourly slots with crew
+    // or output; Koa, 2026-11-10). No hourly log for a day = a gap, not a guess.
+    const hours = days.map(d => loggedHours(state.hourlyByDate[d.date]));
+    const perHour = (lbs, i) => (hours[i] ? +(lbs / hours[i]).toFixed(1) : null);
     const ptRadius = days.length > 30 ? 0 : 3;
     chartRate = new Chart(document.getElementById('chart-rate'), {
       type: 'line',
@@ -575,13 +577,13 @@ import {
         labels,
         datasets: [{
           label: t('tops') + ' /hr',
-          data: days.map(d => d.tops / HOURS_PER_DAY),
+          data: days.map((d, i) => perHour(d.tops, i)),
           borderColor: COLORS.tops,
           backgroundColor: 'rgba(102, 137, 113, 0.1)',
           fill: true, tension: 0.3, pointRadius: ptRadius, pointBackgroundColor: COLORS.tops,
         }, {
           label: t('smalls') + ' /hr',
-          data: days.map(d => d.smalls / HOURS_PER_DAY),
+          data: days.map((d, i) => perHour(d.smalls, i)),
           borderColor: COLORS.smalls,
           backgroundColor: 'rgba(228, 170, 79, 0.1)',
           fill: true, tension: 0.3, pointRadius: ptRadius, pointBackgroundColor: COLORS.smalls,
@@ -590,7 +592,13 @@ import {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
+        plugins: {
+          legend: { labels: { boxWidth: 12, padding: 10 } },
+          tooltip: { callbacks: { footer: (items) => {
+            const h = hours[items[0]?.dataIndex];
+            return h ? `${fmt(h, 1)} ${t('hLogged')}` : '';
+          } } },
+        },
         scales: {
           x: { ticks: { maxTicksLimit: 10, maxRotation: 0 } },
           y: { beginAtZero: true }
@@ -659,7 +667,9 @@ import {
   // -- Inventory Rendering --
   function renderInventory() {
     const card = document.getElementById('inventory-card');
-    const variants = state.inventoryData || [];
+    // Everything is harvested and almost nothing got a 2nd cut: empty
+    // variants are noise (Koa, 2026-11-10).
+    const variants = (state.inventoryData || []).filter(v => (v.quantity || 0) > 0);
     const days = (state.days || []).filter(d => d.sacks > 0);
     const totals = cultivarTotals(days);
 
@@ -672,9 +682,10 @@ import {
     // "Total days left" uses the global daily throughput (all sacks ÷ days
     // worked), not the sum of per-cultivar full-time rates, which would
     // double-count capacity since cultivars share the same line time.
-    const totalSacks = days.reduce((n, d) => n + d.sacks, 0);
-    const totalDailyThroughput = days.length ? totalSacks / days.length : 0;
-    const totalDaysLeft = totalDailyThroughput > 0 ? Math.round(totalInventory / totalDailyThroughput) : null;
+    // Days supply is line time: sacks ÷ the line's sacks per working day, the
+    // same rate for every cultivar (Koa, 2026-11-10).
+    const lineRate = lineSacksPerDay(days);
+    const totalDaysLeft = lineRate ? Math.round(totalInventory / lineRate) : null;
 
     let html = `<div class="card-title">${t('currentInventory')}</div>`;
     html += `<div class="inventory-summary">`;
@@ -687,18 +698,16 @@ import {
 
     variants.forEach(v => {
       const name = v.title || 'Unknown';
-      const p = projectVariant(name, v.quantity || 0, totals);
-      // An empty variant (most 2nd Cut rows) has nothing to deplete.
-      const empty = p.quantity <= 0;
-      const daysLeft = empty ? null : p.daysLeft;
-      const daysStr = empty ? '--' : daysLeft == null ? t('never') : daysLeft < 1 ? '<1' : fmt(Math.round(daysLeft));
+      const p = projectVariant(name, v.quantity || 0, totals, lineRate);
+      const daysLeft = p.daysLeft;
+      const daysStr = daysLeft == null ? t('never') : daysLeft < 1 ? '<1' : fmt(Math.round(daysLeft));
       const projTops = p.topsLbs != null ? fmt(p.topsLbs) : '--';
       const projSmalls = p.smallsLbs != null ? fmt(p.smallsLbs) : '--';
-      const thinBadge = (!empty && p.daysLeft == null && p.sample > 0)
+      const thinBadge = p.thin
         ? `<span class="thin-sample-badge" title="${esc(t('thinTitle', { n: p.sample }))}">⚠ thin</span>`
         : '';
 
-      let depleteStr = empty ? '--' : t('never');
+      let depleteStr = t('never');
       if (daysLeft != null && daysLeft < 9999) {
         const d = new Date();
         d.setDate(d.getDate() + Math.ceil(daysLeft));
@@ -711,8 +720,8 @@ import {
       html += `<tr>`;
       html += `<td style="font-family:var(--font-ui);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</td>`;
       html += `<td>${fmt(p.quantity)}</td>`;
-      html += `<td>${daysStr}${thinBadge}<div class="depletion-bar-bg"><div class="depletion-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>`;
-      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span></td>`;
+      html += `<td>${daysStr}<div class="depletion-bar-bg"><div class="depletion-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>`;
+      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span>${thinBadge}</td>`;
       html += `<td style="font-size:11px">${depleteStr}</td>`;
       html += `</tr>`;
     });
