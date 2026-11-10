@@ -12,6 +12,13 @@
  *          (cell_hourly; a blank cultivar is the room's cultivar that hour). The log
  *          is by hour, not by order, so the yield is for the cell's day of that
  *          cultivar: every lot of it that day together, and only once all are closed.
+ *          Only the hours the lots were out count (first hand-out to last weigh-back),
+ *          so tops logged before the water spider started entering raw never land
+ *          on a small lot (a whole morning on one 175 g hand-out reads 300%).
+ *
+ * A yield outside YIELD_BAND is shown with check: true and kept out of the roll-up
+ * (known cell yields: Sour Lifter 19%, Lifter 25%): a missed hand-out or a typo
+ * should never teach a cultivar its rate.
  *
  * No yield (null) while raw is still at the cell, when nothing was used (out - back
  * <= 0), or when there are no tops yet. Those are left out of the per-cultivar
@@ -19,6 +26,26 @@
  */
 export const PICKUP_GRACE_MS = 2 * 60 * 1000;
 export const G_PER_LB = 453.59237;
+export const YIELD_BAND = [5, 50];   // % tops of raw used
+
+/** "2:00 PM – 3:00 PM" -> { startMin, endMin }, Pacific minutes since midnight; null if unreadable. */
+export function slotRange(slot) {
+  const parts = String(slot || '').split('–').map(x => x.trim());
+  const min = t => {
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(t || '');
+    if (!m) return null;
+    let h = Number(m[1]) % 12;
+    if (m[3].toUpperCase() === 'PM') h += 12;
+    return h * 60 + Number(m[2]);
+  };
+  const startMin = min(parts[0]), endMin = min(parts[1]);
+  return startMin === null || endMin === null ? null : { startMin, endMin };
+}
+const pacificMinutes = ms => {
+  const s = new Date(ms).toLocaleString('sv-SE', { timeZone: 'America/Los_Angeles' });
+  return Number(s.slice(11, 13)) * 60 + Number(s.slice(14, 16));
+};
+const checked = y => (y === null ? { yieldPct: null, check: false } : { yieldPct: y, check: y < YIELD_BAND[0] || y > YIELD_BAND[1] });
 
 const parseUtc = s => (s ? Date.parse(String(s).replace(' ', 'T') + (/[zZ]$/.test(s) ? '' : 'Z')) : null);
 const r1 = n => Math.round(n * 10) / 10;
@@ -29,7 +56,7 @@ const pct = (tops, used) => (used > 0 && tops > 0 ? r1((tops / used) * 100) : nu
  * @param {Array<{id,stationId,date,cultivar,bag,bags,openedAt,closedAt,outG,backG,outs}>} a.lots
  * @param {Set<string>} a.scaleStations stations with a table scale
  * @param {Array<{station_id,ts,kg}>} a.marks pickup marks for those stations
- * @param {Array<{station_id,production_date,cultivar,tops_lbs}>} a.hourly cultivar already resolved
+ * @param {Array<{station_id,production_date,time_slot,cultivar,tops_lbs}>} a.hourly cultivar already resolved
  */
 export function lotYields({ lots, scaleStations, marks = [], hourly = [] }) {
   // Where each scale lot's window ends: weigh-back + grace, but never past the next lot.
@@ -56,25 +83,36 @@ export function lotYields({ lots, scaleStations, marks = [], hourly = [] }) {
       .filter(m => m.station_id === l.stationId)
       .filter(m => { const at = parseUtc(m.ts); return at >= from && at <= to; })
       .reduce((s, m) => s + (Number(m.kg) || 0) * 1000, 0));
-    return { ...base, topsG, yieldPct: closed ? pct(topsG, usedG) : null };
+    return { ...base, topsG, ...checked(closed ? pct(topsG, usedG) : null) };
   });
 
   // Hourly cells: one yield per cell, day and cultivar.
   const groups = new Map();
   for (const l of out.filter(x => x.source === 'hourly')) {
     const key = `${l.stationId}|${l.date}|${l.cultivar}`;
-    const g = groups.get(key) || { key, stationId: l.stationId, date: l.date, cultivar: l.cultivar, lots: 0, open: 0, usedG: 0, topsG: 0 };
+    const g = groups.get(key) || { key, stationId: l.stationId, date: l.date, cultivar: l.cultivar, lots: 0, open: 0, usedG: 0, topsG: 0, from: Infinity, to: -Infinity };
     g.lots += 1;
     if (l.closed) g.usedG += l.usedG; else g.open += 1;
+    g.from = Math.min(g.from, parseUtc(l.openedAt));
+    if (l.closed) g.to = Math.max(g.to, parseUtc(l.closedAt));
     groups.set(key, g);
+  }
+  // Only the hours the group's raw was out: an hour counts if it overlaps the
+  // window from the first hand-out to the last weigh-back (Pacific minutes).
+  for (const g of groups.values()) {
+    g.fromMin = Number.isFinite(g.from) ? pacificMinutes(g.from) : null;
+    g.toMin = Number.isFinite(g.to) ? pacificMinutes(g.to) : null;
   }
   for (const h of hourly) {
     const g = groups.get(`${h.station_id}|${h.production_date}|${h.cultivar}`);
-    if (g && Number.isFinite(Number(h.tops_lbs))) g.topsG += Number(h.tops_lbs) * G_PER_LB;
+    if (!g || g.open || g.fromMin === null || g.toMin === null || !Number.isFinite(Number(h.tops_lbs))) continue;
+    const r = slotRange(h.time_slot);
+    if (!r || r.endMin <= g.fromMin || r.startMin >= g.toMin) continue;
+    g.topsG += Number(h.tops_lbs) * G_PER_LB;
   }
-  const groupList = [...groups.values()].map(g => {
+  const groupList = [...groups.values()].map(({ from, to, fromMin, toMin, ...g }) => {
     const usedG = r1(g.usedG), topsG = r1(g.topsG);
-    return { ...g, usedG, topsG, yieldPct: g.open ? null : pct(topsG, usedG) };
+    return { ...g, usedG, topsG, ...checked(g.open ? null : pct(topsG, usedG)) };
   });
   for (const l of out) {
     if (l.source !== 'hourly') continue;
@@ -84,8 +122,8 @@ export function lotYields({ lots, scaleStations, marks = [], hourly = [] }) {
 
   // Per cultivar: every weighed unit (a scale lot, or an hourly cell-day) with a yield.
   const units = [
-    ...out.filter(l => l.source === 'scale' && l.yieldPct !== null).map(l => ({ cultivar: l.cultivar, lots: 1, usedG: l.usedG, topsG: l.topsG })),
-    ...groupList.filter(g => g.yieldPct !== null).map(g => ({ cultivar: g.cultivar, lots: g.lots, usedG: g.usedG, topsG: g.topsG })),
+    ...out.filter(l => l.source === 'scale' && l.yieldPct !== null && !l.check).map(l => ({ cultivar: l.cultivar, lots: 1, usedG: l.usedG, topsG: l.topsG })),
+    ...groupList.filter(g => g.yieldPct !== null && !g.check).map(g => ({ cultivar: g.cultivar, lots: g.lots, usedG: g.usedG, topsG: g.topsG })),
   ];
   const cult = new Map();
   for (const u of units) {

@@ -68,3 +68,4 @@ table.data td.yield { font: 800 18px var(--font-mono); text-align: right; }
 table.data tr.open td { background: color-mix(in srgb, var(--gold) 12%, transparent); }
 .src { font: 600 12px var(--font-ui); color: var(--text-secondary); }
 table:empty { display: none; }
+.check { font: 700 12px var(--font-ui); color: #8a5a00; background: color-mix(in srgb, var(--gold) 35%, transparent); border-radius: 6px; padding: 1px 6px; margin-top: 2px; display: inline-block; }

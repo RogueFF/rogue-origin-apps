@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { rawOut, rawBack, rawUndo, getRawBoard } from '../src/handlers/production/cell-raw.js';
-import { lotYields, G_PER_LB } from '../src/lib/raw-yield.js';
+import { lotYields, G_PER_LB, slotRange } from '../src/lib/raw-yield.js';
 
 const NOW = new Date('2026-11-10T18:00:00Z');   // 10:00 am Pacific
 const DAY = '2026-11-10';
@@ -101,10 +101,10 @@ test('yield, cells without a scale: the hourly log for the cell-day-cultivar, on
     { id: 3, stationId: 'table4', date: DAY, cultivar: SL, openedAt: '2026-11-10 16:00:00', closedAt: null, outG: 1000, backG: 0 },
   ];
   const hourly = [
-    { station_id: 'table3', production_date: DAY, cultivar: LIFTER, tops_lbs: 1 },
-    { station_id: 'table3', production_date: DAY, cultivar: LIFTER, tops_lbs: 0.5 },
-    { station_id: 'table3', production_date: DAY, cultivar: SL, tops_lbs: 9 },       // another cultivar
-    { station_id: 'table4', production_date: DAY, cultivar: SL, tops_lbs: 0.4 },
+    { station_id: 'table3', production_date: DAY, time_slot: '8:00 AM – 9:00 AM', cultivar: LIFTER, tops_lbs: 1 },
+    { station_id: 'table3', production_date: DAY, time_slot: '10:00 AM – 11:00 AM', cultivar: LIFTER, tops_lbs: 0.5 },
+    { station_id: 'table3', production_date: DAY, time_slot: '9:00 AM – 10:00 AM', cultivar: SL, tops_lbs: 9 },   // another cultivar
+    { station_id: 'table4', production_date: DAY, time_slot: '8:00 AM – 9:00 AM', cultivar: SL, tops_lbs: 0.4 },
   ];
   const y = lotYields({ lots, scaleStations: new Set(['table1']), hourly });
   const g3 = y.groups.find(g => g.stationId === 'table3');
@@ -115,6 +115,35 @@ test('yield, cells without a scale: the hourly log for the cell-day-cultivar, on
   assert.equal(y.byCultivar.length, 1);
   assert.equal(y.byCultivar[0].lots, 2);
   assert.equal(y.lots[0].group, g3.key);
+});
+
+test('rollout day: tops logged before the raw was entered never land on a small lot', () => {
+  // The leads logged Cell 3 Sour Lifter all morning; the water spider's first hand-out is 2:00-3:00 pm.
+  const lots = [{ id: 1, stationId: 'table3', date: DAY, cultivar: SL, openedAt: '2026-11-10 22:00:00', closedAt: '2026-11-10 23:00:00', outG: 175, backG: 0 }];
+  const hourly = ['7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM', '10:00 AM – 11:00 AM', '11:00 AM – 12:00 PM']
+    .map(time_slot => ({ station_id: 'table3', production_date: DAY, time_slot, cultivar: SL, tops_lbs: 0.5 }))
+    .concat([{ station_id: 'table3', production_date: DAY, time_slot: '2:00 PM – 3:00 PM', cultivar: SL, tops_lbs: 0.075 }]);
+  const y = lotYields({ lots, scaleStations: new Set(), hourly });
+  assert.equal(y.groups[0].topsG, Math.round(0.075 * G_PER_LB * 10) / 10, 'only the 2-3 pm hour');
+  assert.equal(y.groups[0].yieldPct, 19.4);
+  assert.equal(y.groups[0].check, false);
+  assert.deepEqual(slotRange('12:30 PM – 1:00 PM'), { startMin: 750, endMin: 780 });
+});
+
+test('a yield outside 5-50% is flagged check and kept out of the roll-up', () => {
+  const lots = [
+    { id: 1, stationId: 'table1', date: DAY, cultivar: SL, openedAt: '2026-11-10 17:00:00', closedAt: '2026-11-10 17:30:00', outG: 100, backG: 0 },
+    { id: 2, stationId: 'table1', date: DAY, cultivar: SL, openedAt: '2026-11-10 18:00:00', closedAt: '2026-11-10 18:30:00', outG: 175, backG: 0 },
+  ];
+  const marks = [
+    { station_id: 'table1', ts: '2026-11-10 17:20:00', kg: 0.08 },   // 80%: a hand-out that was never entered
+    { station_id: 'table1', ts: '2026-11-10 18:20:00', kg: 0.033 },  // 18.9%
+  ];
+  const y = lotYields({ lots, scaleStations: new Set(['table1']), marks });
+  assert.equal(y.lots[0].yieldPct, 80);
+  assert.equal(y.lots[0].check, true);
+  assert.equal(y.lots[1].check, false);
+  assert.deepEqual(y.byCultivar.map(c => [c.lots, c.usedG, c.topsG]), [[1, 175, 33]]);
 });
 
 test('the board: cells with the screen order and open lot, today\'s lots, per-cultivar roll-up', async () => {

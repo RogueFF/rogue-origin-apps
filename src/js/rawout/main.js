@@ -43,7 +43,7 @@ registerLabels({
     loadFail: 'Can\'t reach the server. Retrying…', notReady: 'Raw hand-out is not set up on the server yet.',
     tooMuchBack: 'More than was handed out ({g}).',
     hCell: 'Cell', hCultivar: 'Cultivar', hOrder: 'Order', hOut: 'Out', hBack: 'Back', hUsed: 'Used', hTops: 'Tops', hYield: 'Yield',
-    hLots: 'Lots', hRawPer: 'Raw per 1 g tops', hRate: 'Chart rate', stillOut: 'raw out', srcScale: 'scale', srcHourly: 'hourly log, cell-day',
+    hLots: 'Lots', hRawPer: 'Raw per 1 g tops', hRate: 'Chart rate', stillOut: 'raw out', check: 'check: left out of the roll-up', srcScale: 'scale', srcHourly: 'hourly log, cell-day',
     rollupSub: 'Last {n} days. Tops ÷ raw used. Scale cells: per lot. Other cells: per cell-day from the hourly log.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
   },
@@ -62,7 +62,7 @@ registerLabels({
     loadFail: 'No hay conexión con el servidor. Reintentando…', notReady: 'La entrega de crudo todavía no está lista en el servidor.',
     tooMuchBack: 'Más de lo que se entregó ({g}).',
     hCell: 'Celda', hCultivar: 'Variedad', hOrder: 'Orden', hOut: 'Entregado', hBack: 'Regresó', hUsed: 'Usado', hTops: 'Tops', hYield: 'Rendimiento',
-    hLots: 'Lotes', hRawPer: 'Crudo por 1 g de tops', hRate: 'Tasa de la tabla', stillOut: 'crudo afuera', srcScale: 'báscula', srcHourly: 'registro por hora, día de la celda',
+    hLots: 'Lotes', hRawPer: 'Crudo por 1 g de tops', hRate: 'Tasa de la tabla', stillOut: 'crudo afuera', check: 'revisar: no cuenta en el resumen', srcScale: 'báscula', srcHourly: 'registro por hora, día de la celda',
     rollupSub: 'Últimos {n} días. Tops ÷ crudo usado. Celdas con báscula: por lote. Otras: por día de la celda, del registro por hora.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
   },
@@ -253,6 +253,7 @@ function renderLots() {
     const y = td(tr, fmtPct(g ? g.yieldPct : l.yieldPct), 'yield');
     const src = document.createElement('div'); src.className = 'src'; src.textContent = t(l.source === 'scale' ? 'srcScale' : 'srcHourly');
     y.appendChild(src);
+    if (g ? g.check : l.check) { const c = document.createElement('div'); c.className = 'check'; c.textContent = t('check'); y.appendChild(c); }
     body.appendChild(tr);
   }
   el.lots.append(head, body);

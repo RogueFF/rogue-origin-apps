@@ -157,7 +157,7 @@ export async function getRawBoard(params, env, now = new Date()) {
       `SELECT station_id, ts, kg FROM scale_marks WHERE kind = 'pickup' AND ts >= ? ORDER BY ts`
     ).bind(firstOpen)) : [],
     allOrEmpty(env.DB.prepare(
-      `SELECT h.station_id, h.production_date, COALESCE(h.cultivar, r.cultivar) AS cultivar, h.tops_lbs
+      `SELECT h.station_id, h.production_date, h.time_slot, COALESCE(h.cultivar, r.cultivar) AS cultivar, h.tops_lbs
        FROM cell_hourly h LEFT JOIN cell_room_hourly r ON r.production_date = h.production_date AND r.time_slot = h.time_slot
        WHERE h.production_date BETWEEN ? AND ? AND h.tops_lbs IS NOT NULL`
     ).bind(from, date)),
