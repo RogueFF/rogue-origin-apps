@@ -24,7 +24,7 @@ const BATT_LOW_PCT = 20;   // red on the tile; Koa gets a Telegram under 15%
 
 registerLabels({
   en: {
-    title: 'Cells', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
+    title: 'Cells', rawLink: 'Raw hand-out', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
     idle: 'Idle', armed: 'Ready', running: 'Filling', paused: 'Paused', finished: 'Ready for pickup',
     down: 'Scale disconnected', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
     notrec: 'NOT RECORDING', noScreen: 'trimming, no cell screen open', tabletOff: 'trimming, tablet not reporting', noJob: 'trimming, no job started',
@@ -33,7 +33,7 @@ registerLabels({
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
   },
   es: {
-    title: 'Celdas', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
+    title: 'Celdas', rawLink: 'Entrega de crudo', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
     idle: 'Sin trabajo', armed: 'Lista', running: 'Llenando', paused: 'En pausa', finished: 'Listo para recoger',
     down: 'Báscula desconectada', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
     notrec: 'NO SE GRABA', noScreen: 'recortando, sin pantalla abierta', tabletOff: 'recortando, la tableta no reporta', noJob: 'recortando, sin trabajo iniciado',
@@ -47,6 +47,7 @@ const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 const params = new URLSearchParams(location.search);
 const apiParam = params.get('api') || '';
 const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
+if (API !== PROD_API) document.getElementById('rawLink').href = `rawout.html?api=${encodeURIComponent(API)}`;
 
 const $ = id => document.getElementById(id);
 const el = { pickups: $('pickups'), grid: $('grid'), quiet: $('quiet'), status: $('status'), sub: $('sub'), sound: $('soundBtn'), lang: $('langToggle') };

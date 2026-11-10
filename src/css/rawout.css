@@ -1,0 +1,70 @@
+/* Raw hand-out (rawout.html): the water spider at the WIP bench. Big targets, explicit steps. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+.ro-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; flex-wrap: wrap; }
+.ro-head h1 { margin: 0; font-size: 32px; }
+.head-right { display: flex; gap: 10px; align-items: center; }
+.muted { color: var(--text-secondary); font-size: 15px; }
+.ro-main { display: grid; gap: 16px; padding: 0 16px 32px; max-width: 1100px; margin: 0 auto; }
+.card { background: var(--bg-card); border: 2px solid var(--border); border-radius: 18px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.card h2 { margin: 0; font-size: 24px; display: flex; align-items: center; gap: 10px; }
+.step { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: #fff; font: 800 18px var(--font-ui); flex: none; }
+
+.btn { font: 700 18px var(--font-ui); padding: 12px 18px; min-height: 52px; border-radius: 12px; cursor: pointer;
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.btn.ghost { min-height: 44px; padding: 8px 14px; font-size: 16px; font-weight: 600; }
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; font-size: 24px; min-height: 72px; width: 100%; }
+.btn.primary.confirm { background: var(--gold); border-color: var(--gold); color: #2d3a32; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Cells: one big button each; a cell with raw out is gold */
+.cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.cell-btn { display: grid; gap: 4px; text-align: left; padding: 12px 14px; min-height: 84px; border-radius: 14px; cursor: pointer;
+  border: 3px solid var(--border); border-left-width: 10px; background: var(--bg-card); color: var(--text); font-family: var(--font-ui); }
+.cell-btn.wholesale { border-left-color: var(--green); }
+.cell-btn.retail { border-left-color: var(--indoor); }
+.cell-btn b { font: 800 22px var(--font-ui); }
+.cell-btn small { font: 600 14px var(--font-ui); color: var(--text-secondary); line-height: 1.25; }
+.cell-btn.out { background: color-mix(in srgb, var(--gold) 22%, var(--bg-card)); border-color: var(--gold); }
+.cell-btn.out small { color: var(--text); }
+.cell-btn.sel { outline: 4px solid var(--info); outline-offset: 2px; }
+
+.panel h2 { font-size: 28px; }
+.row { display: grid; gap: 8px; }
+.lbl { font: 700 19px var(--font-ui); display: flex; align-items: center; gap: 10px; }
+.hint { margin: 0; font-size: 15px; color: var(--text-secondary); }
+.big-select, .ss-input { font: 600 20px var(--font-ui); min-height: 56px; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); width: 100%; box-sizing: border-box; }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.chip { font: 800 22px var(--font-ui); min-height: 64px; border-radius: 12px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; }
+.chip small { display: block; font: 600 13px var(--font-mono); color: var(--text-secondary); }
+.chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+.chip.on small { color: #fff; }
+.stepper { display: flex; align-items: center; gap: 14px; }
+.step-btn { width: 64px; min-height: 64px; font-size: 32px; padding: 0; }
+.stepper output { font: 800 34px var(--font-mono); min-width: 56px; text-align: center; }
+.suggest { font: 800 52px var(--font-mono); line-height: 1.1; color: var(--green-dark, var(--green)); }
+
+.lot-summary { display: grid; gap: 6px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--gold) 18%, var(--bg-card)); border: 2px solid var(--gold); }
+.lot-summary .big { font: 800 26px var(--font-ui); }
+.lot-summary .out { font: 800 40px var(--font-mono); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tab { min-height: 64px; font-size: 20px; }
+.tab.on { background: var(--info); border-color: var(--info); color: #fff; }
+
+.entry { display: flex; align-items: center; gap: 10px; }
+.grams { font: 800 48px var(--font-mono); width: 100%; min-width: 0; min-height: 84px; padding: 4px 16px; border-radius: 14px; border: 3px solid var(--border-strong); background: var(--bg); color: var(--text); box-sizing: border-box; }
+.grams:focus { outline: none; border-color: var(--info); }
+.unit { font: 800 32px var(--font-mono); }
+.warn { margin: 0; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--gold) 30%, var(--bg-card)); font: 700 18px var(--font-ui); }
+.notice { margin: 0; padding: 14px 16px; border-radius: 14px; font: 700 20px var(--font-ui); background: var(--danger); color: #fff; }
+.notice.ok { background: var(--green); }
+.panel-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.table-wrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 16px; }
+table.data th { text-align: left; font: 700 13px var(--font-ui); text-transform: uppercase; letter-spacing: .5px; color: var(--text-secondary); padding: 6px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+table.data td { padding: 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.data td.num { font-family: var(--font-mono); text-align: right; }
+table.data td.yield { font: 800 18px var(--font-mono); text-align: right; }
+table.data tr.open td { background: color-mix(in srgb, var(--gold) 12%, transparent); }
+.src { font: 600 12px var(--font-ui); color: var(--text-secondary); }
+table:empty { display: none; }
