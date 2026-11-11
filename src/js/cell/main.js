@@ -462,7 +462,7 @@ function closeJob(g) {
   const jobId = state.jobId || null;
   const sent = mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null, jobId });
   // The Worker closes the job and moves NEXT up; ask for the new NOW once it has.
-  if (jobId) { closedJobs.add(jobId); state.jobId = null; sent.then(loadQueue); }
+  if (jobId) { closedJobs.set(jobId, Date.now()); state.jobId = null; sent.then(loadQueue); }
   state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
   state.tareFlagG = 0; clearPauses();
   // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be
@@ -810,7 +810,12 @@ setInterval(checkBuild, BUILD_CHECK_MS);
 // Orders assigned to this cell (order flow slice 2): NOW is the order, NEXT is shown
 // under it. Read every QUEUE_MS, and right after a pickup.
 const QUEUE_MS = 5000;
-const closedJobs = new Set();
+// Jobs this tablet closed with a pickup -> when. If the Worker still shows one as
+// NOW after LOST_PICKUP_MS, the pickup mark never landed: close it with jobDone
+// (not a second pickup mark, which would count the tops twice in the hourly log).
+const LOST_PICKUP_MS = 30000;
+const closedJobs = new Map();
+const jobDoneSent = new Set();
 let queue = { now: null, next: null };
 async function loadQueue() {
   try {
@@ -819,7 +824,14 @@ async function loadQueue() {
     const d = await r.json();
     queue = { now: (d.cell && d.cell.now) || null, next: (d.cell && d.cell.next) || null };
   } catch { return; }
-  const changed = applyQueue(state, queue.now, { locked: orderLocked(), closed: closedJobs, bagOk: k => !!bagOf(k) });
+  const stuck = queue.now && closedJobs.has(queue.now.id) ? queue.now.id : null;
+  if (stuck && Date.now() - closedJobs.get(stuck) > LOST_PICKUP_MS && !jobDoneSent.has(stuck)) {
+    jobDoneSent.add(stuck);
+    fetch(`${API}?action=jobDone`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ jobId: stuck }) })
+      .then(() => loadQueue()).catch(() => jobDoneSent.delete(stuck));
+  }
+  for (const [id, at] of closedJobs) if (id !== stuck && Date.now() - at > 10 * 60000) { closedJobs.delete(id); jobDoneSent.delete(id); }
+  const changed = applyQueue(state, queue.now, { locked: orderLocked(), closed: new Set(closedJobs.keys()), bagOk: k => !!bagOf(k) });
   if (changed) { overSince = null; armIfReady(); save(); renderOrder(); render(); }
   renderQueue();
 }
