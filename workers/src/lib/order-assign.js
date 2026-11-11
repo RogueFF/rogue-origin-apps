@@ -5,15 +5,15 @@
  * Rules, for each waiting order in FIFO order (rush first, then oldest):
  *   1. Only cells that take orders and hold fewer than MAX_ORDERS orders
  *      (NOW + NEXT: the order being trimmed and one behind it).
- *   2. Same cultivar first: a cell whose last queued cultivar (or, if empty,
- *      the cultivar it last ran) is one of the order's cultivars. That also
- *      covers a mixed order: it goes to a cell already running one of its
- *      cultivars, and that cultivar's baskets go first, so it costs one swap.
- *      But a cell never sits idle to save a changeover: while any cell is idle,
- *      the order goes to an idle cell (an idle one that last ran its cultivar
- *      first). Once every cell is busy, a matching cell wins if it frees up
- *      within SAME_CULTIVAR_WAIT_MIN of the soonest one.
- *   3. Otherwise the cell that frees up soonest. Ties: roster order.
+ *   2. The cell that frees up first (Koa 2026-11-11: "Tie-breaker only": raw is
+ *      brought per line item, so same-cultivar grouping saves little, mostly the
+ *      leftover raw and a quick tray swap).
+ *   3. Same cultivar only breaks a tie: among the cells that free up within
+ *      CULTIVAR_TIE_MIN of the first one, a cell whose last queued cultivar (or,
+ *      if empty, the cultivar it last ran) is one of the order's cultivars wins.
+ *      That covers a mixed order too, and that cultivar's baskets go first.
+ *      A cell never sits idle for it: while any cell is idle, only idle cells tie.
+ *   4. Still tied: roster order.
  * One order goes to one cell, whole (§2c split rule). A line becomes baskets of at
  * most one 1 lb fill (460 g), whole bags only, so the scale target stays a basket.
  */
@@ -22,7 +22,8 @@
 export const FILL_G = { qOz: 7.5, hOz: 15.0, oz1: 30.0, qLb: 115.0, hLb: 230.0, lb1: 460.0 };
 export const BASKET_MAX_G = 460;
 export const MAX_ORDERS = 2;
-export const SAME_CULTIVAR_WAIT_MIN = 20;
+/** Minutes within which two cells count as freeing up together. 0 = cultivar never decides. */
+export const CULTIVAR_TIE_MIN = 3;
 /**
  * Room default pace, g of tops per minute: the 11/9 one-touch rate, ~0.9 lb tops
  * per person-hour (n=2). AN ESTIMATE: each scale cell's own pace replaces it once
@@ -105,7 +106,7 @@ export function planAssignments({ cells, orders }) {
     const soonest = scored[0];
     const idle = soonest.free < 0.5;
     const match = scored.find(s => s.tail && cultivars.includes(s.tail)
-      && (idle ? s.free < 0.5 : s.free <= soonest.free + SAME_CULTIVAR_WAIT_MIN));
+      && (idle ? s.free < 0.5 : s.free <= soonest.free + CULTIVAR_TIE_MIN));
     const pick = match || soonest;
     const why = match
       ? (cultivars.length > 1 ? 'already running one of its cultivars' : 'same cultivar: no changeover')

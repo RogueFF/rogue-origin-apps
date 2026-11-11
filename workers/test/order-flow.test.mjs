@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { planAssignments, basketsFor, paceFromMarks, DEFAULT_PACE_GPM } from '../src/lib/order-assign.js';
+import { planAssignments, basketsFor, paceFromMarks, DEFAULT_PACE_GPM, CULTIVAR_TIE_MIN } from '../src/lib/order-assign.js';
 import { fillSlots, getCellQueue, orderAction, jobDone, handJobLeft } from '../src/handlers/production/order-flow.js';
 import { scaleMark } from '../src/handlers/production/cell-hourly.js';
 import { setCellState, collectPickup } from '../src/handlers/production/cell-board.js';
@@ -58,11 +58,17 @@ test('a cell never sits idle to save a changeover', () => {
     'among idle cells, the one that last ran it');
 });
 
-test('every cell busy: same cultivar only within a short wait', () => {
-  const busy = [job(1, SL, 460, false), job(1, SL, 460, false)];   // ~135 min of work
-  const cells = [cell('table1', 1, busy), cell('table13', 13, [], { lastCultivar: LI })];
-  const { assign } = planAssignments({ cells, orders: [order(10, [line(1, SL)])] });
-  assert.equal(assign[0].stationId, 'table13');
+test('tie-breaker only: the cell that frees up first wins; same cultivar breaks a tie within 3 min', () => {
+  assert.equal(CULTIVAR_TIE_MIN, 3);
+  // At 6.8 g/min: 68 g = 10 min, 82 g = ~12 min, 136 g = 20 min.
+  const later = [cell('table1', 1, [job(1, SL, 136)]), cell('table13', 13, [job(2, LI, 68)])];
+  const r = planAssignments({ cells: later, orders: [order(10, [line(1, SL)])] });
+  assert.equal(r.assign[0].stationId, 'table13', 'same cultivar 10 min later than the first free cell: no longer worth the wait');
+  assert.equal(r.assign[0].why, 'frees up soonest');
+  const close = [cell('table1', 1, [job(1, SL, 82)]), cell('table13', 13, [job(2, LI, 68)])];
+  const t = planAssignments({ cells: close, orders: [order(11, [line(1, SL)])] });
+  assert.equal(t.assign[0].stationId, 'table1', 'within ~2 min: a tie, and same cultivar breaks it');
+  assert.match(t.assign[0].why, /same cultivar/);
 });
 
 test('a mixed order goes to a cell already running one of its cultivars, that cultivar first', () => {
