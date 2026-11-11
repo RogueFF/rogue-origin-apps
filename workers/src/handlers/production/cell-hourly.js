@@ -94,9 +94,11 @@ async function allOrEmpty(stmt) {
   }
 }
 
-// Hourly tops worked out from each station's scale, for the given Pacific day.
-async function autoRows(env, date, stationIds, now = new Date()) {
-  if (!stationIds.length) return [];
+// Each station's scale day, worked out (cell-auto.js): Map(station -> autoTops
+// result). Shared by the hourly log (autoRows) and the Phase 1 day read (cellDay).
+async function autoDay(env, date, stationIds) {
+  const by = new Map();
+  if (!stationIds.length) return by;
   // A UTC window wide enough for any Pacific day; autoTops keeps only that day.
   const d = new Date(`${date}T12:00:00Z`);
   const from = new Date(d.getTime() - 24 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
@@ -114,13 +116,21 @@ async function autoRows(env, date, stationIds, now = new Date()) {
     // End of day weighs (0062): never tops.
     eodWindows(env, stationIds, from, to),
   ]);
-  const p = pacificParts(now);
-  const nowMin = p.hour * 60 + p.minute;
-  const out = [];
   for (const id of stationIds) {
     const rs = readings.filter(r => r.station_id === id);
     if (!rs.length) continue;
-    const { bySlot, flags } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES, windows: windows.get(id) || [] });
+    by.set(id, autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES, windows: windows.get(id) || [] }));
+  }
+  return by;
+}
+
+// Hourly tops worked out from each station's scale, for the given Pacific day.
+async function autoRows(env, date, stationIds, now = new Date()) {
+  const days = await autoDay(env, date, stationIds);
+  const p = pacificParts(now);
+  const nowMin = p.hour * 60 + p.minute;
+  const out = [];
+  for (const [id, { bySlot, flags }] of days) {
     for (const s of SLOT_MINUTES) {
       if (!(s.slot in bySlot)) continue;
       // An hour locks at its end; until then it's "so far".
@@ -362,4 +372,4 @@ async function saveCellRoster(body, env) {
   return successResponse({ success: true, stationId: cell.station_id, label, lane, active: active === 1 });
 }
 
-export { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark, canonicalSlot, autoRows };
+export { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark, canonicalSlot, autoRows, autoDay, SLOT_MINUTES };
