@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { planAssignments, basketsFor, paceFromMarks, DEFAULT_PACE_GPM } from '../src/lib/order-assign.js';
-import { fillSlots, getCellQueue, orderAction, jobDone } from '../src/handlers/production/order-flow.js';
+import { fillSlots, getCellQueue, orderAction, jobDone, handJobLeft } from '../src/handlers/production/order-flow.js';
 import { scaleMark } from '../src/handlers/production/cell-hourly.js';
 import { setCellState } from '../src/handlers/production/cell-board.js';
 import { syncShopOrders, STATUS_QUERY } from '../src/lib/order-sync.js';
@@ -237,6 +237,31 @@ test('cancelled in Shopify: its baskets leave the cell, and the slot refills', a
   await fillSlots(e);
   assert.equal(raw.prepare(`SELECT COUNT(*) n FROM cell_jobs WHERE order_id = ? AND state = 'queued'`).get(orderId(raw, '#9000')).n, 0);
   assert.equal(raw.prepare(`SELECT state FROM shop_orders WHERE name = '#9008'`).get().state, 'assigned');
+});
+
+test('a cell trimming a hand-picked job is not free', async () => {
+  const t0 = Date.parse('2026-11-11T16:00:00Z');
+  const screen = (phase, target_g = 460) => ({ phase, target_g, updated_at: t0 - 5000 });
+  assert.equal(handJobLeft(screen('running'), [], 160, t0), 300, 'running, nothing queued started: a hand job');
+  assert.equal(handJobLeft(screen('running'), [{ started_at: 'x' }], 160, t0), 0, 'the running job is the queued one');
+  assert.equal(handJobLeft(screen('armed', 115), [], null, t0), 115);
+  assert.equal(handJobLeft(screen('armed', 115), [{ started_at: null }], null, t0), 0, 'armed on its queued NOW');
+  assert.equal(handJobLeft({ ...screen('running'), updated_at: t0 - 10 * 60000 }, [], 0, t0), 0, 'a tablet that went quiet says nothing');
+
+  const { raw, env: e } = env();
+  raw.prepare(`INSERT INTO cell_screen_state (station_id, phase, cultivar, bag, target_g, paused, updated_at) VALUES ('table1', 'running', ?, 'lb1', 460, 0, ?)`)
+    .run(SL, Date.now());
+  await seed(e, [sOrder(9501, '2026-11-10T10:00:00Z', [sLine('Sour Lifter Hemp Flower', '1 oz.', 1)])]);
+  assert.notEqual(raw.prepare(`SELECT station_id FROM cell_jobs WHERE order_id = ?`).get(orderId(raw, '#9501')).station_id, 'table1',
+    'the first order goes to an idle cell, not behind table1\'s hand job');
+});
+
+test('hold is refused once a basket of the order is being trimmed', async () => {
+  const { raw, env: e } = env();
+  await seed(e, [sOrder(9601, '2026-11-10T10:00:00Z', [sLine('Sour Lifter Hemp Flower', '1 oz.', 1)])]);
+  const id = orderId(raw, '#9601');
+  raw.prepare(`UPDATE cell_jobs SET started_at = datetime('now') WHERE order_id = ?`).run(id);
+  assert.equal((await orderAction({ orderId: id, op: 'hold' }, e)).status, 409);
 });
 
 test('before migration 0059: a clear 503, never a crash', async () => {
