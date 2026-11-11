@@ -20,6 +20,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .pickup .p-what { font: 700 24px var(--font-ui); line-height: 1.2; }
 .pickup .p-what small { display: block; font: 600 17px var(--font-ui); opacity: .85; }
 .pickup .p-tag { font: 800 20px var(--font-ui); text-transform: uppercase; letter-spacing: 1px; text-align: right; }
+/* Orders at the cells (slice 2): an order with every basket at its cell's pickup spot. */
+.pickup.order-ready { background: var(--info); color: #fff; border-color: #3f4f63; }
+.t-queue { font: 700 15px var(--font-ui); color: var(--text-secondary); min-height: 1.2em; }
 .pickup .p-tag small { display: block; font: 600 16px var(--font-mono); letter-spacing: 0; text-transform: none; }
 @keyframes pop { from { transform: scale(.96); } to { transform: none; } }
 @keyframes glow { 50% { box-shadow: 0 0 0 8px rgba(228, 170, 79, .35); } }

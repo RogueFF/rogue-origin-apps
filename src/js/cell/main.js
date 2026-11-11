@@ -12,11 +12,19 @@
  * timer live in this tablet's localStorage, per station. Each pickup (finished or not) posts
  * a pickup mark carrying its cultivar, bag size and working time (migration 0052),
  * so the Worker keeps a record of what every job was.
+ *
+ * Orders at the cells (order flow slice 2, Koa 2026-11-11: "automatic order
+ * assignment"): when the Worker has assigned this cell orders (cellQueue), the
+ * NOW job is the order, shown as a card with NEXT under it, and the dropdowns step
+ * aside. The pickup mark carries the job's id, which closes it on the Worker, and
+ * NEXT moves up with no taps. With nothing assigned, the dropdowns work as before
+ * (wholesale batches, or a day the queue is down).
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
 import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
+import { applyQueue, shortCultivar } from './queue.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -96,6 +104,8 @@ registerLabels({
     pilotNote: 'Pick the cultivar and the bag size this order goes into. The bag size sets the target for the basket. The scale weight is live.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Cell',
     netHint: 'net · container tared',
+    nowLabel: 'NOW', nextLabel: 'NEXT', basketOf: 'basket {n} of {m}', nothingNext: 'Nothing next yet',
+    newCultivar: 'New cultivar', changedShopify: 'Changed in Shopify: ask bag/tag', rushTag: 'RUSH',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
@@ -120,6 +130,8 @@ registerLabels({
     pilotNote: 'Elija la variedad y el tamaño de bolsa donde va esta orden. El tamaño de bolsa fija la meta de la canasta. El peso de la báscula es en vivo.',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Celda',
     netHint: 'neto · contenedor en tara',
+    nowLabel: 'AHORA', nextLabel: 'SIGUIENTE', basketOf: 'canasta {n} de {m}', nothingNext: 'Nada después todavía',
+    newCultivar: 'Variedad nueva', changedShopify: 'Cambió en Shopify: pregunte a empaque', rushTag: 'URGENTE',
   },
 });
 
@@ -140,7 +152,8 @@ const API_ROOT = API.replace(/\/production$/, '');
 const $ = id => document.getElementById(id);
 const el = {
   name: $('cellName'), batt: $('batt'), orderLock: $('orderLock'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
-  cultivar: $('cultivarSelect'), bag: $('bagSelect'),
+  cultivar: $('cultivarSelect'), bag: $('bagSelect'), orderPick: $('orderPick'), queueCards: $('queueCards'),
+  nowOrder: $('nowOrder'), nowWhat: $('nowWhat'), nowMeta: $('nowMeta'), nextOrder: $('nextOrder'), nextWhat: $('nextWhat'), nextMeta: $('nextMeta'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'),
   cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
@@ -160,7 +173,8 @@ if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase
 // The target is always the picked bag size's fill standard.
 const bagOf = key => PRESETS.find(p => p.key === key);
 if (state.bag && !bagOf(state.bag)) state.bag = '';
-state.targetG = state.bag ? bagOf(state.bag).g : 0;
+// A queued order's basket keeps its own target (bags x fill, slice 2).
+state.targetG = state.jobId && state.jobTargetG > 0 && state.bag ? state.jobTargetG : state.bag ? bagOf(state.bag).g : 0;
 // A job needs both halves of its order: no cultivar or no bag size, nothing records.
 const hasOrder = () => !!state.cultivar && !!bagOf(state.bag);
 delete state.working; delete state.next;   // the old typed order fields
@@ -448,7 +462,10 @@ function onLift(ev) {
 // how long it took.
 function closeJob(g) {
   const ms = state.phase === 'finished' ? state.finishedMs : state.startedAt ? elapsedMs() : null;
-  mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null });
+  const jobId = state.jobId || null;
+  const sent = mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null, ...(jobId ? { jobId } : {}) });
+  // The Worker closes the job and moves NEXT up; ask for the new NOW once it has.
+  if (jobId) { closedJobs.add(jobId); state.jobId = null; sent.then(loadQueue); }
   state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
   state.tareFlagG = 0; clearPauses();
   // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be
@@ -757,6 +774,7 @@ function jobSnapshot() {
   const elapsed = running ? elapsedMs() : state.phase === 'finished' ? state.finishedMs : null;
   return {
     stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: state.bag || null, targetG: state.targetG || null,
+    jobId: state.jobId || null,
     elapsedMs: elapsed == null ? null : Math.max(0, Math.round(elapsed)),
     paused: !!state.pausedAt || held,
     pauseNote: state.pausedAt ? state.pauseNote : held ? 'Scale disconnected' : null,
@@ -792,6 +810,43 @@ async function checkBuild() {
 }
 setInterval(checkBuild, BUILD_CHECK_MS);
 
+// Orders assigned to this cell (order flow slice 2): NOW is the order, NEXT is shown
+// under it. Read every QUEUE_MS, and right after a pickup.
+const QUEUE_MS = 5000;
+const closedJobs = new Set();
+let queue = { now: null, next: null };
+async function loadQueue() {
+  try {
+    const r = await fetch(`${API}?action=cellQueue&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
+    if (!r.ok) return;   // before migration 0059 (503) the screen works as it always has
+    const d = await r.json();
+    queue = { now: (d.cell && d.cell.now) || null, next: (d.cell && d.cell.next) || null };
+  } catch { return; }
+  const changed = applyQueue(state, queue.now, { locked: orderLocked(), closed: closedJobs, bagOk: k => !!bagOf(k) });
+  if (changed) { overSince = null; armIfReady(); save(); renderOrder(); render(); }
+  renderQueue();
+}
+function jobLine(j) {
+  return `${shortCultivar(j.cultivar)} · ${t(j.bag)} × ${j.bags}`;
+}
+function renderQueue() {
+  const now = state.jobId && queue.now && queue.now.id === state.jobId ? queue.now : null;
+  el.queueCards.hidden = !now;
+  el.orderPick.hidden = !!now;
+  if (!now) return;
+  el.nowOrder.textContent = now.orderName || '';
+  el.nowWhat.textContent = jobLine(now);
+  el.nowMeta.textContent = [
+    now.baskets > 1 ? t('basketOf').replace('{n}', now.basketNo).replace('{m}', now.baskets) : '',
+    now.rush ? t('rushTag') : '', now.changedInShopify ? t('changedShopify') : '',
+  ].filter(Boolean).join(' · ');
+  const next = queue.next;
+  el.nextOrder.textContent = next ? next.orderName || '' : '';
+  el.nextWhat.textContent = next ? jobLine(next) : t('nothingNext');
+  el.nextMeta.textContent = next && next.cultivar !== now.cultivar ? t('newCultivar') : '';
+}
+setInterval(() => { if (!document.hidden) loadQueue(); }, QUEUE_MS);
+
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 save();
 reportJob(true);
@@ -800,3 +855,4 @@ renderOrder();
 render();
 poll();
 loadCultivars();
+loadQueue();

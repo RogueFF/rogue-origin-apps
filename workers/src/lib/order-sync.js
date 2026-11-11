@@ -20,6 +20,7 @@
 import { shopifyGraphql, shopifyConfigured } from './shopify.js';
 import { routeLine, rushOf, intakeTag } from './order-route.js';
 import { pacificDay } from './pacific.js';
+import { dropQueuedJobs } from '../handlers/production/order-flow.js';
 
 export const LOOKBACK_DAYS = 21;
 export const PAGE = 10;           // orders per page; 25 lines each keeps the cost ~800
@@ -105,7 +106,10 @@ async function upsertOrder(env, o) {
        ON CONFLICT (shop_line_gid) DO UPDATE SET
          title = excluded.title, variant_title = excluded.variant_title, cultivar = excluded.cultivar,
          floor_cultivar = excluded.floor_cultivar, form = excluded.form, bag = excluded.bag, qty = excluded.qty,
-         qty_open = excluded.qty_open, route = excluded.route, route_why = excluded.route_why, sort = excluded.sort`
+         qty_open = excluded.qty_open, sort = excluded.sort,
+         -- a route bag/tag picked by hand (0059) is never overwritten by the next poll
+         route = CASE WHEN shop_order_lines.route_set_by IS NULL THEN excluded.route ELSE shop_order_lines.route END,
+         route_why = CASE WHEN shop_order_lines.route_set_by IS NULL THEN excluded.route_why ELSE shop_order_lines.route_why END`
     ).bind(row.id, l.gid, l.title, l.variantTitle, l.cultivar, l.floorCultivar, l.form, l.bag, l.qty, l.qtyOpen,
       l.route, l.why, l.sort).run();
   }
@@ -139,10 +143,12 @@ async function reconcile(env, seen, gql) {
       if (n.cancelledAt) {
         await env.DB.prepare(`UPDATE shop_orders SET state = 'cancelled', cancelled_at = ?, shop_status = ? WHERE id = ?`)
           .bind(n.cancelledAt, n.displayFulfillmentStatus || null, r.id).run();
+        await dropQueuedJobs(env, r.id);
         closed++;
       } else if (n.displayFulfillmentStatus === 'FULFILLED') {
         await env.DB.prepare(`UPDATE shop_orders SET state = 'fulfilled', fulfilled_at = datetime('now'), shop_status = 'FULFILLED' WHERE id = ?`)
           .bind(r.id).run();
+        await dropQueuedJobs(env, r.id);
         closed++;
       }
     }

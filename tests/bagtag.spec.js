@@ -25,6 +25,7 @@ const QUEUE = {
   orders: [
     { id: 3, name: '#9003', placedAt: '2026-11-10T15:00:00Z', rush: true, rushWhy: 'UPS Next Day Air', state: 'queued', fifo: 1,
       carriedOver: false, changedInShopify: false, cellLines: 1, cultivars: ['Orange Fritter'],
+      cell: { stationId: 'table1', label: 'Cell 1', slot: 'NOW', why: 'cell is free', scale: true, baskets: 1, done: 0, started: false, nowJobId: 1 },
       lines: [{ id: 5, cultivar: 'Orange Fritter', form: 'tops', bag: 'qOz', qty: 2, qtyOpen: 2, route: 'cell', why: '2026 Sungrown Tops: trimmed at a cell' }] },
     { id: 1, name: '#9001', placedAt: '2026-11-09T22:00:00Z', rush: false, state: 'queued', fifo: 2,
       carriedOver: true, changedInShopify: false, cellLines: 0, cultivars: [],
@@ -35,6 +36,7 @@ const QUEUE = {
 async function isolate(context) {
   const blocked = [];
   const calls = [];
+  const posts = [];
   await context.route(/^https?:\/\/[^/]*\.workers\.dev\//, (route) => {
     blocked.push(route.request().url());
     return route.abort();
@@ -43,13 +45,15 @@ async function isolate(context) {
     const action = new URL(route.request().url()).searchParams.get('action');
     calls.push(action);
     if (action === 'orderQueue') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(QUEUE) });
+    if (action === 'orderAction') { posts.push(JSON.parse(route.request().postData() || '{}')); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' }); }
+    if (action === 'cellQueue') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverNow: NOW, cells: [] }) });
     if (action === 'orderSync') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...QUEUE, refresh: { ok: true, orders: 2, closed: 0 } }) });
     }
     blocked.push(route.request().url());
     return route.abort();
   });
-  return { blocked, calls };
+  return { blocked, calls, posts };
 }
 
 test.describe('Bag/tag queue', () => {
@@ -66,6 +70,12 @@ test.describe('Bag/tag queue', () => {
     await expect(cards.nth(1)).toContainText('Carried over');
     await expect(cards.nth(1).locator('.route.r-bagging')).toHaveText('Bagging');
     await expect(page.locator('#counts')).toContainText('2 fulfilled today');
+
+    // Slice 2: the order is on a cell already; the one click confirms it.
+    await expect(cards.nth(0).locator('.cell-line')).toContainText('Cell 1 · NOW');
+    await cards.nth(0).locator('.btn.primary').click();
+    await expect.poll(() => live.posts.length).toBe(1);
+    expect(live.posts[0]).toEqual({ orderId: 3, op: 'confirm' });
 
     await page.click('#refreshBtn');
     await expect.poll(() => live.calls.includes('orderSync')).toBe(true);
