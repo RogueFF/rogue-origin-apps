@@ -1,12 +1,13 @@
-// One-click print, browser path (order flow slice 4: lib/order-coa.js,
-// handlers/production/order-print.js). Made-up orders; COA names as in
-// raw/coas/2026/Post-Harvest/.
+// Slice 4 (Koa 2026-11-11: printing goes through Shopify): each queued order
+// carries its Shopify admin link, and a COA on-file check for the card
+// (lib/shopify.js adminOrderUrl, lib/order-coa.js). Made-up orders; COA names as
+// in raw/coas/2026/Post-Harvest/.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { parseCoaName, coaFor, coaFiles, resetCoaCache, safeCoaFile, COA_PREFIX } from '../src/lib/order-coa.js';
-import { getOrderPrint, coaPdf, adminOrderUrl } from '../src/handlers/production/order-print.js';
+import { parseCoaName, coaFor, coaFiles, resetCoaCache, COA_PREFIX } from '../src/lib/order-coa.js';
+import { adminOrderUrl } from '../src/lib/shopify.js';
 import { getOrderQueue } from '../src/handlers/production/order-queue.js';
 
 const FILES = [
@@ -22,9 +23,6 @@ test('COA names: cultivar from the file name; one per cultivar; Rainbow GMO is t
   assert.deepEqual(coaFor('Rainbow GMO', FILES), { file: 'Rainbow-GMO-PostHarvest-G1393-2026.pdf' });
   assert.deepEqual(coaFor('Lifter', FILES), { missing: true }, 'Lifter is not Sour Lifter');
   assert.deepEqual(coaFor('Purple Snowman', FILES), { missing: true });
-  assert.ok(safeCoaFile('Sour-Lifter-PostHarvest-G1395-2026.pdf'));
-  assert.ok(!safeCoaFile('../secrets.json'));
-  assert.ok(!safeCoaFile('2026/Sour-Lifter-PostHarvest-G1395-2026.pdf'));
 });
 
 test('Shopify admin link for Shopify\'s own packing slip', () => {
@@ -66,23 +64,18 @@ function env(extra = {}) {
   return { DB: { prepare: sql => ({ bind: (...p) => stmt(sql, p), ...stmt(sql, []) }) }, ...extra };
 }
 
-test('the order\'s papers: Shopify slip link, a COA per cultivar (tops and smalls), missing ones named', async () => {
+test('each queued order carries its Shopify link and a COA on-file check', async () => {
   resetCoaCache();
   const e = env({ SHOPIFY_SHOP: 'example-store', MEDIA_BUCKET: bucket(FILES) });
-  const r = await getOrderPrint({ orderId: '1' }, e);
-  const d = await r.json();
-  assert.equal(r.status, 200);
-  assert.equal(d.slipUrl, 'https://admin.shopify.com/store/example-store/orders/555');
-  assert.deepEqual(d.coas, [
-    { cultivar: 'Sour Lifter', file: 'Sour-Lifter-PostHarvest-G1395-2026.pdf' },
-    { cultivar: 'Rainbow GMO', file: 'Rainbow-GMO-PostHarvest-G1393-2026.pdf' },
-    { cultivar: 'Purple Snowman', missing: true },
-  ]);
-  assert.equal((await getOrderPrint({ orderId: '99' }, e)).status, 404);
-  assert.equal((await getOrderPrint({}, e)).status, 400);
-  // The queue card carries the same COA check.
   const q = await (await getOrderQueue({}, e, new Date('2026-11-10T18:00:00Z'))).json();
+  assert.equal(q.orders[0].shopifyUrl, 'https://admin.shopify.com/store/example-store/orders/555');
   assert.deepEqual(q.orders[0].coa, { checked: true, missing: ['Purple Snowman'], count: 2 });
+  // Nothing mirrored to R2 yet (on hold): no COA alarm at all; no store: no link.
+  resetCoaCache();
+  const bare = await (await getOrderQueue({}, env({ MEDIA_BUCKET: bucket([]) }), new Date('2026-11-10T18:00:00Z'))).json();
+  assert.equal(bare.orders[0].coa.checked, false);
+  assert.equal(bare.orders[0].shopifyUrl, null);
+  resetCoaCache();
 });
 
 test('the R2 listing is read once per 5 minutes, not per request', async () => {
@@ -94,15 +87,4 @@ test('the R2 listing is read once per 5 minutes, not per request', async () => {
   await coaFiles({ MEDIA_BUCKET: b }, 1000 + 6 * 60000);
   assert.equal(b.listCalls.length, 2);
   resetCoaCache();
-});
-
-test('coaPdf: only COA names, served inline', async () => {
-  const e = { MEDIA_BUCKET: bucket(FILES) };
-  const r = await coaPdf({ file: 'Sour-Lifter-PostHarvest-G1395-2026.pdf' }, e);
-  assert.equal(r.status, 200);
-  assert.equal(r.headers.get('Content-Type'), 'application/pdf');
-  assert.match(r.headers.get('Content-Disposition'), /^inline/);
-  assert.equal((await coaPdf({ file: '../../secrets.json' }, e)).status, 400);
-  assert.equal((await coaPdf({ file: 'Lifter-PostHarvest-G1-2026.pdf' }, e)).status, 404);
-  assert.equal((await coaPdf({ file: 'Sour-Lifter-PostHarvest-G1395-2026.pdf' }, {})).status, 503);
 });

@@ -26,6 +26,7 @@ const QUEUE = {
     { id: 3, name: '#9003', placedAt: '2026-11-10T15:00:00Z', rush: true, rushWhy: 'UPS Next Day Air', state: 'queued', fifo: 1,
       carriedOver: false, changedInShopify: false, cellLines: 1, cultivars: ['Orange Fritter'],
       cell: { stationId: 'table1', label: 'Cell 1', slot: 'NOW', why: 'cell is free', scale: true, baskets: 1, done: 0, started: false, nowJobId: 1 },
+      shopifyUrl: 'https://admin.shopify.com/store/example-store/orders/3',
       lines: [{ id: 5, cultivar: 'Orange Fritter', form: 'tops', bag: 'qOz', qty: 2, qtyOpen: 2, route: 'cell', why: '2026 Sungrown Tops: trimmed at a cell' }] },
     { id: 1, name: '#9001', placedAt: '2026-11-09T22:00:00Z', rush: false, state: 'queued', fifo: 2,
       carriedOver: true, changedInShopify: false, cellLines: 0, cultivars: [],
@@ -33,17 +34,12 @@ const QUEUE = {
   ],
 };
 
-const PRINT = {
-  order: { id: 3, name: '#9003', rush: true, confirmedAt: null },
-  slipUrl: 'https://admin.shopify.com/store/example-store/orders/3',
-  lines: [{ cultivar: 'Orange Fritter', form: 'tops', bag: 'qOz', qty: 2, route: 'cell' }],
-  coas: [{ cultivar: 'Orange Fritter', file: 'Orange-Fritter-PostHarvest-G1396-2026.pdf' }, { cultivar: 'Purple Snowman', missing: true }],
-};
-
 async function isolate(context) {
   const blocked = [];
   const calls = [];
   const posts = [];
+  // Shopify admin opens in a new tab on Confirm: answer it here, never the real site.
+  await context.route(/^https:\/\/admin\.shopify\.com\//, route => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>shopify stub</p>' }));
   await context.route(/^https?:\/\/[^/]*\.workers\.dev\//, (route) => {
     blocked.push(route.request().url());
     return route.abort();
@@ -53,8 +49,6 @@ async function isolate(context) {
     calls.push(action);
     if (action === 'orderQueue') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(QUEUE) });
     if (action === 'orderAction') { posts.push(JSON.parse(route.request().postData() || '{}')); return route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' }); }
-    if (action === 'orderPrint') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PRINT) });
-    if (action === 'coaPdf') return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF\n' });
     if (action === 'cellQueue') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverNow: NOW, cells: [] }) });
     if (action === 'orderSync') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...QUEUE, refresh: { ok: true, orders: 2, closed: 0 } }) });
@@ -80,10 +74,11 @@ test.describe('Bag/tag queue', () => {
     await expect(cards.nth(1).locator('.route.r-bagging')).toHaveText('Bagging');
     await expect(page.locator('#counts')).toContainText('2 fulfilled today');
 
-    // Slice 2: the order is on a cell already; the one click confirms it.
+    // Slice 2 + 4: the order is on a cell already; the one click confirms it and opens it in Shopify.
+    await expect(cards.nth(0).locator('.btn.primary')).toHaveText('Confirm + open in Shopify');
     await expect(cards.nth(0).locator('.cell-line')).toContainText('Cell 1 · NOW');
     const [popup] = await Promise.all([page.context().waitForEvent('page'), cards.nth(0).locator('.btn.primary').click()]);
-    await expect(popup).toHaveURL(/print\.html\?order=3&auto=1/);
+    await expect(popup).toHaveURL('https://admin.shopify.com/store/example-store/orders/3');
     await expect.poll(() => live.posts.length).toBe(1);
     await popup.close();
     expect(live.posts[0]).toEqual({ orderId: 3, op: 'confirm' });
@@ -95,24 +90,6 @@ test.describe('Bag/tag queue', () => {
     await expect(page.locator('h1')).toHaveText('Cola de empaque');
     await expect(cards.nth(0).locator('.route.r-cell')).toHaveText('Celda');
     await expect(cards.nth(1).locator('.why')).toHaveText('Smalls: se embolsa del inventario');
-    expect(live.blocked).toEqual([]);
-  });
-
-  test('the papers tab: COA prints, a missing COA is named, the slip opens in Shopify', async ({ page }) => {
-    const live = await isolate(page.context());
-    await page.addInitScript(() => { localStorage.setItem('ro-lang', 'en'); window.__prints = 0; });
-    await page.goto(`http://localhost:${PORT}/src/pages/print.html?order=3`);
-    await expect(page.locator('h1')).toHaveText('#9003 · Papers');
-    await expect(page.locator('.coa.missing')).toContainText('No COA for Purple Snowman');
-    await expect(page.locator('#slip a')).toHaveAttribute('href', PRINT.slipUrl);
-    await page.locator('.coa').first().locator('.btn').click();
-    // Headless Chromium has no PDF viewer, so it lands on the fallback link; a real Chrome prints.
-    await expect(page.locator('.coa').first().locator('.status')).toHaveText(/Sent to print|Open the COA to print it/, { timeout: 8000 });
-    expect(live.calls).toContain('coaPdf');
-    // Bag labels are off by default; ?labels=1 turns them on for this computer.
-    await expect(page.locator('#labelsCard')).toBeHidden();
-    await page.goto(`http://localhost:${PORT}/src/pages/print.html?order=3&labels=1`);
-    await expect(page.locator('#labels .btn')).toHaveText('Print 2 bag label(s)');
     expect(live.blocked).toEqual([]);
   });
 
