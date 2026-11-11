@@ -11,6 +11,17 @@ export function shortCultivar(c) {
 }
 
 /**
+ * The calm "Waiting for the next order" banner instead of the red NOT RECORDING
+ * "choose cultivar and bag size" one. Only when something really feeds this cell
+ * orders (autoAssign: our stand-in in practice mode, later Nathan's scheduler),
+ * nothing is assigned yet, and nothing is being trimmed. Live today nothing
+ * assigns, so the red prompt (Koa 2026-11-10: hard restrictions) stays.
+ */
+export function calmWait({ takesOrders, autoAssign, hasNow, grossG, onScaleG }) {
+  return !!takesOrders && autoAssign === true && !hasNow && !(grossG > onScaleG);
+}
+
+/**
  * Put the queue's NOW job on the screen's state, when the order may change.
  * A running or finished job is never changed under the trimmer (it closes with a
  * pickup first). A job this tablet just closed is ignored until the Worker has

@@ -96,8 +96,17 @@ export async function loadWaiting(env) {
   return out;
 }
 
+/**
+ * Our auto-assign is a STAND-IN (Koa 2026-11-11: "leave the scheduling for him
+ * for now"): scheduling is Nathan's (wiki operations/plans/2026-11-11-scheduler-contract.md).
+ * It only runs when ORDER_AUTO_ASSIGN is '1' (the practice/demo mode sets it);
+ * live it is OFF, and orders wait for the scheduler.
+ */
+export const autoAssignOn = env => !!env && String(env.ORDER_AUTO_ASSIGN || '') === '1';
+
 /** Fill every free NOW/NEXT slot. Safe to run twice at once: an order is claimed with a guarded UPDATE. */
 export async function fillSlots(env) {
+  if (!autoAssignOn(env)) return { assigned: 0, off: true };
   let cells, waiting;
   try { [cells, waiting] = await Promise.all([loadCells(env), loadWaiting(env)]); } catch (e) {
     if (notReady(e)) return { assigned: 0, notReady: true };
@@ -230,8 +239,9 @@ export async function getCellQueue(params, env) {
       atSpot: [...atSpot.values()],
     };
   });
-  if (want && !out.length) return successResponse({ serverNow: Date.now(), cell: null, cells: [] });
-  return successResponse({ serverNow: Date.now(), cell: want ? out[0] : undefined, cells: out });
+  const autoAssign = autoAssignOn(env);   // something feeds the cells orders (the cell screen's calm wait)
+  if (want && !out.length) return successResponse({ serverNow: Date.now(), autoAssign, cell: null, cells: [] });
+  return successResponse({ serverNow: Date.now(), autoAssign, cell: want ? out[0] : undefined, cells: out });
 }
 
 export async function jobDone(body, env) {

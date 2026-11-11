@@ -76,6 +76,17 @@ binding = "DB"
 database_name = "rogue-origin-db"
 database_id = "31397aa4-aa8c-47c4-965d-d51d36be8b13"
 
+# Practice / demo database (lib/demo-env.js; Koa 2026-11-11). OFF until created:
+#   1. cd workers && npx wrangler d1 create rogue-origin-demo     (prints its database_id)
+#   2. uncomment the block below with that id
+#   3. npx wrangler d1 execute rogue-origin-demo --remote --file=migrations-demo/demo-schema.sql
+#   4. npm run deploy
+# Without it, /api/demo/production answers 503 and live is unaffected.
+# [[d1_databases]]
+# binding = "DEMO_DB"
+# database_name = "rogue-origin-demo"
+# database_id = "PASTE-THE-ID-FROM-STEP-1"
+
 # R2 Storage (SOP media)
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"

@@ -24,6 +24,8 @@ import { getCellEod, eodWindow, eodWeigh, eodUndo, cellSack } from './cell-eod.j
 import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
 import { getOrderQueue, orderSync } from './order-queue.js';
 import { getCellQueue, orderAction, jobDone } from './order-flow.js';
+import { DEMO_ACTIONS } from '../../lib/demo-env.js';
+import { demoLoad, demoTick, demoControl, demoState, demoFulfill } from './demo.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -50,6 +52,13 @@ export async function handleProductionD1(request, env, ctx) {
 
     if (!action) {
       return errorResponse('Missing action parameter', 'VALIDATION_ERROR', 400);
+    }
+    // Practice mode (lib/demo-env.js): only the floor actions, never anything else.
+    if (env.DEMO && !DEMO_ACTIONS.has(action)) {
+      return errorResponse(`Not available in demo mode: ${action}`, 'DEMO_BLOCKED', 403);
+    }
+    if (!env.DEMO && String(action).startsWith('demo')) {
+      return errorResponse('Demo actions only run in demo mode', 'NOT_FOUND', 404);
     }
 
     switch (action) {
@@ -127,6 +136,16 @@ export async function handleProductionD1(request, env, ctx) {
         return await orderAction(body, env);
       case 'jobDone':
         return await jobDone(body, env);
+      case 'demoLoad':
+        return await demoLoad(body, env);
+      case 'demoTick':
+        return await demoTick(body, env);
+      case 'demoControl':
+        return await demoControl(body, env);
+      case 'demoState':
+        return await demoState(params, env);
+      case 'demoFulfill':
+        return await demoFulfill(body, env);
       case 'setBagMode':
         return await setBagMode(body, env);
       case 'inventoryWebhook':

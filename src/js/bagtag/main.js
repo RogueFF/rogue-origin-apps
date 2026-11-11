@@ -17,6 +17,7 @@
  *   bagtag.html?api=http://localhost:8787/api/production local testing only
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
+import { isDemo, demoApi, withDemo, showDemoBanner } from '../shared/demo.mjs';
 import { ageText, lineText, splitLists, routeCounts, syncAgeMin, whyText, cellLine } from './view.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -35,7 +36,8 @@ registerLabels({
     rCell: 'Cell', rBagging: 'Bagging', rPack: 'Pack', rWholesale: 'Wholesale', rAsk: 'Ask',
     countLine: '{n} to start · {r} rush', doneToday: '{n} fulfilled today',
     atCell: '{cell} · {slot}', slotNOW: 'NOW', slotNEXT: 'NEXT', baskets: '{d} of {b} baskets done',
-    waitingCell: 'Waiting for a cell · {cell} frees a slot in ~{m} min', noCell: 'Waiting for a cell',
+    waitingCell: 'Waiting for a cell · {cell} frees a slot in ~{m} min', noCell: 'Waiting for a cell', noScheduler: 'Waiting for the scheduler to give it a cell',
+    demoInfo: 'PRACTICE: mock orders move on their own. Confirm opens a stand-in for Shopify.', demoSync: 'Practice data: not from Shopify',
     bagOnly: 'No cell work: pull from the pools', confirm: 'Confirm + open in Shopify', confirmOnly: 'Confirm', confirmed: 'Confirmed', openShopify: 'Open in Shopify', ship: 'Ship in Shopify', noCoa: 'No COA on file: {c}',
     slipHint: 'In Shopify: Print → Print packing slips.', shipHint: 'In Shopify: Create shipping label → Buy shipping label → Print label. It drops off this list once Shopify says fulfilled.',
     move: 'Move to…', hold: 'Hold', release: 'Release', held: 'ON HOLD',
@@ -57,7 +59,8 @@ registerLabels({
     rCell: 'Celda', rBagging: 'Empaque', rPack: 'Empacar', rWholesale: 'Mayoreo', rAsk: 'Preguntar',
     countLine: '{n} por empezar · {r} urgentes', doneToday: '{n} completadas hoy',
     atCell: '{cell} · {slot}', slotNOW: 'AHORA', slotNEXT: 'SIGUIENTE', baskets: '{d} de {b} canastas listas',
-    waitingCell: 'Esperando celda · {cell} libera un lugar en ~{m} min', noCell: 'Esperando celda',
+    waitingCell: 'Esperando celda · {cell} libera un lugar en ~{m} min', noCell: 'Esperando celda', noScheduler: 'Esperando que el programador le dé una celda',
+    demoInfo: 'PRÁCTICA: órdenes de prueba que avanzan solas. Confirmar abre una página que hace de Shopify.', demoSync: 'Datos de práctica: no vienen de Shopify',
     bagOnly: 'Sin trabajo de celda: sacar del inventario', confirm: 'Confirmar + abrir en Shopify', confirmOnly: 'Confirmar', confirmed: 'Confirmada', openShopify: 'Abrir en Shopify', ship: 'Enviar en Shopify', noCoa: 'Sin COA: {c}',
     slipHint: 'En Shopify: Print → Print packing slips.', shipHint: 'En Shopify: Create shipping label → Buy shipping label → Print label. Sale de esta lista cuando Shopify la marca como enviada.',
     move: 'Mover a…', hold: 'Pausar', release: 'Soltar', held: 'EN PAUSA',
@@ -77,7 +80,8 @@ const WHY_KEY = {
 
 const params = new URLSearchParams(location.search);
 const apiParam = params.get('api') || '';
-const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
+// Practice mode (?demo=1): the same page on the practice database (shared/demo.mjs).
+const API = demoApi(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API);
 
 const $ = id => document.getElementById(id);
 const el = {
@@ -89,6 +93,9 @@ if (API !== PROD_API) {
   el.boardLink.href = `cells.html?api=${encodeURIComponent(API)}`;
   el.pullLink.href = `pull.html?api=${encodeURIComponent(API)}`;
 }
+el.boardLink.href = withDemo(el.boardLink.getAttribute('href'));
+el.pullLink.href = withDemo(el.pullLink.getAttribute('href'));
+showDemoBanner();
 
 let last = null;
 let cellsNow = [];   // cellQueue: every order-taking cell's NOW / NEXT / pickup spot
@@ -130,7 +137,9 @@ const act = (orderId, op, extra = {}) => post('orderAction', { orderId, op, ...e
 let shopifyOpenedAt = 0;
 function openShopify(o) {
   if (!o.shopifyUrl) return false;
-  window.open(o.shopifyUrl, `ro-shopify-${o.id}`);
+  // Practice mode: a stand-in page plays Shopify (print the slip, buy the label).
+  const url = o.shopifyUrl === 'demo-stub' ? withDemo(`shopify-stub.html?order=${o.id}`) : o.shopifyUrl;
+  window.open(url, `ro-shopify-${o.id}`);
   shopifyOpenedAt = Date.now();
   return true;
 }
@@ -143,7 +152,8 @@ function cellInfo(o) {
   const c = cellLine(o);
   const p = node('p', `cell-line k-${c.kind}`);
   if (c.kind === 'bagOnly') p.textContent = t('bagOnly');
-  else if (c.kind === 'none') p.textContent = t('noCell');
+  // Live, scheduling is Nathan's: an order with cell work waits for his scheduler, not ours.
+  else if (c.kind === 'none') p.textContent = last && last.autoAssign === false ? t('noScheduler') : t('noCell');
   else if (c.kind === 'waiting') p.textContent = tf('waitingCell', { cell: c.label, m: c.inMin ?? '?' });
   else {
     p.append(node('b', null, tf('atCell', { cell: c.label, slot: c.slot ? t(`slot${c.slot}`) : '' })));
@@ -160,7 +170,9 @@ function actions(o, list) {
       row.append(button('ghost', t('release'), () => act(o.id, 'release')));
       return row;
     }
-    row.append(button('primary', o.shopifyUrl ? t('confirm') : t('confirmOnly'), () => confirmAndOpen(o)));
+    // Already confirmed (it's waiting for a cell): the one click is done; Shopify stays one tap away.
+    if (o.confirmedAt) { if (o.shopifyUrl) row.append(button('ghost', t('openShopify'), () => openShopify(o))); }
+    else row.append(button('primary', o.shopifyUrl ? t('confirm') : t('confirmOnly'), () => confirmAndOpen(o)));
     if (o.cell && !o.cell.waiting && !o.cell.started && cellsNow.length > 1) row.append(moveSelect(o));
     if (!(o.cell && o.cell.started)) row.append(button('ghost', t('hold'), () => act(o.id, 'hold')));
   } else if (list === 'inCells') {
@@ -248,10 +260,10 @@ function render() {
   const now = Date.now() + skew;
   const { toStart, inCells, ready } = splitLists(last.orders);
   el.notice.hidden = true;
-  el.info.textContent = last.configured ? t('info') : t('notConfigured');
-  el.info.className = `notice ${last.configured ? 'ok' : 'warn'}`;
+  el.info.textContent = last.demo ? t('demoInfo') : last.configured ? t('info') : t('notConfigured');
+  el.info.className = `notice ${last.configured || last.demo ? 'ok' : 'warn'}`;
   const age = syncAgeMin(last.sync, now);
-  el.sync.textContent = last.sync && last.sync.lastError
+  el.sync.textContent = last.demo ? t('demoSync') : last.sync && last.sync.lastError
     ? tf('syncErr', { e: last.sync.lastError })
     : age === null ? t('neverSynced') : age < 1 ? t('syncedNow') : tf('synced', { m: age });
   el.sync.classList.toggle('bad', !!(last.sync && last.sync.lastError));

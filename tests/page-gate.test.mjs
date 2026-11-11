@@ -37,6 +37,8 @@ const OPEN = [
   'cells.html',               // Cells board: every cell's screen + ready-for-pickup, for bagging and the office
   'rawout.html',              // Raw hand-out: the water spider types raw out / back per cell at the WIP bench
   'bagtag.html',              // Bag/tag order queue: order #, cultivar, bag size only (no buyer fields); open on purpose (Koa 2026-11-10: "Keep it open")
+  'demo.html',                // Practice floor controls: mock orders on the separate practice database only
+  'shopify-stub.html',        // Practice mode's stand-in for Shopify admin (mock orders only)
   'pull.html',                // Pull list: the water spider's raw to bring per cell (cultivar, grams), no buyer data
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)

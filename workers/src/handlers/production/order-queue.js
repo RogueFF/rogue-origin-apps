@@ -13,7 +13,7 @@ import { successResponse, errorResponse } from '../../lib/response.js';
 import { syncShopOrders } from '../../lib/order-sync.js';
 import { shopifyConfigured, adminOrderUrl } from '../../lib/shopify.js';
 import { pacificDay } from '../../lib/pacific.js';
-import { fillSlots, loadCells, loadWaiting } from './order-flow.js';
+import { fillSlots, loadCells, loadWaiting, autoAssignOn } from './order-flow.js';
 import { planAssignments } from '../../lib/order-assign.js';
 import { coaFiles, coaFor } from '../../lib/order-coa.js';
 
@@ -86,7 +86,7 @@ export async function getOrderQueue(params, env, now = new Date()) {
       const firsts = [...new Set(c.rows.map(r => r.order_id))];
       firsts.forEach((id, i) => slotBy.set(id, i === 0 ? 'NOW' : 'NEXT'));
     }
-    const waiting = await loadWaiting(env);
+    const waiting = autoAssignOn(env) ? await loadWaiting(env) : [];
     if (waiting.length) {
       const plan = planAssignments({ cells: cells.filter(c => c.takesOrders), orders: waiting });
       waitBy = new Map(plan.waiting.map(w => [w.orderId, w]));
@@ -136,12 +136,15 @@ export async function getOrderQueue(params, env, now = new Date()) {
       confirmedAt: o.confirmed_at || null, readyAt: o.ready_at || null, collectedAt: o.collected_at || null,
       cell: cellOf(o),
       coa: coaOf(ls),
-      shopifyUrl: adminOrderUrl(env, o.shop_gid),
+      // Demo: a stub page stands in for Shopify admin (the page maps 'demo-stub' to it).
+      shopifyUrl: env.DEMO ? 'demo-stub' : adminOrderUrl(env, o.shop_gid),
     };
   }).filter(o => o.lines.length);
   return successResponse({
     serverNow: now.getTime(),
     configured: shopifyConfigured(env),
+    autoAssign: autoAssignOn(env),   // our stand-in scheduler (off live: scheduling is Nathan's)
+    demo: !!env.DEMO,
     sync: sync ? { lastTryAt: sync.last_try_at, lastOkAt: sync.last_ok_at, lastError: sync.last_error, count: sync.last_count } : null,
     fulfilledToday: (fulfilledToday && fulfilledToday.n) || 0,
     orders: list,
