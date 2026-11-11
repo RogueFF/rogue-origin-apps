@@ -50,7 +50,9 @@ test('break-even by cultivar: Sour Lifter 6.4/6.8, Lifter 8.8/9.1, others on Sou
 test('verdict tiers: both prices, the higher only, under, and no weigh; any gap fails the day', () => {
   const y = (tps) => verdict(cellDay({ yield: { ...cellDay().yield, topsPerSack: tps } }));
   assert.deepEqual([y(6.86).yield, y(6.86).pass], ['both', true]);
-  assert.deepEqual([y(6.5).yield, y(6.5).pass], ['at', false], 'CLOSE is not a pass');
+  assert.deepEqual([y(6.5).yield, y(6.5).pass], ['at', true], 'CLOSE with clean recording passes the day');
+  const other = verdict(cellDay({ cultivar: '2026 - Strawberry Doughnuts / Sungrown', sacks: { list: [], count: 0, lb: 0 }, jobs: [] }));
+  assert.deepEqual([other.yield, other.pass], ['info', false], 'NO BASELINE is never judged a pass');
   assert.deepEqual([y(6.1).yield, y(6.1).pass], ['under', false]);
   assert.deepEqual([y(null).yield, y(null).pass], ['none', false]);
   const gap = verdict(cellDay({ gaps: { offline: { count: 1, minutes: 6, episodes: [] }, notRecording: { count: 0, minutes: 0, episodes: [] } } }));
@@ -62,15 +64,18 @@ test('the card: big numbers, hourly bars with their own caps, the 5-day strip, a
   const m = cellModel({ date: '2026-11-12', day: cellDay(), strip, generatedAt: GEN });
   assert.equal(m.kind, 'cell');
   assert.equal(m.eyebrow, 'Cell 1 · Phase 1 · Day 1 of 5');
-  assert.equal(m.pill, 'EXIT TEST: PASS');
+  assert.equal(m.pill, 'DAY: ✓ PASS');
   assert.deepEqual(m.tiles.map((t) => t.value), ['4.02', '6.86', '0']);
-  assert.equal(m.tiles[1].chips[0].kind, 'good');
-  assert.deepEqual(m.chart.cols.slice(0, 3).map((c) => [c.label, c.cap]), [['7', '0.41'], ['8', '0.55'], ['9', '0.48']]);
+  assert.deepEqual(m.tiles[1].chips[0], { kind: 'good', text: '✓ PASS' });
+  assert.deepEqual(m.tiles[2].chips[0], { kind: 'good', text: '✓ PASS' });
+  assert.deepEqual(m.chart.cols.slice(0, 3).map((c) => [c.label, c.cap]), [['7', '0.41'], ['8', '0.55'], ['9', '0.58']], 'tops per hour: 9-10 is 0.83 h');
+  assert.deepEqual([m.chart.cols[0].target, m.chart.legend, m.chart.cols[2].rate], [0.77, 'line 0.77', '0.83 h']);
   assert.equal(m.chart.cols[3].rate, 'typed');
   assert.deepEqual(m.minis.map((x) => x.value), ['1:35', '1', '0.51', '64']);
   assert.deepEqual(m.strip.map((s) => s.value), ['6.9', '—', '—', '—', '—', '6.9']);
-  assert.deepEqual([m.strip[5].label, m.strip[5].sub, m.strip[5].kind], ['So far', '1 day', 'good']);
-  assert.deepEqual(m.flags, [{ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above break-even' }]);
+  assert.deepEqual([m.strip[0].sub, m.strip[0].kind], ['BE✓ rec✓', 'good']);
+  assert.deepEqual([m.strip[5].label, m.strip[5].sub], ['So far', '1/5 passed']);
+  assert.deepEqual(m.flags, [{ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above both break-evens (6.4 / 6.8)' }]);
   assert.equal(phaseSoFar(strip.map((s) => s.day)).topsPerSack, Math.round((4.02 * 35 / 20.5) * 100) / 100);
 });
 

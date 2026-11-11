@@ -177,3 +177,21 @@ test('cellDay: carry-in is the shift day before only; a skipped weigh there make
   assert.deepEqual([tue.eod.carryInG, tue.eod.carryFrom], [900, '2026-11-16']);
   assert.ok(tue.yield.topsPerSack > 0, 'Tue ran on Mon\'s leftover alone');
 });
+
+test('cellDay raw=1: the day\'s scale events, marks, screen log, EOD rows and episodes; not without it', async () => {
+  const { raw, env } = d1();
+  raw.exec(readFileSync(new URL('../migrations/0054-cell-screen-state.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0062-cell-day.sql', import.meta.url), 'utf8'));   // safe twice
+  raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, 0.0123), ('table1', ?, 0.5)`).run(utc(9, 0), '2026-11-11 20:00:00');
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'tare', 0.168)`).run(utc(9, 1));
+  raw.prepare(`INSERT INTO cell_screen_log (station_id, ts, phase) VALUES ('table1', ?, 'running')`).run(utc(9, 2));
+  raw.prepare(`INSERT INTO cell_eod (station_id, production_date, kind, ts, ended_at) VALUES ('table1', ?, 'window', ?, ?)`).run(DAY, utc(15, 50), utc(15, 58));
+  const d = await (await getCellDay({ stationId: 'table1', date: DAY, raw: '1' }, env, ms(17, 0))).json();
+  assert.deepEqual(d.raw.scaleEvents, [{ ts: utc(9, 0), g: 12.3 }], 'only that Pacific day');
+  assert.deepEqual([d.raw.scaleMarks.length, d.raw.scaleMarks[0].kind], [1, 'tare']);
+  assert.deepEqual(d.raw.screenLog.map(r => r.phase), ['running']);
+  assert.deepEqual(d.raw.eod.map(r => r.kind), ['window']);
+  assert.ok(Array.isArray(d.raw.episodes));
+  const plain = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(17, 0))).json();
+  assert.equal(plain.raw, undefined);
+});

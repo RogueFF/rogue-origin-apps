@@ -3,6 +3,10 @@
  * no paper, no photo). Read only:
  *
  *   GET ?action=cellDay&stationId=table1&date=YYYY-MM-DD   (date defaults to Pacific today)
+ *       &raw=1 adds the day's raw record, read-only, for re-working it later:
+ *       scale_events (ts, g), every scale_mark, the screen's change log
+ *       (cell_screen_log), the End of day rows (windows and weighs, undone ones
+ *       too) and the episodes as stored. Times are UTC 'YYYY-MM-DD HH:MM:SS'.
  *
  * Everything comes from what the floor already records: the scale (cell-auto),
  * the hourly log (a typed value wins over the scale, as on the hourly page), the
@@ -143,6 +147,8 @@ export async function getCellDay(params, env, now = Date.now()) {
       ? { pct: battPct(r.batt_mv), mv: r.batt_mv, at: msOf(r.batt_at || r.updated_at), from: 'latest' }
       : null;
 
+  const rawRecord = params.raw === '1' || params.raw === 'true' ? await rawDay(env, id, date, fromSql, toSql, episodes) : undefined;
+
   return successResponse({
     stationId: id, label: station.label, date, serverNow: now,
     cultivar: mainCultivar(sackList, jobs),
@@ -158,6 +164,24 @@ export async function getCellDay(params, env, now = Date.now()) {
     eod: { rawG: eodRawG, toteG: eodToteG, carryInG, carryFrom: c.g != null ? prev : null },
     yield: yieldOut,
     battery,
+    ...(rawRecord ? { raw: rawRecord } : {}),
   });
+}
+
+/** The day's raw record for one station (raw=1). */
+async function rawDay(env, id, date, fromSql, toSql, episodes) {
+  const [events, marks, screen, eod] = await Promise.all([
+    rows(env.DB.prepare(`SELECT ts, weight_kg FROM scale_events WHERE station_id = ? AND ts >= ? AND ts < ? ORDER BY ts, id`).bind(id, fromSql, toSql)),
+    rows(env.DB.prepare(`SELECT * FROM scale_marks WHERE station_id = ? AND ts >= ? AND ts < ? ORDER BY ts, id`).bind(id, fromSql, toSql)),
+    rows(env.DB.prepare(`SELECT ts, phase, cultivar, bag, paused, pause_note, job_id FROM cell_screen_log WHERE station_id = ? AND ts >= ? AND ts < ? ORDER BY ts, id`).bind(id, fromSql, toSql)),
+    rows(env.DB.prepare(`SELECT id, kind, grams, batt_mv, ts, ended_at, undone_at FROM cell_eod WHERE station_id = ? AND production_date = ? ORDER BY ts, id`).bind(id, date)),
+  ]);
+  return {
+    scaleEvents: events.map(e => ({ ts: e.ts, g: Math.round(e.weight_kg * 100000) / 100 })),
+    scaleMarks: marks,
+    screenLog: screen,
+    eod,
+    episodes,
+  };
 }
 

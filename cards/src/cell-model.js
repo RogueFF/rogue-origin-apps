@@ -20,15 +20,19 @@ export const PHASE_DAYS = 5;
  * Other cultivars use Sour Lifter's until they are measured.
  */
 export const BREAK_EVEN = {
-  'Sour Lifter': { at: 6.4, both: 6.8 },
-  Lifter: { at: 8.8, both: 9.1 },
+  'Sour Lifter': { at: 6.4, both: 6.8, lineRate: 0.77 },
+  Lifter: { at: 8.8, both: 9.1, lineRate: 0.86 },
 };
+/** Pooled cell rate, tops per direct person-hour (wiki cell vs line table, 2026-11-10). */
+export const CELLS_RATE = 0.52;
+/** Status words, always with an icon (never colour alone). */
+const WORD = { pass: '✓ PASS', close: '≈ CLOSE', miss: '✕ MISS', pending: '… PENDING', none: 'NO BASELINE' };
 
 export function breakEvenFor(cultivar) {
   const name = String(cultivar || '');
   if (/sour lifter/i.test(name)) return { key: 'Sour Lifter', ...BREAK_EVEN['Sour Lifter'], measured: true };
   if (/lifter/i.test(name)) return { key: 'Lifter', ...BREAK_EVEN.Lifter, measured: true };
-  return { key: null, at: null, both: null, measured: false };   // no break-even yet: shown, not judged
+  return { key: null, at: null, both: null, lineRate: null, measured: false };   // NO BASELINE: shown, not judged
 }
 
 /** Weekday dates (Mon–Fri) from `start`, `n` of them. */
@@ -72,8 +76,9 @@ const gapsOf = (day) => ({
  * The day against the exit test, in the Phase 1 scorecard's terms (the
  * hourly-data session's reference card): PASS ('both') clears both break-evens,
  * CLOSE ('at') the higher price only, MISS ('under') neither; 'none' = no
- * verified figure yet; 'info' = no break-even for this cultivar. Only PASS with
- * no recording gaps passes the day.
+ * verified figure yet; 'info' = no break-even for this cultivar (NO BASELINE).
+ * A day passes when tops/sack is PASS or CLOSE and Recording is PASS (0 gap
+ * minutes, 0 episodes).
  */
 export function verdict(day) {
   const be = breakEvenFor(dayCultivar(day));
@@ -81,20 +86,21 @@ export function verdict(day) {
   const y = tps === null ? 'none' : !be.measured ? 'info' : tps >= be.both ? 'both' : tps >= be.at ? 'at' : 'under';
   const g = gapsOf(day);
   const clean = g.offline === 0 && g.notRec === 0 && g.minutes === 0;
-  return { be, tps, yield: y, clean, gaps: g, pass: clean && y === 'both' };
+  return { be, tps, yield: y, clean, gaps: g, pass: clean && (y === 'both' || y === 'at') };
 }
 
 const mmss = (s) => (s === null || s === undefined ? DASH : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 const lb2 = (v) => (v === null || v === undefined ? DASH : fmt2(v));
 
 function yieldChip(v) {
-  if (v.yield === 'none') return { kind: 'warn', text: 'no EOD weigh' };
-  if (v.yield === 'info') return { kind: 'neutral', text: 'no break-even' };
-  const be = `${fmt1(v.be.at)}/${fmt1(v.be.both)}`;
-  if (v.yield === 'both') return { kind: 'good', text: `PASS ${be}` };
-  if (v.yield === 'at') return { kind: 'warn', text: `CLOSE ${be}` };
-  return { kind: 'bad', text: `MISS ${be}` };
+  if (v.yield === 'none') return { kind: 'neutral', text: `${WORD.pending}` };
+  if (v.yield === 'info') return { kind: 'neutral', text: WORD.none };
+  if (v.yield === 'both') return { kind: 'good', text: WORD.pass };
+  if (v.yield === 'at') return { kind: 'warn', text: WORD.close };
+  return { kind: 'bad', text: WORD.miss };
 }
+const recChip = (v) => (v.clean ? { kind: 'good', text: WORD.pass } : { kind: 'bad', text: WORD.miss });
+const mark = (y) => ({ both: '✓', at: '≈', under: '✕', none: '…', info: '–' }[y]);
 
 function stripItem(date, day) {
   const label = `${shortWeekday(date)} ${monthDay(date).replace(/^\w+ /, '')}`;
@@ -103,8 +109,9 @@ function stripItem(date, day) {
   return {
     label,
     value: v.tps === null ? DASH : fmt1(v.tps),
-    sub: `${v.gaps.minutes} gap min`,
-    kind: v.pass ? 'good' : v.clean && ['at', 'none', 'info'].includes(v.yield) ? 'warn' : 'bad',
+    // Two marks: tops/sack vs break-even, and Recording.
+    sub: `BE${mark(v.yield)} rec${v.clean ? '✓' : '✕'}`,
+    kind: v.pass ? 'good' : v.clean && ['none', 'info'].includes(v.yield) ? 'neutral' : 'bad',
   };
 }
 
@@ -131,7 +138,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const final = (day.tops.hourly || []).every((h) => h.final);
   const carryUnknown = day.yield?.carryKnown === false;
   const pill = v.yield === 'none' ? (carryUnknown ? 'NOT YET: no carry-in weigh' : 'NOT YET: weigh the leftovers')
-    : v.pass ? 'EXIT TEST: PASS' : v.clean && v.yield === 'at' ? 'EXIT TEST: CLOSE' : 'EXIT TEST: MISS';
+    : v.yield === 'info' ? `DAY: ${WORD.none}` : v.pass ? `DAY: ${v.yield === 'both' ? WORD.pass : WORD.close}` : `DAY: ${WORD.miss}`;
   const ch = day.changeovers || {};
   const so = phaseSoFar(strip.map((s) => s.day));
   const flags = [];
@@ -143,7 +150,8 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   if (carryUnknown) flags.push({ kind: 'warn', tag: 'Raw', text: 'The shift day before had raw but no End of day weigh, so today is not verified' });
   if (day.quality?.stop) flags.push({ kind: 'bad', tag: 'Stop', text: `${day.quality.stop} batch(es) scored 1 on mold or insects` });
   if (!v.be.measured) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: tops/sack is shown, not judged` });
-  if (v.pass && !flags.some((f) => f.kind === 'bad')) flags.unshift({ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above break-even' });
+  if (v.pass && !flags.some((f) => f.kind === 'bad')) flags.unshift({ kind: 'good', tag: 'Good', text: `No recording gaps, and verified tops/sack ${v.yield === 'both' ? 'above both' : 'between the'} break-evens (${fmt1(v.be.at)} / ${fmt1(v.be.both)})` });
+  const passed = strip.filter((x) => x.day && verdict(x.day).pass).length;
 
   return {
     kind: 'cell',
@@ -162,30 +170,34 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
         day.yield?.accountedPct != null ? { kind: 'neutral', text: `acct ${day.yield.accountedPct}%` } : null,
       ].filter(Boolean) },
       { label: 'Recording gaps', value: String(v.gaps.minutes), unit: 'min', chips: [
-        { kind: v.gaps.offline ? 'bad' : 'good', text: `off ${v.gaps.offline}` },
-        { kind: v.gaps.notRec ? 'bad' : 'good', text: `n/r ${v.gaps.notRec}` },
+        recChip(v),
+        { kind: v.gaps.notRec ? 'bad' : 'neutral', text: `${v.gaps.notRec + v.gaps.offline} ep` },
       ] },
     ],
+    // Bars are tops per hour for one person (tops ÷ the slot's hours); the dashed
+    // tick is the line's rate for this cultivar.
     chart: {
-      title: 'Tops by hour',
-      legend: '',
-      sub: `${fmt1(day.tops.workedH)} h worked`,
-      cols: (day.tops.hourly || []).map((h) => ({
-        kind: 'done', label: slotLabel(h.slot), rate: h.source === 'typed' ? 'typed' : '', lbs: h.lb, cap: fmt2(h.lb), target: 0,
-      })),
+      title: 'Tops per hour',
+      legend: v.be.lineRate ? `line ${fmt2(v.be.lineRate)}` : '',
+      sub: `cells ${fmt2(CELLS_RATE)}`,
+      cols: (day.tops.hourly || []).map((h) => {
+        const rate = h.hours > 0 ? h.lb / h.hours : h.lb;
+        const tag = !h.final ? 'so far' : h.flag === 'scaleTared' ? 'tared!' : h.source === 'typed' ? 'typed' : h.hours < 1 ? `${h.hours} h` : '';
+        return { kind: 'done', label: slotLabel(h.slot), rate: tag, lbs: rate, cap: fmt2(rate), target: v.be.lineRate || 0 };
+      }),
     },
     minis: [
       { label: 'Changeover', value: mmss(ch.medianS), unit: 'median', sub: ch.count ? `max ${mmss(ch.maxS)} · ${ch.count}` : 'none timed' },
       { label: 'Quality redos', value: String(day.quality?.redo ?? 0), unit: '', sub: `${day.quality?.batches ?? 0} batches` },
-      { label: 'Per person-hr', value: lb2(day.tops.perPersonH), unit: 'lb', sub: day.tops.personH ? `${fmt2(day.tops.personH)} person-hr` : DASH },
+      { label: 'Per person-hr', value: lb2(day.tops.perPersonH), unit: 'lb', sub: v.be.lineRate ? `vs line ${fmt2(v.be.lineRate)}` : (day.tops.personH ? `${fmt1(day.tops.personH)} person-h` : DASH) },
       { label: 'EOD battery', value: day.battery ? String(day.battery.pct) : DASH, unit: day.battery ? '%' : '', sub: day.battery?.at ? `at ${clock12(day.battery.at)}` : DASH },
     ],
     // The 5 days, then the phase so far (tops over raw used, every weighed day).
     strip: strip.length ? [...strip.map((s) => stripItem(s.date, s.day)), {
       label: 'So far',
       value: so.topsPerSack === null ? DASH : fmt1(so.topsPerSack),
-      sub: `${so.days} day${so.days === 1 ? '' : 's'}`,
-      kind: so.topsPerSack === null || !v.be.measured ? 'neutral' : so.topsPerSack >= v.be.both ? 'good' : so.topsPerSack >= v.be.at ? 'warn' : 'bad',
+      sub: `${passed}/${PHASE_DAYS} passed`,
+      kind: passed >= PHASE_DAYS ? 'good' : 'neutral',
     }] : [],
     // One line: the strip takes the room a second would need. Gaps first.
     flags: flags.slice(0, 1),
