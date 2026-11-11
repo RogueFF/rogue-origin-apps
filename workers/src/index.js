@@ -140,6 +140,17 @@ export default {
       } catch (e) {
         console.error(`[Cron] Battery watch failed: ${e.message}`);
       }
+      // Shopify open orders -> the bag/tag queue (migration 0058, design doc §2e).
+      // A no-op until the SHOPIFY_* secrets are set; 5 am to 7 pm Pacific only.
+      try {
+        const { syncShopOrders, inPollHours } = await import('./lib/order-sync.js');
+        if (inPollHours()) {
+          const r = await syncShopOrders(env);
+          if (r.error) console.error(`[Cron] Order sync failed: ${r.error}`);
+        }
+      } catch (e) {
+        console.error(`[Cron] Order sync failed: ${e.message}`);
+      }
       // ...and when a cell is trimming with no job on its screen (migration 0056).
       try {
         const { runUntrackedWatch } = await import('./lib/scale-watch.js');

@@ -51,6 +51,16 @@ name = "rogue-origin-api"
 #                                  Twilio signs the URL it was configured with; leave
 #                                  unset on *.workers.dev or every signature fails.)
 #                                  Runbook: docs/harvest-hourly-sms.md
+# - SHOPIFY_SHOP                 (OPTIONAL — order queue, lib/shopify.js: the store subdomain,
+#                                  without .myshopify.com. Unset = the queue stays empty.)
+# - SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET  (the Dev Dashboard app's credentials; the
+#                                  Worker trades them for a 24 h read-only token, kept in
+#                                  memory only. Scopes: read_orders, read_products.)
+# - SHOPIFY_ADMIN_TOKEN          (OPTIONAL instead of the two above: an existing legacy
+#                                  custom-app token, shpat_...)
+# - ORDER_QUEUE_GO_LIVE          (OPTIONAL var, YYYY-MM-DD Pacific: orders created on/after it
+#                                  join the queue even without Nathan's m2o-line /
+#                                  wholesale-line tag. Unset = tagged orders only.)
 #
 # The hourly bot no longer calls a model: v2 queues chat texts for the Capataz
 # relay, so there is no HARVEST_HOURLY_MODEL and ANTHROPIC_API_KEY above is for

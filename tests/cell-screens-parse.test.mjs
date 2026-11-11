@@ -9,7 +9,7 @@ import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SCREENS = ['src/js/cell/main.js', 'src/js/cells/main.js', 'src/js/cell/lift.mjs', 'src/js/cell/breaks.mjs', 'src/js/cell-hourly/main.js', 'src/js/rawout/main.js', 'src/js/rawout/rates.mjs'];
+const SCREENS = ['src/js/cell/main.js', 'src/js/cells/main.js', 'src/js/cell/lift.mjs', 'src/js/cell/breaks.mjs', 'src/js/cell-hourly/main.js', 'src/js/rawout/main.js', 'src/js/rawout/rates.mjs', 'src/js/bagtag/main.js', 'src/js/bagtag/view.mjs'];
 
 test('every cell screen module parses', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cell-parse-'));
