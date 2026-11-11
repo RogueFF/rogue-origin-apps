@@ -2,7 +2,7 @@
  * Scoreboard & dashboard handlers.
  */
 
-import { query, queryOne } from '../../lib/db.js';
+import { query } from '../../lib/db.js';
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { validateDate } from '../../lib/validate.js';
 import {
@@ -20,6 +20,19 @@ import {
   getLoadedLaborRate,
   getEffectiveTargetRate,
 } from '../../lib/production-utils.js';
+import { laborSplit, CELL_MODE_FROM } from '../../lib/labor-split.js';
+
+// Inputs laborSplit needs, read once per request.
+async function laborOptions(env) {
+  return {
+    loadedRate: await getLoadedLaborRate(env),
+    inspectors: (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1,
+    multipliers: (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS,
+    cellModeFrom: (await getConfig(env, 'labor.cell_mode_from')) ?? CELL_MODE_FROM,
+  };
+}
+const LABOR_ROWS_SQL = `SELECT production_date, time_slot, trimmers_line1, buckers_line1, tzero_line1, tops_lbs1, smalls_lbs1
+  FROM monthly_production`;
 
 // ===== SCOREBOARD DATA =====
 
@@ -235,10 +248,7 @@ async function getExtendedDailyData(days, env) {
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffStr = formatDatePT(cutoff, 'yyyy-MM-dd');
-  const loadedRate = await getLoadedLaborRate(env);
-
-  // Fetch smalls inspector count config
-  const smallsInspectorCount = (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1;
+  const laborOpts = await laborOptions(env);
 
   const rows = await query(env.DB, `
     SELECT production_date,
@@ -290,6 +300,14 @@ async function getExtendedDailyData(days, env) {
     GROUP BY production_date, cultivar1
   `, [cutoffStr]);
 
+  // Labor per day, slot by slot (lib/labor-split.js).
+  const laborRows = await query(env.DB, `${LABOR_ROWS_SQL} WHERE production_date >= ?`, [cutoffStr]);
+  const laborRowsByDate = new Map();
+  for (const lr of laborRows) {
+    if (!laborRowsByDate.has(lr.production_date)) laborRowsByDate.set(lr.production_date, []);
+    laborRowsByDate.get(lr.production_date).push(lr);
+  }
+
   const cultivarsByDate = new Map();
   for (const cr of cultivarRows) {
     if (!cultivarsByDate.has(cr.production_date)) cultivarsByDate.set(cr.production_date, []);
@@ -308,36 +326,7 @@ async function getExtendedDailyData(days, env) {
     const totalSmalls = r.total_smalls || 0;
     const totalLbs = totalTops + totalSmalls;
     const trimmerHours = r.trimmer_hours || 0;
-    const buckerHours = r.bucker_hours || 0;
-    const tzeroHours = r.tzero_hours || 0;
-    const waterspiderHours = r.hours_with_data || 0;
-
-    // Smalls inspector: fixed count for every hour of production
-    const hoursWithData = r.hours_with_data || 0;
-    const smallsInspectorHours = smallsInspectorCount * hoursWithData;
-
-    const topsRatio = totalLbs > 0 ? totalTops / totalLbs : 1;
-    const smallsRatio = totalLbs > 0 ? totalSmalls / totalLbs : 0;
-
-    const sharedHours = buckerHours + tzeroHours + waterspiderHours;
-    const topsSharedHours = sharedHours * topsRatio;
-    const smallsSharedHours = sharedHours * smallsRatio;
-
-    const topsLaborHours = trimmerHours + topsSharedHours;
-    let smallsLaborHours = smallsSharedHours;
-    
-    // Add inspector hours DIRECTLY to smalls labor (100% attribution)
-    smallsLaborHours += smallsInspectorHours;
-
-    const topsLaborCost = topsLaborHours * loadedRate;
-    const smallsLaborCost = smallsLaborHours * loadedRate;
-    const totalLaborCost = topsLaborCost + smallsLaborCost;
-
-    const topsCostPerLb = totalTops > 0 ? topsLaborCost / totalTops : 0;
-    const smallsCostPerLb = totalSmalls > 0 ? smallsLaborCost / totalSmalls : 0;
-    const blendedCostPerLb = totalLbs > 0 ? totalLaborCost / totalLbs : 0;
-
-    const totalOperatorHours = buckerHours + trimmerHours + tzeroHours + waterspiderHours + smallsInspectorHours;
+    const labor = laborSplit(laborRowsByDate.get(r.production_date) || [], laborOpts);
 
     return {
       date: new Date(r.production_date + 'T12:00:00'),
@@ -346,11 +335,11 @@ async function getExtendedDailyData(days, env) {
       avgRate: trimmerHours > 0 ? totalTops / trimmerHours : 0,
       totalLbs,
       trimmerHours,
-      operatorHours: totalOperatorHours,
-      laborCost: totalLaborCost,
-      costPerLb: blendedCostPerLb,
-      topsCostPerLb,
-      smallsCostPerLb,
+      operatorHours: labor.operatorHours,
+      laborCost: labor.totalLaborCost,
+      costPerLb: labor.costPerLb,
+      topsCostPerLb: labor.topsCostPerLb,
+      smallsCostPerLb: labor.smallsCostPerLb,
       cultivar: r.dominant_cultivar || '',
       cultivars: cultivarsByDate.get(r.production_date) || [],
       totalCrew: r.peak_crew || 0,
@@ -382,7 +371,6 @@ async function scoreboard(params, env) {
 async function dashboard(params, env) {
   const start = params.start || '';
   const end = params.end || '';
-  const loadedRate = await getLoadedLaborRate(env);
 
   if (start && !validateDate(start)) {
     return errorResponse('Invalid start date', 'VALIDATION_ERROR', 400);
@@ -449,79 +437,24 @@ async function dashboard(params, env) {
     }
   }
 
-  const todayOperatorData = await queryOne(env.DB, `
-    SELECT
-      SUM(
-        CASE
-          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
-          THEN trimmers_line1
-          ELSE 0
-        END
-      ) as trimmer_hours,
-      SUM(
-        CASE
-          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
-          THEN buckers_line1
-          ELSE 0
-        END
-      ) as bucker_hours,
-      SUM(
-        CASE
-          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
-          THEN tzero_line1
-          ELSE 0
-        END
-      ) as tzero_hours,
-      COUNT(
-        CASE
-          WHEN (buckers_line1 + trimmers_line1 + tzero_line1) > 0 AND tops_lbs1 > 0
-          THEN 1
-          ELSE NULL
-        END
-      ) as hours_with_data,
-      SUM(tops_lbs1) as total_tops,
-      SUM(smalls_lbs1) as total_smalls
-    FROM monthly_production
-    WHERE production_date = ?
-  `, [targetDate]);
+  const todayLabor = laborSplit(
+    await query(env.DB, `${LABOR_ROWS_SQL} WHERE production_date = ?`, [targetDate]),
+    await laborOptions(env),
+  );
+  const todayTops = todayLabor.tops;
+  const todaySmalls = todayLabor.smalls;
+  const todayTotalLbs = todayLabor.totalLbs;
+  // Headcount sums over the counted slots (for the average crew below).
+  const todayTrimmerHours = todayLabor.heads.trimmers;
+  const todayBuckerHours = todayLabor.heads.buckers;
+  const todayTZeroHours = todayLabor.heads.tzero;
+  const todayTotalOperatorHours = todayLabor.operatorHours;
+  const todayTotalLaborCost = todayLabor.totalLaborCost;
+  const todayBlendedCostPerLb = todayLabor.costPerLb;
+  const todayTopsCostPerLb = todayLabor.topsCostPerLb;
+  const todaySmallsCostPerLb = todayLabor.smallsCostPerLb;
 
-  const todayTops = todayOperatorData?.total_tops || 0;
-  const todaySmalls = todayOperatorData?.total_smalls || 0;
-  const todayTotalLbs = todayTops + todaySmalls;
-  const todayTrimmerHours = todayOperatorData?.trimmer_hours || 0;
-  const todayBuckerHours = todayOperatorData?.bucker_hours || 0;
-  const todayTZeroHours = todayOperatorData?.tzero_hours || 0;
-  const todayWaterspiderHours = todayOperatorData?.hours_with_data || 0;
-
-  // Smalls inspector: fixed count for every hour of production
-  const smallsInspectorCount = (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1;
-  const todayHoursWithData = todayOperatorData?.hours_with_data || 0;
-  const todaySmallsInspectorHours = smallsInspectorCount * todayHoursWithData;
-
-  const todayTopsRatio = todayTotalLbs > 0 ? todayTops / todayTotalLbs : 1;
-  const todaySmallsRatio = todayTotalLbs > 0 ? todaySmalls / todayTotalLbs : 0;
-
-  const todaySharedHours = todayBuckerHours + todayTZeroHours + todayWaterspiderHours;
-  const todayTopsSharedHours = todaySharedHours * todayTopsRatio;
-  const todaySmallsSharedHours = todaySharedHours * todaySmallsRatio;
-
-  const todayTopsLaborHours = todayTrimmerHours + todayTopsSharedHours;
-  let todaySmallsLaborHours = todaySmallsSharedHours;
-  
-  // Add inspector hours DIRECTLY to smalls labor (100% attribution)
-  todaySmallsLaborHours += todaySmallsInspectorHours;
-
-  const todayTopsLaborCost = todayTopsLaborHours * loadedRate;
-  const todaySmallsLaborCost = todaySmallsLaborHours * loadedRate;
-  const todayTotalLaborCost = todayTopsLaborCost + todaySmallsLaborCost;
-
-  const todayTopsCostPerLb = todayTops > 0 ? todayTopsLaborCost / todayTops : 0;
-  const todaySmallsCostPerLb = todaySmalls > 0 ? todaySmallsLaborCost / todaySmalls : 0;
-  const todayBlendedCostPerLb = todayTotalLbs > 0 ? todayTotalLaborCost / todayTotalLbs : 0;
-
-  const todayTotalOperatorHours = todayBuckerHours + todayTrimmerHours + todayTZeroHours + todayWaterspiderHours + todaySmallsInspectorHours;
-
-  const hoursWithData = todayOperatorData?.hours_with_data || 0;
+  const hoursWithData = todayLabor.heads.slots;
 
   const todayData = (!isViewingToday && filteredData.length > 0) ? {
     totalTops: filteredData[0].totalTops || 0,
