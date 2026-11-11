@@ -174,3 +174,28 @@ test('un-tared, the basket already on when the day began: trimming, lift, back e
   assert.equal(out.pickups.length, 1);
   assert.ok(Math.abs(out.pickups[0].g - 32) < 1e-9);
 });
+
+// ---- Two weight-matched baskets per cell (Koa 2026-11-11): at the chime the full
+// basket goes to the pickup spot and the matched empty one (within 2 g) goes on.
+
+test('two baskets, tared, the swap shows a negative: a pickup like any lift', () => {
+  const out = run([r(9, 0, 0), r(9, 20, 200), r(9, 21, -168), r(9, 21, 1.2, 4), r(9, 40, 31.2)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(200 + 30) });
+  assert.equal(out.pickups.length, 1);
+  assert.deepEqual(out.flags, {});
+});
+
+test('two baskets, a fast swap with no settled negative: the screen pickup mark makes it a pickup, not a TARE', () => {
+  const out = run([r(9, 0, 0), r(9, 5, 40), r(9, 12, 120), r(9, 20, 200), r(9, 21, 1.4), r(9, 40, 31.4)], [tap(9, 21, 1)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(200 + 30) });
+  assert.deepEqual(out.flags, {});
+  assert.equal(out.pickups.length, 1);
+  assert.ok(Math.abs(out.pickups[0].g - 200) < 1e-9);
+});
+
+test('two baskets: a fast swap that is the last reading so far still reads as the pickup the screen marked', () => {
+  const out = run([r(9, 0, 0), r(9, 5, 2), r(9, 6, 4.5), r(9, 7, 7.6), r(9, 8, 1.3)], [tap(9, 8, 3)]);
+  assert.deepEqual(out.flags, {});
+  assert.equal(out.pickups.length, 1);
+  assert.ok(Math.abs(out.pickups[0].g - 7.6) < 1e-9);
+});

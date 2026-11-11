@@ -97,3 +97,46 @@ test('the migration is safe to run twice', () => {
   const { raw } = d1();
   raw.exec(mig('0054-cell-screen-state'));
 });
+
+// ---- Waiting at the pickup spot (Koa 2026-11-11, migration 0060)
+import { collectPickup } from '../src/handlers/production/cell-board.js';
+function withMarks() {
+  const x = d1();
+  x.raw.exec(mig('0052-cell-job-order'));
+  x.raw.exec(mig('0060-pickup-spot'));
+  return x;
+}
+const at = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+
+test('a pickup not yet collected waits at the spot; collected, it leaves the board; undo puts it back', async () => {
+  const { raw, env } = withMarks();
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg, cultivar, bag, cycle_s) VALUES ('table1', ?, 'pickup', 0.0142, '2026 - Lifter / Sungrown', 'hOz', 1500)`).run(at(T0 - 60e3));
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'tare', 0)`).run(at(T0 - 50e3));
+  let b = (await json(await getCellBoard({}, env, T0))).body;
+  assert.equal(b.waiting.length, 1);
+  assert.deepEqual({ ...b.waiting[0], id: 0 }, { id: 0, stationId: 'table1', label: 'Cell 1', at: T0 - 60e3, g: 14.2, cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycleS: 1500, jobId: null });
+  const id = b.waiting[0].id;
+  assert.equal((await collectPickup({ id }, env, T0)).status, 200);
+  assert.equal((await collectPickup({ id }, env, T0)).status, 409);          // already collected
+  b = (await json(await getCellBoard({}, env, T0))).body;
+  assert.equal(b.waiting.length, 0);
+  assert.equal((await collectPickup({ id, undo: true }, env, T0 + 5 * 60e3)).status, 200);
+  assert.equal((await json(await getCellBoard({}, env, T0 + 5 * 60e3))).body.waiting.length, 1);
+  await collectPickup({ id }, env, T0);
+  assert.equal((await collectPickup({ id, undo: true }, env, T0 + 11 * 60e3)).status, 409);   // too late
+});
+
+test('pickups from before 0060 count as collected, and nothing older than a day waits', async () => {
+  const { raw, env } = d1();
+  raw.exec(mig('0052-cell-job-order'));
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'pickup', 0.02)`).run(at(T0 - 60e3));
+  raw.exec(mig('0060-pickup-spot'));
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'pickup', 0.03)`).run(at(T0 - 25 * 3600e3));
+  assert.equal((await json(await getCellBoard({}, env, T0))).body.waiting.length, 0);
+});
+
+test('before 0060: the board still loads with nothing waiting, and collect says not ready', async () => {
+  const { env } = d1();
+  assert.deepEqual((await json(await getCellBoard({}, env, T0))).body.waiting, []);
+  assert.equal((await collectPickup({ id: 1 }, env, T0)).status, 503);
+});

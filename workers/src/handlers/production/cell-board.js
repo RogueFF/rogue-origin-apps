@@ -7,6 +7,14 @@
  *   POST ?action=setCellState { stationId, phase, cultivar?, bag?, targetG?, elapsedMs?,
  *                               paused?, pauseNote?, finishedNetG? }   from cell.html
  *   GET  ?action=cellBoard                                             for cells.html
+ *   POST ?action=collectPickup { id, undo? }                           bag/tag took it off the spot
+ *
+ * Waiting at the pickup spot (Koa 2026-11-11, migration 0060): two weight-matched
+ * baskets per cell. At the chime the full basket goes to a marked spot beside the
+ * cell and the matched empty one goes on the scale, which closes the job (a pickup
+ * mark). Every pickup mark not yet collected is "waiting at pickup spot" on the
+ * board until bag/tag taps it collected. Only the last WAITING_HOURS count, so a
+ * forgotten tap can't fill the board for good.
  *
  * No token, like scaleMark: it only describes the screen, it moves no stock
  * and holds no buyer data. Times are this Worker's clock, never the tablet's.
@@ -20,6 +28,10 @@ const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
 const MAX_MS = 12 * 3600e3;
 const TABLET_STALE_MS = 90e3;   // the tablet reports every 30 s while it's open
 const LEGACY_STALE_S = 3;
+const WAITING_HOURS = 24;
+const UNDO_MIN = 10;          // a collected tap can be taken back this long
+const sqlTime = ms => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+const parseUtc = s => Date.parse(String(s).replace(' ', 'T') + 'Z');
 
 const clean = (v, max) => {
   if (v === null || v === undefined) return null;
@@ -78,12 +90,17 @@ export async function setCellState(body, env, now = Date.now()) {
 }
 
 export async function getCellBoard(params, env, now = Date.now()) {
-  const [roster, states, readings, stations, events] = await Promise.all([
+  const [roster, states, readings, stations, events, waitingRows] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
     allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
     allOrEmpty(env.DB.prepare(`SELECT station_id, stale_after_s FROM scale_stations WHERE kind = 'table' AND active = 1`)),
     recentEvents(env, now),
+    // Before 0060 there is no collected_at: nothing shows as waiting.
+    allOrEmpty(env.DB.prepare(
+      `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
+       WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
+    ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
   ]);
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
   const st = byId(states), rd = byId(readings), sc = byId(stations);
@@ -113,5 +130,31 @@ export async function getCellBoard(params, env, now = Date.now()) {
       } : null,
     };
   });
-  return successResponse({ serverNow: now, cells });
+  const label = new Map((roster.results || []).map(c => [c.station_id, c.label]));
+  const waiting = waitingRows.map(w => ({
+    id: w.id, stationId: w.station_id, label: label.get(w.station_id) || w.station_id,
+    at: parseUtc(w.ts), g: Math.round(w.kg * 100000) / 100, cultivar: w.cultivar, bag: w.bag, cycleS: w.cycle_s, jobId: w.job_id,
+  }));
+  return successResponse({ serverNow: now, cells, waiting });
+}
+
+/** Bag/tag took a basket off the pickup spot; undo: true puts it back (within UNDO_MIN). */
+export async function collectPickup(body, env, now = Date.now()) {
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id <= 0) return errorResponse('id required', 'VALIDATION_ERROR', 400);
+  let r;
+  try {
+    r = body.undo
+      ? await env.DB.prepare(`UPDATE scale_marks SET collected_at = NULL WHERE id = ? AND kind = 'pickup' AND collected_at >= ?`)
+        .bind(id, sqlTime(now - UNDO_MIN * 60e3)).run()
+      : await env.DB.prepare(`UPDATE scale_marks SET collected_at = ? WHERE id = ? AND kind = 'pickup' AND collected_at IS NULL`)
+        .bind(sqlTime(now), id).run();
+  } catch (e) {
+    if (/no such column/i.test(String(e && e.message))) return errorResponse('Pickup spot is not set up yet (migration 0060)', 'NOT_READY', 503);
+    throw e;
+  }
+  if (!r.meta || !r.meta.changes) {
+    return errorResponse(body.undo ? 'Too late to undo' : 'Already collected, or not a pickup', 'CONFLICT', 409);
+  }
+  return successResponse({ success: true, id, collected: !body.undo });
 }
