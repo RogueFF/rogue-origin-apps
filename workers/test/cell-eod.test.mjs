@@ -238,3 +238,18 @@ test('NOT RECORDING episodes open on a rise with no job and close once a job rec
   await runUntrackedWatch(env2, new Date(ms(15, 53)));
   assert.equal(raw2.prepare(`SELECT COUNT(*) AS n FROM scale_episodes`).get().n, 0);
 });
+
+test('screen log: a row per change of phase, order or pause; heartbeats write none; before 0062 nothing breaks', async () => {
+  const { raw, env } = d1();
+  const { setCellState } = await import('../src/handlers/production/cell-board.js');
+  const o = { stationId: 'table1', cultivar: '2026 - Sour Lifter / Sungrown', bag: 'hLb', targetG: 230 };
+  await setCellState({ ...o, phase: 'idle' }, env, ms(9, 0));
+  await setCellState({ ...o, phase: 'running', elapsedMs: 1000 }, env, ms(9, 1));
+  await setCellState({ ...o, phase: 'running', elapsedMs: 31000 }, env, ms(9, 1, 30));      // heartbeat
+  await setCellState({ ...o, phase: 'running', elapsedMs: 60000, paused: true, pauseNote: 'Break 9:00-9:10' }, env, ms(9, 2));
+  await setCellState({ ...o, phase: 'finished', elapsedMs: 900000, finishedNetG: 231 }, env, ms(9, 20));
+  const log = raw.prepare(`SELECT phase, paused, pause_note FROM cell_screen_log ORDER BY id`).all().map(r => [r.phase, r.paused, r.pause_note]);
+  assert.deepEqual(log, [['idle', 0, null], ['running', 0, null], ['running', 1, 'Break 9:00-9:10'], ['finished', 0, null]]);
+  const { env: old } = d1({ eod: false });
+  assert.equal((await setCellState({ ...o, phase: 'running', elapsedMs: 1 }, old, ms(9, 0))).status, 200);
+});

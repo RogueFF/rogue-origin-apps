@@ -53,6 +53,26 @@ async function allOrEmpty(stmt) {
   }
 }
 
+/**
+ * History of the screen (cell_screen_log, migration 0062): a row only when the
+ * phase, order or pause changed since the stored state, never on a heartbeat.
+ * Before 0062, or on any error, it is skipped: the live state still saves.
+ */
+async function logScreenChange(env, stationId, s, now) {
+  try {
+    const prev = await env.DB.prepare(
+      `SELECT phase, cultivar, bag, paused, pause_note FROM cell_screen_state WHERE station_id = ?`
+    ).bind(stationId).first();
+    if (prev && prev.phase === s.phase && (prev.cultivar ?? null) === s.cultivar && (prev.bag ?? null) === s.bag
+      && (prev.paused || 0) === s.paused && (prev.pause_note ?? null) === s.note) return;
+    await env.DB.prepare(
+      `INSERT INTO cell_screen_log (station_id, ts, phase, cultivar, bag, paused, pause_note, job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(stationId, new Date(now).toISOString().slice(0, 19).replace('T', ' '), s.phase, s.cultivar, s.bag, s.paused, s.note, s.jobId).run();
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message))) console.error('[cell-screen-log]', e);
+  }
+}
+
 export async function setCellState(body, env, now = Date.now()) {
   const phase = PHASES.includes(body.phase) ? body.phase : null;
   if (!phase) return errorResponse(`phase must be one of ${PHASES.join(', ')}`, 'VALIDATION_ERROR', 400);
@@ -71,6 +91,9 @@ export async function setCellState(body, env, now = Date.now()) {
   const ticking = phase === 'running' && !paused && elapsedMs !== null;
   const clockStart = ticking ? Math.round(now - elapsedMs) : null;
   const clockMs = !ticking && elapsedMs !== null && (phase === 'running' || phase === 'finished') ? Math.round(elapsedMs) : null;
+  const cultivar = clean(body.cultivar, 80), bag = BAGS.includes(body.bag) ? body.bag : null;
+  const note = paused ? clean(body.pauseNote, 120) : null;
+  await logScreenChange(env, cell.station_id, { phase, cultivar, bag, paused, note, jobId: Number(body.jobId) > 0 ? Number(body.jobId) : null }, now);
   await env.DB.prepare(
     `INSERT INTO cell_screen_state (station_id, phase, cultivar, bag, target_g, clock_start, clock_ms, paused, pause_note,
                                     finished_net_g, finished_at, updated_at)
@@ -84,8 +107,8 @@ export async function setCellState(body, env, now = Date.now()) {
                           ELSE excluded.finished_at END,
        updated_at = excluded.updated_at`
   ).bind(
-    cell.station_id, phase, clean(body.cultivar, 80), BAGS.includes(body.bag) ? body.bag : null, targetG,
-    clockStart, clockMs, paused, paused ? clean(body.pauseNote, 120) : null,
+    cell.station_id, phase, cultivar, bag, targetG,
+    clockStart, clockMs, paused, note,
     phase === 'finished' ? finishedNetG : null, phase === 'finished' ? now : null, now,
   ).run();
   // A queued order's basket started trimming (migration 0061): the order shows as trimming.

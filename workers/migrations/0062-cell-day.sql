@@ -60,3 +60,19 @@ CREATE TABLE IF NOT EXISTS scale_episodes (
   why         TEXT                              -- untracked: noScreen | tabletOff | noJob
 );
 CREATE INDEX IF NOT EXISTS idx_scale_episodes_station ON scale_episodes (station_id, from_ts);
+
+-- Every change of what a cell screen is doing (cell_screen_state keeps only the
+-- latest): phase, order, pause. Written by setCellState only when one of them
+-- changed, not on the 30 s heartbeat, so a day is a few hundred rows a cell.
+CREATE TABLE IF NOT EXISTS cell_screen_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  station_id  TEXT NOT NULL,
+  ts          TEXT NOT NULL DEFAULT (datetime('now')),   -- UTC
+  phase       TEXT NOT NULL,
+  cultivar    TEXT,
+  bag         TEXT,
+  paused      INTEGER NOT NULL DEFAULT 0,
+  pause_note  TEXT,
+  job_id      INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_cell_screen_log_station ON cell_screen_log (station_id, ts);
