@@ -10,7 +10,7 @@
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
  *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg, cultivar?, bag?, cycleS?, jobId? }   from the cell screen
- *                                (jobId: a queued order's basket; the pickup closes it, migration 0059)
+ *                                (jobId: a queued order's basket; the pickup closes it, migration 0061)
  *                                (a pickup = a finished job; cultivar/bag/cycleS say what it was, migration 0052)
  *                                (the auto rule uses pickups; readings are net since the crew tare on the scale)
  *
