@@ -19,7 +19,6 @@
  * Worker's time, so a computer with a wrong clock still shows the right time.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
-import { isDemo, demoApi, withDemo, showDemoBanner } from '../shared/demo.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const POLL_MS = 2000;
@@ -58,13 +57,10 @@ const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 
 const params = new URLSearchParams(location.search);
 const apiParam = params.get('api') || '';
-const API = demoApi(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API);   // ?demo=1: the practice database
+const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
 if (API !== PROD_API) document.getElementById('rawLink').href = `rawout.html?api=${encodeURIComponent(API)}`;
 if (API !== PROD_API) document.getElementById('queueLink').href = `bagtag.html?api=${encodeURIComponent(API)}`;
 if (API !== PROD_API) document.getElementById('pullLink').href = `pull.html?api=${encodeURIComponent(API)}`;
-for (const id of ['rawLink', 'queueLink', 'pullLink']) { const a = document.getElementById(id); a.href = withDemo(a.getAttribute('href')); }
-if (isDemo()) document.getElementById('rawLink').hidden = true;   // the raw hand-out has no practice mode
-showDemoBanner();
 
 const $ = id => document.getElementById(id);
 const el = { pickups: $('pickups'), grid: $('grid'), quiet: $('quiet'), status: $('status'), sub: $('sub'), sound: $('soundBtn'), lang: $('langToggle') };

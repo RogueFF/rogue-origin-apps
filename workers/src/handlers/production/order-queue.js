@@ -136,15 +136,13 @@ export async function getOrderQueue(params, env, now = new Date()) {
       confirmedAt: o.confirmed_at || null, readyAt: o.ready_at || null, collectedAt: o.collected_at || null,
       cell: cellOf(o),
       coa: coaOf(ls),
-      // Demo: a stub page stands in for Shopify admin (the page maps 'demo-stub' to it).
-      shopifyUrl: env.DEMO ? 'demo-stub' : adminOrderUrl(env, o.shop_gid),
+      shopifyUrl: adminOrderUrl(env, o.shop_gid),
     };
   }).filter(o => o.lines.length);
   return successResponse({
     serverNow: now.getTime(),
     configured: shopifyConfigured(env),
     autoAssign: autoAssignOn(env),   // our stand-in scheduler (off live: scheduling is Nathan's)
-    demo: !!env.DEMO,
     sync: sync ? { lastTryAt: sync.last_try_at, lastOkAt: sync.last_ok_at, lastError: sync.last_error, count: sync.last_count } : null,
     fulfilledToday: (fulfilledToday && fulfilledToday.n) || 0,
     orders: list,

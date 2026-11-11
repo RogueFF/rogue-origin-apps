@@ -21,7 +21,6 @@
  * (wholesale batches, or a day the queue is down).
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
-import { isDemo, demoApi, withDemo, showDemoBanner } from '../shared/demo.mjs';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
 import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
@@ -146,13 +145,11 @@ const STATION_KEY = 'ro-cell:station';
 const clean = v => String(v || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 32);
 function rememberedStation() { try { return localStorage.getItem(STATION_KEY); } catch { return null; } }
 const station = clean(params.get('station')) || clean(rememberedStation()) || 'table1';
-if (!isDemo()) { try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode: falls back to the link each time */ } }
+try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode: falls back to the link each time */ }
 // Local testing only: ?api=http://localhost:8799/api/production. Never another host.
 const apiParam = params.get('api') || '';
-// Practice mode (?demo=1): the practice database, its own saved job state, and the
-// tablet's remembered station left alone (shared/demo.mjs).
-const API = demoApi(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API);
-const KEY = isDemo() ? `ro-cell:demo:${station}` : `ro-cell:${station}`;
+const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
+const KEY = `ro-cell:${station}`;
 const API_ROOT = API.replace(/\/production$/, '');
 
 const $ = id => document.getElementById(id);
@@ -267,7 +264,6 @@ async function loadCultivars() {
   try { history = (await (await fetch(`${API}?action=getCultivars`, { cache: 'no-store' })).json()).cultivars || []; } catch { /* stays short */ }
   let variants = [];
   try {
-    if (isDemo()) throw new Error('no pool in practice mode');
     const r = await fetch(`${API_ROOT}/pool?action=get_supersack_variants`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
     const v = await r.json();
     variants = (v.data || v).variants || [];
@@ -894,7 +890,6 @@ reportJob(true);
 enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });
 renderOrder();
 render();
-showDemoBanner();
 poll();
 loadCultivars();
 loadQueue();

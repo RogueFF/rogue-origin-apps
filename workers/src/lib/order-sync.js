@@ -83,7 +83,7 @@ export function normalizeOrder(node, goLive = null) {
   };
 }
 
-export async function upsertOrder(env, o) {
+async function upsertOrder(env, o) {
   const row = await env.DB.prepare(
     `INSERT INTO shop_orders (shop_gid, name, placed_at, intake_tag, rush, rush_why, shop_status, first_seen_at, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
