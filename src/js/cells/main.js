@@ -24,22 +24,24 @@ const BATT_LOW_PCT = 20;   // red on the tile; Koa gets a Telegram under 15%
 
 registerLabels({
   en: {
-    title: 'Cells', rawLink: 'Raw hand-out', queueLink: 'Bag/tag queue', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
+    title: 'Cells', rawLink: 'Raw hand-out', queueLink: 'Bag/tag queue', pullLink: 'Pull list', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
     idle: 'Idle', armed: 'Ready', running: 'Filling', paused: 'Paused', finished: 'Ready for pickup',
     down: 'Scale disconnected', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
     notrec: 'NOT RECORDING', noScreen: 'trimming, no cell screen open', tabletOff: 'trimming, tablet not reporting', noJob: 'trimming, no job started',
     retail: 'retail', notOnScreen: 'Not on a screen yet', loadFail: 'Can\'t reach the server. Retrying…',
     cellsLive: '{n} cell(s) on a screen', ago: '{m} min ago', justNow: 'just now', startsAt: 'starts on the first gram',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
+    qNow: 'NOW', qNext: 'NEXT', atSpot: '{n} at pickup spot', orderReady: 'Order ready', atSpotOf: 'at {cell}’s pickup spot · {n} basket(s)',
   },
   es: {
-    title: 'Celdas', rawLink: 'Entrega de crudo', queueLink: 'Cola de empaque', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
+    title: 'Celdas', rawLink: 'Entrega de crudo', queueLink: 'Cola de empaque', pullLink: 'Lista de surtido', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
     idle: 'Sin trabajo', armed: 'Lista', running: 'Llenando', paused: 'En pausa', finished: 'Listo para recoger',
     down: 'Báscula desconectada', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
     notrec: 'NO SE GRABA', noScreen: 'recortando, sin pantalla abierta', tabletOff: 'recortando, la tableta no reporta', noJob: 'recortando, sin trabajo iniciado',
     retail: 'menudeo', notOnScreen: 'Todavía sin pantalla', loadFail: 'No hay conexión con el servidor. Reintentando…',
     cellsLive: '{n} celda(s) con pantalla', ago: 'hace {m} min', justNow: 'ahora', startsAt: 'empieza con el primer gramo',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
+    qNow: 'AHORA', qNext: 'SIGUIENTE', atSpot: '{n} en recogida', orderReady: 'Orden lista', atSpotOf: 'en el lugar de recogida de {cell} · {n} canasta(s)',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -49,11 +51,15 @@ const apiParam = params.get('api') || '';
 const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
 if (API !== PROD_API) document.getElementById('rawLink').href = `rawout.html?api=${encodeURIComponent(API)}`;
 if (API !== PROD_API) document.getElementById('queueLink').href = `bagtag.html?api=${encodeURIComponent(API)}`;
+if (API !== PROD_API) document.getElementById('pullLink').href = `pull.html?api=${encodeURIComponent(API)}`;
 
 const $ = id => document.getElementById(id);
 const el = { pickups: $('pickups'), grid: $('grid'), quiet: $('quiet'), status: $('status'), sub: $('sub'), sound: $('soundBtn'), lang: $('langToggle') };
 
 let cells = [];
+// Orders at the cells (order flow slice 2, cellQueue): NOW / NEXT and baskets at each pickup spot.
+const queues = new Map();   // stationId -> { now, next, atSpot }
+const seenOrderReady = new Set();
 let offsetMs = 0;            // Worker clock minus this computer's clock
 const seenFinished = new Map();   // stationId -> finishedAt already chimed for
 let lastChimeAt = 0;
@@ -147,14 +153,36 @@ function renderPickups() {
     card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
     place(el.pickups, card, keep.size - 1);   // oldest first
   }
-  for (const [key, card] of pickupEls) if (!keep.has(key)) { card.remove(); pickupEls.delete(key); }
   // Chime for a bag that just finished; again every 2 min while any still waits.
   let fresh = false;
   for (const c of ready) {
     if (seenFinished.get(c.stationId) !== c.job.finishedAt) { seenFinished.set(c.stationId, c.job.finishedAt); fresh = true; }
   }
   for (const id of [...seenFinished.keys()]) if (!ready.some(c => c.stationId === id)) seenFinished.delete(id);
-  if (fresh || (ready.length && Date.now() - lastChimeAt >= REMIND_MS)) chime();
+  // An order whose every basket is at its cell's pickup spot: one card per order (slice 2).
+  const orderReady = [...queues.values()].flatMap(q => (q.atSpot || []).filter(s => s.orderReady).map(s => ({ ...s, label: q.label })));
+  for (const s of orderReady) {
+    const key = `order|${s.orderId}`;
+    keep.add(key);
+    let card = pickupEls.get(key);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'pickup order-ready';
+      card.innerHTML = '<div class="p-cell"></div><div class="p-what"><span class="w"></span><small></small></div><div class="p-tag"><span class="r"></span><small></small></div>';
+      pickupEls.set(key, card);
+    }
+    card.querySelector('.p-cell').textContent = s.label;
+    card.querySelector('.p-what .w').textContent = s.orderName || '';
+    card.querySelector('.p-what small').textContent = tf('atSpotOf', { cell: s.label, n: s.baskets });
+    card.querySelector('.p-tag .r').textContent = t('orderReady');
+    const since = Date.parse(String(s.since).replace(' ', 'T') + 'Z');
+    const mins = Number.isFinite(since) ? Math.floor((workerNow() - since) / 60000) : 0;
+    card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
+    place(el.pickups, card, keep.size - 1);
+    if (!seenOrderReady.has(s.orderId)) { seenOrderReady.add(s.orderId); fresh = true; }
+  }
+  for (const [key, card] of pickupEls) if (!keep.has(key)) { card.remove(); pickupEls.delete(key); }
+  if (fresh || ((ready.length || orderReady.length) && Date.now() - lastChimeAt >= REMIND_MS)) chime();
   document.title = ready.length ? `(${ready.length}) ${t('title')} - Rogue Origin` : `${t('title')} - Rogue Origin`;
 }
 
@@ -165,6 +193,7 @@ function tileFor(c) {
     tile.innerHTML = `
       <div class="t-top"><div class="t-name"><span class="n"></span><small></small></div><span class="batt"></span><span class="pill"></span></div>
       <div class="t-order"><span class="o"></span><small></small></div>
+      <div class="t-queue"></div>
       <div class="t-weight"><b></b><span></span></div>
       <div class="bar"><i></i></div>
       <div class="t-foot"><div class="t-clock"></div><div class="t-note"></div></div>`;
@@ -174,8 +203,9 @@ function tileFor(c) {
 }
 
 function renderGrid() {
-  const onScreen = cells.filter(c => c.job || c.scale);
-  const quiet = cells.filter(c => !c.job && !c.scale);
+  const hasQueue = c => { const q = queues.get(c.stationId); return !!(q && (q.now || (q.atSpot || []).length)); };
+  const onScreen = cells.filter(c => c.job || c.scale || hasQueue(c));
+  const quiet = cells.filter(c => !c.job && !c.scale && !hasQueue(c));
   const keep = new Set();
   for (const c of onScreen) {
     keep.add(c.stationId);
@@ -204,6 +234,12 @@ function renderGrid() {
     bar.style.width = `${Math.min(100, Math.round(frac * 100))}%`;
     bar.classList.toggle('near', frac >= NEAR && frac < 1);
     bar.classList.toggle('over', frac > 1.02);
+    const q = queues.get(c.stationId);
+    const spot = q ? (q.atSpot || []).reduce((s, x) => s + x.baskets, 0) : 0;
+    tile.querySelector('.t-queue').textContent = q && (q.now || spot)
+      ? [q.now ? `${t('qNow')} ${q.now.orderName}` : '', q.nextOrder ? `${t('qNext')} ${q.nextOrder.orderName}` : '', spot ? tf('atSpot', { n: spot }) : '']
+        .filter(Boolean).join(' · ')
+      : '';
     tile.querySelector('.t-clock').textContent = clock == null ? '--:--' : fmtClock(clock);
     tile.querySelector('.t-note').textContent =
       st === 'paused' ? (j.pauseNote || '') :
@@ -238,6 +274,22 @@ async function poll() {
   }
   timer = setTimeout(poll, POLL_MS);
 }
+// Orders at the cells: a lighter read, every QUEUE_MS. Before migration 0059 it 503s and the board is as before.
+const QUEUE_MS = 5000;
+async function pollQueues() {
+  if (!document.hidden) {
+    try {
+      const r = await fetch(`${API}?action=cellQueue`, { cache: 'no-store' });
+      if (r.ok) {
+        queues.clear();
+        for (const q of (await r.json()).cells || []) queues.set(q.stationId, q);
+        for (const id of [...seenOrderReady]) if (![...queues.values()].some(q => (q.atSpot || []).some(s => s.orderId === id && s.orderReady))) seenOrderReady.delete(id);
+        if (cells.length) render();
+      }
+    } catch { /* the board still shows the cells */ }
+  }
+  setTimeout(pollQueues, QUEUE_MS);
+}
 // Clocks tick between reads.
 setInterval(() => { if (!document.hidden && cells.length) render(); }, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
@@ -247,3 +299,4 @@ document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang
 el.sound.addEventListener('click', () => { unlock(); chime(); });
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 poll();
+pollQueues();
