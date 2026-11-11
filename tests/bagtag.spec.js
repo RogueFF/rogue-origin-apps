@@ -109,6 +109,10 @@ test.describe('Bag/tag queue', () => {
     // Headless Chromium has no PDF viewer, so it lands on the fallback link; a real Chrome prints.
     await expect(page.locator('.coa').first().locator('.status')).toHaveText(/Sent to print|Open the COA to print it/, { timeout: 8000 });
     expect(live.calls).toContain('coaPdf');
+    // Bag labels are off by default; ?labels=1 turns them on for this computer.
+    await expect(page.locator('#labelsCard')).toBeHidden();
+    await page.goto(`http://localhost:${PORT}/src/pages/print.html?order=3&labels=1`);
+    await expect(page.locator('#labels .btn')).toHaveText('Print 2 bag label(s)');
     expect(live.blocked).toEqual([]);
   });
 
