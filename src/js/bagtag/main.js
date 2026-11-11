@@ -142,7 +142,7 @@ function actions(o, list) {
     }
     row.append(button('primary', t('confirm'), () => act(o.id, 'confirm')));
     if (o.cell && !o.cell.waiting && !o.cell.started && cellsNow.length > 1) row.append(moveSelect(o));
-    row.append(button('ghost', t('hold'), () => act(o.id, 'hold')));
+    if (!(o.cell && o.cell.started)) row.append(button('ghost', t('hold'), () => act(o.id, 'hold')));
   } else if (list === 'inCells') {
     if (o.state === 'ready') {
       row.append(node('span', 'spot', tf('atSpot', { cell: o.cell ? o.cell.label : '' })));

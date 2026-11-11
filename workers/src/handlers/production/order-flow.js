@@ -29,12 +29,28 @@ async function all(env, sql, ...p) { return (await env.DB.prepare(sql).bind(...p
 async function first(env, sql, ...p) { return env.DB.prepare(sql).bind(...p).first(); }
 async function run(env, sql, ...p) { return env.DB.prepare(sql).bind(...p).run(); }
 
+const SCREEN_FRESH_MS = 2 * 60 * 1000;
+/**
+ * A cell busy with a job that isn't from the queue (a hand-picked wholesale batch,
+ * or the dropdowns): grams still to trim on it, so the planner never calls that
+ * cell free. A queued job the screen started has started_at (setCellState with
+ * jobId), so a running screen with no started queued job is a hand job.
+ */
+export function handJobLeft(screen, rows, liveNetG, now = Date.now()) {
+  if (!screen || !(screen.target_g > 0) || !(now - Number(screen.updated_at) <= SCREEN_FRESH_MS)) return 0;
+  if (screen.phase === 'running' && !rows.some(j => j.started_at)) {
+    return Math.max(0, screen.target_g - Math.max(0, liveNetG ?? 0));
+  }
+  if (screen.phase === 'armed' && !rows.length) return screen.target_g;
+  return 0;
+}
+
 /** What the planner needs about each order-taking cell, from D1. */
-export async function loadCells(env) {
+export async function loadCells(env, now = Date.now()) {
   const [roster, jobs, screens, readings, marks, lastDone] = await Promise.all([
     all(env, `SELECT station_id, label, lane, sort, takes_orders FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`),
-    all(env, `SELECT * FROM cell_jobs WHERE state = 'queued' ORDER BY station_id, seq`),
-    all(env, `SELECT station_id, phase, cultivar FROM cell_screen_state`).catch(() => []),
+    all(env, `SELECT * FROM cell_jobs WHERE state = 'queued' ORDER BY station_id, seq, id`),
+    all(env, `SELECT station_id, phase, cultivar, target_g, updated_at FROM cell_screen_state`).catch(() => []),
     all(env, `SELECT r.station_id, r.weight FROM scale_readings r JOIN scale_stations s ON s.station_id = r.station_id AND s.kind = 'table'`).catch(() => []),
     all(env, `SELECT station_id, kg, cycle_s FROM scale_marks WHERE kind = 'pickup' AND cycle_s IS NOT NULL AND ts >= datetime('now', '-7 days')`).catch(() => []),
     all(env, `SELECT station_id, cultivar FROM cell_jobs WHERE state = 'done' AND id IN (SELECT MAX(id) FROM cell_jobs WHERE state = 'done' GROUP BY station_id)`),
@@ -47,13 +63,16 @@ export async function loadCells(env) {
   return roster.filter(c => c.takes_orders === 1 || jobsBy.has(c.station_id)).map(c => {
     const r = readBy.get(c.station_id);
     const s = screenBy.get(c.station_id);
+    const rows = jobsBy.get(c.station_id) || [];
+    const liveNetG = r && Number.isFinite(Number(r.weight)) ? Number(r.weight) * 1000 : null;
     return {
       stationId: c.station_id, label: c.label, lane: c.lane, sort: c.sort, takesOrders: c.takes_orders === 1,
-      liveNetG: r && Number.isFinite(Number(r.weight)) ? Number(r.weight) * 1000 : null,
+      liveNetG,
+      handJobLeftG: handJobLeft(s, rows, liveNetG, now),
       lastCultivar: doneBy.get(c.station_id) || (s && s.cultivar) || null,
       paceGpm: paceFromMarks(marksBy.get(c.station_id) || []),
-      rows: jobsBy.get(c.station_id) || [],
-      jobs: (jobsBy.get(c.station_id) || []).map(j => ({ orderId: j.order_id, cultivar: j.cultivar, targetG: j.target_g, started: !!j.started_at })),
+      rows,
+      jobs: rows.map(j => ({ orderId: j.order_id, cultivar: j.cultivar, targetG: j.target_g, started: !!j.started_at })),
     };
   });
 }
@@ -226,6 +245,8 @@ export async function orderAction(body, env) {
       let seq = (top && top.s) || 0;
       for (const j of jobs) await run(env, `UPDATE cell_jobs SET station_id = ?, seq = ?, assigned_by = 'moved', why = 'moved by bag/tag' WHERE id = ?`, to.station_id, ++seq, j.id);
     } else if (op === 'hold') {
+      const started = await first(env, `SELECT COUNT(*) AS n FROM cell_jobs WHERE order_id = ? AND state = 'queued' AND started_at IS NOT NULL`, orderId);
+      if (started.n) return errorResponse('A basket of this order is already being trimmed', 'STARTED', 409);
       await run(env, `UPDATE cell_jobs SET state = 'cancelled' WHERE order_id = ? AND state = 'queued' AND started_at IS NULL`, orderId);
       await run(env, `UPDATE shop_orders SET state = 'hold' WHERE id = ? AND state IN ('queued', 'assigned')`, orderId);
     } else if (op === 'release') {
