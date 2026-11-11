@@ -36,6 +36,7 @@ const OPEN = [
   'cell-hourly.html',         // Cell hourly log (manual entry until every table has a scale)
   'cells.html',               // Cells board: every cell's screen + ready-for-pickup, for bagging and the office
   'rawout.html',              // Raw hand-out: the water spider types raw out / back per cell at the WIP bench
+  'bagtag.html',              // Bag/tag order queue: order #, cultivar, bag size only (no buyer fields); read-only in slice 1
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',

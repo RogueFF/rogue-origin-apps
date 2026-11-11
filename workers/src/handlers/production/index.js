@@ -21,6 +21,7 @@ import { getScaleWeight, setScaleWeight, setBagMode } from './scale.js';
 import { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark } from './cell-hourly.js';
 import { setCellState, getCellBoard } from './cell-board.js';
 import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
+import { getOrderQueue, orderSync } from './order-queue.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -102,6 +103,10 @@ export async function handleProductionD1(request, env, ctx) {
         return await getRawBoard(params, env);
       case 'cellBoard':
         return await getCellBoard(params, env);
+      case 'orderQueue':
+        return await getOrderQueue(params, env);
+      case 'orderSync':
+        return await orderSync(body, env);
       case 'setBagMode':
         return await setBagMode(body, env);
       case 'inventoryWebhook':
