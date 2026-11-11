@@ -120,8 +120,32 @@ export function verifiedYield({ topsLb, sacksLb, carryInG = 0, eodRawG = null, t
     sacksLb: r2(sacksLb), carryInLb: r2(carryInLb), carryKnown, rawInLb: r2(rawInLb), eodRawLb: r2(eodRawLb), usedLb: r2(usedLb),
     toteLb: r2(toteG === null ? null : toteG / G_PER_LB),
     topsPerSack: usedLb !== null && usedLb > 0 && rawInLb > 0 ? r2((topsLb * sackLbs) / usedLb) : null,
+    // Check line: tops + the fall-through tote, as a % of the raw used.
+    accountedPct: usedLb !== null && usedLb > 0 && toteG !== null ? Math.round(((topsLb + toteG / G_PER_LB) / usedLb) * 100) : null,
     sackLbs,
   };
+}
+
+/**
+ * Person-hours for a one-trimmer cell (Phase 1): from the day's first gram of
+ * real tops (or first queue Start) to its last pickup (or last gram), breaks out.
+ * null with nothing trimmed.
+ */
+export function personHours(rises, pickups, starts = [], people = 1, breaks = CELL_BREAKS) {
+  const firsts = [...rises.filter(r => r.g >= START_G).map(r => r.ms), ...starts];
+  const lasts = [...pickups, ...rises.map(r => r.ms)];
+  if (!firsts.length || !lasts.length) return null;
+  const a = Math.min(...firsts), b = Math.max(...lasts);
+  if (!(b > a)) return null;
+  return Math.round(((b - a - breakMsIn(a, b, breaks)) / 3600e3) * people * 100) / 100;
+}
+
+/** The day's cultivar: the sacks the cell used (by lb), else its jobs. */
+export function mainCultivar(sacks, jobs) {
+  const w = new Map();
+  for (const s of sacks) if (s.cultivar) w.set(s.cultivar, (w.get(s.cultivar) || 0) + s.lbs);
+  if (!w.size) for (const j of jobs) if (j.cultivar) w.set(j.cultivar, (w.get(j.cultivar) || 0) + 1);
+  return [...w.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
 }
 
 /** The shift day before `date` (Mon–Fri; Friday before a Monday). */

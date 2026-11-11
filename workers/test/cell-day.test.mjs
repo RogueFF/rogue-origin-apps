@@ -115,6 +115,9 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.equal(res.status, 200);
   const d = await res.json();
   assert.equal(d.label, 'Cell 1');
+  assert.equal(d.cultivar, '2026 - Sour Lifter / Sungrown');
+  assert.equal(d.tops.personH, 1.18, '9:30 first gram to the 10:41 pickup');
+  assert.equal(d.yield.accountedPct, 7);
   assert.deepEqual(d.tops.hourly.map(h => [h.source, h.lb]), [['scale', 0.51], ['typed', 0.6]]);
   assert.equal(d.tops.lb, 1.11);
   assert.equal(d.tops.workedH, 1.83, '9-10 is 0.83 h (9:00 break)');

@@ -15,7 +15,7 @@ function cellDay(over = {}) {
   return {
     stationId: 'table1', label: 'Cell 1', date: '2026-11-12',
     tops: {
-      lb: 4.02, workedH: 7.67, perHour: 0.52,
+      lb: 4.02, workedH: 7.67, perHour: 0.52, personH: 7.9, perPersonH: 0.51,
       hourly: [
         ['7:00 AM', '8:00 AM', 0.41, 1], ['8:00 AM', '9:00 AM', 0.55, 1], ['9:00 AM', '10:00 AM', 0.48, 0.83],
         ['10:00 AM', '11:00 AM', 0.6, 1], ['11:00 AM', '12:00 PM', 0.57, 1], ['12:30 PM', '1:00 PM', 0.22, 0.5],
@@ -50,7 +50,7 @@ test('break-even by cultivar: Sour Lifter 6.4/6.8, Lifter 8.8/9.1, others on Sou
 test('verdict tiers: both prices, the higher only, under, and no weigh; any gap fails the day', () => {
   const y = (tps) => verdict(cellDay({ yield: { ...cellDay().yield, topsPerSack: tps } }));
   assert.deepEqual([y(6.86).yield, y(6.86).pass], ['both', true]);
-  assert.deepEqual([y(6.5).yield, y(6.5).pass], ['at', true]);
+  assert.deepEqual([y(6.5).yield, y(6.5).pass], ['at', false], 'CLOSE is not a pass');
   assert.deepEqual([y(6.1).yield, y(6.1).pass], ['under', false]);
   assert.deepEqual([y(null).yield, y(null).pass], ['none', false]);
   const gap = verdict(cellDay({ gaps: { offline: { count: 1, minutes: 6, episodes: [] }, notRecording: { count: 0, minutes: 0, episodes: [] } } }));
@@ -67,7 +67,7 @@ test('the card: big numbers, hourly bars with their own caps, the 5-day strip, a
   assert.equal(m.tiles[1].chips[0].kind, 'good');
   assert.deepEqual(m.chart.cols.slice(0, 3).map((c) => [c.label, c.cap]), [['7', '0.41'], ['8', '0.55'], ['9', '0.48']]);
   assert.equal(m.chart.cols[3].rate, 'typed');
-  assert.deepEqual(m.minis.map((x) => x.value), ['1:35', '1', '20.50', '64']);
+  assert.deepEqual(m.minis.map((x) => x.value), ['1:35', '1', '0.51', '64']);
   assert.deepEqual(m.strip.map((s) => s.value), ['6.9', '—', '—', '—', '—', '6.9']);
   assert.deepEqual([m.strip[5].label, m.strip[5].sub, m.strip[5].kind], ['So far', '1 day', 'good']);
   assert.deepEqual(m.flags, [{ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above break-even' }]);

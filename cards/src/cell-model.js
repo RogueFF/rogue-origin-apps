@@ -28,7 +28,7 @@ export function breakEvenFor(cultivar) {
   const name = String(cultivar || '');
   if (/sour lifter/i.test(name)) return { key: 'Sour Lifter', ...BREAK_EVEN['Sour Lifter'], measured: true };
   if (/lifter/i.test(name)) return { key: 'Lifter', ...BREAK_EVEN.Lifter, measured: true };
-  return { key: 'Sour Lifter', ...BREAK_EVEN['Sour Lifter'], measured: false };
+  return { key: null, at: null, both: null, measured: false };   // no break-even yet: shown, not judged
 }
 
 /** Weekday dates (Mon–Fri) from `start`, `n` of them. */
@@ -55,6 +55,7 @@ export function stripDates(date) {
 
 /** The day's cultivar: the sacks the cell used (by lb), else its jobs. */
 export function dayCultivar(day) {
+  if (day.cultivar) return day.cultivar;
   const weight = new Map();
   for (const s of day.sacks?.list || []) if (s.cultivar) weight.set(s.cultivar, (weight.get(s.cultivar) || 0) + s.lbs);
   if (!weight.size) for (const j of day.jobs || []) if (j.cultivar) weight.set(j.cultivar, (weight.get(j.cultivar) || 0) + 1);
@@ -68,29 +69,31 @@ const gapsOf = (day) => ({
 });
 
 /**
- * The day against the exit test.
- * yield: 'both' (at or over the lower-price break-even), 'at' (between: the
- * higher price only), 'under', or 'none' (no EOD weigh, so no verified figure).
- * pass: no recording gaps and yield 'both' or 'at'.
+ * The day against the exit test, in the Phase 1 scorecard's terms (the
+ * hourly-data session's reference card): PASS ('both') clears both break-evens,
+ * CLOSE ('at') the higher price only, MISS ('under') neither; 'none' = no
+ * verified figure yet; 'info' = no break-even for this cultivar. Only PASS with
+ * no recording gaps passes the day.
  */
 export function verdict(day) {
   const be = breakEvenFor(dayCultivar(day));
   const tps = day.yield?.topsPerSack ?? null;
-  const y = tps === null ? 'none' : tps >= be.both ? 'both' : tps >= be.at ? 'at' : 'under';
+  const y = tps === null ? 'none' : !be.measured ? 'info' : tps >= be.both ? 'both' : tps >= be.at ? 'at' : 'under';
   const g = gapsOf(day);
-  const clean = g.offline === 0 && g.notRec === 0;
-  return { be, tps, yield: y, clean, gaps: g, pass: clean && (y === 'both' || y === 'at') };
+  const clean = g.offline === 0 && g.notRec === 0 && g.minutes === 0;
+  return { be, tps, yield: y, clean, gaps: g, pass: clean && y === 'both' };
 }
 
 const mmss = (s) => (s === null || s === undefined ? DASH : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
 const lb2 = (v) => (v === null || v === undefined ? DASH : fmt2(v));
 
 function yieldChip(v) {
-  const be = `${fmt1(v.be.at)}–${fmt1(v.be.both)}`;
   if (v.yield === 'none') return { kind: 'warn', text: 'no EOD weigh' };
-  if (v.yield === 'both') return { kind: 'good', text: `▲ ${be}` };
-  if (v.yield === 'at') return { kind: 'warn', text: `▲ ${fmt1(v.be.at)}, ▼ ${fmt1(v.be.both)}` };
-  return { kind: 'bad', text: `▼ ${be}` };
+  if (v.yield === 'info') return { kind: 'neutral', text: 'no break-even' };
+  const be = `${fmt1(v.be.at)}/${fmt1(v.be.both)}`;
+  if (v.yield === 'both') return { kind: 'good', text: `PASS ${be}` };
+  if (v.yield === 'at') return { kind: 'warn', text: `CLOSE ${be}` };
+  return { kind: 'bad', text: `MISS ${be}` };
 }
 
 function stripItem(date, day) {
@@ -101,7 +104,7 @@ function stripItem(date, day) {
     label,
     value: v.tps === null ? DASH : fmt1(v.tps),
     sub: `${v.gaps.minutes} gap min`,
-    kind: v.pass ? (v.yield === 'both' ? 'good' : 'warn') : v.yield === 'none' && v.clean ? 'warn' : 'bad',
+    kind: v.pass ? 'good' : v.clean && ['at', 'none', 'info'].includes(v.yield) ? 'warn' : 'bad',
   };
 }
 
@@ -128,7 +131,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const final = (day.tops.hourly || []).every((h) => h.final);
   const carryUnknown = day.yield?.carryKnown === false;
   const pill = v.yield === 'none' ? (carryUnknown ? 'NOT YET: no carry-in weigh' : 'NOT YET: weigh the leftovers')
-    : v.pass ? (v.yield === 'both' ? 'EXIT TEST: PASS' : 'PASS at the higher price') : 'EXIT TEST: MISS';
+    : v.pass ? 'EXIT TEST: PASS' : v.clean && v.yield === 'at' ? 'EXIT TEST: CLOSE' : 'EXIT TEST: MISS';
   const ch = day.changeovers || {};
   const so = phaseSoFar(strip.map((s) => s.day));
   const flags = [];
@@ -139,7 +142,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   }
   if (carryUnknown) flags.push({ kind: 'warn', tag: 'Raw', text: 'The shift day before had raw but no End of day weigh, so today is not verified' });
   if (day.quality?.stop) flags.push({ kind: 'bad', tag: 'Stop', text: `${day.quality.stop} batch(es) scored 1 on mold or insects` });
-  if (!v.be.measured) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: Sour Lifter's is used` });
+  if (!v.be.measured) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: tops/sack is shown, not judged` });
   if (v.pass && !flags.some((f) => f.kind === 'bad')) flags.unshift({ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above break-even' });
 
   return {
@@ -151,12 +154,12 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
     pill,
     tiles: [
       { label: 'Tops', value: lb2(day.tops.lb), unit: 'lb', chips: [
-        { kind: 'neutral', text: `${lb2(day.tops.perHour)}/hr` },
         { kind: 'neutral', text: `${(day.jobs || []).length} jobs` },
       ] },
       { label: 'Verified tops / sack', value: v.tps === null ? DASH : fmt2(v.tps), unit: '', chips: [
         yieldChip(v),
-        day.yield?.toteLb != null ? { kind: 'neutral', text: `tote ${fmt1(day.yield.toteLb)}` } : null,
+        // Check line: tops + tote as a % of the raw used.
+        day.yield?.accountedPct != null ? { kind: 'neutral', text: `acct ${day.yield.accountedPct}%` } : null,
       ].filter(Boolean) },
       { label: 'Recording gaps', value: String(v.gaps.minutes), unit: 'min', chips: [
         { kind: v.gaps.offline ? 'bad' : 'good', text: `off ${v.gaps.offline}` },
@@ -174,15 +177,15 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
     minis: [
       { label: 'Changeover', value: mmss(ch.medianS), unit: 'median', sub: ch.count ? `max ${mmss(ch.maxS)} · ${ch.count}` : 'none timed' },
       { label: 'Quality redos', value: String(day.quality?.redo ?? 0), unit: '', sub: `${day.quality?.batches ?? 0} batches` },
-      { label: 'Raw used', value: lb2(day.yield?.usedLb), unit: 'lb', sub: `${day.yield?.eodRawLb == null ? DASH : fmt1(day.yield.eodRawLb)} lb left` },
-      { label: 'Battery', value: day.battery ? String(day.battery.pct) : DASH, unit: day.battery ? '%' : '', sub: day.battery?.from === 'eod' ? 'at EOD weigh' : 'latest' },
+      { label: 'Per person-hr', value: lb2(day.tops.perPersonH), unit: 'lb', sub: day.tops.personH ? `${fmt2(day.tops.personH)} person-hr` : DASH },
+      { label: 'EOD battery', value: day.battery ? String(day.battery.pct) : DASH, unit: day.battery ? '%' : '', sub: day.battery?.at ? `at ${clock12(day.battery.at)}` : DASH },
     ],
     // The 5 days, then the phase so far (tops over raw used, every weighed day).
     strip: strip.length ? [...strip.map((s) => stripItem(s.date, s.day)), {
       label: 'So far',
       value: so.topsPerSack === null ? DASH : fmt1(so.topsPerSack),
       sub: `${so.days} day${so.days === 1 ? '' : 's'}`,
-      kind: so.topsPerSack === null ? 'neutral' : so.topsPerSack >= v.be.both ? 'good' : so.topsPerSack >= v.be.at ? 'warn' : 'bad',
+      kind: so.topsPerSack === null || !v.be.measured ? 'neutral' : so.topsPerSack >= v.be.both ? 'good' : so.topsPerSack >= v.be.at ? 'warn' : 'bad',
     }] : [],
     // One line: the strip takes the room a second would need. Gaps first.
     flags: flags.slice(0, 1),

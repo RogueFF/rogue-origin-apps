@@ -17,7 +17,7 @@ import { battPct } from '../../lib/battery.js';
 import { sackLbs } from '../../lib/sack-weight.js';
 import { autoDay, SLOT_MINUTES } from './cell-hourly.js';
 import {
-  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN,
+  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN, personHours, mainCultivar,
 } from '../../lib/cell-day.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -111,6 +111,8 @@ export async function getCellDay(params, env, now = Date.now()) {
   const rises = ((auto && auto.rises) || []).map(r => ({ ms: msOf(r.ts), g: r.g }));
   const co = changeovers(jobs.map(j => ({ ms: j.at, jobId: j.jobId })), rises, starts.map(s => msOf(s.started_at)).filter(Boolean));
   const coS = co.map(c => c.s);
+  // One trimmer per cell in Phase 1: first gram to last pickup, breaks out.
+  const personH = personHours(rises, jobs.map(j => j.at), starts.map(s => msOf(s.started_at)).filter(Boolean));
 
   // ---- recording gaps ----
   // Gaps count inside the shift only: an episode left open overnight is not 14 h of gap.
@@ -143,7 +145,11 @@ export async function getCellDay(params, env, now = Date.now()) {
 
   return successResponse({
     stationId: id, label: station.label, date, serverNow: now,
-    tops: { lb: topsLb, workedH, perHour: workedH > 0 ? r2(topsLb / workedH) : null, hourly },
+    cultivar: mainCultivar(sackList, jobs),
+    tops: {
+      lb: topsLb, workedH, perHour: workedH > 0 ? r2(topsLb / workedH) : null,
+      personH, perPersonH: personH > 0 ? r2(topsLb / personH) : null, hourly,
+    },
     jobs,
     changeovers: { list: co, count: co.length, medianS: median(coS), maxS: coS.length ? Math.max(...coS) : null, startG: START_G },
     gaps: { offline: gap('offline'), notRecording: gap('untracked') },
