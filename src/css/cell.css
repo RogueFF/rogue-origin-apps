@@ -28,6 +28,18 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .order-select:focus { outline: 3px solid var(--green); }
 .order-select.missing { border-color: var(--danger); background: var(--danger-dim); }
 .order-select:disabled { opacity: .65; cursor: not-allowed; }
+/* Orders at the cells (slice 2): NOW is the order; NEXT is what comes after it. */
+.queue-cards { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.queue-cards[hidden], .order[hidden] { display: none; }
+.qcard { display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px; border: 3px solid var(--border); background: var(--bg-card); min-width: 0; }
+.qcard.now { border-color: var(--green); }
+.qcard.next { opacity: .85; }
+.q-order { font: 800 26px var(--font-mono); }
+.q-what { font: 700 22px var(--font-ui); overflow-wrap: anywhere; }
+.qcard.next .q-what { font-size: 18px; }
+.q-meta { font: 700 14px var(--font-ui); color: var(--text-secondary); min-height: 1em; }
+.qcard.next .q-meta { color: var(--danger); }
+@media (max-width: 560px) { .queue-cards { grid-template-columns: 1fr; } }
 .order-lock { margin: 6px 0 0; font: 600 15px var(--font-ui); color: var(--text-secondary); }
 .order-lock::before { content: '🔒 '; }
 .order-lock[hidden] { display: none; }

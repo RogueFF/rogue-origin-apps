@@ -11,8 +11,11 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { syncShopOrders } from '../../lib/order-sync.js';
-import { shopifyConfigured } from '../../lib/shopify.js';
+import { shopifyConfigured, adminOrderUrl } from '../../lib/shopify.js';
 import { pacificDay } from '../../lib/pacific.js';
+import { fillSlots, loadCells, loadWaiting } from './order-flow.js';
+import { planAssignments } from '../../lib/order-assign.js';
+import { coaFiles, coaFor } from '../../lib/order-coa.js';
 
 const OPEN_STATES = ['queued', 'assigned', 'trimming', 'ready', 'checked', 'hold'];
 const CLOSE_MIN = 16 * 60 + 30;   // the floor's day ends 4:30 PM Pacific
@@ -67,6 +70,54 @@ export async function getOrderQueue(params, env, now = new Date()) {
       form: l.form, bag: l.bag, qty: l.qty, qtyOpen: l.qty_open, route: l.route, why: l.route_why,
     });
   }
+  // Slice 2 (0061): each order's cell, its baskets, and for a waiting order the
+  // cell that frees a slot first. Before 0061 these are simply absent.
+  const jobsBy = new Map(), slotBy = new Map(), labels = new Map();
+  let waitBy = new Map();
+  try {
+    const jobs = (await env.DB.prepare(
+      `SELECT j.* FROM cell_jobs j JOIN shop_orders o ON o.id = j.order_id
+       WHERE o.state IN (${OPEN_STATES.map(() => '?').join(', ')}) AND j.state != 'cancelled' ORDER BY j.seq`
+    ).bind(...OPEN_STATES).all()).results || [];
+    for (const j of jobs) (jobsBy.get(j.order_id) || jobsBy.set(j.order_id, []).get(j.order_id)).push(j);
+    const cells = await loadCells(env);
+    for (const c of cells) {
+      labels.set(c.stationId, c.label);
+      const firsts = [...new Set(c.rows.map(r => r.order_id))];
+      firsts.forEach((id, i) => slotBy.set(id, i === 0 ? 'NOW' : 'NEXT'));
+    }
+    const waiting = await loadWaiting(env);
+    if (waiting.length) {
+      const plan = planAssignments({ cells: cells.filter(c => c.takesOrders), orders: waiting });
+      waitBy = new Map(plan.waiting.map(w => [w.orderId, w]));
+    }
+  } catch (e) { if (!notReady(e)) throw e; }
+  const roster = (await env.DB.prepare(`SELECT station_id, label FROM cell_roster`).all().catch(() => ({ results: [] }))).results || [];
+  const scales = new Set(((await env.DB.prepare(`SELECT station_id FROM scale_stations WHERE kind = 'table' AND active = 1`).all().catch(() => ({ results: [] }))).results || []).map(r => r.station_id));
+  for (const r of roster) if (!labels.has(r.station_id)) labels.set(r.station_id, r.label);
+  const cellOf = (o) => {
+    const js = jobsBy.get(o.id) || [];
+    if (!js.length) {
+      const w = waitBy.get(o.id);
+      return w && w.stationId ? { waiting: true, stationId: w.stationId, label: labels.get(w.stationId) || w.stationId, inMin: w.inMin } : null;
+    }
+    const station = js[js.length - 1].station_id;
+    return {
+      stationId: station, label: labels.get(station) || station, slot: slotBy.get(o.id) || null, why: js[0].why,
+      scale: scales.has(station),   // no scale: bag/tag taps Basket done
+      baskets: js.length, done: js.filter(j => j.state === 'done').length,
+      started: js.some(j => j.started_at), nowJobId: (js.find(j => j.state === 'queued') || {}).id || null,
+    };
+  };
+  // COA on file per cultivar (slice 4): information on the card only, never a block, and silent
+  // until COAs are mirrored to R2 (on hold: Koa 2026-11-11).
+  let files = [];
+  try { files = await coaFiles(env); } catch { /* R2 down: no COA chips this read */ }
+  const coaOf = ls => {
+    const cults = [...new Set(ls.filter(l => l.cultivar && (l.form === 'tops' || l.form === 'smalls')).map(l => l.cultivar))];
+    const r = cults.map(c => ({ cultivar: c, ...coaFor(c, files) }));
+    return { checked: files.length > 0, missing: r.filter(x => !x.file).map(x => x.cultivar), count: r.filter(x => x.file).length };
+  };
   const cutoff = carryCutoff(now);
   const today = pacificDay(now);
   const fulfilledToday = await env.DB.prepare(
@@ -82,6 +133,10 @@ export async function getOrderQueue(params, env, now = new Date()) {
       lines: ls,
       cellLines: ls.filter(l => l.route === 'cell').length,
       cultivars: [...new Set(ls.filter(l => l.route === 'cell').map(l => l.cultivar))],
+      confirmedAt: o.confirmed_at || null, readyAt: o.ready_at || null, collectedAt: o.collected_at || null,
+      cell: cellOf(o),
+      coa: coaOf(ls),
+      shopifyUrl: adminOrderUrl(env, o.shop_gid),
     };
   }).filter(o => o.lines.length);
   return successResponse({
@@ -95,7 +150,7 @@ export async function getOrderQueue(params, env, now = new Date()) {
 
 export async function orderSync(body, env, now = new Date()) {
   let result;
-  try { result = await syncShopOrders(env, { now }); } catch (e) {
+  try { result = await syncShopOrders(env, { now }); await fillSlots(env); } catch (e) {
     if (notReady(e)) return errorResponse('The order queue is not set up yet (migration 0058)', 'NOT_READY', 503);
     throw e;
   }

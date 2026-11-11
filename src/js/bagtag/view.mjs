@@ -31,12 +31,27 @@ export function lineText(l) {
   return [name, form, size ? `${size} × ${qty}` : `× ${qty}`].filter(Boolean).join(' · ');
 }
 
-/** The queue's three lists. Slice 1 has only queued orders; the rest fill in from slice 2. */
+/**
+ * The queue's three lists (slice 2):
+ *   To start        not confirmed yet: bag/tag's one click is still due
+ *   In cells        confirmed and at a cell, or every basket at the pickup spot
+ *   Ready to check  collected from the spot (or pool-only orders once confirmed)
+ */
 export function splitLists(orders = []) {
-  const toStart = orders.filter(o => o.state === 'queued' || o.state === 'hold');
-  const inCells = orders.filter(o => o.state === 'assigned' || o.state === 'trimming');
-  const ready = orders.filter(o => o.state === 'ready' || o.state === 'checked');
+  const collected = o => !!o.collectedAt;
+  const ready = orders.filter(o => collected(o) && (o.state === 'ready' || o.state === 'checked'));
+  const rest = orders.filter(o => !ready.includes(o));
+  const inCells = rest.filter(o => o.state === 'ready' || (o.confirmedAt && (o.state === 'assigned' || o.state === 'trimming')));
+  const toStart = rest.filter(o => !inCells.includes(o));
   return { toStart, inCells, ready };
+}
+
+/** "Cell 13 · NOW · same cultivar: no changeover" / "Waiting · Cell 13 frees a slot in ~25 min" parts. */
+export function cellLine(o) {
+  const c = o.cell;
+  if (!c) return o.cellLines ? { kind: 'none' } : { kind: 'bagOnly' };
+  if (c.waiting) return { kind: 'waiting', label: c.label, inMin: c.inMin };
+  return { kind: 'at', label: c.label, slot: c.slot, why: c.why, done: c.done, baskets: c.baskets };
 }
 
 /** Counts per route over the To start list, for the header chips. */

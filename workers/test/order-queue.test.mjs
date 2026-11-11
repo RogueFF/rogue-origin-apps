@@ -14,7 +14,10 @@ const NOW = new Date('2026-11-10T18:00:00Z');   // Tue 10:00 am Pacific
 
 function env(extra = {}) {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../migrations/0058-order-queue.sql', import.meta.url), 'utf8'));
+  db.exec(`CREATE TABLE scale_readings (station_id TEXT PRIMARY KEY, weight REAL, target_weight REAL, unit TEXT, updated_at TEXT);`);
+  for (const m of ['0049-cell-table-stations', '0050-cell-hourly', '0052-cell-job-order', '0054-cell-screen-state', '0058-order-queue', '0060-pickup-spot', '0061-order-assign']) {
+    db.exec(readFileSync(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
+  }
   const stmt = (sql, p) => ({
     first: async () => db.prepare(sql).get(...p) ?? null,
     all: async () => ({ results: db.prepare(sql).all(...p) }),

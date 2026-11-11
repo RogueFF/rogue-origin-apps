@@ -9,7 +9,8 @@
  *                                  checkedBy?, notes?, cultivar? }   (each check 1-4 or null; migration 0051)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
- *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg, cultivar?, bag?, cycleS? }   from the cell screen
+ *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg, cultivar?, bag?, cycleS?, jobId? }   from the cell screen
+ *                                (jobId: a queued order's basket; the pickup closes it, migration 0061)
  *                                (a pickup = a finished job; cultivar/bag/cycleS say what it was, migration 0052)
  *                                (the auto rule uses pickups; readings are net since the crew tare on the scale)
  *
@@ -26,6 +27,7 @@ import { successResponse, errorResponse } from '../../lib/response.js';
 import { ALL_TIME_SLOTS, TIME_SLOT_MULTIPLIERS, parseSlotTimeToMinutes } from '../../lib/production-helpers.js';
 import { autoTops } from '../../lib/cell-auto.js';
 import { pacificParts } from '../../lib/pacific.js';
+import { completeJob } from './order-flow.js';
 
 const MAX_TOPS_LBS = 50;      // a cell-hour is a few lb; this only stops nonsense
 const MAX_SMALLS_LBS = 200;
@@ -152,7 +154,9 @@ async function scaleMark(body, env) {
       await env.DB.prepare(
         `INSERT INTO scale_marks (station_id, ts, kind, kg, cultivar, bag, cycle_s, job_id) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)`
       ).bind(station.station_id, kind, kg, cultivar, bag, cycleS, jobId).run();
-      return successResponse({ success: true, job: { cultivar, bag, cycleS, jobId } });
+      // Order flow slice 2 (0061): the pickup closes the queue job, and the cell's NEXT moves up.
+      const done = await completeJob(env, { jobId, stationId: station.station_id, by: 'scale', netG: Math.round(kg * 100000) / 100, cycleS });
+      return successResponse({ success: true, job: { cultivar, bag, cycleS, jobId, closed: done.ok, orderReady: !!done.orderReady } });
     } catch (e) {
       // Migration 0060 not applied yet: keep the mark without its job.
       if (!/no (such )?column|has no column/i.test(String(e && e.message))) throw e;
