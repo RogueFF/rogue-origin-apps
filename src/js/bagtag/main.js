@@ -36,11 +36,12 @@ registerLabels({
     countLine: '{n} to start · {r} rush', doneToday: '{n} fulfilled today',
     atCell: '{cell} · {slot}', slotNOW: 'NOW', slotNEXT: 'NEXT', baskets: '{d} of {b} baskets done',
     waitingCell: 'Waiting for a cell · {cell} frees a slot in ~{m} min', noCell: 'Waiting for a cell',
-    bagOnly: 'No cell work: pull from the pools', confirm: 'Confirm', confirmed: 'Confirmed',
+    bagOnly: 'No cell work: pull from the pools', confirm: 'Confirm + open in Shopify', confirmOnly: 'Confirm', confirmed: 'Confirmed', openShopify: 'Open in Shopify', ship: 'Ship in Shopify', noCoa: 'No COA on file: {c}',
+    slipHint: 'In Shopify: Print → Print packing slips.', shipHint: 'In Shopify: Create shipping label → Buy shipping label → Print label. It drops off this list once Shopify says fulfilled.',
     move: 'Move to…', hold: 'Hold', release: 'Release', held: 'ON HOLD',
     basketDone: 'Basket done', collected: 'Collected', atSpot: 'At {cell}\'s pickup spot',
     pickRoute: 'Where does it go?', toBagging: 'Bagging', toPack: 'Pack',
-    readyCheck: 'Collected · check-weigh comes next', now: 'NOW', next: 'NEXT', spot: '{n} at spot', free: 'free', cells: 'Cells',
+    readyCheck: 'Collected: weigh, box, then ship in Shopify', now: 'NOW', next: 'NEXT', spot: '{n} at spot', free: 'free', cells: 'Cells',
     whySame: 'same cultivar: no changeover', whyMixed: 'already running one of its cultivars', whyFree: 'cell is free',
     whySoonest: 'frees up soonest', whyMoved: 'moved by bag/tag', failed: 'That didn\'t save: {e}',
   },
@@ -57,11 +58,12 @@ registerLabels({
     countLine: '{n} por empezar · {r} urgentes', doneToday: '{n} completadas hoy',
     atCell: '{cell} · {slot}', slotNOW: 'AHORA', slotNEXT: 'SIGUIENTE', baskets: '{d} de {b} canastas listas',
     waitingCell: 'Esperando celda · {cell} libera un lugar en ~{m} min', noCell: 'Esperando celda',
-    bagOnly: 'Sin trabajo de celda: sacar del inventario', confirm: 'Confirmar', confirmed: 'Confirmada',
+    bagOnly: 'Sin trabajo de celda: sacar del inventario', confirm: 'Confirmar + abrir en Shopify', confirmOnly: 'Confirmar', confirmed: 'Confirmada', openShopify: 'Abrir en Shopify', ship: 'Enviar en Shopify', noCoa: 'Sin COA: {c}',
+    slipHint: 'En Shopify: Print → Print packing slips.', shipHint: 'En Shopify: Create shipping label → Buy shipping label → Print label. Sale de esta lista cuando Shopify la marca como enviada.',
     move: 'Mover a…', hold: 'Pausar', release: 'Soltar', held: 'EN PAUSA',
     basketDone: 'Canasta lista', collected: 'Recogida', atSpot: 'En el lugar de recogida de {cell}',
     pickRoute: '¿A dónde va?', toBagging: 'Empaque', toPack: 'Empacar',
-    readyCheck: 'Recogida · sigue pesar y revisar', now: 'AHORA', next: 'SIGUIENTE', spot: '{n} en recogida', free: 'libre', cells: 'Celdas',
+    readyCheck: 'Recogida: pesar, empacar y enviar en Shopify', now: 'AHORA', next: 'SIGUIENTE', spot: '{n} en recogida', free: 'libre', cells: 'Celdas',
     whySame: 'misma variedad: sin cambio', whyMixed: 'ya trabaja una de sus variedades', whyFree: 'la celda está libre',
     whySoonest: 'se libera primero', whyMoved: 'movida por empaque', failed: 'No se guardó: {e}',
   },
@@ -119,6 +121,24 @@ async function post(action, body) {
 }
 const act = (orderId, op, extra = {}) => post('orderAction', { orderId, op, ...extra });
 
+// The one click (slice 4; Koa 2026-11-11: "it goes through shopify on back-end"):
+// confirm the order here and open it in Shopify admin, where bag/tag prints
+// Shopify's own packing slip (Print > Print packing slips). Nothing prints from
+// this page. The tab must open inside the click itself, or the browser blocks it.
+// Coming back to this page after shipping re-reads Shopify, so a fulfilled order
+// drops off the list without waiting for the 5-minute poll.
+let shopifyOpenedAt = 0;
+function openShopify(o) {
+  if (!o.shopifyUrl) return false;
+  window.open(o.shopifyUrl, `ro-shopify-${o.id}`);
+  shopifyOpenedAt = Date.now();
+  return true;
+}
+function confirmAndOpen(o) {
+  openShopify(o);
+  act(o.id, 'confirm');
+}
+
 function cellInfo(o) {
   const c = cellLine(o);
   const p = node('p', `cell-line k-${c.kind}`);
@@ -140,16 +160,19 @@ function actions(o, list) {
       row.append(button('ghost', t('release'), () => act(o.id, 'release')));
       return row;
     }
-    row.append(button('primary', t('confirm'), () => act(o.id, 'confirm')));
+    row.append(button('primary', o.shopifyUrl ? t('confirm') : t('confirmOnly'), () => confirmAndOpen(o)));
     if (o.cell && !o.cell.waiting && !o.cell.started && cellsNow.length > 1) row.append(moveSelect(o));
     if (!(o.cell && o.cell.started)) row.append(button('ghost', t('hold'), () => act(o.id, 'hold')));
   } else if (list === 'inCells') {
+    if (o.shopifyUrl) row.append(button('ghost', t('openShopify'), () => openShopify(o)));
     if (o.state === 'ready') {
       row.append(node('span', 'spot', tf('atSpot', { cell: o.cell ? o.cell.label : '' })));
       row.append(button('primary', t('collected'), () => act(o.id, 'collected')));
     } else if (o.cell && !o.cell.scale && o.cell.nowJobId) {
       row.append(button('ghost', t('basketDone'), () => post('jobDone', { jobId: o.cell.nowJobId })));
     }
+  } else if (list === 'ready' && o.shopifyUrl) {
+    row.append(button('primary', t('ship'), () => openShopify(o)));
   }
   return row;
 }
@@ -178,6 +201,7 @@ function card(o, now, list) {
   if (o.carriedOver) head.append(node('span', 'badge carried', t('carried')));
   if (o.changedInShopify) head.append(node('span', 'badge changed', t('changed')));
   if (o.confirmedAt) head.append(node('span', 'badge ok', t('confirmed')));
+  if (o.coa && o.coa.checked && o.coa.missing.length) head.append(node('span', 'badge nocoa', tf('noCoa', { c: o.coa.missing.join(', ') })));
   head.append(node('span', 'age', tf('waiting', { a: ageText(o.placedAt, now) })));
   c.append(head);
   const ul = node('ul', 'lines');
@@ -197,6 +221,7 @@ function card(o, now, list) {
   c.append(ul);
   if (list !== 'ready') c.append(cellInfo(o));
   else c.append(node('p', 'cell-line', t('readyCheck')));
+  if (o.shopifyUrl && (list === 'toStart' || list === 'ready')) c.append(node('p', 'hint', t(list === 'ready' ? 'shipHint' : 'slipHint')));
   const a = actions(o, list);
   if (a.childNodes.length) c.append(a);
   return c;
@@ -301,4 +326,8 @@ el.lang.textContent = getLang() === 'en' ? 'ES' : 'EN';
 load();
 setInterval(() => { if (!document.hidden && !busy) load(); }, POLL_MS);
 setInterval(render, 60000);   // ages tick between polls
-document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  // Back from Shopify: ask Shopify now, so a just-fulfilled order leaves the list (the Worker throttles to one per 20 s).
+  if (shopifyOpenedAt && Date.now() - shopifyOpenedAt < 30 * 60000) { shopifyOpenedAt = 0; refresh(); } else load();
+});

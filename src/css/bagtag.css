@@ -62,6 +62,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .pick .btn { min-height: 40px; font-size: 15px; padding: 6px 12px; }
 .order.held { opacity: .7; }
 .badge.held { background: var(--text-secondary); color: var(--bg-card); }
+.order .hint { margin: 0; font: 600 14px var(--font-ui); color: var(--text-secondary); }
+.badge.nocoa { background: var(--danger); color: #fff; }
 .badge.ok { background: color-mix(in srgb, var(--green) 25%, var(--bg-card)); color: var(--text); }
 .cell-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .cell-chip { display: grid; gap: 2px; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--border); background: var(--bg-card); font: 600 15px var(--font-ui); }
