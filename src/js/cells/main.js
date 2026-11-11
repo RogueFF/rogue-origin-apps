@@ -70,7 +70,8 @@ let waiting = [];            // pickups at the pickup spot, not yet collected
 const collecting = new Set();     // ids tapped Collected here, hidden until the server agrees
 let undoBar = null, undoTimer = null;
 // Orders at the cells (order flow slice 2, cellQueue): NOW / NEXT and baskets at each pickup spot.
-const queues = new Map();   // stationId -> { now, next, atSpot }
+const queues = new Map();   // stationId -> { now, next, nextOrder, atSpot }
+const jobOrder = new Map(); // jobId -> { orderId, orderName, orderReady }: a waiting basket's order
 const seenOrderReady = new Set();
 let offsetMs = 0;            // Worker clock minus this computer's clock
 const seenFinished = new Map();   // stationId -> finishedAt already chimed for
@@ -179,9 +180,12 @@ function renderPickups() {
       pickupEls.set(key, card);
     }
     card.querySelector('.p-cell').textContent = w.label;
-    card.querySelector('.p-what .w').textContent = `${w.bag ? t(w.bag) : ''}${w.bag && w.cultivar ? ' · ' : ''}${shortCultivar(w.cultivar)}`;
+    // A basket of a queued order carries the order number; the last one says the order is ready (slice 2).
+    const o = w.jobId ? jobOrder.get(w.jobId) : null;
+    card.classList.toggle('order-ready', !!(o && o.orderReady));
+    card.querySelector('.p-what .w').textContent = `${o && o.orderName ? `${o.orderName} · ` : ''}${w.bag ? t(w.bag) : ''}${w.bag && w.cultivar ? ' · ' : ''}${shortCultivar(w.cultivar)}`;
     card.querySelector('.p-what small').textContent = `${fmtG(w.g)}${w.cycleS ? ` · ${fmtClock(w.cycleS * 1000)}` : ''}`;
-    card.querySelector('.p-tag .r').textContent = t('atSpot');
+    card.querySelector('.p-tag .r').textContent = o && o.orderReady ? t('orderReady') : t('atSpot');
     const mins = Math.floor((workerNow() - w.at) / 60000);
     card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
     card.querySelector('.collect').textContent = t('collected');
@@ -193,22 +197,27 @@ function renderPickups() {
     if (seenFinished.get(c.stationId) !== c.job.finishedAt) { seenFinished.set(c.stationId, c.job.finishedAt); fresh = true; }
   }
   for (const id of [...seenFinished.keys()]) if (!ready.some(c => c.stationId === id)) seenFinished.delete(id);
-  // An order whose every basket is at its cell's pickup spot: one card per order (slice 2).
-  const orderReady = [...queues.values()].flatMap(q => (q.atSpot || []).filter(s => s.orderReady).map(s => ({ ...s, label: q.label })));
+  // A cell with no scale has no pickup marks, so its finished order gets one card here (slice 2):
+  // bag/tag tapped Basket done for each basket. Scale cells use the basket cards above.
+  const noScale = id => { const c = cells.find(x => x.stationId === id); return !(c && c.scale); };
+  const orderReady = [...queues.values()].filter(q => noScale(q.stationId))
+    .flatMap(q => (q.atSpot || []).filter(s => s.orderReady).map(s => ({ ...s, label: q.label })));
   for (const s of orderReady) {
     const key = `order|${s.orderId}`;
     keep.add(key);
     let card = pickupEls.get(key);
     if (!card) {
       card = document.createElement('div');
-      card.className = 'pickup order-ready';
-      card.innerHTML = '<div class="p-cell"></div><div class="p-what"><span class="w"></span><small></small></div><div class="p-tag"><span class="r"></span><small></small></div>';
+      card.className = 'pickup spot order-ready';
+      card.innerHTML = '<div class="p-cell"></div><div class="p-what"><span class="w"></span><small></small></div><div class="p-tag"><span class="r"></span><small></small></div><button type="button" class="collect"></button>';
+      card.querySelector('.collect').addEventListener('click', () => collectOrder(s.orderId));
       pickupEls.set(key, card);
     }
     card.querySelector('.p-cell').textContent = s.label;
     card.querySelector('.p-what .w').textContent = s.orderName || '';
     card.querySelector('.p-what small').textContent = tf('atSpotOf', { cell: s.label, n: s.baskets });
     card.querySelector('.p-tag .r').textContent = t('orderReady');
+    card.querySelector('.collect').textContent = t('collected');
     const since = Date.parse(String(s.since).replace(' ', 'T') + 'Z');
     const mins = Number.isFinite(since) ? Math.floor((workerNow() - since) / 60000) : 0;
     card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
@@ -219,6 +228,15 @@ function renderPickups() {
   const count = ready.length + spot.length + orderReady.length;
   if (fresh || (count && Date.now() - lastChimeAt >= REMIND_MS)) chime();
   document.title = count ? `(${count}) ${t('title')} - Rogue Origin` : `${t('title')} - Rogue Origin`;
+}
+
+// A whole order from a cell with no scale (order flow slice 2): the same Collected as bag/tag's.
+async function collectOrder(orderId) {
+  try {
+    const r = await fetch(`${API}?action=orderAction`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ orderId, op: 'collected' }) });
+    if (!r.ok && r.status !== 409) throw new Error(String(r.status));
+  } catch { el.status.textContent = t('collectFail'); }
+  pollQueues(true);
 }
 
 async function postCollect(id, undo) {
@@ -351,21 +369,25 @@ async function poll() {
   }
   timer = setTimeout(poll, POLL_MS);
 }
-// Orders at the cells: a lighter read, every QUEUE_MS. Before migration 0059 it 503s and the board is as before.
+// Orders at the cells: a lighter read, every QUEUE_MS. Before migration 0061 it 503s and the board is as before.
 const QUEUE_MS = 5000;
-async function pollQueues() {
+async function pollQueues(once = false) {
   if (!document.hidden) {
     try {
       const r = await fetch(`${API}?action=cellQueue`, { cache: 'no-store' });
       if (r.ok) {
         queues.clear();
-        for (const q of (await r.json()).cells || []) queues.set(q.stationId, q);
+        jobOrder.clear();
+        for (const q of (await r.json()).cells || []) {
+          queues.set(q.stationId, q);
+          for (const s of q.atSpot || []) for (const id of s.jobIds || []) jobOrder.set(id, { orderId: s.orderId, orderName: s.orderName, orderReady: s.orderReady });
+        }
         for (const id of [...seenOrderReady]) if (![...queues.values()].some(q => (q.atSpot || []).some(s => s.orderId === id && s.orderReady))) seenOrderReady.delete(id);
         if (cells.length) render();
       }
     } catch { /* the board still shows the cells */ }
   }
-  setTimeout(pollQueues, QUEUE_MS);
+  if (!once) setTimeout(pollQueues, QUEUE_MS);
 }
 // Clocks tick between reads.
 setInterval(() => { if (!document.hidden && cells.length) render(); }, 1000);

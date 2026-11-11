@@ -820,7 +820,7 @@ let queue = { now: null, next: null };
 async function loadQueue() {
   try {
     const r = await fetch(`${API}?action=cellQueue&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
-    if (!r.ok) return;   // before migration 0059 (503) the screen works as it always has
+    if (!r.ok) return;   // before migration 0061 (503) the screen works as it always has
     const d = await r.json();
     queue = { now: (d.cell && d.cell.now) || null, next: (d.cell && d.cell.next) || null };
   } catch { return; }

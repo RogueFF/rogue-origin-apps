@@ -147,7 +147,7 @@ export default {
         if (inPollHours()) {
           const r = await syncShopOrders(env);
           if (r.error) console.error(`[Cron] Order sync failed: ${r.error}`);
-          // ...and every waiting order onto a cell's NOW/NEXT (migration 0059).
+          // ...and every waiting order onto a cell's NOW/NEXT (migration 0061).
           const { fillSlots } = await import('./handlers/production/order-flow.js');
           await fillSlots(env);
         }

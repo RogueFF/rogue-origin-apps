@@ -1,5 +1,5 @@
 /**
- * Orders at the cells, slice 2 (migration 0059; design doc §2e; Koa 2026-11-11:
+ * Orders at the cells, slice 2 (migration 0061; design doc §2e; Koa 2026-11-11:
  * "automatic order assignment, 1 click printing, order queue, and flow").
  *
  * The Worker assigns every waiting order to a cell by itself (lib/order-assign.js)
@@ -22,7 +22,7 @@ import { successResponse, errorResponse } from '../../lib/response.js';
 import { planAssignments, paceFromMarks, FILL_G, minutesToFree } from '../../lib/order-assign.js';
 
 const notReady = e => /no such (table|column)/i.test(String(e && e.message));
-const NOT_READY = () => errorResponse('Orders at cells are not set up yet (migration 0059)', 'NOT_READY', 503);
+const NOT_READY = () => errorResponse('Orders at cells are not set up yet (migration 0061)', 'NOT_READY', 503);
 const bad = msg => errorResponse(msg, 'VALIDATION_ERROR', 400);
 
 async function all(env, sql, ...p) { return (await env.DB.prepare(sql).bind(...p).all()).results || []; }
@@ -137,7 +137,11 @@ export async function startJob(env, stationId, jobId) {
 
 /** A basket reached the pickup spot: by the cell scale's pickup, or a tap for a cell with no scale. */
 export async function completeJob(env, { jobId, stationId = null, by = 'scale', netG = null, cycleS = null }) {
-  const job = await first(env, `SELECT id, order_id, station_id, state FROM cell_jobs WHERE id = ?`, Number(jobId));
+  let job;
+  try { job = await first(env, `SELECT id, order_id, station_id, state FROM cell_jobs WHERE id = ?`, Number(jobId)); } catch (e) {
+    if (notReady(e)) return { ok: false, notReady: true };   // 0061 not applied: the pickup mark is all there is
+    throw e;
+  }
   if (!job || job.state !== 'queued' || (stationId && job.station_id !== stationId)) return { ok: false };
   await run(env, `UPDATE cell_jobs SET state = 'done', done_at = datetime('now'), done_by = ?, net_g = ?, cycle_s = ?,
     started_at = COALESCE(started_at, datetime('now')) WHERE id = ? AND state = 'queued'`, by, netG, cycleS, job.id);
@@ -149,6 +153,29 @@ export async function completeJob(env, { jobId, stationId = null, by = 'scale', 
   }
   await fillSlots(env);
   return { ok: true, orderId: job.order_id, orderReady: !left.n };
+}
+
+/**
+ * The pickup spot has one store, the pickup mark (scale_marks.collected_at,
+ * migration 0060, #166). When the board's Collected (collectPickup) takes a mark
+ * that closed a queued job, the job is collected too, and the order once every
+ * basket of it is. Undo puts both back.
+ */
+export async function markCollected(env, markId, collected) {
+  try {
+    const m = await first(env, `SELECT job_id FROM scale_marks WHERE id = ?`, Number(markId));
+    if (!m || !m.job_id) return;
+    const job = await first(env, `SELECT id, order_id FROM cell_jobs WHERE id = ?`, m.job_id);
+    if (!job) return;
+    if (collected) {
+      await run(env, `UPDATE cell_jobs SET collected_at = COALESCE(collected_at, datetime('now')) WHERE id = ?`, job.id);
+      const left = await first(env, `SELECT COUNT(*) AS n FROM cell_jobs WHERE order_id = ? AND state != 'cancelled' AND collected_at IS NULL`, job.order_id);
+      if (!left.n) await run(env, `UPDATE shop_orders SET collected_at = COALESCE(collected_at, datetime('now')) WHERE id = ? AND state = 'ready'`, job.order_id);
+    } else {
+      await run(env, `UPDATE cell_jobs SET collected_at = NULL WHERE id = ?`, job.id);
+      await run(env, `UPDATE shop_orders SET collected_at = NULL WHERE id = ? AND state = 'ready'`, job.order_id);
+    }
+  } catch (e) { if (!notReady(e)) throw e; }
 }
 
 /** Shopify cancelled or fulfilled an order: its baskets not yet started leave the cell queue. */
@@ -188,8 +215,9 @@ export async function getCellQueue(params, env) {
     const atSpot = new Map();
     for (const j of spot.filter(s => s.station_id === c.stationId)) {
       const e = atSpot.get(j.order_id) || { orderId: j.order_id, orderName: (orders.get(j.order_id) || {}).name || null,
-        baskets: 0, since: j.done_at, orderReady: (orders.get(j.order_id) || {}).state === 'ready' };
+        baskets: 0, since: j.done_at, orderReady: (orders.get(j.order_id) || {}).state === 'ready', jobIds: [] };
       e.baskets += 1;
+      e.jobIds.push(j.id);
       atSpot.set(j.order_id, e);
     }
     return {
@@ -211,6 +239,7 @@ export async function jobDone(body, env) {
   if (!Number.isInteger(jobId) || jobId < 1) return bad('jobId is required');
   let r;
   try { r = await completeJob(env, { jobId, by: 'tap' }); } catch (e) { if (notReady(e)) return NOT_READY(); throw e; }
+  if (r.notReady) return NOT_READY();
   if (!r.ok) return errorResponse('That basket is not waiting at a cell', 'NOT_QUEUED', 409);
   return successResponse({ success: true, ...r });
 }
@@ -255,6 +284,11 @@ export async function orderAction(body, env) {
       if (order.state !== 'ready') return errorResponse('Not every basket is at the pickup spot yet', 'NOT_READY_YET', 409);
       await run(env, `UPDATE cell_jobs SET collected_at = datetime('now') WHERE order_id = ? AND state = 'done' AND collected_at IS NULL`, orderId);
       await run(env, `UPDATE shop_orders SET collected_at = COALESCE(collected_at, datetime('now')) WHERE id = ?`, orderId);
+      // ...and the pickup marks behind those baskets, so the board's waiting cards clear too (0060).
+      try {
+        await run(env, `UPDATE scale_marks SET collected_at = datetime('now') WHERE kind = 'pickup' AND collected_at IS NULL
+          AND job_id IN (SELECT id FROM cell_jobs WHERE order_id = ?)`, orderId);
+      } catch (e) { if (!notReady(e)) throw e; }
     } else if (op === 'route') {
       const route = ['bagging', 'pack', 'cell'].includes(body.route) ? body.route : null;
       if (!route) return bad('route must be bagging, pack or cell');

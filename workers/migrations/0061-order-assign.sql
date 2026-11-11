@@ -6,9 +6,11 @@
 -- splits a line into baskets of at most one 1 lb fill). A cell's NOW is its
 -- first queued job by seq, NEXT the second. A cell holds at most two orders.
 --
--- Run ONCE: the ALTER TABLE lines are not idempotent in SQLite. Needs 0058.
+-- Run ONCE: the ALTER TABLE lines are not idempotent in SQLite. Needs 0058 and
+-- 0060 (0060-pickup-spot adds scale_marks.job_id and collected_at: the pickup
+-- mark is the one store for "waiting at the pickup spot").
 -- Apply by hand:
---   cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0059-order-assign.sql
+--   cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0061-order-assign.sql
 
 CREATE TABLE IF NOT EXISTS cell_jobs (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,9 +37,6 @@ CREATE TABLE IF NOT EXISTS cell_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_cell_jobs_station ON cell_jobs (station_id, state, seq);
 CREATE INDEX IF NOT EXISTS idx_cell_jobs_order ON cell_jobs (order_id);
-
--- The pickup that closed a job (the cell screen sends jobId with it).
-ALTER TABLE scale_marks ADD COLUMN job_id INTEGER;
 
 -- Which cells take orders (Koa 2026-11-10/11: table1 and the retail cells 12-14 now).
 ALTER TABLE cell_roster ADD COLUMN takes_orders INTEGER NOT NULL DEFAULT 0;

@@ -22,7 +22,7 @@
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { batteryOf } from '../../lib/battery.js';
 import { recentEvents, notRecording } from '../../lib/untracked.js';
-import { startJob } from './order-flow.js';
+import { startJob, markCollected } from './order-flow.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
 const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
@@ -87,7 +87,7 @@ export async function setCellState(body, env, now = Date.now()) {
     clockStart, clockMs, paused, paused ? clean(body.pauseNote, 120) : null,
     phase === 'finished' ? finishedNetG : null, phase === 'finished' ? now : null, now,
   ).run();
-  // A queued order's basket started trimming (migration 0059): the order shows as trimming.
+  // A queued order's basket started trimming (migration 0061): the order shows as trimming.
   if (phase === 'running' && Number(body.jobId) > 0) await startJob(env, cell.station_id, Number(body.jobId));
   return successResponse({ success: true, stationId: cell.station_id, phase });
 }
@@ -159,5 +159,7 @@ export async function collectPickup(body, env, now = Date.now()) {
   if (!r.meta || !r.meta.changes) {
     return errorResponse(body.undo ? 'Too late to undo' : 'Already collected, or not a pickup', 'CONFLICT', 409);
   }
+  // A basket of a queued order (order flow slice 2): the job and its order follow.
+  await markCollected(env, id, !body.undo);
   return successResponse({ success: true, id, collected: !body.undo });
 }

@@ -69,8 +69,8 @@ export async function getOrderQueue(params, env, now = new Date()) {
       form: l.form, bag: l.bag, qty: l.qty, qtyOpen: l.qty_open, route: l.route, why: l.route_why,
     });
   }
-  // Slice 2 (0059): each order's cell, its baskets, and for a waiting order the
-  // cell that frees a slot first. Before 0059 these are simply absent.
+  // Slice 2 (0061): each order's cell, its baskets, and for a waiting order the
+  // cell that frees a slot first. Before 0061 these are simply absent.
   const jobsBy = new Map(), slotBy = new Map(), labels = new Map();
   let waitBy = new Map();
   try {

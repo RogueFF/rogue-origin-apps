@@ -107,7 +107,7 @@ async function upsertOrder(env, o) {
          title = excluded.title, variant_title = excluded.variant_title, cultivar = excluded.cultivar,
          floor_cultivar = excluded.floor_cultivar, form = excluded.form, bag = excluded.bag, qty = excluded.qty,
          qty_open = excluded.qty_open, sort = excluded.sort,
-         -- a route bag/tag picked by hand (0059) is never overwritten by the next poll
+         -- a route bag/tag picked by hand (0061) is never overwritten by the next poll
          route = CASE WHEN shop_order_lines.route_set_by IS NULL THEN excluded.route ELSE shop_order_lines.route END,
          route_why = CASE WHEN shop_order_lines.route_set_by IS NULL THEN excluded.route_why ELSE shop_order_lines.route_why END`
     ).bind(row.id, l.gid, l.title, l.variantTitle, l.cultivar, l.floorCultivar, l.form, l.bag, l.qty, l.qtyOpen,

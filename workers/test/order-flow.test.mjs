@@ -1,4 +1,4 @@
-// Orders at the cells, slice 2 (migration 0059; lib/order-assign.js,
+// Orders at the cells, slice 2 (migration 0061; lib/order-assign.js,
 // handlers/production/order-flow.js, the scaleMark / setCellState hooks).
 // Made-up orders only: invented numbers, no buyer fields.
 import { test } from 'node:test';
@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { planAssignments, basketsFor, paceFromMarks, DEFAULT_PACE_GPM } from '../src/lib/order-assign.js';
 import { fillSlots, getCellQueue, orderAction, jobDone, handJobLeft } from '../src/handlers/production/order-flow.js';
 import { scaleMark } from '../src/handlers/production/cell-hourly.js';
-import { setCellState } from '../src/handlers/production/cell-board.js';
+import { setCellState, collectPickup } from '../src/handlers/production/cell-board.js';
 import { syncShopOrders, STATUS_QUERY } from '../src/lib/order-sync.js';
 import { getOrderQueue } from '../src/handlers/production/order-queue.js';
 
@@ -89,7 +89,7 @@ test('NOW + NEXT: two orders a cell; rush first; the rest wait with the cell tha
 function env() {
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE scale_readings (station_id TEXT PRIMARY KEY, weight REAL, target_weight REAL, unit TEXT, updated_at TEXT);`);
-  for (const m of ['0049-cell-table-stations', '0050-cell-hourly', '0052-cell-job-order', '0054-cell-screen-state', '0058-order-queue', '0059-order-assign']) {
+  for (const m of ['0049-cell-table-stations', '0050-cell-hourly', '0052-cell-job-order', '0054-cell-screen-state', '0058-order-queue', '0060-pickup-spot', '0061-order-assign']) {
     db.exec(readFileSync(new URL(`../migrations/${m}.sql`, import.meta.url), 'utf8'));
   }
   db.exec(`INSERT OR IGNORE INTO scale_stations (station_id, label, kind, token_hash, stale_after_s) VALUES ('table1', 'Cell 1', 'table', 'x', 45);`);
@@ -264,11 +264,41 @@ test('hold is refused once a basket of the order is being trimmed', async () => 
   assert.equal((await orderAction({ orderId: id, op: 'hold' }, e)).status, 409);
 });
 
-test('before migration 0059: a clear 503, never a crash', async () => {
+test('before migration 0061: a clear 503, never a crash', async () => {
   const db = new DatabaseSync(':memory:');
   const s = sql => ({ first: async () => db.prepare(sql).get(), all: async () => ({ results: db.prepare(sql).all() }), run: async () => db.prepare(sql).run() });
   const e = { DB: { prepare: sql => ({ bind: () => s(sql), ...s(sql) }) } };
   assert.equal((await getCellQueue({}, e)).status, 503);
   assert.equal((await jobDone({ jobId: 1 }, e)).status, 503);
   assert.deepEqual(await fillSlots(e), { assigned: 0, notReady: true });
+});
+
+test('one pickup spot: the board\'s Collected on a basket collects the job and, with the last one, the order (and Undo)', async () => {
+  const { raw, env: e } = env();
+  await seed(e, [sOrder(9701, '2026-11-10T10:00:00Z', [sLine('Sour Lifter Hemp Flower', '1 lb.', 2)])]);
+  const id = orderId(raw, '#9701');
+  for (let i = 0; i < 2; i++) {
+    const c = await queueOf(e, 'table1');
+    await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.46, cultivar: SL, bag: 'lb1', cycleS: 3000, jobId: c.now.id }, e);
+  }
+  const marks = raw.prepare(`SELECT id, job_id, collected_at FROM scale_marks WHERE kind = 'pickup' ORDER BY id`).all();
+  assert.equal(marks.length, 2);
+  assert.ok(marks.every(m => m.job_id && m.collected_at === null), 'waiting at the spot');
+  const c = await queueOf(e, 'table1');
+  assert.deepEqual(c.atSpot[0].jobIds.length, 2, 'the board can put the order number on each basket card');
+  await collectPickup({ id: marks[0].id }, e);
+  assert.equal(raw.prepare(`SELECT collected_at FROM shop_orders WHERE id = ?`).get(id).collected_at, null, 'one basket still at the spot');
+  await collectPickup({ id: marks[1].id }, e);
+  assert.ok(raw.prepare(`SELECT collected_at FROM shop_orders WHERE id = ?`).get(id).collected_at, 'both collected: on to check-weigh');
+  await collectPickup({ id: marks[1].id, undo: true }, e);
+  assert.equal(raw.prepare(`SELECT collected_at FROM shop_orders WHERE id = ?`).get(id).collected_at, null, 'undo puts the order back at the spot');
+});
+
+test('one pickup spot: bag/tag\'s order Collected clears the baskets\' marks too', async () => {
+  const { raw, env: e } = env();
+  await seed(e, [sOrder(9801, '2026-11-10T10:00:00Z', [sLine('Sour Lifter Hemp Flower', '1 oz.', 2)])]);
+  const c = await queueOf(e, 'table1');
+  await scaleMark({ stationId: 'table1', kind: 'pickup', kg: 0.06, cultivar: SL, bag: 'oz1', cycleS: 600, jobId: c.now.id }, e);
+  assert.equal((await orderAction({ orderId: orderId(raw, '#9801'), op: 'collected' }, e)).status, 200);
+  assert.ok(raw.prepare(`SELECT collected_at FROM scale_marks WHERE job_id = ?`).get(c.now.id).collected_at);
 });
