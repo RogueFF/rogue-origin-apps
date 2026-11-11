@@ -22,6 +22,7 @@
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { batteryOf } from '../../lib/battery.js';
 import { recentEvents, notRecording } from '../../lib/untracked.js';
+import { startJob } from './order-flow.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
 const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
@@ -86,6 +87,8 @@ export async function setCellState(body, env, now = Date.now()) {
     clockStart, clockMs, paused, paused ? clean(body.pauseNote, 120) : null,
     phase === 'finished' ? finishedNetG : null, phase === 'finished' ? now : null, now,
   ).run();
+  // A queued order's basket started trimming (migration 0059): the order shows as trimming.
+  if (phase === 'running' && Number(body.jobId) > 0) await startJob(env, cell.station_id, Number(body.jobId));
   return successResponse({ success: true, stationId: cell.station_id, phase });
 }
 
