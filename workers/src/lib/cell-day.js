@@ -127,25 +127,43 @@ export function verifiedYield({ topsLb, sacksLb, carryInG = 0, eodRawG = null, t
 }
 
 /**
- * Person-hours for a one-trimmer cell (Phase 1): from the day's first gram of
- * real tops (or first queue Start) to its last pickup (or last gram), breaks out.
- * null with nothing trimmed.
+ * The cell's working window: from the day's first gram of real tops (or first
+ * queue Start) to its last pickup (or last gram). null with nothing trimmed.
+ * Person-hours and offline gap minutes both use it (hourly-data session
+ * 2026-11-11: a Feather off before anyone sits down, or charging after the last
+ * pickup, is not a recording gap).
  */
-export function personHours(rises, pickups, starts = [], people = 1, breaks = CELL_BREAKS) {
+export function workWindow(rises, pickups, starts = []) {
   const firsts = [...rises.filter(r => r.g >= START_G).map(r => r.ms), ...starts];
   const lasts = [...pickups, ...rises.map(r => r.ms)];
   if (!firsts.length || !lasts.length) return null;
   const a = Math.min(...firsts), b = Math.max(...lasts);
-  if (!(b > a)) return null;
-  return Math.round(((b - a - breakMsIn(a, b, breaks)) / 3600e3) * people * 100) / 100;
+  return b > a ? { fromMs: a, toMs: b } : null;
 }
 
-/** The day's cultivar: the sacks the cell used (by lb), else its jobs. */
+/** Person-hours for a one-trimmer cell (Phase 1): the working window, breaks out. */
+export function personHours(rises, pickups, starts = [], people = 1, breaks = CELL_BREAKS) {
+  const w = workWindow(rises, pickups, starts);
+  if (!w) return null;
+  return Math.round(((w.toMs - w.fromMs - breakMsIn(w.fromMs, w.toMs, breaks)) / 3600e3) * people * 100) / 100;
+}
+
+/** A day's raw is one cultivar when the main one is at least this share of it. */
+export const SINGLE_SHARE = 0.8;
+
+/**
+ * The day's cultivar: the sacks the cell used (by lb), else its jobs (by count),
+ * with its share. A blend (no cultivar at SINGLE_SHARE) has no single break-even.
+ */
 export function mainCultivar(sacks, jobs) {
   const w = new Map();
   for (const s of sacks) if (s.cultivar) w.set(s.cultivar, (w.get(s.cultivar) || 0) + s.lbs);
   if (!w.size) for (const j of jobs) if (j.cultivar) w.set(j.cultivar, (w.get(j.cultivar) || 0) + 1);
-  return [...w.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+  const all = [...w.values()].reduce((a, x) => a + x, 0);
+  const top = [...w.entries()].sort((x, y) => y[1] - x[1])[0];
+  if (!top || !(all > 0)) return { name: null, share: null, mixed: false };
+  const share = Math.round((top[1] / all) * 100) / 100;
+  return { name: top[0], share, mixed: share < SINGLE_SHARE };
 }
 
 /** The shift day before `date` (Mon–Fri; Friday before a Monday). */

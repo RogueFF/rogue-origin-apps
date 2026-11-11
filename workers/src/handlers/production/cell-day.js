@@ -21,7 +21,7 @@ import { battPct } from '../../lib/battery.js';
 import { sackLbs } from '../../lib/sack-weight.js';
 import { autoDay, SLOT_MINUTES } from './cell-hourly.js';
 import {
-  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN, personHours, mainCultivar,
+  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN, personHours, mainCultivar, workWindow,
 } from '../../lib/cell-day.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -116,15 +116,25 @@ export async function getCellDay(params, env, now = Date.now()) {
   const co = changeovers(jobs.map(j => ({ ms: j.at, jobId: j.jobId })), rises, starts.map(s => msOf(s.started_at)).filter(Boolean));
   const coS = co.map(c => c.s);
   // One trimmer per cell in Phase 1: first gram to last pickup, breaks out.
-  const personH = personHours(rises, jobs.map(j => j.at), starts.map(s => msOf(s.started_at)).filter(Boolean));
+  const startMs = starts.map(s => msOf(s.started_at)).filter(Boolean);
+  const personH = personHours(rises, jobs.map(j => j.at), startMs);
+  const work = workWindow(rises, jobs.map(j => j.at), startMs);
 
   // ---- recording gaps ----
-  // Gaps count inside the shift only: an episode left open overnight is not 14 h of gap.
-  const eps = episodesInDay(episodes, dayFrom + SHIFT_MIN[0] * 60e3, dayFrom + SHIFT_MIN[1] * 60e3, now);
-  const gap = kind => {
-    const e = eps.filter(x => x.kind === kind);
-    return { count: e.length, minutes: e.reduce((a, x) => a + x.minutes, 0), episodes: e };
-  };
+  // NOT RECORDING (a real weight rise with no job) counts anywhere in the shift.
+  // Scale offline counts only inside the working window: a Feather off before
+  // anyone sits down, or charging after the last pickup, is not a gap. Offline
+  // time in the shift but outside the window is listed as `uncounted`, so a
+  // scale that died mid-afternoon (and so had no pickups after it) still shows.
+  const shiftFrom = dayFrom + SHIFT_MIN[0] * 60e3, shiftTo = dayFrom + SHIFT_MIN[1] * 60e3;
+  const nrEps = episodesInDay(episodes.filter(e => e.kind === 'untracked'), shiftFrom, shiftTo, now);
+  const offRows = episodes.filter(e => e.kind === 'offline');
+  const offEps = work ? episodesInDay(offRows, Math.max(shiftFrom, work.fromMs), Math.min(shiftTo, work.toMs), now) : [];
+  const offShift = episodesInDay(offRows, shiftFrom, shiftTo, now);
+  const uncounted = offShift
+    .map(e => ({ ...e, minutes: e.minutes - offEps.filter(x => x.fromMs < (e.toMs ?? Infinity) && (x.toMs ?? Infinity) > e.fromMs).reduce((a, x) => a + x.minutes, 0) }))
+    .filter(e => e.minutes > 0);
+  const gap = list => ({ count: list.length, minutes: list.reduce((a, x) => a + x.minutes, 0), episodes: list });
 
   // ---- End of day, sacks, verified tops/sack ----
   const sum = k => eod.filter(e => e.kind === k).reduce((a, e) => a + e.grams, 0);
@@ -151,14 +161,19 @@ export async function getCellDay(params, env, now = Date.now()) {
 
   return successResponse({
     stationId: id, label: station.label, date, serverNow: now,
-    cultivar: mainCultivar(sackList, jobs),
+    // A blend (no cultivar at 80% of the raw) has no single break-even: mixed.
+    ...(() => { const c = mainCultivar(sackList, jobs); return { cultivar: c.name, cultivarShare: c.share, mixed: c.mixed }; })(),
     tops: {
       lb: topsLb, workedH, perHour: workedH > 0 ? r2(topsLb / workedH) : null,
       personH, perPersonH: personH > 0 ? r2(topsLb / personH) : null, hourly,
     },
     jobs,
     changeovers: { list: co, count: co.length, medianS: median(coS), maxS: coS.length ? Math.max(...coS) : null, startG: START_G },
-    gaps: { offline: gap('offline'), notRecording: gap('untracked') },
+    gaps: {
+      offline: { ...gap(offEps), uncounted },
+      notRecording: gap(nrEps),
+      window: work,
+    },
     quality: qualityOf(quality),
     sacks: { list: sackList, count: sackList.length, lb: r2(sacksLb) },
     eod: { rawG: eodRawG, toteG: eodToteG, carryInG, carryFrom: c.g != null ? prev : null },

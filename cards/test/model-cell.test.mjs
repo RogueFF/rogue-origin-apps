@@ -139,3 +139,24 @@ test('carry-in unknown (the day before had raw, no weigh): NOT YET with the reas
   assert.equal(m.pill, 'NOT YET: no carry-in weigh');
   assert.equal(m.flags[0].tag, 'Raw');
 });
+
+test('a blend is NO BASELINE with the reason; a low EOD battery and a mid-afternoon outage are said in words', () => {
+  const day = cellDay({
+    mixed: true, cultivarShare: 0.66,
+    battery: { pct: 12, mv: 3560, at: Date.parse('2026-11-13T00:30:00Z'), from: 'eod' },
+    gaps: {
+      offline: { count: 0, minutes: 0, episodes: [], uncounted: [{ kind: 'offline', fromMs: Date.parse('2026-11-12T22:00:00Z'), toMs: null, minutes: 140 }] },
+      notRecording: { count: 0, minutes: 0, episodes: [] },
+      window: { fromMs: Date.parse('2026-11-12T15:30:00Z'), toMs: Date.parse('2026-11-12T21:50:00Z') },
+    },
+  });
+  const v = verdict(day);
+  assert.deepEqual([v.yield, v.pass, v.clean], ['info', false, true]);
+  const m = cellModel({ date: '2026-11-12', day, strip: [], generatedAt: GEN });
+  assert.equal(m.pill, 'DAY: NO BASELINE');
+  assert.deepEqual(m.flags[0], { kind: 'warn', tag: 'Check', text: 'Scale offline from 2:00 PM after the last pickup (not counted): was the cell still trimming?' });
+  assert.equal(m.minis[3].sub, '⚠ LOW: charge');
+  // Charging after a 4:05 pm last pickup is the normal end of day: no Check flag.
+  const late = cellDay({ gaps: { ...day.gaps, offline: { ...day.gaps.offline, uncounted: [{ kind: 'offline', fromMs: Date.parse('2026-11-13T00:10:00Z'), toMs: null, minutes: 10 }] }, window: { fromMs: 0, toMs: Date.parse('2026-11-13T00:05:00Z') } } });
+  assert.ok(!cellModel({ date: '2026-11-12', day: late, strip: [], generatedAt: GEN }).flags.some((f) => f.tag === 'Check'));
+});

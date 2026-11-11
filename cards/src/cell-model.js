@@ -80,8 +80,14 @@ const gapsOf = (day) => ({
  * A day passes when tops/sack is PASS or CLOSE and Recording is PASS (0 gap
  * minutes, 0 episodes).
  */
+/** EOD battery under this: an overnight charge that doesn't happen is tomorrow's gap. */
+export const BATTERY_LOW_PCT = 15;
+/** Offline after the last pickup but starting before this (Pacific minutes) may be a scale that died mid-shift. */
+const LATE_MIN = 15 * 60 + 50;
+
 export function verdict(day) {
-  const be = breakEvenFor(dayCultivar(day));
+  // A blend (no cultivar at 80% of the raw, cellDay `mixed`) has no single break-even.
+  const be = day.mixed ? breakEvenFor(null) : breakEvenFor(dayCultivar(day));
   const tps = day.yield?.topsPerSack ?? null;
   const y = tps === null ? 'none' : !be.measured ? 'info' : tps >= be.both ? 'both' : tps >= be.at ? 'at' : 'under';
   const g = gapsOf(day);
@@ -147,9 +153,18 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   if (eps.length) {
     flags.push({ kind: 'bad', tag: 'Gap', text: eps.map((e) => `${e.kind === 'offline' ? 'Scale offline' : 'NOT RECORDING'} ${clock12(e.fromMs)}, ${e.minutes} min${e.toMs === null ? ' (open)' : ''}`).join(' · ') });
   }
+  // Offline after the last pickup isn't counted, but if it began well before
+  // the end of the shift the scale may have died while the cell kept trimming.
+  const workEnd = day.gaps?.window?.toMs ?? null;
+  const early = (day.gaps?.offline?.uncounted || []).find((e) => workEnd !== null && e.fromMs >= workEnd
+    && (() => { const p = new Date(e.fromMs).toLocaleTimeString('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit' }).split(':'); return Number(p[0]) * 60 + Number(p[1]) < LATE_MIN; })());
+  if (early) flags.push({ kind: 'warn', tag: 'Check', text: `Scale offline from ${clock12(early.fromMs)} after the last pickup (not counted): was the cell still trimming?` });
   if (carryUnknown) flags.push({ kind: 'warn', tag: 'Raw', text: 'The shift day before had raw but no End of day weigh, so today is not verified' });
+  const lowBatt = day.battery && day.battery.pct < BATTERY_LOW_PCT;
+  if (lowBatt) flags.push({ kind: 'warn', tag: 'Charge', text: `Scale battery ${day.battery.pct}% at End of day: charge it tonight or tomorrow starts with a gap` });
+  if (day.mixed) flags.push({ kind: 'warn', tag: 'Mixed', text: `Mixed raw: ${cultivar ? cultivarShort(cultivar) : 'the main cultivar'} is ${Math.round((day.cultivarShare || 0) * 100)}%, so no single break-even (NO BASELINE)` });
   if (day.quality?.stop) flags.push({ kind: 'bad', tag: 'Stop', text: `${day.quality.stop} batch(es) scored 1 on mold or insects` });
-  if (!v.be.measured) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: tops/sack is shown, not judged` });
+  if (!v.be.measured && !day.mixed) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: tops/sack is shown, not judged` });
   if (v.pass && !flags.some((f) => f.kind === 'bad')) flags.unshift({ kind: 'good', tag: 'Good', text: `No recording gaps, and verified tops/sack ${v.yield === 'both' ? 'above both' : 'between the'} break-evens (${fmt1(v.be.at)} / ${fmt1(v.be.both)})` });
   const passed = strip.filter((x) => x.day && verdict(x.day).pass).length;
 
@@ -190,7 +205,8 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
       { label: 'Changeover', value: mmss(ch.medianS), unit: 'median', sub: ch.count ? `max ${mmss(ch.maxS)} · ${ch.count}` : 'none timed' },
       { label: 'Quality redos', value: String(day.quality?.redo ?? 0), unit: '', sub: `${day.quality?.batches ?? 0} batches` },
       { label: 'Per person-hr', value: lb2(day.tops.perPersonH), unit: 'lb', sub: v.be.lineRate ? `vs line ${fmt2(v.be.lineRate)}` : (day.tops.personH ? `${fmt1(day.tops.personH)} person-h` : DASH) },
-      { label: 'EOD battery', value: day.battery ? String(day.battery.pct) : DASH, unit: day.battery ? '%' : '', sub: day.battery?.at ? `at ${clock12(day.battery.at)}` : DASH },
+      { label: 'EOD battery', value: day.battery ? String(day.battery.pct) : DASH, unit: day.battery ? '%' : '',
+        sub: lowBatt ? '⚠ LOW: charge' : day.battery?.at ? `at ${clock12(day.battery.at)}` : DASH },
     ],
     // The 5 days, then the phase so far (tops over raw used, every weighed day).
     strip: strip.length ? [...strip.map((s) => stripItem(s.date, s.day)), {

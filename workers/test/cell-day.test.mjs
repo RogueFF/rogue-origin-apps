@@ -115,7 +115,7 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.equal(res.status, 200);
   const d = await res.json();
   assert.equal(d.label, 'Cell 1');
-  assert.equal(d.cultivar, '2026 - Sour Lifter / Sungrown');
+  assert.deepEqual([d.cultivar, d.cultivarShare, d.mixed], ['2026 - Sour Lifter / Sungrown', 1, false]);
   assert.equal(d.tops.personH, 1.18, '9:30 first gram to the 10:41 pickup');
   assert.equal(d.yield.accountedPct, 7);
   assert.deepEqual(d.tops.hourly.map(h => [h.source, h.lb]), [['scale', 0.51], ['typed', 0.6]]);
@@ -124,7 +124,9 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.deepEqual(d.jobs.map(j => [j.g, j.bag, j.cycleS]), [[227, 'hLb', 2280], [226, 'hLb', 2820]]);
   assert.equal(d.changeovers.count, 1);
   assert.equal(d.changeovers.medianS, 3 * 60 - 1, '9:50:01 pickup -> 9:53 first gram');
-  assert.deepEqual([d.gaps.offline.count, d.gaps.offline.minutes, d.gaps.notRecording.count], [1, 6, 0]);
+  // 11:00-11:06 offline is after the 10:41 last pickup: listed, not counted.
+  assert.deepEqual([d.gaps.offline.count, d.gaps.offline.minutes, d.gaps.notRecording.count], [0, 0, 0]);
+  assert.deepEqual(d.gaps.offline.uncounted.map(e => e.minutes), [6]);
   assert.deepEqual(d.quality, { batches: 2, pass: 1, redo: 1, stop: 0 });
   assert.deepEqual([d.sacks.count, d.sacks.lb], [1, 35]);
   assert.deepEqual([d.eod.rawG, d.eod.toteG, d.eod.carryInG, d.eod.carryFrom], [1814.4, 680.4, 2268, '2026-11-11']);
@@ -194,4 +196,26 @@ test('cellDay raw=1: the day\'s scale events, marks, screen log, EOD rows and ep
   assert.ok(Array.isArray(d.raw.episodes));
   const plain = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(17, 0))).json();
   assert.equal(plain.raw, undefined);
+});
+
+test('offline minutes count only inside the working window (first gram to last pickup); before and after are listed, not counted', async () => {
+  const { raw, env } = d1();
+  const ev = raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, ?)`);
+  for (const [h, m, g] of [[7, 30, 0], [7, 40, 20], [9, 50, 227], [10, 20, 0.3], [10, 25, 30], [14, 0, 230]]) ev.run(utc(h, m), g / 1000);
+  raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'pickup', 0.227), ('table1', ?, 'pickup', 0.2)`).run(utc(10, 20, 1), utc(14, 1));
+  const ep = raw.prepare(`INSERT INTO scale_episodes (station_id, kind, from_ts, to_ts) VALUES ('table1', 'offline', ?, ?)`);
+  ep.run(utc(6, 10), utc(7, 25));     // off before anyone sat down
+  ep.run(utc(11, 0), utc(11, 5));     // mid-job: a real gap
+  ep.run(utc(14, 30), null);          // charging after the last pickup
+  const d = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(17, 0))).json();
+  assert.deepEqual([d.gaps.offline.count, d.gaps.offline.minutes], [1, 5]);
+  assert.deepEqual(d.gaps.offline.uncounted.map(e => e.minutes), [75, 100], '6:10-7:25, and 2:30-4:20 less the 2:30-2:40 break');
+  assert.deepEqual([d.gaps.window.fromMs, d.gaps.window.toMs], [ms(7, 40), ms(14, 1)]);
+});
+
+test('a blend (no cultivar at 80% of the raw) is mixed', async () => {
+  const { mainCultivar } = await import('../src/lib/cell-day.js');
+  assert.deepEqual(mainCultivar([{ cultivar: 'A', lbs: 35 }, { cultivar: 'B', lbs: 18 }], []), { name: 'A', share: 0.66, mixed: true });
+  assert.deepEqual(mainCultivar([{ cultivar: 'A', lbs: 35 }, { cultivar: 'B', lbs: 5 }], []), { name: 'A', share: 0.88, mixed: false });
+  assert.deepEqual(mainCultivar([], []), { name: null, share: null, mixed: false });
 });
