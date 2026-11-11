@@ -58,9 +58,13 @@ name = "rogue-origin-api"
 #                                  memory only. Scopes: read_orders, read_products.)
 # - SHOPIFY_ADMIN_TOKEN          (OPTIONAL instead of the two above: an existing legacy
 #                                  custom-app token, shpat_...)
-# - ORDER_QUEUE_GO_LIVE          (OPTIONAL var, YYYY-MM-DD Pacific: orders created on/after it
+# - ORDER_QUEUE_GO_LIVE          (OPTIONAL, YYYY-MM-DD Pacific: orders created on/after it
 #                                  join the queue even without Nathan's m2o-line /
 #                                  wholesale-line tag. Unset = tagged orders only.)
+#                                  Set SHOPIFY_SHOP and ORDER_QUEUE_GO_LIVE with
+#                                  `wrangler secret put` too, not as dashboard vars:
+#                                  the [vars] block below replaces dashboard vars on
+#                                  every deploy.
 #
 # The hourly bot no longer calls a model: v2 queues chat texts for the Capataz
 # relay, so there is no HARVEST_HOURLY_MODEL and ANTHROPIC_API_KEY above is for
