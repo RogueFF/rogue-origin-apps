@@ -13,6 +13,7 @@
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { lineText } from '../bagtag/view.mjs';
+import { bagLabels, labelSheetHtml } from './labels.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const FRAME_MS = 5000;
@@ -24,6 +25,7 @@ registerLabels({
     missing: 'No COA for {c}. Print it from Drive.', ambiguous: '{c} has more than one COA: pick one.', printing: 'Printing…', printed: 'Sent to print',
     notFound: 'This COA is not in the store yet: print it from Drive.', loadFail: 'No connection to the server.', lines: 'In this order', done: 'Done: close this tab',
     openCoa: 'Open the COA to print it',
+    labels: 'Bag labels', printLabels: 'Print {n} bag label(s)', labelsHint: 'Blank 4.75 × 1 in labels, cultivar name only.',
   },
   es: {
     papers: 'Papeles', slip: 'Lista de empaque', slipBtn: 'Abrir en Shopify para imprimir la lista de empaque', slipHint: 'En Shopify: More actions → Print packing slips.',
@@ -31,6 +33,7 @@ registerLabels({
     missing: 'No hay COA para {c}. Imprímalo desde Drive.', ambiguous: '{c} tiene más de un COA: elija uno.', printing: 'Imprimiendo…', printed: 'Enviado a imprimir',
     notFound: 'Este COA todavía no está guardado: imprímalo desde Drive.', loadFail: 'No hay conexión con el servidor.', lines: 'En esta orden', done: 'Listo: cierre esta pestaña',
     openCoa: 'Abra el COA para imprimirlo',
+    labels: 'Etiquetas de bolsa', printLabels: 'Imprimir {n} etiqueta(s)', labelsHint: 'Etiquetas en blanco de 4.75 × 1 in, solo el nombre de la variedad.',
   },
 });
 const tf = (key, vars = {}) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
@@ -41,7 +44,28 @@ const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiPa
 const orderId = Number(params.get('order'));
 
 const $ = id => document.getElementById(id);
-const el = { title: $('title'), lines: $('lines'), slip: $('slip'), coas: $('coas'), notice: $('notice'), lang: $('langToggle'), all: $('printAll') };
+const el = { title: $('title'), lines: $('lines'), slip: $('slip'), coas: $('coas'), notice: $('notice'), lang: $('langToggle'), all: $('printAll'),
+  labelsCard: $('labelsCard'), labels: $('labels') };
+
+// Bag labels are OFF by default (Koa 2026-11-11: no label printer picked yet).
+// print.html?labels=1 turns them on for this computer, ?labels=0 turns them off.
+const LABELS_KEY = 'ro-print:labels';
+function labelsOn() {
+  const p = params.get('labels');
+  try {
+    if (p === '1' || p === '0') localStorage.setItem(LABELS_KEY, p);
+    return localStorage.getItem(LABELS_KEY) === '1';
+  } catch { return p === '1'; }
+}
+const LABELS = labelsOn();
+
+function printLabels(names) {
+  const frame = document.createElement('iframe');
+  frame.className = 'print-frame';
+  frame.onload = () => setTimeout(() => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch { /* nothing to fall back to */ } }, 200);
+  frame.srcdoc = labelSheetHtml(names);
+  document.body.appendChild(frame);
+}
 let data = null;
 
 function node(tag, cls, text) {
@@ -128,6 +152,14 @@ function render() {
     return row;
   }));
   el.all.hidden = !data.coas.some(c => c.file);
+  const names = LABELS ? bagLabels(data.lines) : [];
+  el.labelsCard.hidden = !names.length;
+  if (names.length) {
+    const b = node('button', 'btn', tf('printLabels', { n: names.length }));
+    b.type = 'button';
+    b.addEventListener('click', () => printLabels(names));
+    el.labels.replaceChildren(b, node('p', 'hint', t('labelsHint')));
+  }
 }
 
 async function printAll() {
