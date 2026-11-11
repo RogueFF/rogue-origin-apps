@@ -34,6 +34,12 @@
  *         back within EMPTY_G of the empty basket: pickup (what it held);
  *         back within EMPTY_G of where it was: set down with everything, no change;
  *         anywhere else: a shake, the difference is credited.
+ *       a pickup mark from the cell screen during the zero: a two-basket swap
+ *       (Koa 2026-11-11: full basket to the pickup spot, the matched empty one
+ *       on, within EMPTY_G) that showed no settled negative. A pickup. The
+ *       screen sees the live stream; this log only keeps settled readings, so
+ *       the screen's mark is how it knows. After trimming, "about 0" is within
+ *       EMPTY_G, since a matched basket reads up to 2 g either way.
  *       anything else (a small rise as trimming carries on, a negative lift, or
  *       the zero holding past GRACE_MS): it was the scale's TARE after all.
  *         The reading before was an empty basket (a single jump from about 0,
@@ -158,7 +164,7 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
 
     const net = e.g;
     if (pending) {
-      if (Math.abs(net) <= ZERO_G && e.at.ms - pending.ms <= GRACE_MS) continue;   // still off, or tared and empty
+      if (Math.abs(net) <= pending.tol && e.at.ms - pending.ms <= GRACE_MS) continue;   // still off, or tared and empty
       const basket = hasBasket();
       if (net >= BASKET_MIN_G && basket && e.at.ms - pending.ms <= GRACE_MS) {
         // An un-tared lift: the basket is back.
@@ -177,7 +183,14 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
         }
         continue;
       }
-      tared();                                             // then this reading as usual
+      if (pending.tapped) {
+        // The cell screen closed the job during the zero (its pickup mark): a
+        // two-basket swap with no settled negative between. A pickup, not a TARE.
+        pickups.push({ ts: e.ts, g: pending.fromNet - emptyG });
+        pending = null; lastNet = 0; atZero();
+      } else {
+        tared();                                           // then this reading as usual
+      }
     }
     if (net < -LIFT_G) {                                   // basket off the pan
       if (!lift && lastNet !== null) lift = { fromNet: lastNet, tapped: false };
@@ -203,10 +216,13 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
       continue;
     }
 
-    if (Math.abs(net) <= ZERO_G && lastNet > EMPTY_G) {
+    // About 0: within ZERO_G, or within EMPTY_G after trimming (a matched empty
+    // basket swapped on reads up to 2 g either way).
+    const tol = rises > 1 || segStart >= BASKET_MIN_G ? EMPTY_G : ZERO_G;
+    if (Math.abs(net) <= tol && lastNet > EMPTY_G) {
       // A straight drop to about 0, no lift: the scale's TARE, or a basket lifted
       // off a scale nobody tared. The next settled reading decides (see above).
-      pending = { fromNet: lastNet, minutes: e.at.minutes, ms: e.at.ms, tapped: false };
+      pending = { fromNet: lastNet, minutes: e.at.minutes, ms: e.at.ms, ts: e.ts, tapped: false, tol };
       continue;
     }
 
@@ -215,7 +231,10 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
     if (Math.abs(net) <= ZERO_G) atZero();
   }
 
-  if (pending) tared();       // the day ended on the zero: the TARE rule stands
+  // The log ended on the zero (no reading since): the screen's pickup mark, if it
+  // sent one, says swap; otherwise the TARE rule stands.
+  if (pending && pending.tapped) pickups.push({ ts: pending.ts, g: pending.fromNet - emptyG });
+  else if (pending) tared();
 
   const bySlot = {};
   for (const [s, g] of Object.entries(gBySlot)) {

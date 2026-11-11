@@ -3,8 +3,13 @@
  * (Koa 2026-11-09: "once everything renders on the cell 1 tablet, id like to see
  * it pop up on other's computers"). For the bagging/fulfillment computer and the
  * office: one tile per cell with its order, live weight, progress and clock, and
- * a "ready for pickup" pop-up with a chime when a cell finishes a bag. The pop-up
- * clears by itself when the bag is lifted off the scale.
+ * a "ready for pickup" pop-up with a chime when a cell finishes a bag.
+ *
+ * Two weight-matched baskets per cell (Koa 2026-11-11): at the chime the trimmer
+ * moves the full basket to the pickup spot beside the cell and sets the empty one
+ * on, which closes the job. The pop-up then turns into "waiting at pickup spot"
+ * and stays until bag/tag taps Collected (?action=collectPickup, migration 0060),
+ * with a short Undo for a wrong tap.
  *
  *   cells.html                      all cells
  *   cells.html?api=http://localhost:8799/api/production   local testing only
@@ -28,6 +33,8 @@ registerLabels({
     idle: 'Idle', armed: 'Ready', running: 'Filling', paused: 'Paused', finished: 'Ready for pickup',
     down: 'Scale disconnected', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
     notrec: 'NOT RECORDING', noScreen: 'trimming, no cell screen open', tabletOff: 'trimming, tablet not reporting', noJob: 'trimming, no job started',
+    atSpot: 'At pickup spot', collected: 'Collected ✓', undo: 'Undo', collectedMsg: 'Collected: {cell}', spotCount: '🧺 {n} at pickup spot',
+    collectFail: 'Could not mark it collected. Try again.',
     retail: 'retail', notOnScreen: 'Not on a screen yet', loadFail: 'Can\'t reach the server. Retrying…',
     cellsLive: '{n} cell(s) on a screen', ago: '{m} min ago', justNow: 'just now', startsAt: 'starts on the first gram',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
@@ -37,6 +44,8 @@ registerLabels({
     idle: 'Sin trabajo', armed: 'Lista', running: 'Llenando', paused: 'En pausa', finished: 'Listo para recoger',
     down: 'Báscula desconectada', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
     notrec: 'NO SE GRABA', noScreen: 'recortando, sin pantalla abierta', tabletOff: 'recortando, la tableta no reporta', noJob: 'recortando, sin trabajo iniciado',
+    atSpot: 'En el punto de recogida', collected: 'Recogido ✓', undo: 'Deshacer', collectedMsg: 'Recogido: {cell}', spotCount: '🧺 {n} en el punto de recogida',
+    collectFail: 'No se pudo marcar como recogido. Intente otra vez.',
     retail: 'menudeo', notOnScreen: 'Todavía sin pantalla', loadFail: 'No hay conexión con el servidor. Reintentando…',
     cellsLive: '{n} celda(s) con pantalla', ago: 'hace {m} min', justNow: 'ahora', startsAt: 'empieza con el primer gramo',
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
@@ -54,6 +63,9 @@ const $ = id => document.getElementById(id);
 const el = { pickups: $('pickups'), grid: $('grid'), quiet: $('quiet'), status: $('status'), sub: $('sub'), sound: $('soundBtn'), lang: $('langToggle') };
 
 let cells = [];
+let waiting = [];            // pickups at the pickup spot, not yet collected
+const collecting = new Set();     // ids tapped Collected here, hidden until the server agrees
+let undoBar = null, undoTimer = null;
 let offsetMs = 0;            // Worker clock minus this computer's clock
 const seenFinished = new Map();   // stationId -> finishedAt already chimed for
 let lastChimeAt = 0;
@@ -147,6 +159,28 @@ function renderPickups() {
     card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
     place(el.pickups, card, keep.size - 1);   // oldest first
   }
+  // Then every basket waiting at the pickup spot, oldest first.
+  const spot = waiting.filter(w => !collecting.has(w.id));
+  for (const w of spot) {
+    const key = `w|${w.id}`;
+    keep.add(key);
+    let card = pickupEls.get(key);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'pickup spot';
+      card.innerHTML = '<div class="p-cell"></div><div class="p-what"><span class="w"></span><small></small></div><div class="p-tag"><span class="r"></span><small></small></div><button type="button" class="collect"></button>';
+      card.querySelector('.collect').addEventListener('click', () => collect(w.id, w.label));
+      pickupEls.set(key, card);
+    }
+    card.querySelector('.p-cell').textContent = w.label;
+    card.querySelector('.p-what .w').textContent = `${w.bag ? t(w.bag) : ''}${w.bag && w.cultivar ? ' · ' : ''}${shortCultivar(w.cultivar)}`;
+    card.querySelector('.p-what small').textContent = `${fmtG(w.g)}${w.cycleS ? ` · ${fmtClock(w.cycleS * 1000)}` : ''}`;
+    card.querySelector('.p-tag .r').textContent = t('atSpot');
+    const mins = Math.floor((workerNow() - w.at) / 60000);
+    card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
+    card.querySelector('.collect').textContent = t('collected');
+    place(el.pickups, card, keep.size - 1);
+  }
   for (const [key, card] of pickupEls) if (!keep.has(key)) { card.remove(); pickupEls.delete(key); }
   // Chime for a bag that just finished; again every 2 min while any still waits.
   let fresh = false;
@@ -154,8 +188,47 @@ function renderPickups() {
     if (seenFinished.get(c.stationId) !== c.job.finishedAt) { seenFinished.set(c.stationId, c.job.finishedAt); fresh = true; }
   }
   for (const id of [...seenFinished.keys()]) if (!ready.some(c => c.stationId === id)) seenFinished.delete(id);
-  if (fresh || (ready.length && Date.now() - lastChimeAt >= REMIND_MS)) chime();
-  document.title = ready.length ? `(${ready.length}) ${t('title')} - Rogue Origin` : `${t('title')} - Rogue Origin`;
+  const count = ready.length + spot.length;
+  if (fresh || (count && Date.now() - lastChimeAt >= REMIND_MS)) chime();
+  document.title = count ? `(${count}) ${t('title')} - Rogue Origin` : `${t('title')} - Rogue Origin`;
+}
+
+async function postCollect(id, undo) {
+  const r = await fetch(`${API}?action=collectPickup`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ id, undo }) });
+  if (!r.ok && r.status !== 409) throw new Error(String(r.status));
+}
+// Bag/tag took the basket off the spot. It goes at once; Undo for a wrong tap.
+async function collect(id, cellLabel) {
+  collecting.add(id);
+  render();
+  try {
+    await postCollect(id, false);
+  } catch {
+    collecting.delete(id);
+    el.status.textContent = t('collectFail');
+    render();
+    return;
+  }
+  showUndo(id, cellLabel);
+}
+function showUndo(id, cellLabel) {
+  if (!undoBar) {
+    undoBar = document.createElement('div');
+    undoBar.className = 'undo-bar';
+    undoBar.innerHTML = '<span></span><button type="button" class="btn"></button>';
+    document.body.appendChild(undoBar);
+  }
+  undoBar.querySelector('span').textContent = tf('collectedMsg', { cell: cellLabel });
+  const btn = undoBar.querySelector('button');
+  btn.textContent = t('undo');
+  btn.onclick = async () => {
+    undoBar.hidden = true;
+    try { await postCollect(id, true); collecting.delete(id); } catch { el.status.textContent = t('collectFail'); }
+    poll();
+  };
+  undoBar.hidden = false;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { undoBar.hidden = true; }, 10000);
 }
 
 function tileFor(c) {
@@ -209,7 +282,8 @@ function renderGrid() {
       st === 'paused' ? (j.pauseNote || '') :
       st === 'armed' ? t('startsAt') :
       st === 'finished' ? t('waiting') :
-      st === 'notrec' ? `${t(c.notRecording.why)} · +${c.notRecording.riseG} g` : '';
+      st === 'notrec' ? `${t(c.notRecording.why)} · +${c.notRecording.riseG} g` :
+      spotFor(c.stationId) ? tf('spotCount', { n: spotFor(c.stationId) }) : '';
     place(el.grid, tile, keep.size - 1);   // roster order
   }
   for (const [id, tile] of tileEls) if (!keep.has(id)) { tile.remove(); tileEls.delete(id); }
@@ -217,6 +291,7 @@ function renderGrid() {
   el.sub.textContent = tf('cellsLive', { n: onScreen.length });
 }
 
+const spotFor = id => waiting.filter(w => w.stationId === id && !collecting.has(w.id)).length;
 function render() { renderPickups(); renderGrid(); }
 
 let timer = null;
@@ -230,6 +305,9 @@ async function poll() {
       const body = d.data || d;
       offsetMs = body.serverNow - Date.now();
       cells = body.cells || [];
+      waiting = body.waiting || [];
+      // Once the server no longer lists a collected basket, stop hiding it here.
+      for (const id of [...collecting]) if (!waiting.some(w => w.id === id)) collecting.delete(id);
       el.status.textContent = '';
       render();
     } catch {
