@@ -44,6 +44,7 @@ import { sendTelegramMessage } from '../lib/telegram.js';
 import { deriveEvents } from '../lib/wholesale-notify.js';
 import { buildQueueBrief } from '../lib/queue-brief.js';
 import { buildRates, effectiveRate, sacksFor, preferSeason } from '../lib/sack-rates.js';
+import { MP_BY_CULTIVAR } from '../lib/cultivar-parts.js';
 
 /**
  * DEFAULT-DENY. These are the only actions answered without the password:
@@ -432,7 +433,7 @@ async function getRates(db) {
            SUM(mp.tops_lbs1 + mp.smalls_lbs1) AS lbs,
            SUM(mp.tops_lbs1)                  AS tops_lbs,
            SUM(COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1)) AS hours
-    FROM monthly_production mp
+    FROM (${MP_BY_CULTIVAR}) mp
     JOIN cultivar_aliases a ON a.alias = mp.cultivar1
     WHERE COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1) > 0
       AND (mp.tops_lbs1 + mp.smalls_lbs1) > 0
@@ -559,7 +560,7 @@ async function rateTable(db) {
            SUM(mp.tops_lbs1 + mp.smalls_lbs1) AS lbs,
            SUM(mp.tops_lbs1)                  AS tops_lbs,
            SUM(COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1)) AS hours
-    FROM monthly_production mp
+    FROM (${MP_BY_CULTIVAR}) mp
     JOIN cultivar_aliases a ON a.alias = mp.cultivar1
     WHERE COALESCE(mp.effective_trimmers_line1, mp.trimmers_line1) > 0
       AND (mp.tops_lbs1 + mp.smalls_lbs1) > 0
@@ -632,7 +633,7 @@ async function recordedProduction(db, since) {
     SELECT mp.production_date AS date, mp.time_slot AS timeSlot,
            a.cultivar_id AS cultivarId,
            mp.tops_lbs1 AS topsLbs, mp.smalls_lbs1 AS smallsLbs
-    FROM monthly_production mp
+    FROM (${MP_BY_CULTIVAR}) mp
     JOIN cultivar_aliases a ON a.alias = mp.cultivar1
     WHERE mp.production_date >= ?
       AND (COALESCE(mp.tops_lbs1, 0) + COALESCE(mp.smalls_lbs1, 0)) > 0
@@ -656,7 +657,7 @@ async function unmatchedSpellings(db, since) {
   return query(db, `
     SELECT mp.cultivar1 AS spelling,
            ROUND(SUM(COALESCE(mp.tops_lbs1, 0) + COALESCE(mp.smalls_lbs1, 0)), 1) AS lbs
-    FROM monthly_production mp
+    FROM (${MP_BY_CULTIVAR}) mp
     LEFT JOIN cultivar_aliases a ON a.alias = mp.cultivar1
     WHERE mp.production_date >= ?
       AND a.alias IS NULL

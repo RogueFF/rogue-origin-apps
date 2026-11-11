@@ -11,6 +11,7 @@ import {
   getEffectiveTargetRate,
   incrementDataVersion,
 } from '../../lib/production-utils.js';
+import { changeShare } from '../../lib/cultivar-parts.js';
 
 // ===== VALIDATION HELPERS =====
 
@@ -181,6 +182,22 @@ async function addProduction(body, env) {
     validations.push('Line 2: enter Buckers, Trimmers, or T-Zero — crew can\'t be blank if Tops or Smalls are recorded');
   }
 
+  // A cultivar change partway through the hour (migration 0059). Only written
+  // when the body carries it, so a page from before 0059 never wipes one.
+  // tops1 is the hour's total; changeTops is the part after the change.
+  const hasChange = 'changeCultivar' in body || 'changeAt' in body || 'changeTops' in body;
+  let change = { at: null, cultivar: null, tops: null, share: null };
+  if (hasChange && String(body.changeCultivar || '').trim() !== '') {
+    const c = String(body.changeCultivar).trim().substring(0, 100);
+    const when = changeShare(slotValidation.value, body.changeAt);
+    const v = validateLbs(body.changeTops ?? 0, 'Tops after the change');
+    if (!when.ok) validations.push(when.error);
+    if (!v.valid) validations.push(v.error);
+    if (c === String(cultivar1 || '').trim()) validations.push('The cultivar after the change must be a different cultivar');
+    if (v.valid && v.value > lbs1.tops) validations.push("Tops after the change can't be more than the hour's tops");
+    if (when.ok && v.valid) change = { at: when.changeAt, cultivar: c, tops: v.value, share: when.share };
+  }
+
   if (validations.length > 0) {
     return errorResponse(validations.join('; '), 'VALIDATION_ERROR', 400);
   }
@@ -213,6 +230,11 @@ async function addProduction(body, env) {
       crew2.trimmers, crew2.buckers, crew2.tzero, safeCultivar2, lbs2.tops, lbs2.smalls,
       safeQc, effTrim1, effTrim2, existing.id
     ]);
+    if (hasChange) {
+      await execute(env.DB,
+        'UPDATE monthly_production SET change_at = ?, change_cultivar = ?, change_tops_lbs = ?, change_share = ? WHERE id = ?',
+        [change.at, change.cultivar, change.tops, change.share, existing.id]);
+    }
 
     await incrementDataVersion(env);
 
@@ -236,6 +258,7 @@ async function addProduction(body, env) {
       qc: safeQc,
       effective_trimmers_line1: effTrim1,
       effective_trimmers_line2: effTrim2,
+      ...(change.cultivar ? { change_at: change.at, change_cultivar: change.cultivar, change_tops_lbs: change.tops, change_share: change.share } : {}),
     });
 
     await incrementDataVersion(env);
@@ -265,12 +288,13 @@ async function getProduction(params, env) {
   `, [date]);
 
   // Determine active strain for target rate
+  // The cultivar on the floor now: the latest slot's, after its change if it had one.
   const cultivarRows = await query(env.DB, `
-    SELECT cultivar1 FROM monthly_production
+    SELECT cultivar1, change_cultivar FROM monthly_production
     WHERE production_date = ? AND cultivar1 IS NOT NULL AND cultivar1 != ''
     ORDER BY time_slot DESC LIMIT 1
   `, [date]);
-  const activeStrain = cultivarRows.length > 0 ? cultivarRows[0].cultivar1 : '';
+  const activeStrain = cultivarRows.length > 0 ? (cultivarRows[0].change_cultivar || cultivarRows[0].cultivar1) : '';
   const targetRate = await getEffectiveTargetRate(env, 2, timeSlotMultipliers, activeStrain);
 
   return successResponse({
@@ -295,6 +319,10 @@ async function getProduction(params, env) {
       qcNotes: r.qc || '',
       effectiveTrimmers1: r.effective_trimmers_line1 || null,
       effectiveTrimmers2: r.effective_trimmers_line2 || null,
+      // tops1 is the hour's total; changeTops is the part after changeAt.
+      changeAt: r.change_at || '',
+      changeCultivar: r.change_cultivar || '',
+      changeTops: r.change_tops_lbs || 0,
     })),
   });
 }

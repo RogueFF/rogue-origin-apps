@@ -18,6 +18,7 @@ import { handleAllocate, pacificDayRange } from './harvest-d1.js';
 import { floorOutputByCultivar, cutFromStrainTitle, harvestTypeFromStrainTitle, resolveCultivars } from '../lib/floor-output.js';
 import { variantTitle } from '../lib/supersack-inventory.js';
 import { fullSackLbs } from '../lib/sack-weight.js';
+import { MP_BY_CULTIVAR } from '../lib/cultivar-parts.js';
 
 // Same rule as harvest-d1's isTestMode: test unless explicitly switched off.
 const isTest = (env) => (env.HARVEST_TEST_MODE !== 'false' ? 1 : 0);
@@ -270,7 +271,7 @@ const pacificToday = () => new Intl.DateTimeFormat('en-CA', {
 async function hourlyOutput(db, day) {
   const rows = await all(db, `
     SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, cultivar2, tops_lbs2, smalls_lbs2
-    FROM monthly_production WHERE production_date = ?`, [day]);
+    FROM (${MP_BY_CULTIVAR}) WHERE production_date = ?`, [day]);
   const lines = [];
   for (const r of rows) {
     if (r.cultivar1) lines.push({ title: r.cultivar1, tops: Number(r.tops_lbs1) || 0, smalls: Number(r.smalls_lbs1) || 0 });

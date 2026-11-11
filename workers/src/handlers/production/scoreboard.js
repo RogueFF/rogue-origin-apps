@@ -21,6 +21,7 @@ import {
   getEffectiveTargetRate,
 } from '../../lib/production-utils.js';
 import { laborSplit, CELL_MODE_FROM } from '../../lib/labor-split.js';
+import { MP_BY_CULTIVAR } from '../../lib/cultivar-parts.js';
 
 // Inputs laborSplit needs, read once per request.
 async function laborOptions(env) {
@@ -271,10 +272,10 @@ async function getExtendedDailyData(days, env) {
                ELSE NULL
              END
            ) as hours_with_data,
-           (SELECT m2.cultivar1 FROM monthly_production m2
+           (SELECT m2.cultivar1 FROM (${MP_BY_CULTIVAR}) m2
             WHERE m2.production_date = monthly_production.production_date
               AND m2.cultivar1 IS NOT NULL AND m2.cultivar1 != ''
-            GROUP BY m2.cultivar1 ORDER BY COUNT(*) DESC LIMIT 1
+            GROUP BY m2.cultivar1 ORDER BY SUM(m2.slot_share) DESC LIMIT 1
            ) as dominant_cultivar,
            MAX(
              CASE
@@ -295,7 +296,7 @@ async function getExtendedDailyData(days, env) {
   const cultivarRows = await query(env.DB, `
     SELECT production_date, cultivar1 as cultivar,
            SUM(tops_lbs1) as tops, SUM(smalls_lbs1) as smalls
-    FROM monthly_production
+    FROM (${MP_BY_CULTIVAR})
     WHERE production_date >= ? AND cultivar1 IS NOT NULL AND cultivar1 != ''
     GROUP BY production_date, cultivar1
   `, [cutoffStr]);
