@@ -106,3 +106,71 @@ test('a scale TARE that holds at 0 is still seen through the settle filter', () 
   assert.deepEqual(out.bySlot, { '9-10': LB(150) });
   assert.deepEqual(out.flags, { '9-10': ['scaleTared'] });
 });
+
+// ---- A scale nobody tared reads GROSS (bench test 2026-11-11, v6.5, JINXUAN):
+// a 168 g basket lifted off reads 0.00, not negative, and holds there ~4 s.
+// Koa 2026-11-11 ("automatic + guard"): a zero from a loaded basket is a lift
+// when the basket comes back; only an empty basket's zero is the scale's TARE.
+
+test('un-tared: basket on, trimming, lifted (reads 0), back empty = pickup of the tops only', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168), r(9, 10, 175), r(9, 30, 200), r(9, 31, 0, 0), r(9, 31, 0, 4), r(9, 31, 168.2, 6)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(32) });          // not 200, and not 368
+  assert.deepEqual(out.flags, {});
+  assert.equal(out.pickups.length, 1);
+  assert.ok(Math.abs(out.pickups[0].g - 32) < 1e-9);
+});
+
+test('un-tared: back with tops still in it = a shake; the next pickup is measured from the empty basket', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168), r(9, 30, 200), r(9, 31, 0), r(9, 31, 190, 5),
+    r(9, 40, 220), r(9, 41, 0), r(9, 41, 168.3, 5)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(22 + 30) });     // 32 made, 10 shaken out, 30 more
+  assert.equal(out.pickups.length, 1);
+  assert.ok(Math.abs(out.pickups[0].g - 52) < 1e-9);
+  assert.deepEqual(out.flags, {});
+});
+
+test('un-tared: an empty basket lifted and set back changes nothing', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168.6), r(9, 2, 0), r(9, 2, 168.22, 6)]);
+  assert.deepEqual(out.bySlot, {});
+  assert.equal(out.pickups.length, 0);
+});
+
+test('un-tared: a loaded basket lifted and set straight back changes nothing', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168), r(9, 20, 200), r(9, 21, 0), r(9, 21, 200.4, 5), r(9, 30, 210)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(42) });
+  assert.equal(out.pickups.length, 0);
+});
+
+test('un-tared, then the crew press TARE with the empty basket on: the scale reads net from then on', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168), r(9, 30, 200), r(9, 31, 0), r(9, 31, 168, 5),   // pickup 32
+    r(9, 35, 0), r(9, 40, 20), r(9, 45, -150), r(9, 46, 0.2)]);                               // TARE, 20 g, pickup
+  assert.deepEqual(out.bySlot, { '9-10': LB(52) });
+  assert.deepEqual(out.pickups.map(p => Math.round(p.g)), [32, 20]);
+  assert.deepEqual(out.flags, {});
+});
+
+test('a loaded zero that never comes back within GRACE_MS is the scale TARE: banked and flagged', () => {
+  const out = run([r(9, 0, 0), r(9, 1, 168), r(9, 30, 200), r(9, 31, 0), r(9, 40, 0.4), r(9, 50, 20)]);
+  assert.deepEqual(out.flags, { '9-10': ['scaleTared'] });
+  assert.equal(out.pickups.length, 0);
+});
+
+test('tared scale, mid-job TARE with tops in (small first handful): still banked and flagged', () => {
+  const out = run([r(9, 0, 0), r(9, 5, 10), r(9, 10, 30), r(9, 11, 0), r(9, 12, 2), r(9, 13, 60)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(30 + 60) });
+  assert.deepEqual(out.flags, { '9-10': ['scaleTared'] });
+});
+
+test('un-tared, the basket already on when the day began: a lift and set-back credits nothing', () => {
+  // The first reading of the day is the basket itself (no rise from 0 to see).
+  const out = run([r(9, 0, 168.6), r(9, 2, 0), r(9, 2, 168.22, 6)]);
+  assert.deepEqual(out.bySlot, {});
+  assert.deepEqual(out.flags, {});
+});
+
+test('un-tared, the basket already on when the day began: trimming, lift, back empty = pickup of the tops', () => {
+  const out = run([r(9, 0, 168), r(9, 10, 175), r(9, 30, 200), r(9, 31, 0), r(9, 31, 168.1, 6)]);
+  assert.deepEqual(out.bySlot, { '9-10': LB(32) });
+  assert.equal(out.pickups.length, 1);
+  assert.ok(Math.abs(out.pickups[0].g - 32) < 1e-9);
+});

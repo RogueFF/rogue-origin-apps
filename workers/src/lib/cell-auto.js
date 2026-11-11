@@ -22,13 +22,25 @@
  *       was never tops).
  *   - The hour mark landing mid-lift: the hour keeps the last reading from
  *     before the lift; the outcome lands in the hour the basket comes back in.
- *   - A straight drop to about 0 with no lift in between is someone pressing
- *     the scale's TARE:
- *       after a single jump from about 0 (a basket set down, then tared):
- *         that jump was the basket, not tops, so it is taken back out;
- *       after trimming (more than one rise): a mid-job TARE. What was on the
- *         pan is banked as tops (nothing taken back) and the hour is flagged
- *         so a lead can check it.
+ *   - A straight drop to about 0 with no lift in between is either someone
+ *     pressing the scale's TARE or, on a scale nobody tared (it reads GROSS,
+ *     bench test 2026-11-11), a basket lifted off: an un-tared lift reads 0, not
+ *     negative. The two look the same until the next settled reading, so the
+ *     zero waits for it (Koa 2026-11-11, "automatic + guard"):
+ *       a basket-sized jump back (>= BASKET_MIN_G, while the segment's first
+ *       rise was a basket of that size): an un-tared LIFT. That first rise was
+ *       the basket, not tops, so it comes back out of its hour, and the scale's
+ *       empty-basket reading is remembered. Then, like a negative lift:
+ *         back within EMPTY_G of the empty basket: pickup (what it held);
+ *         back within EMPTY_G of where it was: set down with everything, no change;
+ *         anywhere else: a shake, the difference is credited.
+ *       anything else (a small rise as trimming carries on, a negative lift, or
+ *       the zero holding past GRACE_MS): it was the scale's TARE after all.
+ *         The reading before was an empty basket (a single jump from about 0,
+ *         or the remembered empty-basket reading): that jump was the basket,
+ *         taken back out, and the scale now reads net.
+ *         After trimming: a mid-job TARE. What was on the pan is banked as tops
+ *         (nothing taken back) and the hour is flagged so a lead can check it.
  */
 import { pacificParts, parseSqliteUtc } from './pacific.js';
 
@@ -36,10 +48,16 @@ export const LIFT_G = 1.0;       // net below -1 g: the basket is off the pan
 export const ZERO_G = 0.5;       // a TARE'd scale reads 0.00; this is "about 0"
 export const EMPTY_G = 2.0;      // a basket back within 2 g of zero is empty
 export const GRACE_MS = 90 * 1000;
+// An empty basket weighs well over this (168 g on the bench) and a first handful
+// of tops well under it: a jump this big off about 0 is a basket going on.
+export const BASKET_MIN_G = 50;
 // The JINXUAN streams ~10 lines/s with no stability marker, so every reading
 // arrives marked stable. A reading only counts as settled if the scale held it:
 // the next logged reading is at least SETTLE_MS later (logs are to the second).
 // Readings passing through while a basket goes on or off are skipped.
+// v6.5 firmware only posts stable=1 once the weight has held (bench 2026-11-11:
+// settled posts 4.3-5.0 s apart, floor ~1.5 s), and scale_events keeps only
+// those. Timestamps are whole seconds, so 1.2 s and 2 s pass the same readings.
 export const SETTLE_MS = 2000;
 const G_PER_LB = 453.59237;
 
@@ -85,6 +103,12 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
   // tared can be taken back out of the hours it landed in.
   let segment = [];         // [{ slot, g }] positive and negative changes since about-0
   let rises = 0;            // how many rises since about-0
+  // A scale nobody tared reads GROSS: emptyG is its empty-basket reading once a
+  // lift has shown it (0 = the scale reads net). pending: a drop to about 0
+  // waiting for the next settled reading to say TARE or un-tared lift.
+  let emptyG = 0;
+  let pending = null;       // { fromNet, minutes, ms, tapped }
+  let segStart = 0;         // where the segment started: 0, or the day's first reading (a basket already on)
 
   const credit = (g, minutes) => {
     if (!g) return;
@@ -97,18 +121,69 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
     const s = slotFor(minutes, slots);
     (flags[s] = flags[s] || []).includes(what) || flags[s].push(what);
   };
-  const atZero = () => { segment = []; rises = 0; };
+  const atZero = () => { segment = []; rises = 0; segStart = 0; };
+  // The segment's first rise, when it was basket-sized: the basket going on.
+  const basketRise = () => (segment[0] && segment[0].g >= BASKET_MIN_G ? segment[0] : null);
+  // Is there a basket to measure against: remembered, already on when the day
+  // began (never credited), or the segment's first, basket-sized rise.
+  const hasBasket = () => emptyG > 0 || segStart >= BASKET_MIN_G || basketRise() !== null;
+  // The empty basket's reading on an un-tared scale: remembered, or the first
+  // rise (taken back out of its hour: it was the basket, never tops).
+  const learnEmpty = () => {
+    if (emptyG > 0) return emptyG;
+    if (segStart >= BASKET_MIN_G) { emptyG = segStart; return emptyG; }
+    const b = basketRise();
+    if (!b) return 0;
+    gBySlot[b.slot] -= b.g;
+    emptyG = b.g;
+    b.g = 0;
+    return emptyG;
+  };
+  // The pending zero was the scale's TARE after all.
+  const tared = () => {
+    const p = pending;
+    pending = null;
+    if (emptyG > 0 ? p.fromNet - emptyG <= EMPTY_G : rises <= 1) {
+      // An empty basket, then TARE: that jump was the basket.
+      if (emptyG === 0) for (const c of segment) gBySlot[c.slot] -= c.g;
+    } else {
+      flag(p.minutes, 'scaleTared');                       // mid-job TARE: bank it, flag it
+    }
+    emptyG = 0; lastNet = 0; atZero();
+  };
 
   for (let i = 0; i < timeline.length; i++) {
     const e = timeline[i];
-    if (e.type === 'pickup') { if (lift) lift.tapped = true; continue; }
+    if (e.type === 'pickup') { if (lift) lift.tapped = true; if (pending) pending.tapped = true; continue; }
 
     const net = e.g;
+    if (pending) {
+      if (Math.abs(net) <= ZERO_G && e.at.ms - pending.ms <= GRACE_MS) continue;   // still off, or tared and empty
+      const basket = hasBasket();
+      if (net >= BASKET_MIN_G && basket && e.at.ms - pending.ms <= GRACE_MS) {
+        // An un-tared lift: the basket is back.
+        const { fromNet, tapped } = pending;
+        pending = null;
+        const empty = learnEmpty();
+        if (tapped || Math.abs(net - empty) <= EMPTY_G) {
+          // An empty basket lifted and set back is not a pickup.
+          if (tapped || fromNet - empty > EMPTY_G) pickups.push({ ts: e.ts, g: fromNet - empty });
+          lastNet = net; atZero();
+        } else if (Math.abs(net - fromNet) > EMPTY_G) {
+          credit(net - fromNet, e.at.minutes);             // a shake
+          lastNet = net;
+        } else {
+          lastNet = net;                                   // set down with everything
+        }
+        continue;
+      }
+      tared();                                             // then this reading as usual
+    }
     if (net < -LIFT_G) {                                   // basket off the pan
       if (!lift && lastNet !== null) lift = { fromNet: lastNet, tapped: false };
       continue;
     }
-    if (lastNet === null) { lastNet = net; if (Math.abs(net) <= ZERO_G) atZero(); continue; }
+    if (lastNet === null) { lastNet = net; if (Math.abs(net) <= ZERO_G) atZero(); else segStart = net; continue; }
 
     if (lift) {
       // A TARE shortly after it comes back means a new basket went on: pickup.
@@ -129,14 +204,9 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
     }
 
     if (Math.abs(net) <= ZERO_G && lastNet > EMPTY_G) {
-      // A straight drop to about 0, no lift: someone pressed the scale's TARE.
-      if (rises <= 1) {
-        // A basket set down, then tared: take that jump back out.
-        for (const c of segment) gBySlot[c.slot] -= c.g;
-      } else {
-        flag(e.at.minutes, 'scaleTared');                  // mid-job TARE: bank it, flag it
-      }
-      lastNet = net; atZero();
+      // A straight drop to about 0, no lift: the scale's TARE, or a basket lifted
+      // off a scale nobody tared. The next settled reading decides (see above).
+      pending = { fromNet: lastNet, minutes: e.at.minutes, ms: e.at.ms, tapped: false };
       continue;
     }
 
@@ -144,6 +214,8 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
     lastNet = net;
     if (Math.abs(net) <= ZERO_G) atZero();
   }
+
+  if (pending) tared();       // the day ended on the zero: the TARE rule stands
 
   const bySlot = {};
   for (const [s, g] of Object.entries(gBySlot)) {
