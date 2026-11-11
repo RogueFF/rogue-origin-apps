@@ -212,7 +212,7 @@ function pacificNow() {
 }
 const fmtTarget = g => `${g.toLocaleString('en-US', { maximumFractionDigits: 2 })} g`;
 
-// The order: cultivar (the Shopify 2026 list the hourly log uses) and bag size.
+// The order: cultivar (the Shopify 2026 list, Sungrown only: cells run 2026 Sungrown tops) and bag size.
 function renderOrder() {
   const opts = [...cultivars];
   if (state.cultivar && !opts.includes(state.cultivar)) opts.unshift(state.cultivar);
@@ -244,7 +244,7 @@ async function loadCultivars() {
     const v = await r.json();
     variants = (v.data || v).variants || [];
   } catch { /* history only */ }
-  cultivars = buildCultivarOptions(history, variants);
+  cultivars = buildCultivarOptions(history, variants, { sungrownOnly: true });
   renderOrder();
 }
 

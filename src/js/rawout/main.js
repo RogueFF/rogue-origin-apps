@@ -379,12 +379,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) poll
 async function loadCultivars() {
   let history = [];
   try { history = (await (await fetch(`${API}?action=getCultivars`, { cache: 'no-store' })).json()).cultivars || []; } catch { /* stays short */ }
-  cultivars = buildCultivarOptions(history, []);
+  cultivars = buildCultivarOptions(history, [], { sungrownOnly: true });
   renderCultivars();
   try {
     const r = await fetch(`${API_ROOT}/pool?action=get_supersack_variants`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
     const v = await r.json();
-    cultivars = buildCultivarOptions(history, (v.data || v).variants || []);
+    cultivars = buildCultivarOptions(history, (v.data || v).variants || [], { sungrownOnly: true });
     renderCultivars();
   } catch { /* history only */ }
 }
