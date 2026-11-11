@@ -262,6 +262,10 @@ CREATE TABLE IF NOT EXISTS monthly_production (
   notes TEXT,
   effective_trimmers_line1 REAL,
   effective_trimmers_line2 REAL,
+  change_at TEXT,          -- 0059: cultivar change mid-hour
+  change_cultivar TEXT,
+  change_tops_lbs REAL,
+  change_share REAL,
   UNIQUE(production_date, time_slot)
 );
 

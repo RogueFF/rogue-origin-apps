@@ -151,6 +151,17 @@ const LABELS = {
     queueUnavailable: 'Queue unavailable', moreOnBoard: 'more on the board',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
+    topsFirst: 'Tops, first cultivar (lbs)',
+    changeAdd: '+ Cultivar change',
+    changeTitle: 'Cultivar change',
+    changeRemove: 'Remove',
+    changeHint: 'Tops above are the first cultivar, before the change.',
+    changeAt: 'Changed at',
+    changeCultivar: 'New cultivar',
+    changeTops: 'Tops after the change (lbs)',
+    changeTotal: 'Hour total: {n} lbs tops',
+    changeSame: 'Pick a different cultivar than the first one',
+    changeTime: 'The time must be inside this hour',
     qcNotes: 'QC Notes',
     hourlyTarget: 'Hourly Target',
     dayView: 'Day',
@@ -263,6 +274,17 @@ const LABELS = {
     queueUnavailable: 'Cola no disponible', moreOnBoard: 'más en el tablero',
     tops: 'Tops (lbs)',
     smalls: 'Smalls (lbs)',
+    topsFirst: 'Tops, primera variedad (lbs)',
+    changeAdd: '+ Cambio de variedad',
+    changeTitle: 'Cambio de variedad',
+    changeRemove: 'Quitar',
+    changeHint: 'Los tops de arriba son de la primera variedad, antes del cambio.',
+    changeAt: 'Cambió a las',
+    changeCultivar: 'Nueva variedad',
+    changeTops: 'Tops después del cambio (lbs)',
+    changeTotal: 'Total de la hora: {n} lbs de tops',
+    changeSame: 'Elija una variedad distinta a la primera',
+    changeTime: 'La hora debe estar dentro de esta hora',
     qcNotes: 'Notas QC',
     hourlyTarget: 'Meta por Hora',
     dayView: 'Día',
@@ -374,6 +396,7 @@ const FIELD_ORDER = [
   'qcperson',                          // QC
   'cultivar1',                         // Line 1 cultivar
   'tops1', 'smalls1',                  // Line 1 production
+  'changeAt', 'changeCultivar', 'changeTops', // cultivar change (if open)
   'buckers2', 'trimmers2', 'tzero2',  // Line 2 crew (if expanded)
   'cultivar2',                         // Line 2 cultivar
   'tops2', 'smalls2',                  // Line 2 production
@@ -640,6 +663,71 @@ function normalizeFirstSlotKey() {
   });
 }
 
+// ===== CULTIVAR CHANGE MID-HOUR (migration 0059) =====
+// In storage and on the wire tops1 is the HOUR'S total and changeTops the part
+// after the change. On screen the tops1 box is the first cultivar only, so the
+// form converts at the edges: populateForm and collectFormData. Anything that
+// reads the tops boxes for a total goes through formTops1().
+const formTops1Total = () => formTops1();   // where a local is also called formTops1
+const changeOpen = () => !!document.getElementById('change-section')?.classList.contains('open');
+const boxNum = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+function formTops1() {
+  return Math.round((boxNum('tops1') + (changeOpen() ? boxNum('changeTops') : 0)) * 10) / 10;
+}
+/** Slot '1:00 PM – 2:00 PM' -> [startMin, endMin]. */
+function slotBounds(slot) {
+  const toMin = (t) => {
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(t || '').trim());
+    if (!m) return null;
+    let h = Number(m[1]) % 12;
+    if (m[3].toUpperCase() === 'PM') h += 12;
+    return h * 60 + Number(m[2]);
+  };
+  const [a, b] = String(slot || '').split(/[–—-]/);
+  return [toMin(a), toMin(b)];
+}
+const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+function setChangeOpen(open) {
+  const section = document.getElementById('change-section');
+  if (!section) return;
+  section.classList.toggle('open', open);
+  const labels = LABELS[currentLang];
+  const topsLabel = document.getElementById('label-tops1');
+  if (topsLabel) topsLabel.textContent = open ? labels.topsFirst : labels.tops;
+  const [a, b] = slotBounds(TIME_SLOTS[currentSlotIndex]);
+  const at = document.getElementById('changeAt');
+  if (at && a !== null && b !== null) { at.min = hhmm(a + 1); at.max = hhmm(b - 1); }
+  renderChangeTotal();
+}
+/** Why the change can't be saved as entered, or ''. */
+function changeProblem() {
+  if (!changeOpen()) return '';
+  const labels = LABELS[currentLang];
+  const c = document.getElementById('changeCultivar').value;
+  if (c && c === document.getElementById('cultivar1').value) return labels.changeSame;
+  const at = document.getElementById('changeAt').value;
+  if (at) {
+    const [a, b] = slotBounds(TIME_SLOTS[currentSlotIndex]);
+    const [h, m] = at.split(':').map(Number);
+    if (a !== null && b !== null && !(h * 60 + m > a && h * 60 + m < b)) return labels.changeTime;
+  }
+  return '';
+}
+function renderChangeTotal() {
+  const el = document.getElementById('change-total');
+  if (!el) return;
+  const problem = changeProblem();
+  el.classList.toggle('bad', !!problem);
+  el.textContent = problem || (changeOpen() ? LABELS[currentLang].changeTotal.replace('{n}', formTops1().toFixed(1)) : '');
+}
+/** The change half of the save body. Empty strings clear a change that was removed. */
+function changeFields() {
+  const c = changeOpen() ? document.getElementById('changeCultivar').value : '';
+  const at = changeOpen() ? document.getElementById('changeAt').value : '';
+  if (!c || !at || changeProblem()) return { changeAt: '', changeCultivar: '', changeTops: '' };
+  return { changeAt: at, changeCultivar: c, changeTops: boxNum('changeTops') };
+}
+
 function slotHasRecordedData(slot) {
   const d = dayData[slot];
   if (!d) return false;
@@ -813,6 +901,31 @@ function initializeUI() {
     document.getElementById('line2-section').classList.toggle('expanded');
   });
 
+  // Cultivar change mid-hour
+  document.getElementById('change-toggle')?.addEventListener('click', () => {
+    setChangeOpen(true);
+    const at = document.getElementById('changeAt');
+    if (!at.value) {
+      // Default to now when now is inside this hour: one tap less on a live entry.
+      const now = new Date();
+      const min = now.getHours() * 60 + now.getMinutes();
+      const [a, b] = slotBounds(TIME_SLOTS[currentSlotIndex]);
+      if (a !== null && min > a && min < b) at.value = hhmm(min);
+    }
+    at.focus();
+  });
+  document.getElementById('change-remove')?.addEventListener('click', () => {
+    document.getElementById('changeAt').value = '';
+    document.getElementById('changeCultivar').value = '';
+    document.getElementById('changeTops').value = 0;
+    setChangeOpen(false);
+    scheduleAutoSave();
+  });
+  ['tops1', 'changeTops', 'changeAt', 'changeCultivar', 'cultivar1'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', renderChangeTotal);
+    document.getElementById(id)?.addEventListener('change', renderChangeTotal);
+  });
+
   // Copy crew from previous hour
   const copyCrewBtn = document.getElementById('copy-crew-btn');
   if (copyCrewBtn) {
@@ -925,8 +1038,10 @@ function createSlotElement(slot, currentSlot) {
   const hasData = totalTops > 0 || data.trimmers1 > 0;
   const isCurrent = slot === currentSlot;
 
-  // Get cultivar (prefer Line 1, fallback to Line 2)
-  const cultivar = data.cultivar1 || data.cultivar2 || '';
+  // Get cultivar (prefer Line 1, fallback to Line 2); a mid-hour change shows both
+  const cultivar = data.changeCultivar && data.cultivar1
+    ? `${data.cultivar1} → ${String(data.changeCultivar).replace(/^\d{4}\s*-?\s*/, '')}`
+    : (data.cultivar1 || data.cultivar2 || '');
   // Shorten cultivar name (remove year prefix if present)
   const cultivarShort = cultivar.replace(/^\d{4}\s*/, '');
 
@@ -1039,8 +1154,16 @@ function populateForm(slot) {
   document.getElementById('trimmers1').value = data.trimmers1 || 0;
   document.getElementById('tzero1').value = data.tzero1 ?? 1;  // Default to 1
   setCultivarValue(document.getElementById('cultivar1'), data.cultivar1);
-  document.getElementById('tops1').value = data.tops1 || 0;
+  // tops1 is the hour's total; the box shows the first cultivar's part.
+  const hadChange = !!data.changeCultivar;
+  document.getElementById('tops1').value = hadChange
+    ? Math.max(0, Math.round(((data.tops1 || 0) - (data.changeTops || 0)) * 10) / 10)
+    : (data.tops1 || 0);
   document.getElementById('smalls1').value = data.smalls1 || 0;
+  document.getElementById('changeAt').value = data.changeAt || '';
+  setCultivarValue(document.getElementById('changeCultivar'), data.changeCultivar || '');
+  document.getElementById('changeTops').value = data.changeTops || 0;
+  setChangeOpen(hadChange);
 
   document.getElementById('buckers2').value = data.buckers2 || 0;
   document.getElementById('trimmers2').value = data.trimmers2 || 0;
@@ -1132,7 +1255,8 @@ function copyCrewFromPrevious() {
   document.getElementById('trimmers1').value = prevData.trimmers1 || 0;
   document.getElementById('tzero1').value = prevData.tzero1 || 0;
   document.getElementById('qcperson').value = prevData.qcperson || 0;
-  setCultivarValue(document.getElementById('cultivar1'), prevData.cultivar1);
+  // The cultivar running at the end of the last hour: after its change, if it had one.
+  setCultivarValue(document.getElementById('cultivar1'), prevData.changeCultivar || prevData.cultivar1);
 
   // Copy Line 2 if it has data
   if (prevData.trimmers2 > 0) {
@@ -1322,7 +1446,7 @@ function updateStepGuide() {
   const totalTrimmers = trimmers1 + trimmers2;
   const hasCrew = totalTrimmers > 0;
 
-  const tops1 = parseFloat(document.getElementById('tops1').value) || 0;
+  const tops1 = formTops1();
   const tops2 = parseFloat(document.getElementById('tops2').value) || 0;
   const totalTops = tops1 + tops2;  // Only tops count toward target (smalls are byproduct)
   const hasProduction = totalTops > 0;
@@ -1422,7 +1546,7 @@ function updateStepGuide() {
       // Add actual production from this slot
       // For current slot (in editor), use form values instead of saved dayData
       if (i === currentSlotIndex) {
-        const formTops1 = parseFloat(document.getElementById('tops1').value) || 0;
+        const formTops1 = formTops1Total();
         const formTops2 = parseFloat(document.getElementById('tops2').value) || 0;
         cumulativeActual += formTops1 + formTops2;
       } else {
@@ -1432,7 +1556,7 @@ function updateStepGuide() {
     }
     
     // Check if current hour has production entered (use form values for live update)
-    const formTops1 = parseFloat(document.getElementById('tops1').value) || 0;
+    const formTops1 = formTops1Total();
     const formTops2 = parseFloat(document.getElementById('tops2').value) || 0;
     const currentSlotTops = formTops1 + formTops2;
     const currentHourHasProduction = currentSlotTops > 0;
@@ -1463,8 +1587,9 @@ function collectFormData() {
     trimmers1: parseInt(document.getElementById('trimmers1').value, 10) || 0,
     tzero1: parseInt(document.getElementById('tzero1').value, 10) || 0,
     cultivar1: document.getElementById('cultivar1').value,
-    tops1: parseFloat(document.getElementById('tops1').value) || 0,
+    tops1: formTops1(),   // the hour's total, both cultivars
     smalls1: parseFloat(document.getElementById('smalls1').value) || 0,
+    ...changeFields(),
     buckers2: parseInt(document.getElementById('buckers2').value, 10) || 0,
     trimmers2: parseInt(document.getElementById('trimmers2').value, 10) || 0,
     tzero2: parseInt(document.getElementById('tzero2').value, 10) || 0,
@@ -1518,6 +1643,9 @@ function handleEnterKey(currentFieldId) {
   // Find next field
   for (let i = currentIndex + 1; i < FIELD_ORDER.length; i++) {
     const nextFieldId = FIELD_ORDER[i];
+
+    // Skip the cultivar change fields unless one is open
+    if (!changeOpen() && ['changeAt', 'changeCultivar', 'changeTops'].includes(nextFieldId)) continue;
 
     // Skip Line 2 fields if not expanded
     if (!line2Expanded && ['buckers2', 'trimmers2', 'tzero2', 'cultivar2', 'tops2', 'smalls2'].includes(nextFieldId)) {
@@ -1737,7 +1865,7 @@ function setCultivarValue(select, value) {
 }
 
 function populateCultivarSelects() {
-  const selects = [document.getElementById('cultivar1'), document.getElementById('cultivar2')];
+  const selects = [document.getElementById('cultivar1'), document.getElementById('cultivar2'), document.getElementById('changeCultivar')].filter(Boolean);
 
   // Cultivars the board is waiting on, in queue order, spelled the way this
   // dropdown spells them. REORDER ONLY: an alias with no matching option is
@@ -2204,6 +2332,8 @@ function updateLabels() {
       el.placeholder = LABELS[currentLang][key];
     }
   });
+  // The first tops box reads 'first cultivar' while a change is open.
+  if (document.getElementById('change-section')) setChangeOpen(changeOpen());
 }
 
 function showLoading(show) {

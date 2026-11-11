@@ -57,9 +57,12 @@ function freshDb() {
   sqlite.exec(`CREATE TABLE monthly_production (
     id INTEGER PRIMARY KEY AUTOINCREMENT, production_date TEXT NOT NULL, time_slot TEXT NOT NULL,
     trimmers_line1 INTEGER DEFAULT 0, trimmers_line2 INTEGER DEFAULT 0,
+    buckers_line1 INTEGER DEFAULT 0, buckers_line2 INTEGER DEFAULT 0, tzero_line1 INTEGER DEFAULT 0, tzero_line2 INTEGER DEFAULT 0,
     cultivar1 TEXT, cultivar2 TEXT, tops_lbs1 REAL DEFAULT 0, smalls_lbs1 REAL DEFAULT 0,
-    tops_lbs2 REAL DEFAULT 0, smalls_lbs2 REAL DEFAULT 0,
-    effective_trimmers_line1 REAL, effective_trimmers_line2 REAL, UNIQUE(production_date, time_slot))`);
+    tops_lbs2 REAL DEFAULT 0, smalls_lbs2 REAL DEFAULT 0, wage_rate REAL, qc TEXT, notes TEXT,
+    effective_trimmers_line1 REAL, effective_trimmers_line2 REAL,
+    change_at TEXT, change_cultivar TEXT, change_tops_lbs REAL, change_share REAL,
+    UNIQUE(production_date, time_slot))`);
   sqlite.exec('CREATE TABLE cultivars (id INTEGER PRIMARY KEY, name TEXT)');
   sqlite.exec('CREATE TABLE cultivar_aliases (alias TEXT, cultivar_id INTEGER, crop_year INTEGER)');
   sqlite.exec('CREATE TABLE orders (id TEXT PRIMARY KEY, nickname TEXT)');
@@ -170,6 +173,20 @@ test('preview: two cuts of one cultivar — the pounds sit on the first cut', { 
   const [c1, c2] = r.body.groups;
   assert.equal(c1.cut_number, 1); assert.equal(c1.tops, 20); assert.equal(c1.pounds_on, null);
   assert.equal(c2.cut_number, 2); assert.equal(c2.tops, 0); assert.equal(c2.pounds_on, ROW_SL1);
+});
+
+test('preview: a cultivar change mid-hour puts each part under its own cultivar (0059)', { skip }, async () => {
+  const { sqlite, env } = freshDb();
+  sack(sqlite);
+  sack(sqlite, { cultivar: 'Lifter', shopify_variant_id: 'V3' });
+  // 1-2 PM: Lifter, then Sour Lifter from 1:20. tops_lbs1 is the hour's total (3.5), 2.0 after the change.
+  hour(sqlite, { slot: '1:00 PM – 2:00 PM', c1: HOURLY_LF, tops1: 3.5, smalls1: 3 });
+  sqlite.prepare(`UPDATE monthly_production SET change_at = '13:20', change_cultivar = ?, change_tops_lbs = 2, change_share = 0.667`).run(HOURLY_SL);
+  const r = await preview(env);
+  const by = Object.fromEntries(r.body.groups.map(g => [g.cultivar, g]));
+  assert.equal(by['Lifter'].tops, 1.5);
+  assert.equal(by['Sour Lifter'].tops, 2);
+  assert.ok(Math.abs(by['Lifter'].smalls - 1) < 0.01 && Math.abs(by['Sour Lifter'].smalls - 2) < 0.01);
 });
 
 test('preview: line 2 pounds count too, and a 2025 strain on the sheet is not credited to a 2026 sack', { skip }, async () => {

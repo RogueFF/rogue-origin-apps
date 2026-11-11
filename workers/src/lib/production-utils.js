@@ -9,6 +9,7 @@ import {
   getTimeSlotMultiplier,
   getEndHour,
 } from './production-helpers.js';
+import { MP_BY_CULTIVAR } from './cultivar-parts.js';
 
 // ===== CONSTANTS =====
 
@@ -158,7 +159,7 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
   // Query ALL available data for this strain (no date cutoff)
   const strainSlots = await query(env.DB, `
     SELECT production_date, time_slot, tops_lbs1, trimmers_line1, effective_trimmers_line1
-    FROM monthly_production
+    FROM (${MP_BY_CULTIVAR})
     WHERE tops_lbs1 > 0 AND trimmers_line1 > 0
       AND cultivar1 = ?
     ORDER BY production_date, time_slot

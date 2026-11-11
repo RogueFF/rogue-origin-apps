@@ -5,6 +5,7 @@
 import { query } from '../../lib/db.js';
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { getLoadedLaborRate, formatDatePT } from '../../lib/production-utils.js';
+import { MP_BY_CULTIVAR } from '../../lib/cultivar-parts.js';
 
 async function getStrainSummary(env, days = 7, limit = 5) {
   try {
@@ -21,9 +22,9 @@ async function getStrainSummary(env, days = 7, limit = 5) {
         SUM(trimmers_line1) as trimmer_hours,
         SUM(buckers_line1) as bucker_hours,
         SUM(tzero_line1) as tzero_hours,
-        COUNT(CASE WHEN tops_lbs1 > 0 OR smalls_lbs1 > 0 THEN 1 END) as active_hours,
+        SUM(CASE WHEN tops_lbs1 > 0 OR smalls_lbs1 > 0 THEN slot_share ELSE 0 END) as active_hours,
         COUNT(DISTINCT production_date) as days_worked
-      FROM monthly_production
+      FROM (${MP_BY_CULTIVAR})
       WHERE production_date >= ?
         AND cultivar1 IS NOT NULL
         AND cultivar1 != ''
@@ -96,8 +97,9 @@ async function analyzeStrain(params, env) {
         smalls_lbs1,
         trimmers_line1,
         buckers_line1,
-        tzero_line1
-      FROM monthly_production
+        tzero_line1,
+        slot_share
+      FROM (${MP_BY_CULTIVAR})
       WHERE production_date >= ?
         AND production_date <= ?
         AND (cultivar1 LIKE '%' || ? || '%')
@@ -148,7 +150,7 @@ async function analyzeStrain(params, env) {
       dateMap[date].trimmerHours += row.trimmers_line1 || 0;
       dateMap[date].buckerHours += row.buckers_line1 || 0;
       dateMap[date].tzeroHours += row.tzero_line1 || 0;
-      dateMap[date].hours++;
+      dateMap[date].hours += row.slot_share;
 
       const variant = row.cultivar1;
       if (!variantMap[variant]) {
@@ -167,7 +169,7 @@ async function analyzeStrain(params, env) {
       variantMap[variant].trimmerHours += row.trimmers_line1 || 0;
       variantMap[variant].buckerHours += row.buckers_line1 || 0;
       variantMap[variant].tzeroHours += row.tzero_line1 || 0;
-      variantMap[variant].hours++;
+      variantMap[variant].hours += row.slot_share;
       variantMap[variant].dates.add(date);
 
       totalTops += row.tops_lbs1 || 0;

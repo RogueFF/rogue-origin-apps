@@ -4028,3 +4028,25 @@ input[type="number"] {
   color: var(--text-primary);
   white-space: nowrap;
 }
+
+/* Cultivar change partway through the hour (migration 0059) */
+.cultivar-change { margin-top: 16px; }
+.change-toggle {
+  width: 100%; min-height: 56px; border-radius: 10px;
+  border: 2px dashed var(--gold); background: transparent; color: var(--gold);
+  font: 600 18px/1.2 inherit; cursor: pointer;
+}
+.change-content { display: none; padding: 14px; border: 2px solid var(--gold); border-radius: 10px; background: var(--bg-input); }
+.cultivar-change.open .change-toggle { display: none; }
+.cultivar-change.open .change-content { display: block; }
+.change-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.change-title { color: var(--gold); font-weight: 700; font-size: 18px; }
+.change-remove {
+  min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border-color);
+  background: transparent; color: var(--text-secondary); font: 600 15px inherit; cursor: pointer;
+}
+.change-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 15px; }
+.change-time { width: 100%; min-height: 52px; font-size: 22px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); color-scheme: dark; }
+.change-total { margin: 10px 0 0; font-size: 16px; color: var(--text-primary); font-weight: 600; }
+.change-total.bad { color: var(--error); }
