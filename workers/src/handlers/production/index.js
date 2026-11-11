@@ -23,7 +23,6 @@ import { setCellState, getCellBoard, collectPickup } from './cell-board.js';
 import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
 import { getOrderQueue, orderSync } from './order-queue.js';
 import { getCellQueue, orderAction, jobDone } from './order-flow.js';
-import { getOrderPrint, coaPdf } from './order-print.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 
 async function test(env) {
@@ -117,10 +116,6 @@ export async function handleProductionD1(request, env, ctx) {
         return await orderAction(body, env);
       case 'jobDone':
         return await jobDone(body, env);
-      case 'orderPrint':
-        return await getOrderPrint(params, env);
-      case 'coaPdf':
-        return await coaPdf(params, env);
       case 'setBagMode':
         return await setBagMode(body, env);
       case 'inventoryWebhook':

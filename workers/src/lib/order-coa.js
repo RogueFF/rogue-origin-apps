@@ -1,14 +1,15 @@
 /**
- * Which COA goes in an order's sleeve (order flow slice 4, design doc §2e; Koa
- * 2026-11-10: "Warn, never block").
+ * Is a cultivar's COA on file? Information on the bag/tag card only (order flow
+ * slice 4, design doc §2e; Koa 2026-11-10: "Warn, never block"). Nothing here
+ * prints: printing goes through Shopify (Koa 2026-11-11).
  *
  * The customer COAs are the 2026 post-harvest potency PDFs (wiki
  * products/coa-library.md), committed under raw/coas/2026/Post-Harvest/ and
- * mirrored into R2 by the wiki's scripts/sync-coas-to-board.py:
+ * to be mirrored into R2 (ON HOLD until Koa says yes; the wiki's
+ * scripts/sync-coas-to-board.py would need to copy the Post-Harvest folder):
  *   harvest-coa/2026/Post-Harvest/Sour-Lifter-PostHarvest-G1395-2026.pdf
- * The file name carries the cultivar, so no table is needed: a new COA mirrored
- * into R2 is picked up on the next read. COAs are the same results the farm
- * shares with retail customers, so serving them needs no password.
+ * The file name carries the cultivar, so no table is needed. With nothing
+ * mirrored the listing is empty and the card shows nothing (no false alarms).
  *
  * When one cultivar has more than one post-harvest COA, PREFER names the one for
  * the 2026 Sungrown crop (Rainbow GMO: G1393 is the field round, G4044 the GH1
@@ -54,8 +55,3 @@ export async function coaFiles(env, now = Date.now()) {
   return files;
 }
 export function resetCoaCache() { cache = null; }
-
-/** Only a COA name this module would hand out may be served. */
-export function safeCoaFile(file) {
-  return !!parseCoaName(file) && !String(file).includes('/') && !String(file).includes('..');
-}

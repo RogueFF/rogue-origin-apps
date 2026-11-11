@@ -11,7 +11,7 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { syncShopOrders } from '../../lib/order-sync.js';
-import { shopifyConfigured } from '../../lib/shopify.js';
+import { shopifyConfigured, adminOrderUrl } from '../../lib/shopify.js';
 import { pacificDay } from '../../lib/pacific.js';
 import { fillSlots, loadCells, loadWaiting } from './order-flow.js';
 import { planAssignments } from '../../lib/order-assign.js';
@@ -109,7 +109,8 @@ export async function getOrderQueue(params, env, now = new Date()) {
       started: js.some(j => j.started_at), nowJobId: (js.find(j => j.state === 'queued') || {}).id || null,
     };
   };
-  // COA per cultivar (slice 4): a missing one shows on the card, never blocks (Koa 2026-11-10).
+  // COA on file per cultivar (slice 4): information on the card only, never a block, and silent
+  // until COAs are mirrored to R2 (on hold: Koa 2026-11-11).
   let files = [];
   try { files = await coaFiles(env); } catch { /* R2 down: no COA chips this read */ }
   const coaOf = ls => {
@@ -135,6 +136,7 @@ export async function getOrderQueue(params, env, now = new Date()) {
       confirmedAt: o.confirmed_at || null, readyAt: o.ready_at || null, collectedAt: o.collected_at || null,
       cell: cellOf(o),
       coa: coaOf(ls),
+      shopifyUrl: adminOrderUrl(env, o.shop_gid),
     };
   }).filter(o => o.lines.length);
   return successResponse({

@@ -23,6 +23,18 @@ export function shopifyConfigured(env) {
   return !!(env && env.SHOPIFY_SHOP && (env.SHOPIFY_ADMIN_TOKEN || (env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET)));
 }
 
+/**
+ * gid://shopify/Order/123 -> that order's page in Shopify admin, or null when the
+ * store isn't set. Bag/tag prints there (Koa 2026-11-11: "it goes through shopify
+ * on back-end"): Print > Print packing slips, and later Create shipping label >
+ * Buy > Print label. SHOPIFY_ADMIN_STORE only if the admin handle differs.
+ */
+export function adminOrderUrl(env, shopGid) {
+  const store = String((env && (env.SHOPIFY_ADMIN_STORE || env.SHOPIFY_SHOP)) || '').replace(/\.myshopify\.com$/i, '').trim();
+  const id = /\/Order\/(\d+)$/.exec(String(shopGid || ''));
+  return store && id ? `https://admin.shopify.com/store/${encodeURIComponent(store)}/orders/${id[1]}` : null;
+}
+
 export class ShopifyError extends Error {
   constructor(message, code) { super(message); this.code = code; }
 }
