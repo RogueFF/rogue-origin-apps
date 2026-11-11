@@ -20,6 +20,7 @@ import { setShiftStart, getShiftStart } from './shift.js';
 import { getScaleWeight, setScaleWeight, setBagMode } from './scale.js';
 import { getCellHourly, setCellHourly, setCellQuality, setRoomSmalls, saveCellRoster, scaleMark } from './cell-hourly.js';
 import { setCellState, getCellBoard, collectPickup } from './cell-board.js';
+import { getCellEod, eodWindow, eodWeigh, eodUndo, cellSack } from './cell-eod.js';
 import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
 import { getOrderQueue, orderSync } from './order-queue.js';
 import { getCellQueue, orderAction, jobDone } from './order-flow.js';
@@ -96,6 +97,16 @@ export async function handleProductionD1(request, env, ctx) {
         return await setCellState(body, env);
       case 'collectPickup':
         return await collectPickup(body, env);
+      case 'cellEod':
+        return await getCellEod(params, env);
+      case 'eodWindow':
+        return await eodWindow(body, env);
+      case 'eodWeigh':
+        return await eodWeigh(body, env);
+      case 'eodUndo':
+        return await eodUndo(body, env);
+      case 'cellSack':
+        return await cellSack(body, env);
       case 'rawOut':
         return await rawOut(body, env);
       case 'rawBack':

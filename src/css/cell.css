@@ -111,3 +111,23 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr 1fr; align-items: center; }
   .stat-value { font-size: 24px; white-space: nowrap; }
 }
+
+/* End of day weighs (eod.mjs): a small hold button, lead only, and its panel. */
+.btn.hold.eod-btn { min-height: 40px; font-size: 14px; padding: 0 12px; }
+.eod-card { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+.eod-step { margin: 0; font-size: 18px; font-weight: 600; }
+.eod-zero { min-height: 56px; font-size: 20px; }
+.eod-live { font-size: 20px; }
+.eod-live .eod-g { font: 700 34px var(--font-mono, monospace); margin: 0 6px; }
+.eod-live .eod-state { color: var(--text-secondary); }
+.eod-saves .btn { min-height: 64px; font-size: 18px; flex: 1; }
+.eod-hint { color: var(--text-secondary); }
+.eod-list, .eod-sacks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.eod-total { font-weight: 700; font-size: 18px; margin-top: 4px; }
+.eod-part { display: flex; align-items: center; justify-content: space-between; padding-left: 14px; font-family: var(--font-mono, monospace); }
+.eod-part .btn { min-height: 40px; }
+.eod-sacks label { display: flex; align-items: center; gap: 10px; font-size: 17px; min-height: 44px; }
+.eod-sacks input { width: 26px; height: 26px; }
+.eod-card .btn:disabled { opacity: .45; cursor: default; }
+/* Pinned to the top: the saved parts and sacks grow below, so Zero and Save never move under a finger. */
+.dialog.eod { align-items: flex-start; }

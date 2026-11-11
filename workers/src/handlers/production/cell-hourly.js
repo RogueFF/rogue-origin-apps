@@ -26,6 +26,7 @@
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { ALL_TIME_SLOTS, TIME_SLOT_MULTIPLIERS, parseSlotTimeToMinutes } from '../../lib/production-helpers.js';
 import { autoTops } from '../../lib/cell-auto.js';
+import { eodWindows } from '../../lib/cell-eod.js';
 import { pacificParts } from '../../lib/pacific.js';
 import { completeJob } from './order-flow.js';
 
@@ -101,7 +102,7 @@ async function autoRows(env, date, stationIds, now = new Date()) {
   const from = new Date(d.getTime() - 24 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
   const to = new Date(d.getTime() + 24 * 3600e3).toISOString().slice(0, 19).replace('T', ' ');
   const marks = stationIds.map(() => '?').join(', ');
-  const [readings, screenMarks] = await Promise.all([
+  const [readings, screenMarks, windows] = await Promise.all([
     allOrEmpty(env.DB.prepare(
       `SELECT station_id, ts, weight_kg AS kg FROM scale_events
        WHERE station_id IN (${marks}) AND ts >= ? AND ts < ? ORDER BY ts, id`
@@ -110,6 +111,8 @@ async function autoRows(env, date, stationIds, now = new Date()) {
       `SELECT station_id, ts, kind, kg FROM scale_marks
        WHERE station_id IN (${marks}) AND ts >= ? AND ts < ? ORDER BY ts, id`
     ).bind(...stationIds, from, to)),
+    // End of day weighs (0062): never tops.
+    eodWindows(env, stationIds, from, to),
   ]);
   const p = pacificParts(now);
   const nowMin = p.hour * 60 + p.minute;
@@ -117,7 +120,7 @@ async function autoRows(env, date, stationIds, now = new Date()) {
   for (const id of stationIds) {
     const rs = readings.filter(r => r.station_id === id);
     if (!rs.length) continue;
-    const { bySlot, flags } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES });
+    const { bySlot, flags } = autoTops({ day: date, readings: rs, marks: screenMarks.filter(m => m.station_id === id), slots: SLOT_MINUTES, windows: windows.get(id) || [] });
     for (const s of SLOT_MINUTES) {
       if (!(s.slot in bySlot)) continue;
       // An hour locks at its end; until then it's "so far".

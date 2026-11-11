@@ -21,7 +21,8 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { batteryOf } from '../../lib/battery.js';
-import { recentEvents, notRecording } from '../../lib/untracked.js';
+import { recentEvents, notRecording, WINDOW_MS } from '../../lib/untracked.js';
+import { eodActive } from '../../lib/cell-eod.js';
 import { startJob, markCollected } from './order-flow.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
@@ -93,7 +94,7 @@ export async function setCellState(body, env, now = Date.now()) {
 }
 
 export async function getCellBoard(params, env, now = Date.now()) {
-  const [roster, states, readings, stations, events, waitingRows] = await Promise.all([
+  const [roster, states, readings, stations, events, waitingRows, eod] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
     allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
@@ -104,6 +105,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
       `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
        WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
     ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
+    eodActive(env, now, WINDOW_MS),
   ]);
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
   const st = byId(states), rd = byId(readings), sc = byId(stations);
@@ -116,8 +118,10 @@ export async function getCellBoard(params, env, now = Date.now()) {
     const live = at !== null && now - at <= staleS * 1000;
     return {
       stationId: c.station_id, label: c.label, lane: c.lane,
+      // The lead is weighing the End of day leftovers on this scale (0062).
+      eod: eod.has(c.station_id),
       // Trimming with no job on the screen (lib/untracked.js): { riseG, why } or null.
-      notRecording: station ? notRecording({ scaleLive: live, events: events.get(c.station_id) || [], job: s || null, now }) : null,
+      notRecording: station ? notRecording({ scaleLive: live, events: events.get(c.station_id) || [], job: s || null, now, eod: eod.has(c.station_id) }) : null,
       scale: station ? {
         weightG: r ? Math.round(r.weight * 100000) / 100 : null,
         stable: r ? r.stable === 1 : null,
