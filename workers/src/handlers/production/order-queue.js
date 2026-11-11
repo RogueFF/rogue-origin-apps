@@ -15,6 +15,7 @@ import { shopifyConfigured } from '../../lib/shopify.js';
 import { pacificDay } from '../../lib/pacific.js';
 import { fillSlots, loadCells, loadWaiting } from './order-flow.js';
 import { planAssignments } from '../../lib/order-assign.js';
+import { coaFiles, coaFor } from '../../lib/order-coa.js';
 
 const OPEN_STATES = ['queued', 'assigned', 'trimming', 'ready', 'checked', 'hold'];
 const CLOSE_MIN = 16 * 60 + 30;   // the floor's day ends 4:30 PM Pacific
@@ -108,6 +109,14 @@ export async function getOrderQueue(params, env, now = new Date()) {
       started: js.some(j => j.started_at), nowJobId: (js.find(j => j.state === 'queued') || {}).id || null,
     };
   };
+  // COA per cultivar (slice 4): a missing one shows on the card, never blocks (Koa 2026-11-10).
+  let files = [];
+  try { files = await coaFiles(env); } catch { /* R2 down: no COA chips this read */ }
+  const coaOf = ls => {
+    const cults = [...new Set(ls.filter(l => l.cultivar && (l.form === 'tops' || l.form === 'smalls')).map(l => l.cultivar))];
+    const r = cults.map(c => ({ cultivar: c, ...coaFor(c, files) }));
+    return { checked: files.length > 0, missing: r.filter(x => !x.file).map(x => x.cultivar), count: r.filter(x => x.file).length };
+  };
   const cutoff = carryCutoff(now);
   const today = pacificDay(now);
   const fulfilledToday = await env.DB.prepare(
@@ -125,6 +134,7 @@ export async function getOrderQueue(params, env, now = new Date()) {
       cultivars: [...new Set(ls.filter(l => l.route === 'cell').map(l => l.cultivar))],
       confirmedAt: o.confirmed_at || null, readyAt: o.ready_at || null, collectedAt: o.collected_at || null,
       cell: cellOf(o),
+      coa: coaOf(ls),
     };
   }).filter(o => o.lines.length);
   return successResponse({

@@ -1,0 +1,23 @@
+/* Order papers (print.html): the COAs print first, then one button to Shopify's packing slip. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+.ro-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; }
+.ro-head h1 { margin: 0; font-size: 30px; font-family: var(--font-mono); }
+.ro-main { display: grid; gap: 14px; padding: 0 16px 32px; max-width: 760px; margin: 0 auto; }
+.card { background: var(--bg-card); border: 2px solid var(--border); border-radius: 16px; padding: 14px 16px; display: grid; gap: 10px; }
+.card h2 { margin: 0; font-size: 20px; }
+.btn { font: 700 18px var(--font-ui); padding: 10px 18px; min-height: 48px; border-radius: 12px; cursor: pointer;
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; }
+.btn.ghost { font-size: 15px; min-height: 44px; font-weight: 600; }
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; font-size: 20px; min-height: 64px; }
+.coas { display: grid; gap: 8px; }
+.coa { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.coa b { font-size: 18px; min-width: 160px; }
+.coa.missing b { color: var(--danger); }
+.status { font: 600 15px var(--font-ui); color: var(--text-secondary); }
+.status.ok { color: var(--green); }
+.status.bad, .warn { color: var(--danger); font-weight: 700; }
+.hint { margin: 0; color: var(--text-secondary); font-size: 15px; }
+.lines { margin: 0; padding-left: 20px; font-size: 17px; }
+.notice { margin: 0; padding: 12px 16px; border-radius: 14px; background: var(--danger); color: #fff; font-weight: 700; }
+.print-frame { position: absolute; width: 1px; height: 1px; left: -9999px; border: 0; }

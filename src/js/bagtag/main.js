@@ -36,7 +36,7 @@ registerLabels({
     countLine: '{n} to start · {r} rush', doneToday: '{n} fulfilled today',
     atCell: '{cell} · {slot}', slotNOW: 'NOW', slotNEXT: 'NEXT', baskets: '{d} of {b} baskets done',
     waitingCell: 'Waiting for a cell · {cell} frees a slot in ~{m} min', noCell: 'Waiting for a cell',
-    bagOnly: 'No cell work: pull from the pools', confirm: 'Confirm', confirmed: 'Confirmed',
+    bagOnly: 'No cell work: pull from the pools', confirm: 'Print + confirm', confirmed: 'Confirmed', reprint: 'Reprint papers', noCoa: 'No COA: {c}',
     move: 'Move to…', hold: 'Hold', release: 'Release', held: 'ON HOLD',
     basketDone: 'Basket done', collected: 'Collected', atSpot: 'At {cell}\'s pickup spot',
     pickRoute: 'Where does it go?', toBagging: 'Bagging', toPack: 'Pack',
@@ -57,7 +57,7 @@ registerLabels({
     countLine: '{n} por empezar · {r} urgentes', doneToday: '{n} completadas hoy',
     atCell: '{cell} · {slot}', slotNOW: 'AHORA', slotNEXT: 'SIGUIENTE', baskets: '{d} de {b} canastas listas',
     waitingCell: 'Esperando celda · {cell} libera un lugar en ~{m} min', noCell: 'Esperando celda',
-    bagOnly: 'Sin trabajo de celda: sacar del inventario', confirm: 'Confirmar', confirmed: 'Confirmada',
+    bagOnly: 'Sin trabajo de celda: sacar del inventario', confirm: 'Imprimir + confirmar', confirmed: 'Confirmada', reprint: 'Reimprimir papeles', noCoa: 'Sin COA: {c}',
     move: 'Mover a…', hold: 'Pausar', release: 'Soltar', held: 'EN PAUSA',
     basketDone: 'Canasta lista', collected: 'Recogida', atSpot: 'En el lugar de recogida de {cell}',
     pickRoute: '¿A dónde va?', toBagging: 'Empaque', toPack: 'Empacar',
@@ -119,6 +119,20 @@ async function post(action, body) {
 }
 const act = (orderId, op, extra = {}) => post('orderAction', { orderId, op, ...extra });
 
+// The one click (slice 4): the order's papers open in one tab, where the COAs print
+// by themselves and Shopify's packing slip is one button away. The tab has to open
+// inside the click itself, or the browser blocks it.
+function printUrl(o, auto) {
+  const q = new URLSearchParams({ order: String(o.id) });
+  if (auto) q.set('auto', '1');
+  if (API !== PROD_API) q.set('api', API);
+  return `print.html?${q}`;
+}
+function printAndConfirm(o) {
+  window.open(printUrl(o, true), `ro-print-${o.id}`);
+  act(o.id, 'confirm');
+}
+
 function cellInfo(o) {
   const c = cellLine(o);
   const p = node('p', `cell-line k-${c.kind}`);
@@ -140,10 +154,11 @@ function actions(o, list) {
       row.append(button('ghost', t('release'), () => act(o.id, 'release')));
       return row;
     }
-    row.append(button('primary', t('confirm'), () => act(o.id, 'confirm')));
+    row.append(button('primary', t('confirm'), () => printAndConfirm(o)));
     if (o.cell && !o.cell.waiting && !o.cell.started && cellsNow.length > 1) row.append(moveSelect(o));
     if (!(o.cell && o.cell.started)) row.append(button('ghost', t('hold'), () => act(o.id, 'hold')));
   } else if (list === 'inCells') {
+    row.append(button('ghost', t('reprint'), () => window.open(printUrl(o, false), `ro-print-${o.id}`)));
     if (o.state === 'ready') {
       row.append(node('span', 'spot', tf('atSpot', { cell: o.cell ? o.cell.label : '' })));
       row.append(button('primary', t('collected'), () => act(o.id, 'collected')));
@@ -178,6 +193,7 @@ function card(o, now, list) {
   if (o.carriedOver) head.append(node('span', 'badge carried', t('carried')));
   if (o.changedInShopify) head.append(node('span', 'badge changed', t('changed')));
   if (o.confirmedAt) head.append(node('span', 'badge ok', t('confirmed')));
+  if (o.coa && o.coa.checked && o.coa.missing.length) head.append(node('span', 'badge nocoa', tf('noCoa', { c: o.coa.missing.join(', ') })));
   head.append(node('span', 'age', tf('waiting', { a: ageText(o.placedAt, now) })));
   c.append(head);
   const ul = node('ul', 'lines');
