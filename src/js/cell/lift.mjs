@@ -80,3 +80,104 @@ export function createLiftWatch() {
     reset() { recent = []; lift = null; back = null; },
   };
 }
+
+// ---- Drops to about 0 (Koa 2026-11-11, "automatic + guard"; bench test on v6.5).
+// A straight drop to about 0 (no negative reading on the way) is either the
+// crew pressing the scale's TARE or, on a scale nobody tared (it reads GROSS),
+// a basket lifted off: un-tared, a 168 g basket lifted reads 0.00, not negative,
+// and held there ~4 s on the bench. The zero has to hold TARE_HOLD_MS first (a
+// basket being lowered passes through 0). Then:
+//   - the job holds no tops (the reading before was an empty basket: shift
+//     start, a basket swap): a TARE, as before. It stays undoable for GRACE_MS:
+//     if the same basket comes back (a basket-sized reading within EMPTY_G of
+//     the one before), it was an un-tared lift after all ('undoTare').
+//   - the job holds tops: not a TARE yet. It waits for the next settled reading:
+//     a basket-sized one (>= BASKET_MIN_G) within GRACE_MS is an un-tared lift
+//     ('untared'), anything else (a small rise, a negative lift, or GRACE_MS of
+//     zero) was the TARE after all ('tare').
+// Same rule as the Worker's hourly tops (workers/src/lib/cell-auto.js).
+export const ZERO_G = 0.5;        // the scale's TARE reads 0.00: "about 0"
+export const ON_SCALE_G = 2.0;    // more than this is weight on the pan
+export const TARE_HOLD_MS = 1800; // two polls at 0
+export const BASKET_MIN_G = 50;   // an empty basket weighs more (168 g bench); a first handful less
+
+export function createZeroWatch() {
+  let prev = null;          // the reading before this one
+  let anchor = null;        // { at, g }: the reading the scale is holding at
+  let settled = null;       // the last reading that held SETTLE_MS
+  let heldNow = false;      // this reading has held SETTLE_MS
+  let wentNegative = false; // a lift (negative) since the reading was last up
+  let cand = null;          // { before, since }: a zero waiting to hold TARE_HOLD_MS
+  let pending = null;       // { before, at }: a loaded zero waiting for the next settled reading
+  let provisional = null;   // { before, at }: an empty-basket TARE a returning basket can undo
+
+  const track = (at, g) => {
+    if (anchor && Math.abs(g - anchor.g) <= SETTLE_TOL_G) {
+      heldNow = at - anchor.at >= SETTLE_MS;
+      if (heldNow && Math.abs(g) > ZERO_G) settled = g;
+    } else {
+      anchor = { at, g };
+      heldNow = false;
+    }
+  };
+
+  return {
+    /** A loaded zero is waiting: the basket may be off an un-tared scale. */
+    get holding() { return pending !== null; },
+    /** An empty-basket TARE that a returning basket could still undo. */
+    get provisional() { return provisional !== null; },
+
+    /**
+     * One reading. loaded(before) says whether the job holds tops, given the
+     * reading before the drop. Returns null, or
+     *   { kind: 'tare', before }                   a TARE: handle it as one
+     *   { kind: 'untared', before, back }          an un-tared lift came back at `back`
+     *   { kind: 'undoTare', before }               the last TARE was an un-tared lift
+     */
+    reading(at, gross, loaded = () => false) {
+      track(at, gross);
+      let out = null;
+
+      if (pending) {
+        const p = pending;
+        if (gross < -LIFT_G || at - p.at > GRACE_MS) { pending = null; out = { kind: 'tare', before: p.before }; }
+        else if (Math.abs(gross) <= ZERO_G || !heldNow) return null;           // off, or still landing
+        else {
+          pending = null;
+          return gross >= BASKET_MIN_G ? { kind: 'untared', before: p.before, back: gross }
+            : { kind: 'tare', before: p.before };
+        }
+      }
+
+      if (provisional) {
+        if (gross < -LIFT_G || at - provisional.at > GRACE_MS) provisional = null;
+        else if (heldNow && gross >= BASKET_MIN_G && Math.abs(gross - provisional.before) <= EMPTY_G) {
+          const before = provisional.before;
+          provisional = null;
+          return { kind: 'undoTare', before };
+        } else if (heldNow && gross > ZERO_G && gross < BASKET_MIN_G) provisional = null;   // trimming started
+      }
+
+      if (gross < -LIFT_G) { wentNegative = true; cand = null; }
+      else if (gross > ON_SCALE_G) wentNegative = false;
+      if (!cand && prev !== null && prev > ON_SCALE_G && Math.abs(gross) <= ZERO_G && !wentNegative) {
+        // The reading before is the last one the scale held (a lift passes
+        // through moving readings on its way down), else the one just before.
+        cand = { before: settled !== null && settled > ON_SCALE_G ? settled : prev, since: at };
+      } else if (cand && Math.abs(gross) > ZERO_G && at - cand.since < TARE_HOLD_MS) {
+        cand = null;                                                          // passing through 0
+      }
+      prev = gross;
+      if (cand && Math.abs(gross) <= ZERO_G && at - cand.since >= TARE_HOLD_MS) {
+        const { before } = cand;
+        cand = null;
+        if (loaded(before)) { pending = { before, at }; return out; }
+        provisional = { before, at };
+        return out || { kind: 'tare', before };
+      }
+      return out;
+    },
+
+    reset() { prev = null; anchor = null; settled = null; heldNow = false; wentNegative = false; cand = null; pending = null; provisional = null; },
+  };
+}

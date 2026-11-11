@@ -16,7 +16,7 @@
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
-import { createLiftWatch } from './lift.mjs';
+import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -49,7 +49,6 @@ const HOLD_MS = 3000;
 // exactly the number the scale shows (grams, 2 decimals), with no offset of its own.
 // An empty tared basket reads about 0; a lifted basket reads negative.
 const ON_SCALE_G = 2.0;  // more than this on an idle, untared scale -> "Tare on the scale, then tap Start"
-const ZERO_G = 0.5;      // the scale's TARE reads 0.00: "about 0"
 const LIFT_G = 1.0;      // below -1 g mid-job: the basket is off the scale
 // Pauses (Koa 2026-11-05): a running job pauses itself at 4:20 pm Pacific (cleanup),
 // and the Pause button only works with a note saying why. Paused time is left out
@@ -170,11 +169,9 @@ let gross = null;       // grams, latest reading
 let stable = null;      // the scale's settled flag, when it sends one
 let battery = null;     // the scale node's battery { pct, mv, rssi } (firmware v6.5+), or null
 let overSince = null;   // when net first reached the target this job
-let prevReading = null; // the reading before this one, to spot a scale TARE (a straight drop to 0)
-let wentNegative = false; // a lift (negative) since the reading was last up
-let tareCandidate = null;  // { from, since }: a drop to 0 waiting to prove it is a TARE
-const TARE_HOLD_MS = 1800;
 const watch = createLiftWatch(); // basket lifts: pickup or shake (lift.mjs)
+const zero = createZeroWatch();  // drops to about 0: the scale's TARE, or an un-tared lift (lift.mjs)
+let tareAt = null;               // when the last empty-basket TARE was taken (undone if it was a lift)
 let live = false;
 let timer = null;
 // Disconnected: the Worker says the scale's last post is older than its stale
@@ -352,23 +349,37 @@ function chime() {
 // Move the job along from the latest reading. Called after every poll.
 function step() {
   if (gross === null) return;
-  // A drop to about 0 with no lift between is someone pressing the scale's TARE.
-  // The scale sends no settle flag and a basket being lifted passes through 0 on
-  // its way negative, so the 0 must hold TARE_HOLD_MS (two polls) before it counts.
+  // A drop to about 0 with no lift between: someone pressing the scale's TARE,
+  // or a basket lifted off a scale nobody tared (it reads 0, not negative).
+  // zero (lift.mjs) waits for what comes back before it calls a loaded zero a TARE.
   const now = Date.now();
-  if (gross < -LIFT_G) { wentNegative = true; tareCandidate = null; }
-  else if (gross > ON_SCALE_G) wentNegative = false;
-  if (!tareCandidate && prevReading !== null && prevReading > ON_SCALE_G && Math.abs(gross) <= ZERO_G && !wentNegative) {
-    tareCandidate = { from: prevReading, since: now };
-  } else if (tareCandidate && Math.abs(gross) > ZERO_G && now - tareCandidate.since < TARE_HOLD_MS) {
-    tareCandidate = null;                       // didn't hold at 0: passing through
-  }
-  prevReading = gross;
-  const confirmed = tareCandidate && Math.abs(gross) <= ZERO_G && now - tareCandidate.since >= TARE_HOLD_MS;
+  const loaded = before => (state.phase === 'running' || state.phase === 'finished') && before + (state.bankedG || 0) > EMPTY_G;
+  const z = zero.reading(now, gross, loaded);
   const lift = watch.reading(now, gross, net());
-  if (confirmed) {
-    const before = tareCandidate.from;
-    tareCandidate = null;
+  if (z && z.kind === 'undoTare') {
+    // The basket came back: that "TARE" was an un-tared lift of an empty basket.
+    // Undo what it did (an armed or just-started job); the screen asks for a TARE again.
+    if ((state.phase === 'armed' || state.phase === 'running') && tareAt !== null && (!state.startedAt || state.startedAt >= tareAt)) {
+      state.phase = 'idle'; state.startedAt = null; state.finishedMs = null; overSince = null;
+      state.bankedG = 0; state.tareFlagG = 0; clearPauses();
+    }
+    tareAt = null;
+    save();
+    return;
+  }
+  if (z && z.kind === 'untared') {
+    // A loaded basket lifted off an un-tared scale and back (lift.mjs). Empty
+    // back is a pickup; back where it was changes nothing; anything else a shake.
+    const netBefore = z.before + (state.bankedG || 0);
+    const emptyGross = z.before - netBefore;
+    let ev = null;
+    if (Math.abs(z.back - emptyGross) <= EMPTY_G) ev = { kind: 'pickup', g: netBefore };
+    else if (Math.abs(z.back - z.before) > EMPTY_G) ev = { kind: 'shake', g: Math.max(0, z.before - z.back), backNet: net() };
+    if (ev && onLift(ev)) { save(); return; }
+  }
+  if (z && z.kind === 'tare') {
+    const before = z.before;
+    tareAt = now;
     // A TARE right after a basket came back heavy: a new basket went on, so the
     // lift before it was a pickup (same rule as the Worker's hourly tops).
     const swap = watch.tare(now);
@@ -388,7 +399,10 @@ function step() {
   }
   if (lift && onLift(lift)) { save(); return; }
   // Basket off the pan, or still coming down: nothing starts or finishes on it.
-  if (watch.lifted) return;
+  if (watch.lifted || zero.holding) return;
+  // Just after an empty-basket TARE, a basket-sized reading may be that basket
+  // coming back (an un-tared lift): it never starts or finishes a job.
+  if (zero.provisional && gross >= BASKET_MIN_G) return;
   if (state.phase === 'idle' && state.basketBack) { armIfReady(); if (state.phase === 'armed') { save(); return; } }
   const n = net();
   if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume

@@ -78,3 +78,54 @@ test('no lift, no result; an empty basket lifted and set back is a pickup of 0',
   const out = run(w2, [...hold(0, 1000, 0), [1250, -150], ...hold(1500, 2750, 0)]);
   assert.deepEqual(out.map(o => [o.kind, o.g]), [['pickup', 0]]);
 });
+
+// ---- Drops to about 0: the scale's TARE vs a basket lifted off a scale nobody
+// tared (Koa 2026-11-11, "automatic + guard"; bench test on v6.5, JINXUAN).
+import { createZeroWatch } from '../src/js/cell/lift.mjs';
+const zrun = (readings, loaded = () => false) => {
+  const z = createZeroWatch();
+  const out = [];
+  for (const [at, g] of readings) { const e = z.reading(at, g, loaded); if (e) out.push({ at, ...e }); }
+  return { out, z };
+};
+
+test('bench: an empty basket lifted off an UN-TARED scale reads 0, holds 4 s, comes back: TARE then undone', () => {
+  const { out, z } = zrun([...hold(0, 2000, 168.6), [2250, 120], [2500, 191], [2750, 40],
+    ...hold(3000, 7000, 0), [7250, 90], ...hold(7500, 9000, 168.22)]);
+  assert.deepEqual(out.map(o => o.kind), ['tare', 'undoTare']);
+  assert.equal(out[0].before, 168.6);   // the held reading, not the 191 g press spike
+  assert.equal(z.provisional, false);
+});
+
+test('a real TARE at shift start: basket on, TARE, trimming starts from 0: it stands', () => {
+  const { out, z } = zrun([...hold(0, 2000, 168.6), ...hold(2250, 5000, 0), ...hold(5250, 7000, 3.2), ...hold(7250, 9000, 170)]);
+  assert.deepEqual(out.map(o => o.kind), ['tare']);
+  assert.equal(z.provisional, false);   // trimming started: no basket coming back can undo it
+});
+
+test('a loaded zero on a tared scale (TARE pressed with tops in) is a TARE once trimming carries on', () => {
+  const { out } = zrun([...hold(0, 2000, 200), ...hold(2250, 6000, 0), ...hold(6250, 8000, 2.5)], () => true);
+  assert.deepEqual(out, [{ at: 7250, kind: 'tare', before: 200 }]);
+});
+
+test('a loaded basket lifted off an UN-TARED scale and set back: an un-tared lift, never a TARE', () => {
+  const { out, z } = zrun([...hold(0, 2000, 200), [2250, 150], ...hold(2500, 6500, 0), [6750, 120], ...hold(7000, 8500, 168.2)], () => true);
+  assert.deepEqual(out, [{ at: 8000, kind: 'untared', before: 200, back: 168.2 }]);
+  assert.equal(z.holding, false);
+});
+
+test('while a loaded zero waits, the basket counts as off (holding)', () => {
+  const z = createZeroWatch();
+  for (const [at, g] of [...hold(0, 2000, 200), ...hold(2250, 4500, 0)]) z.reading(at, g, () => true);
+  assert.equal(z.holding, true);
+});
+
+test('a loaded zero that stays at 0 past GRACE_MS falls back to the TARE rule', () => {
+  const { out } = zrun([...hold(0, 2000, 200), ...hold(2250, 2250 + GRACE_MS + 5000, 0)], () => true);
+  assert.deepEqual(out.map(o => o.kind), ['tare']);
+});
+
+test('a tared lift (negative) is no zero event at all', () => {
+  const { out } = zrun([...hold(0, 2000, 200), [2250, -150], ...hold(2500, 4000, -168), ...hold(4250, 6000, 0.2)]);
+  assert.deepEqual(out, []);
+});
