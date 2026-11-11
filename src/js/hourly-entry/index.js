@@ -162,6 +162,8 @@ const LABELS = {
     changeTotal: 'Hour total: {n} lbs tops',
     changeSame: 'Pick a different cultivar than the first one',
     changeTime: 'The time must be inside this hour',
+    changeNeedTime: 'Enter the time of the change: it is not saved without one',
+    changeNeedCultivar: 'Pick the new cultivar: the change is not saved without one',
     qcNotes: 'QC Notes',
     hourlyTarget: 'Hourly Target',
     dayView: 'Day',
@@ -285,6 +287,8 @@ const LABELS = {
     changeTotal: 'Total de la hora: {n} lbs de tops',
     changeSame: 'Elija una variedad distinta a la primera',
     changeTime: 'La hora debe estar dentro de esta hora',
+    changeNeedTime: 'Ponga la hora del cambio: sin ella no se guarda',
+    changeNeedCultivar: 'Elija la nueva variedad: sin ella no se guarda el cambio',
     qcNotes: 'Notas QC',
     hourlyTarget: 'Meta por Hora',
     dayView: 'Día',
@@ -705,12 +709,12 @@ function changeProblem() {
   const labels = LABELS[currentLang];
   const c = document.getElementById('changeCultivar').value;
   if (c && c === document.getElementById('cultivar1').value) return labels.changeSame;
+  if (!c) return labels.changeNeedCultivar;
   const at = document.getElementById('changeAt').value;
-  if (at) {
-    const [a, b] = slotBounds(TIME_SLOTS[currentSlotIndex]);
-    const [h, m] = at.split(':').map(Number);
-    if (a !== null && b !== null && !(h * 60 + m > a && h * 60 + m < b)) return labels.changeTime;
-  }
+  if (!at) return labels.changeNeedTime;
+  const [a, b] = slotBounds(TIME_SLOTS[currentSlotIndex]);
+  const [h, m] = at.split(':').map(Number);
+  if (a !== null && b !== null && !(h * 60 + m > a && h * 60 + m < b)) return labels.changeTime;
   return '';
 }
 function renderChangeTotal() {
