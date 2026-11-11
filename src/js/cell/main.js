@@ -24,7 +24,7 @@ import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
 import { enhanceSelect } from '../shared/select-search.js';
 import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
-import { applyQueue, shortCultivar } from './queue.mjs';
+import { applyQueue, shortCultivar, calmWait } from './queue.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -85,6 +85,7 @@ registerLabels({
     waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
     cultivar: 'Cultivar', bagSize: 'Bag size', chooseCultivar: 'Choose the cultivar',
     bannerOrder: 'Choose the cultivar and bag size for this order', chooseBag: 'Choose the bag size',
+    bannerWaitOrder: 'Waiting for the next order. It shows up here by itself.',
     notRecording: 'NOT RECORDING', orderLocked: 'Locked during the job. To change it: Hold to reset.',
     of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
     armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
@@ -111,6 +112,7 @@ registerLabels({
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
     cultivar: 'Variedad', bagSize: 'Tamaño de bolsa', chooseCultivar: 'Elija la variedad',
     bannerOrder: 'Elija la variedad y el tamaño de bolsa de esta orden', chooseBag: 'Elija el tamaño de bolsa',
+    bannerWaitOrder: 'Esperando la siguiente orden. Aparece aquí sola.',
     notRecording: 'NO SE ESTÁ GRABANDO', orderLocked: 'Bloqueado durante el trabajo. Para cambiarlo: Mantenga para reiniciar.',
     of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
     armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
@@ -315,6 +317,13 @@ function renderBanner() {
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
   if (!kind) return;
+  // A cell fed orders (queue.mjs calmWait), with nothing assigned and nothing being
+  // trimmed, is just waiting: say so calmly. Live today nothing assigns: the red stays.
+  if (kind === 'order' && calmWait({ takesOrders: !!(queueCell && queueCell.takesOrders), autoAssign: queueDriven, hasNow: !!queue.now, grossG: gross, onScaleG: ON_SCALE_G })) {
+    el.banner.className = 'banner break';
+    el.banner.textContent = t('bannerWaitOrder');
+    return;
+  }
   if (kind === 'break') {
     const b = breakAt(pacificMinutes(Date.now()));
     el.banner.className = 'banner break';
@@ -817,12 +826,16 @@ const LOST_PICKUP_MS = 30000;
 const closedJobs = new Map();
 const jobDoneSent = new Set();
 let queue = { now: null, next: null };
+let queueCell = null;   // this cell's cellQueue row: takesOrders, NOW, NEXT
+let queueDriven = false; // something assigns orders (cellQueue autoAssign)
 async function loadQueue() {
   try {
     const r = await fetch(`${API}?action=cellQueue&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
     if (!r.ok) return;   // before migration 0061 (503) the screen works as it always has
     const d = await r.json();
     queue = { now: (d.cell && d.cell.now) || null, next: (d.cell && d.cell.next) || null };
+    queueCell = d.cell || null;
+    queueDriven = d.autoAssign === true;
   } catch { return; }
   const stuck = queue.now && closedJobs.has(queue.now.id) ? queue.now.id : null;
   if (stuck && Date.now() - closedJobs.get(stuck) > LOST_PICKUP_MS && !jobDoneSent.has(stuck)) {
@@ -832,8 +845,9 @@ async function loadQueue() {
   }
   for (const [id, at] of closedJobs) if (id !== stuck && Date.now() - at > 10 * 60000) { closedJobs.delete(id); jobDoneSent.delete(id); }
   const changed = applyQueue(state, queue.now, { locked: orderLocked(), closed: new Set(closedJobs.keys()), bagOk: k => !!bagOf(k) });
-  if (changed) { overSince = null; armIfReady(); save(); renderOrder(); render(); }
+  if (changed) { overSince = null; armIfReady(); save(); renderOrder(); }
   renderQueue();
+  render();
 }
 function jobLine(j) {
   return `${shortCultivar(j.cultivar)} · ${t(j.bag)} × ${j.bags}`;

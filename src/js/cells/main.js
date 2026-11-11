@@ -300,8 +300,14 @@ function renderGrid() {
   const keep = new Set();
   for (const c of onScreen) {
     keep.add(c.stationId);
-    const st = statusOf(c) || 'offline';
-    const j = c.job || {};
+    // A cell with no tablet (no scale, or none open) still has an order from the queue:
+    // show what it's on and its target. A cell with no scale has no tablet to be off,
+    // so its state comes from the queue too (practice mode showed this, 2026-11-11).
+    const qn = (queues.get(c.stationId) || {}).now || null;
+    const tabletJob = c.job && c.job.tabletOnline && c.job.phase !== 'idle' ? c.job : null;
+    let st = statusOf(c) || 'offline';
+    if (qn && !c.scale && !tabletJob) st = qn.started ? 'running' : 'armed';
+    const j = tabletJob || (qn ? { cultivar: qn.cultivar, bag: qn.bag, targetG: qn.targetG } : (c.job || {}));
     const tile = tileFor(c);
     tile.className = `tile ${st}`;
     const target = j.targetG || null;

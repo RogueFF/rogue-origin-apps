@@ -104,7 +104,8 @@ function env() {
     all: async () => ({ results: db.prepare(sql).all(...p) }),
     run: async () => ({ meta: { changes: db.prepare(sql).run(...p).changes } }),
   });
-  return { raw: db, env: { DB: { prepare: sql => ({ bind: (...p) => stmt(sql, p), ...stmt(sql, []) }) } } };
+  // Our stand-in auto-assign is OFF unless switched on (live: scheduling is Nathan's).
+  return { raw: db, env: { DB: { prepare: sql => ({ bind: (...p) => stmt(sql, p), ...stmt(sql, []) }) }, ORDER_AUTO_ASSIGN: '1' } };
 }
 const json = async r => ({ status: r.status, body: await r.json() });
 
@@ -270,10 +271,21 @@ test('hold is refused once a basket of the order is being trimmed', async () => 
   assert.equal((await orderAction({ orderId: id, op: 'hold' }, e)).status, 409);
 });
 
+test('the stand-in auto-assign is OFF unless switched on', async () => {
+  const { raw, env: e } = env();
+  delete e.ORDER_AUTO_ASSIGN;
+  await syncShopOrders(e, { gql: shop([sOrder(9901, '2026-11-10T10:00:00Z', [sLine('Sour Lifter Hemp Flower', '1 oz.', 1)])]), now: NOW, force: true });
+  assert.deepEqual(await fillSlots(e), { assigned: 0, off: true });
+  assert.equal(raw.prepare(`SELECT COUNT(*) n FROM cell_jobs`).get().n, 0, 'orders wait for the scheduler');
+  const q = await (await getOrderQueue({}, e, NOW)).json();
+  assert.equal(q.autoAssign, false);
+  assert.equal(q.orders[0].cell, null, 'no stand-in projection either');
+});
+
 test('before migration 0061: a clear 503, never a crash', async () => {
   const db = new DatabaseSync(':memory:');
   const s = sql => ({ first: async () => db.prepare(sql).get(), all: async () => ({ results: db.prepare(sql).all() }), run: async () => db.prepare(sql).run() });
-  const e = { DB: { prepare: sql => ({ bind: () => s(sql), ...s(sql) }) } };
+  const e = { DB: { prepare: sql => ({ bind: () => s(sql), ...s(sql) }) }, ORDER_AUTO_ASSIGN: '1' };
   assert.equal((await getCellQueue({}, e)).status, 503);
   assert.equal((await jobDone({ jobId: 1 }, e)).status, 503);
   assert.deepEqual(await fillSlots(e), { assigned: 0, notReady: true });
