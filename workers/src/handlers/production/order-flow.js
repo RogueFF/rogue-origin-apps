@@ -99,7 +99,8 @@ export async function loadWaiting(env) {
 /**
  * Our auto-assign is a STAND-IN (Koa 2026-11-11: "leave the scheduling for him
  * for now"): scheduling is Nathan's (wiki operations/plans/2026-11-11-scheduler-contract.md).
- * It only runs when ORDER_AUTO_ASSIGN is '1' (the practice/demo mode sets it);
+ * It only runs when ORDER_AUTO_ASSIGN is '1' (set it only to test it; the floor
+ * walkthrough, demo.html, runs the same planner in the browser);
  * live it is OFF, and orders wait for the scheduler.
  */
 export const autoAssignOn = env => !!env && String(env.ORDER_AUTO_ASSIGN || '') === '1';

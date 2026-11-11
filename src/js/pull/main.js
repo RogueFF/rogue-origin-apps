@@ -8,7 +8,6 @@
  *   pull.html?api=http://localhost:8787/api/production local testing only
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
-import { isDemo, demoApi, withDemo, showDemoBanner } from '../shared/demo.mjs';
 import { pullRows } from './view.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
@@ -34,10 +33,8 @@ const tf = (key, vars = {}) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ??
 
 const params = new URLSearchParams(location.search);
 const apiParam = params.get('api') || '';
-const API = demoApi(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API);   // ?demo=1: the practice database
+const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
 if (API !== PROD_API) document.getElementById('queueLink').href = `bagtag.html?api=${encodeURIComponent(API)}`;
-{ const a = document.getElementById('queueLink'); a.href = withDemo(a.getAttribute('href')); }
-showDemoBanner();
 
 const $ = id => document.getElementById(id);
 const el = { lang: $('langToggle'), list: $('rows'), notice: $('notice') };
