@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { changeovers, breakMsIn, episodesInDay, verifiedYield, median, qualityOf, CELL_BREAKS } from '../src/lib/cell-day.js';
+import { changeovers, breakMsIn, episodesInDay, verifiedYield, median, qualityOf, CELL_BREAKS, prevShiftDay } from '../src/lib/cell-day.js';
 import { autoTops } from '../src/lib/cell-auto.js';
 import { getCellDay, pacificDayMs } from '../src/handlers/production/cell-day.js';
 
@@ -135,4 +135,42 @@ test('cellDay: unknown station 400; a bare day reads empty, not an error', async
   assert.equal((await getCellDay({ stationId: 'nope' }, env, ms(12, 0))).status, 400);
   const d = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(12, 0))).json();
   assert.deepEqual([d.tops.lb, d.jobs.length, d.changeovers.medianS, d.yield.topsPerSack, d.battery], [0, 0, null, null, null]);
+});
+
+test('a day on yesterday\'s leftover alone (no new sack) still gets a verified figure', () => {
+  const v = verifiedYield({ topsLb: 3, sacksLb: 0, carryInG: 453.59237 * 14, eodRawG: 453.59237 * 2 });
+  assert.deepEqual([v.rawInLb, v.usedLb, v.topsPerSack], [14, 12, 8.75]);
+  const unknown = verifiedYield({ topsLb: 3, sacksLb: 35, carryInG: null, eodRawG: 453.59237 * 2 });
+  assert.deepEqual([unknown.carryKnown, unknown.rawInLb, unknown.topsPerSack], [false, null, null]);
+  assert.equal(prevShiftDay('2026-11-16'), '2026-11-13', 'Monday -> Friday');
+  assert.equal(prevShiftDay('2026-11-13'), '2026-11-12');
+});
+
+test('cellDay: an episode left open overnight counts only inside each day\'s shift (6:00 to 4:20)', async () => {
+  const { raw, env } = d1();
+  // Scale switched off at cleanup with weight on: NOT RECORDING from 3:59 pm, closed 7:10 next morning.
+  raw.prepare(`INSERT INTO scale_episodes (station_id, kind, from_ts, to_ts, why) VALUES ('table1', 'untracked', ?, ?, 'noJob')`)
+    .run(utc(15, 59), '2026-11-13 15:10:00');
+  const thu = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(40, 0))).json();
+  const fri = await (await getCellDay({ stationId: 'table1', date: '2026-11-13' }, env, ms(40, 0))).json();
+  assert.equal(thu.gaps.notRecording.minutes, 21, '3:59 to the 4:20 cleanup');
+  assert.equal(fri.gaps.notRecording.minutes, 70, '6:00 to 7:10 next morning');
+});
+
+test('cellDay: carry-in is the shift day before only; a skipped weigh there makes it unknown', async () => {
+  const { raw, env } = d1();
+  raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, 0), ('table1', ?, 0.2)`).run('2026-11-16 17:00:00', '2026-11-16 18:00:00');
+  raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, 0), ('table1', ?, 0.2)`).run('2026-11-17 17:00:00', '2026-11-17 18:00:00');
+  const eod = raw.prepare(`INSERT INTO cell_eod (station_id, production_date, kind, grams, ts) VALUES ('table1', ?, 'raw', ?, ?)`);
+  eod.run('2026-11-12', 4000, '2026-11-12 23:50:00');      // Thu leftover
+  raw.prepare(`INSERT INTO cell_sacks (production_date, sack_id, station_id) VALUES ('2026-11-13', 'S2', 'table1')`).run();   // Fri: raw, no weigh
+  eod.run('2026-11-16', 900, '2026-11-16 23:50:00');       // Mon weighed
+  eod.run('2026-11-17', 300, '2026-11-17 23:50:00');       // Tue weighed
+  const day = async d => (await (await getCellDay({ stationId: 'table1', date: d }, env, ms(200, 0))).json());
+  const mon = await day('2026-11-16');
+  assert.equal(mon.eod.carryInG, null, 'Fri had raw but no weigh: unknown, never Thu\'s 4 kg');
+  assert.equal(mon.yield.topsPerSack, null);
+  const tue = await day('2026-11-17');
+  assert.deepEqual([tue.eod.carryInG, tue.eod.carryFrom], [900, '2026-11-16']);
+  assert.ok(tue.yield.topsPerSack > 0, 'Tue ran on Mon\'s leftover alone');
 });

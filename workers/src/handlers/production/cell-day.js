@@ -17,7 +17,7 @@ import { battPct } from '../../lib/battery.js';
 import { sackLbs } from '../../lib/sack-weight.js';
 import { autoDay, SLOT_MINUTES } from './cell-hourly.js';
 import {
-  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G,
+  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN,
 } from '../../lib/cell-day.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -49,6 +49,7 @@ export async function getCellDay(params, env, now = Date.now()) {
   const [dayFrom, dayTo] = pacificDayMs(date);
   const fromSql = sqliteUtc(new Date(dayFrom)), toSql = sqliteUtc(new Date(dayTo));
   const id = station.station_id;
+  const prev = prevShiftDay(date);
 
   const [auto, typed, marks, starts, episodes, quality, eod, carry, sacks, reading] = await Promise.all([
     autoDay(env, date, [id]).then(m => m.get(id) || null),
@@ -66,13 +67,14 @@ export async function getCellDay(params, env, now = Date.now()) {
     rows(env.DB.prepare(
       `SELECT kind, grams, batt_mv, ts FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind IN ('raw', 'tote') AND undone_at IS NULL ORDER BY ts, id`
     ).bind(id, date)),
-    // Carry-in: the leftover raw weighed at this cell's last End of day before today.
+    // Carry-in: the leftover raw weighed at this cell's End of day on the shift day
+    // before, never further back (that leftover was used on the day between).
+    // Also whether the cell had raw that day, so a skipped weigh reads as unknown.
     rows(env.DB.prepare(
-      `SELECT production_date, SUM(grams) AS g FROM cell_eod
-       WHERE station_id = ? AND kind = 'raw' AND undone_at IS NULL AND production_date = (
-         SELECT MAX(production_date) FROM cell_eod WHERE station_id = ? AND kind = 'raw' AND undone_at IS NULL AND production_date < ?)
-       GROUP BY production_date`
-    ).bind(id, id, date)),
+      `SELECT (SELECT SUM(grams) FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind = 'raw' AND undone_at IS NULL) AS g,
+              (SELECT COUNT(*) FROM cell_sacks WHERE station_id = ? AND production_date = ?) +
+              (SELECT COUNT(*) FROM cell_eod WHERE station_id = ? AND production_date = ?) AS had`
+    ).bind(id, prev, id, prev, id, prev)),
     rows(env.DB.prepare(
       `SELECT cs.sack_id, h.season, h.cultivar, h.fill_lbs FROM cell_sacks cs
        LEFT JOIN harvest_sacks h ON h.sack_id = cs.sack_id
@@ -111,7 +113,8 @@ export async function getCellDay(params, env, now = Date.now()) {
   const coS = co.map(c => c.s);
 
   // ---- recording gaps ----
-  const eps = episodesInDay(episodes, dayFrom, dayTo, now);
+  // Gaps count inside the shift only: an episode left open overnight is not 14 h of gap.
+  const eps = episodesInDay(episodes, dayFrom + SHIFT_MIN[0] * 60e3, dayFrom + SHIFT_MIN[1] * 60e3, now);
   const gap = kind => {
     const e = eps.filter(x => x.kind === kind);
     return { count: e.length, minutes: e.reduce((a, x) => a + x.minutes, 0), episodes: e };
@@ -124,7 +127,9 @@ export async function getCellDay(params, env, now = Date.now()) {
   const eodToteG = has('tote') ? r2(sum('tote')) : null;
   const sackList = sacks.map(s => ({ sackId: s.sack_id, cultivar: s.cultivar, lbs: sackLbs(s), fillLbs: s.fill_lbs ?? null }));
   const sacksLb = sackList.reduce((a, s) => a + s.lbs, 0);
-  const carryInG = carry.length ? r2(carry[0].g) : 0;
+  const c = carry[0] || {};
+  // Weighed the shift day before: that. Had raw then but no weigh: unknown (null). Else 0.
+  const carryInG = c.g != null ? r2(c.g) : c.had > 0 ? null : 0;
   const yieldOut = verifiedYield({ topsLb, sacksLb, carryInG, eodRawG, toteG: eodToteG });
 
   // ---- battery: the last End of day weigh's, else (today) the node's latest ----
@@ -144,7 +149,7 @@ export async function getCellDay(params, env, now = Date.now()) {
     gaps: { offline: gap('offline'), notRecording: gap('untracked') },
     quality: qualityOf(quality),
     sacks: { list: sackList, count: sackList.length, lb: r2(sacksLb) },
-    eod: { rawG: eodRawG, toteG: eodToteG, carryInG, carryFrom: carry.length ? carry[0].production_date : null },
+    eod: { rawG: eodRawG, toteG: eodToteG, carryInG, carryFrom: c.g != null ? prev : null },
     yield: yieldOut,
     battery,
   });

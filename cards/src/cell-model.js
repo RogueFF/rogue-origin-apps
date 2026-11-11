@@ -126,7 +126,8 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const phase = shiftDays(PHASE_START, PHASE_DAYS);
   const dayNo = phase.indexOf(date) + 1;
   const final = (day.tops.hourly || []).every((h) => h.final);
-  const pill = v.yield === 'none' ? 'NOT YET: weigh the leftovers'
+  const carryUnknown = day.yield?.carryKnown === false;
+  const pill = v.yield === 'none' ? (carryUnknown ? 'NOT YET: no carry-in weigh' : 'NOT YET: weigh the leftovers')
     : v.pass ? (v.yield === 'both' ? 'EXIT TEST: PASS' : 'PASS at the higher price') : 'EXIT TEST: MISS';
   const ch = day.changeovers || {};
   const so = phaseSoFar(strip.map((s) => s.day));
@@ -136,6 +137,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   if (eps.length) {
     flags.push({ kind: 'bad', tag: 'Gap', text: eps.map((e) => `${e.kind === 'offline' ? 'Scale offline' : 'NOT RECORDING'} ${clock12(e.fromMs)}, ${e.minutes} min${e.toMs === null ? ' (open)' : ''}`).join(' · ') });
   }
+  if (carryUnknown) flags.push({ kind: 'warn', tag: 'Raw', text: 'The shift day before had raw but no End of day weigh, so today is not verified' });
   if (day.quality?.stop) flags.push({ kind: 'bad', tag: 'Stop', text: `${day.quality.stop} batch(es) scored 1 on mold or insects` });
   if (!v.be.measured) flags.push({ kind: 'warn', tag: 'Note', text: `${cultivar ? cultivarShort(cultivar) : 'This cultivar'} has no break-even yet: Sour Lifter's is used` });
   if (v.pass && !flags.some((f) => f.kind === 'bad')) flags.unshift({ kind: 'good', tag: 'Good', text: 'No recording gaps, and verified tops/sack above break-even' });

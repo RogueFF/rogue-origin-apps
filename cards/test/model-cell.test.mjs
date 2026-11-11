@@ -127,3 +127,10 @@ test('renders the cell card as a 1080x1350 PNG; sections stack and the foot stay
   const view = new DataView(png.buffer, png.byteOffset);
   assert.deepEqual([view.getUint32(16), view.getUint32(20)], [CANVAS.width, CANVAS.height]);
 });
+
+test('carry-in unknown (the day before had raw, no weigh): NOT YET with the reason', () => {
+  const day = cellDay({ yield: { ...cellDay().yield, carryKnown: false, rawInLb: null, usedLb: null, topsPerSack: null } });
+  const m = cellModel({ date: '2026-11-13', day, strip: [], generatedAt: GEN });
+  assert.equal(m.pill, 'NOT YET: no carry-in weigh');
+  assert.equal(m.flags[0].tag, 'Raw');
+});

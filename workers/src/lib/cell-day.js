@@ -103,18 +103,38 @@ export function qualityOf(rows) {
  * used. Raw in = the sacks ticked to the cell (fill_lbs, or the crop year's full
  * sack) + the leftover it started the day with (carry-in); used = raw in - the
  * leftover weighed at EOD. The fall-through tote is reported beside it, not in it.
- * Null until there is raw in and an EOD weigh (no weigh, no verified figure).
+ * A day can run on yesterday's leftover alone (a sack lasts about two days at
+ * one trimmer), so it only needs raw in from either source.
+ * Null until there is raw in and an EOD weigh (no weigh, no verified figure),
+ * and when the carry-in is unknown (carryInG null: the cell got raw the shift day
+ * before but its leftover was never weighed).
  */
 export function verifiedYield({ topsLb, sacksLb, carryInG = 0, eodRawG = null, toteG = null, sackLbs = fullSackLbs(2026) }) {
-  const carryInLb = carryInG / G_PER_LB;
+  const carryKnown = carryInG !== null;
+  const carryInLb = carryKnown ? carryInG / G_PER_LB : null;
   const eodRawLb = eodRawG === null ? null : eodRawG / G_PER_LB;
-  const rawInLb = sacksLb + carryInLb;
-  const usedLb = eodRawLb === null ? null : rawInLb - eodRawLb;
+  const rawInLb = carryKnown ? sacksLb + carryInLb : null;
+  const usedLb = eodRawLb === null || rawInLb === null ? null : rawInLb - eodRawLb;
   const r2 = x => (x === null ? null : Math.round(x * 100) / 100);
   return {
-    sacksLb: r2(sacksLb), carryInLb: r2(carryInLb), rawInLb: r2(rawInLb), eodRawLb: r2(eodRawLb), usedLb: r2(usedLb),
+    sacksLb: r2(sacksLb), carryInLb: r2(carryInLb), carryKnown, rawInLb: r2(rawInLb), eodRawLb: r2(eodRawLb), usedLb: r2(usedLb),
     toteLb: r2(toteG === null ? null : toteG / G_PER_LB),
-    topsPerSack: usedLb !== null && usedLb > 0 && sacksLb > 0 ? r2((topsLb * sackLbs) / usedLb) : null,
+    topsPerSack: usedLb !== null && usedLb > 0 && rawInLb > 0 ? r2((topsLb * sackLbs) / usedLb) : null,
     sackLbs,
   };
 }
+
+/** The shift day before `date` (Mon–Fri; Friday before a Monday). */
+export function prevShiftDay(date) {
+  const d = new Date(`${date}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() - 1); while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The shift the gap clock runs in, as Pacific minutes: the scale watch's own
+ * window (6:00 to the 4:20 cleanup). A NOT RECORDING or offline episode left
+ * open overnight (scale switched off at cleanup, nothing recorded after the
+ * last job) only counts inside it.
+ */
+export const SHIFT_MIN = [6 * 60, 16 * 60 + 20];
