@@ -82,10 +82,17 @@ export function slotFor(minutes, slots) {
 }
 
 /**
+ * windows: End of day weighs (lib/cell-eod.js, migration 0062), [{ fromMs, toMs }].
+ * The lead weighs leftover raw and the fall-through tote on the cell scale; those
+ * readings are never tops. Going in, whatever was pending is settled as if the
+ * log ended there; coming out, the next reading starts fresh like the day's
+ * first (a basket already on is never credited), so nothing is read off the
+ * weighs going on or off.
+ *
  * @returns {{ bySlot: Object<string, number>, flags: Object<string, string[]>,
  *             pickups: Array<{ts:string, g:number}> }}  bySlot in lb (2 dp)
  */
-export function autoTops({ day, readings = [], marks = [], slots }) {
+export function autoTops({ day, readings = [], marks = [], slots, windows = [] }) {
   const timeline = [
     ...readings.map(r => ({ type: 'reading', ts: r.ts, g: r.kg * 1000 })),
     ...marks.filter(m => m.kind === 'pickup').map(m => ({ type: 'pickup', ts: m.ts })),
@@ -158,8 +165,22 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
     emptyG = 0; lastNet = 0; atZero();
   };
 
+  // The log stops here for now (end of data, or an End of day window opening):
+  // the screen's pickup mark, if it sent one, says swap; otherwise the TARE rule stands.
+  const settlePending = () => {
+    if (pending && pending.tapped) { pickups.push({ ts: pending.ts, g: pending.fromNet - emptyG }); pending = null; }
+    else if (pending) tared();
+  };
+  const inEodWindow = e => windows.some(w => e.at.ms >= w.fromMs && e.at.ms < w.toMs);
+  let inEod = false;
+
   for (let i = 0; i < timeline.length; i++) {
     const e = timeline[i];
+    if (inEodWindow(e)) {
+      if (!inEod) { settlePending(); lift = null; lastNet = null; atZero(); inEod = true; }
+      continue;
+    }
+    inEod = false;
     if (e.type === 'pickup') { if (lift) lift.tapped = true; if (pending) pending.tapped = true; continue; }
 
     const net = e.g;
@@ -233,8 +254,7 @@ export function autoTops({ day, readings = [], marks = [], slots }) {
 
   // The log ended on the zero (no reading since): the screen's pickup mark, if it
   // sent one, says swap; otherwise the TARE rule stands.
-  if (pending && pending.tapped) pickups.push({ ts: pending.ts, g: pending.fromNet - emptyG });
-  else if (pending) tared();
+  settlePending();
 
   const bySlot = {};
   for (const [s, g] of Object.entries(gBySlot)) {

@@ -21,7 +21,8 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { batteryOf } from '../../lib/battery.js';
-import { recentEvents, notRecording } from '../../lib/untracked.js';
+import { recentEvents, notRecording, WINDOW_MS } from '../../lib/untracked.js';
+import { eodActive } from '../../lib/cell-eod.js';
 import { startJob, markCollected } from './order-flow.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
@@ -52,6 +53,26 @@ async function allOrEmpty(stmt) {
   }
 }
 
+/**
+ * History of the screen (cell_screen_log, migration 0062): a row only when the
+ * phase, order or pause changed since the stored state, never on a heartbeat.
+ * Before 0062, or on any error, it is skipped: the live state still saves.
+ */
+async function logScreenChange(env, stationId, s, now) {
+  try {
+    const prev = await env.DB.prepare(
+      `SELECT phase, cultivar, bag, paused, pause_note FROM cell_screen_state WHERE station_id = ?`
+    ).bind(stationId).first();
+    if (prev && prev.phase === s.phase && (prev.cultivar ?? null) === s.cultivar && (prev.bag ?? null) === s.bag
+      && (prev.paused || 0) === s.paused && (prev.pause_note ?? null) === s.note) return;
+    await env.DB.prepare(
+      `INSERT INTO cell_screen_log (station_id, ts, phase, cultivar, bag, paused, pause_note, job_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(stationId, new Date(now).toISOString().slice(0, 19).replace('T', ' '), s.phase, s.cultivar, s.bag, s.paused, s.note, s.jobId).run();
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message))) console.error('[cell-screen-log]', e);
+  }
+}
+
 export async function setCellState(body, env, now = Date.now()) {
   const phase = PHASES.includes(body.phase) ? body.phase : null;
   if (!phase) return errorResponse(`phase must be one of ${PHASES.join(', ')}`, 'VALIDATION_ERROR', 400);
@@ -70,6 +91,9 @@ export async function setCellState(body, env, now = Date.now()) {
   const ticking = phase === 'running' && !paused && elapsedMs !== null;
   const clockStart = ticking ? Math.round(now - elapsedMs) : null;
   const clockMs = !ticking && elapsedMs !== null && (phase === 'running' || phase === 'finished') ? Math.round(elapsedMs) : null;
+  const cultivar = clean(body.cultivar, 80), bag = BAGS.includes(body.bag) ? body.bag : null;
+  const note = paused ? clean(body.pauseNote, 120) : null;
+  await logScreenChange(env, cell.station_id, { phase, cultivar, bag, paused, note, jobId: Number(body.jobId) > 0 ? Number(body.jobId) : null }, now);
   await env.DB.prepare(
     `INSERT INTO cell_screen_state (station_id, phase, cultivar, bag, target_g, clock_start, clock_ms, paused, pause_note,
                                     finished_net_g, finished_at, updated_at)
@@ -83,8 +107,8 @@ export async function setCellState(body, env, now = Date.now()) {
                           ELSE excluded.finished_at END,
        updated_at = excluded.updated_at`
   ).bind(
-    cell.station_id, phase, clean(body.cultivar, 80), BAGS.includes(body.bag) ? body.bag : null, targetG,
-    clockStart, clockMs, paused, paused ? clean(body.pauseNote, 120) : null,
+    cell.station_id, phase, cultivar, bag, targetG,
+    clockStart, clockMs, paused, note,
     phase === 'finished' ? finishedNetG : null, phase === 'finished' ? now : null, now,
   ).run();
   // A queued order's basket started trimming (migration 0061): the order shows as trimming.
@@ -93,7 +117,7 @@ export async function setCellState(body, env, now = Date.now()) {
 }
 
 export async function getCellBoard(params, env, now = Date.now()) {
-  const [roster, states, readings, stations, events, waitingRows] = await Promise.all([
+  const [roster, states, readings, stations, events, waitingRows, eod] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
     allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
@@ -104,6 +128,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
       `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
        WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
     ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
+    eodActive(env, now, WINDOW_MS),
   ]);
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
   const st = byId(states), rd = byId(readings), sc = byId(stations);
@@ -116,8 +141,10 @@ export async function getCellBoard(params, env, now = Date.now()) {
     const live = at !== null && now - at <= staleS * 1000;
     return {
       stationId: c.station_id, label: c.label, lane: c.lane,
+      // The lead is weighing the End of day leftovers on this scale (0062).
+      eod: eod.has(c.station_id),
       // Trimming with no job on the screen (lib/untracked.js): { riseG, why } or null.
-      notRecording: station ? notRecording({ scaleLive: live, events: events.get(c.station_id) || [], job: s || null, now }) : null,
+      notRecording: station ? notRecording({ scaleLive: live, events: events.get(c.station_id) || [], job: s || null, now, eod: eod.has(c.station_id) }) : null,
       scale: station ? {
         weightG: r ? Math.round(r.weight * 100000) / 100 : null,
         stable: r ? r.stable === 1 : null,

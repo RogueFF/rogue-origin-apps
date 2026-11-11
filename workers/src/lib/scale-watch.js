@@ -20,8 +20,11 @@
 import { HARVEST_TZ, pacificDay, pacificParts } from './pacific.js';
 import { sendTelegramMessage } from './telegram.js';
 import { batteryOf, LOW_PCT, CHARGED_PCT } from './battery.js';
-import { recentEvents, notRecording, recording } from './untracked.js';
+import { recentEvents, notRecording, recording, WINDOW_MS } from './untracked.js';
+import { eodActive } from './cell-eod.js';
 import { WORK_DAY } from './work-calendar.js';
+
+const sqliteUtc = d => d.toISOString().replace('T', ' ').slice(0, 19);
 
 export const SILENT_MIN = 3;
 const SHIFT_FROM_MIN = 6 * 60;
@@ -154,7 +157,7 @@ export function untrackedWatch(rows, now) {
   for (const r of rows) {
     if (r.untrackedSince) { if (recording(r.job, ms)) clear.push(r); continue; }
     if (!inShift(now)) continue;
-    const n = notRecording({ scaleLive: r.scaleLive, events: r.events, job: r.job, now: ms });
+    const n = notRecording({ scaleLive: r.scaleLive, events: r.events, job: r.job, now: ms, eod: !!r.eod });
     if (n) alert.push({ ...r, ...n });
   }
   return { alert, clear };
@@ -190,13 +193,22 @@ export async function runUntrackedWatch(env, now = new Date()) {
     if (!/no such table/i.test(String(e && e.message))) throw e;
   }
   const jobBy = new Map(jobs.map(j => [j.station_id, j]));
-  const events = await recentEvents(env, ms);
+  const [events, eod] = await Promise.all([recentEvents(env, ms), eodActive(env, ms, WINDOW_MS)]);
   const list = rows.map(r => {
     const at = parseUtc(r.updated_at);
     return {
       stationId: r.station_id, label: r.label, untrackedSince: r.untracked_since,
       scaleLive: at !== null && ms - at <= (r.stale_after_s > 0 ? r.stale_after_s : 45) * 1000,
       events: events.get(r.station_id) || [], job: jobBy.get(r.station_id) || null,
+      eod: eod.has(r.station_id),
+    };
+  });
+  // The history log first, on its own state: kept whether or not Telegram takes the alert.
+  await logEpisodes(env, 'untracked', open => {
+    const ep = untrackedWatch(list.map(r => ({ ...r, untrackedSince: open.has(r.stationId) ? 'open' : null })), now);
+    return {
+      opened: ep.alert.map(r => ({ stationId: r.stationId, fromTs: sqliteUtc(now), why: r.why })),
+      closed: ep.clear.map(r => ({ stationId: r.stationId, toTs: sqliteUtc(now) })),
     };
   });
   const { alert, clear } = untrackedWatch(list, now);
@@ -215,6 +227,35 @@ export async function runUntrackedWatch(env, now = new Date()) {
   return sent;
 }
 
+/**
+ * Episode history (scale_episodes, migration 0062) for the Phase 1 scorecard's
+ * recording gaps. decide(open) gets Map(station -> open row) and returns
+ * { opened: [{stationId, fromTs, why?}], closed: [{stationId, toTs}] }. Before
+ * 0062 it does nothing; a failure here never stops the alerts.
+ */
+export async function logEpisodes(env, kind, decide) {
+  try {
+    const rows = (await env.DB.prepare(
+      `SELECT id, station_id, from_ts FROM scale_episodes WHERE kind = ? AND to_ts IS NULL ORDER BY id`
+    ).bind(kind).all()).results || [];
+    const open = new Map(rows.map(r => [r.station_id, r]));
+    const { opened, closed } = decide(open);
+    for (const o of opened) {
+      if (open.has(o.stationId) || !o.fromTs) continue;
+      await env.DB.prepare(`INSERT INTO scale_episodes (station_id, kind, from_ts, why) VALUES (?, ?, ?, ?)`)
+        .bind(o.stationId, kind, o.fromTs, o.why || null).run();
+    }
+    for (const c of closed) {
+      const row = open.get(c.stationId);
+      if (!row) continue;
+      await env.DB.prepare(`UPDATE scale_episodes SET to_ts = ? WHERE station_id = ? AND kind = ? AND to_ts IS NULL`)
+        .bind(c.toTs || sqliteUtc(new Date()), c.stationId, kind).run();
+    }
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message))) console.error('[scale-episodes]', e);
+  }
+}
+
 export async function runScaleWatch(env, now = new Date()) {
   const rows = ((await env.DB.prepare(
     `SELECT s.station_id, COALESCE(c.label, s.label, s.station_id) AS label,
@@ -226,6 +267,13 @@ export async function runScaleWatch(env, now = new Date()) {
   ).all()).results || []).map(r => ({
     stationId: r.station_id, label: r.label, updatedAt: r.updated_at, weightKg: r.weight, downSince: r.down_since,
   }));
+  await logEpisodes(env, 'offline', open => {
+    const ep = scaleWatch(rows.map(r => ({ ...r, downSince: open.has(r.stationId) ? open.get(r.stationId).from_ts : null })), now);
+    return {
+      opened: ep.down.map(r => ({ stationId: r.stationId, fromTs: r.updatedAt })),
+      closed: ep.back.map(r => ({ stationId: r.stationId, toTs: r.updatedAt })),
+    };
+  });
   const { down, back } = scaleWatch(rows, now);
   const chatId = env.TELEGRAM_CELL_ALERT_CHAT_ID;
   const sent = { down: [], back: [] };

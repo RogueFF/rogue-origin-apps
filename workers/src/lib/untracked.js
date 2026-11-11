@@ -63,9 +63,13 @@ export function recording(job, now) {
   return job.phase === 'running' || job.phase === 'finished';
 }
 
-/** Not recording: live scale, real rise, no running job on a reporting tablet. */
-export function notRecording({ scaleLive, events, job, now }) {
-  if (!scaleLive) return null;
+/**
+ * Not recording: live scale, real rise, no running job on a reporting tablet.
+ * eod: the lead's End of day panel is open (or just closed, so the window's
+ * rises are still in view): those weighs are not trimming (lib/cell-eod.js).
+ */
+export function notRecording({ scaleLive, events, job, now, eod = false }) {
+  if (!scaleLive || eod) return null;
   const g = riseG(events, now);
   if (g < RISE_G || recording(job, now)) return null;
   const why = !job ? 'noScreen' : now - job.updated_at > TABLET_STALE_MS ? 'tabletOff' : 'noJob';

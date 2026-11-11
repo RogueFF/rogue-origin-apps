@@ -26,6 +26,7 @@ import { enhanceSelect } from '../shared/select-search.js';
 import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
 import { applyQueue, shortCultivar } from './queue.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
+import { createEod } from './eod.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // Reads cost one Worker request each, so the fast rate is kept to the moments
@@ -194,6 +195,16 @@ let serverStale = false;
 let staleAfterMs = 45000;
 let failingSince = null;
 const disconnected = () => serverStale || (failingSince !== null && Date.now() - failingSince >= staleAfterMs);
+
+// End of day weighs (eod.mjs, Phase 1 scorecard): while the lead's panel is open
+// the scale belongs to it. No job starts, no lift or pickup is read, and once it
+// closes both watches start fresh so nothing is read off the weighs coming off.
+const eod = createEod({
+  api: API, station,
+  isBusy: () => state.phase === 'running' || state.phase === 'finished',
+  onOpen: () => { if (state.phase === 'armed') { state.phase = 'idle'; save(); } render(); },
+  onClose: () => { watch.reset(); zero.reset(); tareAt = null; overSince = null; render(); },
+});
 
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: still works for this visit */ }
@@ -528,7 +539,8 @@ async function poll() {
   // and would otherwise sit on "Waiting for scale" until someone reloads it.
   if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
   await read();
-  if (live) step();   // disconnected: no job starts, nothing is logged
+  if (eod.isOpen) eod.reading(live ? gross : null, stable);
+  else if (live) step();   // disconnected: no job starts, nothing is logged
   render();
   const delay = disconnected() ? DOWN_MS : !live ? IDLE_MS
     : (state.phase === 'armed' || state.phase === 'running') ? JOB_MS : IDLE_MS;
@@ -857,6 +869,8 @@ function renderQueue() {
 setInterval(() => { if (!document.hidden) loadQueue(); }, QUEUE_MS);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
+eod.bindHold($('eodBtn'));
+eod.resume();
 save();
 reportJob(true);
 enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });
