@@ -142,8 +142,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const phase = shiftDays(PHASE_START, PHASE_DAYS);
   const dayNo = phase.indexOf(date) + 1;
   const final = (day.tops.hourly || []).every((h) => h.final);
-  const carryUnknown = day.yield?.carryKnown === false;
-  const pill = v.yield === 'none' ? (carryUnknown ? 'NOT YET: no carry-in weigh' : 'NOT YET: weigh the leftovers')
+  const pill = v.yield === 'none' ? 'NOT YET: weigh the leftovers'
     : v.yield === 'info' ? `DAY: ${WORD.none}` : v.pass ? `DAY: ${v.yield === 'both' ? WORD.pass : WORD.close}` : `DAY: ${WORD.miss}`;
   const ch = day.changeovers || {};
   const so = phaseSoFar(strip.map((s) => s.day));
@@ -159,7 +158,6 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const early = (day.gaps?.offline?.uncounted || []).find((e) => workEnd !== null && e.fromMs >= workEnd
     && (() => { const p = new Date(e.fromMs).toLocaleTimeString('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit' }).split(':'); return Number(p[0]) * 60 + Number(p[1]) < LATE_MIN; })());
   if (early) flags.push({ kind: 'warn', tag: 'Check', text: `Scale offline from ${clock12(early.fromMs)} after the last pickup (not counted): was the cell still trimming?` });
-  if (carryUnknown) flags.push({ kind: 'warn', tag: 'Raw', text: 'The shift day before had raw but no End of day weigh, so today is not verified' });
   const lowBatt = day.battery && day.battery.pct < BATTERY_LOW_PCT;
   if (lowBatt) flags.push({ kind: 'warn', tag: 'Charge', text: `Scale battery ${day.battery.pct}% at End of day: charge it tonight or tomorrow starts with a gap` });
   if (day.mixed) flags.push({ kind: 'warn', tag: 'Mixed', text: `Mixed raw: ${cultivar ? cultivarShort(cultivar) : 'the main cultivar'} is ${Math.round((day.cultivarShare || 0) * 100)}%, so no single break-even (NO BASELINE)` });

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { changeovers, breakMsIn, episodesInDay, verifiedYield, median, qualityOf, CELL_BREAKS, prevShiftDay } from '../src/lib/cell-day.js';
+import { changeovers, breakMsIn, episodesInDay, verifiedYield, median, qualityOf, CELL_BREAKS } from '../src/lib/cell-day.js';
 import { autoTops } from '../src/lib/cell-auto.js';
 import { getCellDay, pacificDayMs } from '../src/handlers/production/cell-day.js';
 
@@ -59,9 +59,10 @@ test('episodes clip to the day, breaks out, an open one runs to now', () => {
   assert.deepEqual(eps.map(e => [e.kind, e.minutes, e.toMs === null]), [['offline', 20, false], ['untracked', 12, true]]);
 });
 
-test('verified tops/sack = tops x 35 / (sacks + carry-in - EOD leftover); none without an EOD weigh', () => {
-  const v = verifiedYield({ topsLb: 12, sacksLb: 35, carryInG: 453.59237 * 5, eodRawG: 453.59237 * 4, toteG: 453.59237 * 1.5 });
-  assert.deepEqual([v.rawInLb, v.usedLb, v.toteLb, v.topsPerSack], [40, 36, 1.5, 11.67]);
+test('verified tops/sack = tops x 35 / (sack lbs in - EOD leftover); no carry-in; none without an EOD weigh', () => {
+  const v = verifiedYield({ topsLb: 12, sacksLb: 35, eodRawG: 453.59237 * 4, toteG: 453.59237 * 1.5 });
+  assert.deepEqual([v.rawInLb, v.usedLb, v.toteLb, v.topsPerSack, v.accountedPct], [35, 31, 1.5, 13.55, 44]);
+  assert.equal(v.carryInLb, undefined);
   assert.equal(verifiedYield({ topsLb: 12, sacksLb: 35, eodRawG: null }).topsPerSack, null);
   assert.equal(verifiedYield({ topsLb: 12, sacksLb: 0, eodRawG: 100 }).topsPerSack, null);
 });
@@ -106,7 +107,7 @@ test('cellDay: one Phase 1 day end to end', async () => {
   raw.prepare(`INSERT INTO harvest_sacks VALUES ('26-SL-1', 1, 2026, '2026 - Sour Lifter / Sungrown', NULL, ?, NULL, 0)`).run(utc(7, 5));
   raw.prepare(`INSERT INTO cell_sacks (production_date, sack_id, station_id) VALUES (?, '26-SL-1', 'table1')`).run(DAY);
   const eod = raw.prepare(`INSERT INTO cell_eod (station_id, production_date, kind, grams, batt_mv, ts, undone_at) VALUES ('table1', ?, ?, ?, ?, ?, ?)`);
-  eod.run('2026-11-11', 'raw', 2268, 3900, '2026-11-12 00:05:00', null);      // yesterday's leftover: carry-in 5 lb
+  eod.run('2026-11-11', 'raw', 2268, 3900, '2026-11-12 00:05:00', null);      // yesterday's leftover: went back, never counts
   eod.run(DAY, 'raw', 1814.4, 3810, utc(15, 50), null);
   eod.run(DAY, 'raw', 500, 3810, utc(15, 51), utc(15, 52));                   // undone
   eod.run(DAY, 'tote', 680.4, 3805, utc(15, 53), null);
@@ -117,7 +118,7 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.equal(d.label, 'Cell 1');
   assert.deepEqual([d.cultivar, d.cultivarShare, d.mixed], ['2026 - Sour Lifter / Sungrown', 1, false]);
   assert.equal(d.tops.personH, 1.18, '9:30 first gram to the 10:41 pickup');
-  assert.equal(d.yield.accountedPct, 7);
+  assert.equal(d.yield.accountedPct, 8, '(1.11 + 1.5) / 31');
   assert.deepEqual(d.tops.hourly.map(h => [h.source, h.lb]), [['scale', 0.51], ['typed', 0.6]]);
   assert.equal(d.tops.lb, 1.11);
   assert.equal(d.tops.workedH, 1.83, '9-10 is 0.83 h (9:00 break)');
@@ -129,9 +130,9 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.deepEqual(d.gaps.offline.uncounted.map(e => e.minutes), [6]);
   assert.deepEqual(d.quality, { batches: 2, pass: 1, redo: 1, stop: 0 });
   assert.deepEqual([d.sacks.count, d.sacks.lb], [1, 35]);
-  assert.deepEqual([d.eod.rawG, d.eod.toteG, d.eod.carryInG, d.eod.carryFrom], [1814.4, 680.4, 2268, '2026-11-11']);
-  assert.deepEqual([d.yield.rawInLb, d.yield.eodRawLb, d.yield.usedLb, d.yield.toteLb], [40, 4, 36, 1.5]);
-  assert.equal(d.yield.topsPerSack, Math.round((1.11 * 35 / 36) * 100) / 100);
+  assert.deepEqual(d.eod, { rawG: 1814.4, toteG: 680.4 });
+  assert.deepEqual([d.yield.rawInLb, d.yield.eodRawLb, d.yield.usedLb, d.yield.toteLb], [35, 4, 31, 1.5]);
+  assert.equal(d.yield.topsPerSack, Math.round((1.11 * 35 / 31) * 100) / 100);
   assert.deepEqual([d.battery.mv, d.battery.from], [3805, 'eod']);
 });
 
@@ -140,15 +141,6 @@ test('cellDay: unknown station 400; a bare day reads empty, not an error', async
   assert.equal((await getCellDay({ stationId: 'nope' }, env, ms(12, 0))).status, 400);
   const d = await (await getCellDay({ stationId: 'table1', date: DAY }, env, ms(12, 0))).json();
   assert.deepEqual([d.tops.lb, d.jobs.length, d.changeovers.medianS, d.yield.topsPerSack, d.battery], [0, 0, null, null, null]);
-});
-
-test('a day on yesterday\'s leftover alone (no new sack) still gets a verified figure', () => {
-  const v = verifiedYield({ topsLb: 3, sacksLb: 0, carryInG: 453.59237 * 14, eodRawG: 453.59237 * 2 });
-  assert.deepEqual([v.rawInLb, v.usedLb, v.topsPerSack], [14, 12, 8.75]);
-  const unknown = verifiedYield({ topsLb: 3, sacksLb: 35, carryInG: null, eodRawG: 453.59237 * 2 });
-  assert.deepEqual([unknown.carryKnown, unknown.rawInLb, unknown.topsPerSack], [false, null, null]);
-  assert.equal(prevShiftDay('2026-11-16'), '2026-11-13', 'Monday -> Friday');
-  assert.equal(prevShiftDay('2026-11-13'), '2026-11-12');
 });
 
 test('cellDay: an episode left open overnight counts only inside each day\'s shift (6:00 to 4:20)', async () => {
@@ -162,22 +154,8 @@ test('cellDay: an episode left open overnight counts only inside each day\'s shi
   assert.equal(fri.gaps.notRecording.minutes, 70, '6:00 to 7:10 next morning');
 });
 
-test('cellDay: carry-in is the shift day before only; a skipped weigh there makes it unknown', async () => {
-  const { raw, env } = d1();
-  raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, 0), ('table1', ?, 0.2)`).run('2026-11-16 17:00:00', '2026-11-16 18:00:00');
-  raw.prepare(`INSERT INTO scale_events (station_id, ts, weight_kg) VALUES ('table1', ?, 0), ('table1', ?, 0.2)`).run('2026-11-17 17:00:00', '2026-11-17 18:00:00');
-  const eod = raw.prepare(`INSERT INTO cell_eod (station_id, production_date, kind, grams, ts) VALUES ('table1', ?, 'raw', ?, ?)`);
-  eod.run('2026-11-12', 4000, '2026-11-12 23:50:00');      // Thu leftover
-  raw.prepare(`INSERT INTO cell_sacks (production_date, sack_id, station_id) VALUES ('2026-11-13', 'S2', 'table1')`).run();   // Fri: raw, no weigh
-  eod.run('2026-11-16', 900, '2026-11-16 23:50:00');       // Mon weighed
-  eod.run('2026-11-17', 300, '2026-11-17 23:50:00');       // Tue weighed
-  const day = async d => (await (await getCellDay({ stationId: 'table1', date: d }, env, ms(200, 0))).json());
-  const mon = await day('2026-11-16');
-  assert.equal(mon.eod.carryInG, null, 'Fri had raw but no weigh: unknown, never Thu\'s 4 kg');
-  assert.equal(mon.yield.topsPerSack, null);
-  const tue = await day('2026-11-17');
-  assert.deepEqual([tue.eod.carryInG, tue.eod.carryFrom], [900, '2026-11-16']);
-  assert.ok(tue.yield.topsPerSack > 0, 'Tue ran on Mon\'s leftover alone');
+test('a day with no sack ticked has no verified figure (the leftover goes back each night)', () => {
+  assert.equal(verifiedYield({ topsLb: 3, sacksLb: 0, eodRawG: 453.59237 * 2 }).topsPerSack, null);
 });
 
 test('cellDay raw=1: the day\'s scale events, marks, screen log, EOD rows and episodes; not without it', async () => {

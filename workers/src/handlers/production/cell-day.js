@@ -21,7 +21,7 @@ import { battPct } from '../../lib/battery.js';
 import { sackLbs } from '../../lib/sack-weight.js';
 import { autoDay, SLOT_MINUTES } from './cell-hourly.js';
 import {
-  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, prevShiftDay, SHIFT_MIN, personHours, mainCultivar, workWindow,
+  changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, SHIFT_MIN, personHours, mainCultivar, workWindow,
 } from '../../lib/cell-day.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -53,9 +53,8 @@ export async function getCellDay(params, env, now = Date.now()) {
   const [dayFrom, dayTo] = pacificDayMs(date);
   const fromSql = sqliteUtc(new Date(dayFrom)), toSql = sqliteUtc(new Date(dayTo));
   const id = station.station_id;
-  const prev = prevShiftDay(date);
 
-  const [auto, typed, marks, starts, episodes, quality, eod, carry, sacks, reading] = await Promise.all([
+  const [auto, typed, marks, starts, episodes, quality, eod, sacks, reading] = await Promise.all([
     autoDay(env, date, [id]).then(m => m.get(id) || null),
     rows(env.DB.prepare(`SELECT time_slot, tops_lbs, cultivar FROM cell_hourly WHERE production_date = ? AND station_id = ?`).bind(date, id)),
     rows(env.DB.prepare(
@@ -71,14 +70,6 @@ export async function getCellDay(params, env, now = Date.now()) {
     rows(env.DB.prepare(
       `SELECT kind, grams, batt_mv, ts FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind IN ('raw', 'tote') AND undone_at IS NULL ORDER BY ts, id`
     ).bind(id, date)),
-    // Carry-in: the leftover raw weighed at this cell's End of day on the shift day
-    // before, never further back (that leftover was used on the day between).
-    // Also whether the cell had raw that day, so a skipped weigh reads as unknown.
-    rows(env.DB.prepare(
-      `SELECT (SELECT SUM(grams) FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind = 'raw' AND undone_at IS NULL) AS g,
-              (SELECT COUNT(*) FROM cell_sacks WHERE station_id = ? AND production_date = ?) +
-              (SELECT COUNT(*) FROM cell_eod WHERE station_id = ? AND production_date = ?) AS had`
-    ).bind(id, prev, id, prev, id, prev)),
     rows(env.DB.prepare(
       `SELECT cs.sack_id, h.season, h.cultivar, h.fill_lbs FROM cell_sacks cs
        LEFT JOIN harvest_sacks h ON h.sack_id = cs.sack_id
@@ -143,10 +134,8 @@ export async function getCellDay(params, env, now = Date.now()) {
   const eodToteG = has('tote') ? r2(sum('tote')) : null;
   const sackList = sacks.map(s => ({ sackId: s.sack_id, cultivar: s.cultivar, lbs: sackLbs(s), fillLbs: s.fill_lbs ?? null }));
   const sacksLb = sackList.reduce((a, s) => a + s.lbs, 0);
-  const c = carry[0] || {};
-  // Weighed the shift day before: that. Had raw then but no weigh: unknown (null). Else 0.
-  const carryInG = c.g != null ? r2(c.g) : c.had > 0 ? null : 0;
-  const yieldOut = verifiedYield({ topsLb, sacksLb, carryInG, eodRawG, toteG: eodToteG });
+  // No carry-in: the leftover goes back each night (Koa 2026-11-11).
+  const yieldOut = verifiedYield({ topsLb, sacksLb, eodRawG, toteG: eodToteG });
 
   // ---- battery: the last End of day weigh's, else (today) the node's latest ----
   const lastEod = [...eod].reverse().find(e => e.batt_mv != null);
@@ -176,7 +165,7 @@ export async function getCellDay(params, env, now = Date.now()) {
     },
     quality: qualityOf(quality),
     sacks: { list: sackList, count: sackList.length, lb: r2(sacksLb) },
-    eod: { rawG: eodRawG, toteG: eodToteG, carryInG, carryFrom: c.g != null ? prev : null },
+    eod: { rawG: eodRawG, toteG: eodToteG },
     yield: yieldOut,
     battery,
     ...(rawRecord ? { raw: rawRecord } : {}),

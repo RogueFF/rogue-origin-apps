@@ -27,8 +27,8 @@ function cellDay(over = {}) {
     gaps: { offline: { count: 0, minutes: 0, episodes: [] }, notRecording: { count: 0, minutes: 0, episodes: [] } },
     quality: { batches: 8, pass: 7, redo: 1, stop: 0 },
     sacks: { list: [{ sackId: '26-SL-1', cultivar: '2026 - Sour Lifter / Sungrown', lbs: 35, fillLbs: null }], count: 1, lb: 35 },
-    eod: { rawG: 6577, toteG: 680, carryInG: 0, carryFrom: null },
-    yield: { sacksLb: 35, carryInLb: 0, rawInLb: 35, eodRawLb: 14.5, usedLb: 20.5, toteLb: 1.5, topsPerSack: 6.86, sackLbs: 35 },
+    eod: { rawG: 6577, toteG: 680 },
+    yield: { sacksLb: 35, rawInLb: 35, eodRawLb: 14.5, usedLb: 20.5, toteLb: 1.5, topsPerSack: 6.86, sackLbs: 35 },
     battery: { pct: 64, mv: 3830, at: 0, from: 'eod' },
     ...over,
   };
@@ -131,13 +131,6 @@ test('renders the cell card as a 1080x1350 PNG; sections stack and the foot stay
   fs.writeFileSync(new URL('./out/cell.png', import.meta.url), png);
   const view = new DataView(png.buffer, png.byteOffset);
   assert.deepEqual([view.getUint32(16), view.getUint32(20)], [CANVAS.width, CANVAS.height]);
-});
-
-test('carry-in unknown (the day before had raw, no weigh): NOT YET with the reason', () => {
-  const day = cellDay({ yield: { ...cellDay().yield, carryKnown: false, rawInLb: null, usedLb: null, topsPerSack: null } });
-  const m = cellModel({ date: '2026-11-13', day, strip: [], generatedAt: GEN });
-  assert.equal(m.pill, 'NOT YET: no carry-in weigh');
-  assert.equal(m.flags[0].tag, 'Raw');
 });
 
 test('a blend is NO BASELINE with the reason; a low EOD battery and a mid-afternoon outage are said in words', () => {
