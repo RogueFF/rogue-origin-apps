@@ -282,3 +282,19 @@ test('before migration 0052 a pickup with an order still saves the plain mark', 
   assert.equal(r.status, 200);
   assert.equal(env.DB.raw.prepare('SELECT COUNT(*) AS n FROM scale_marks').get().n, 1);
 });
+
+test('a pickup mark carries its queue job (0060); before 0060 the mark still saves without it', async () => {
+  const mig60 = readFileSync(new URL('../migrations/0060-pickup-spot.sql', import.meta.url), 'utf8');
+  const env = withJobColumns(d1WithScale());
+  env.DB.raw.exec(mig60);
+  const pick = { stationId: 'table1', kind: 'pickup', kg: 0.0076, cultivar: '2026 - Lifter / Sungrown', bag: 'qOz', cycleS: 380 };
+  assert.equal((await scaleMark({ ...pick, jobId: 7 }, env)).status, 200);
+  assert.equal((await scaleMark({ ...pick, jobId: null }, env)).status, 200);
+  assert.equal((await scaleMark({ ...pick, jobId: 'x' }, env)).status, 200);   // a bad jobId is dropped, never the mark
+  const rows = env.DB.raw.prepare(`SELECT job_id, bag, collected_at FROM scale_marks ORDER BY id`).all();
+  assert.deepEqual(rows.map(r => [r.job_id, r.bag, r.collected_at]), [[7, 'qOz', null], [null, 'qOz', null], [null, 'qOz', null]]);
+
+  const old = withJobColumns(d1WithScale());   // 0052 only
+  assert.equal((await scaleMark({ ...pick, jobId: 7 }, old)).status, 200);
+  assert.equal(old.DB.raw.prepare(`SELECT bag FROM scale_marks`).get().bag, 'qOz');
+});

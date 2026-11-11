@@ -444,7 +444,8 @@ function onLift(ev) {
 // how long it took.
 function closeJob(g) {
   const ms = state.phase === 'finished' ? state.finishedMs : state.startedAt ? elapsedMs() : null;
-  mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null });
+  // jobId: the queue job this basket was for (order flow slice 2 sets state.jobId); null when picked by hand.
+  mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null, jobId: state.jobId || null });
   state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
   state.tareFlagG = 0; clearPauses();
   // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be

@@ -98,7 +98,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
     recentEvents(env, now),
     // Before 0060 there is no collected_at: nothing shows as waiting.
     allOrEmpty(env.DB.prepare(
-      `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s FROM scale_marks
+      `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
        WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
     ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
   ]);
@@ -133,7 +133,7 @@ export async function getCellBoard(params, env, now = Date.now()) {
   const label = new Map((roster.results || []).map(c => [c.station_id, c.label]));
   const waiting = waitingRows.map(w => ({
     id: w.id, stationId: w.station_id, label: label.get(w.station_id) || w.station_id,
-    at: parseUtc(w.ts), g: Math.round(w.kg * 100000) / 100, cultivar: w.cultivar, bag: w.bag, cycleS: w.cycle_s,
+    at: parseUtc(w.ts), g: Math.round(w.kg * 100000) / 100, cultivar: w.cultivar, bag: w.bag, cycleS: w.cycle_s, jobId: w.job_id,
   }));
   return successResponse({ serverNow: now, cells, waiting });
 }

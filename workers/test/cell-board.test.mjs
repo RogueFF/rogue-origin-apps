@@ -114,7 +114,7 @@ test('a pickup not yet collected waits at the spot; collected, it leaves the boa
   raw.prepare(`INSERT INTO scale_marks (station_id, ts, kind, kg) VALUES ('table1', ?, 'tare', 0)`).run(at(T0 - 50e3));
   let b = (await json(await getCellBoard({}, env, T0))).body;
   assert.equal(b.waiting.length, 1);
-  assert.deepEqual({ ...b.waiting[0], id: 0 }, { id: 0, stationId: 'table1', label: 'Cell 1', at: T0 - 60e3, g: 14.2, cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycleS: 1500 });
+  assert.deepEqual({ ...b.waiting[0], id: 0 }, { id: 0, stationId: 'table1', label: 'Cell 1', at: T0 - 60e3, g: 14.2, cultivar: '2026 - Lifter / Sungrown', bag: 'hOz', cycleS: 1500, jobId: null });
   const id = b.waiting[0].id;
   assert.equal((await collectPickup({ id }, env, T0)).status, 200);
   assert.equal((await collectPickup({ id }, env, T0)).status, 409);          // already collected

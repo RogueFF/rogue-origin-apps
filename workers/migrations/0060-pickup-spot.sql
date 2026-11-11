@@ -7,5 +7,8 @@
 -- Everything picked up before this migration counts as collected.
 -- Apply by hand: cd workers && npx wrangler d1 execute rogue-origin-db --remote --file=migrations/0060-pickup-spot.sql
 ALTER TABLE scale_marks ADD COLUMN collected_at TEXT;
+-- The order-flow job the pickup closed (cell_jobs, order flow slice 2); NULL when
+-- the order was picked by hand on the screen.
+ALTER TABLE scale_marks ADD COLUMN job_id INTEGER;
 UPDATE scale_marks SET collected_at = ts WHERE kind = 'pickup';
 CREATE INDEX IF NOT EXISTS idx_scale_marks_waiting ON scale_marks(kind, collected_at, ts);

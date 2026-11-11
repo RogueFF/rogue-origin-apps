@@ -140,11 +140,24 @@ async function scaleMark(body, env) {
   // the hourly tops depend on it.
   const bag = kind === 'pickup' && BAGS.includes(body.bag) ? body.bag : null;
   const cultivar = kind === 'pickup' ? cleanText(body.cultivar, MAX_CULTIVAR) : null;
+  const j = Number(body.jobId);
+  const jobId = kind === 'pickup' && Number.isInteger(j) && j > 0 ? j : null;
   const c = Number(body.cycleS);
   const cycleS = kind === 'pickup' && Number.isFinite(c) && c > 0 && c <= MAX_CYCLE_S ? Math.round(c) : null;
   const station = await env.DB.prepare(`SELECT station_id FROM scale_stations WHERE station_id = ? AND kind = 'table'`)
     .bind(String(body.stationId || '')).first();
   if (!station) return errorResponse('Not a scale station', 'VALIDATION_ERROR', 400);
+  if (jobId) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO scale_marks (station_id, ts, kind, kg, cultivar, bag, cycle_s, job_id) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)`
+      ).bind(station.station_id, kind, kg, cultivar, bag, cycleS, jobId).run();
+      return successResponse({ success: true, job: { cultivar, bag, cycleS, jobId } });
+    } catch (e) {
+      // Migration 0060 not applied yet: keep the mark without its job.
+      if (!/no (such )?column|has no column/i.test(String(e && e.message))) throw e;
+    }
+  }
   if (bag || cultivar || cycleS) {
     try {
       await env.DB.prepare(
