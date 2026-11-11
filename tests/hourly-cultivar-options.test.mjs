@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCultivarOptions, variantCultivar, CARRYOVER } from '../src/js/hourly-entry/cultivar-options.mjs';
+import { buildCultivarOptions, variantCultivar, CARRYOVER, isCurrentSungrown } from '../src/js/hourly-entry/cultivar-options.mjs';
 
 const variant = (cultivar, type, cut, quantity = 0) => ({
   title: `${cultivar} / ${type} / ${cut}`,
@@ -49,4 +49,38 @@ test('the 2025 carryover is finished: no 2025 strain is offered', () => {
 test('Shopify down: carryover plus any 2026 spelling already logged', () => {
   const opts = buildCultivarOptions(['2026 - Rainbow GMO / Sungrown', '2025 - Catnip / Sungrown'], []);
   assert.deepEqual(opts, [...CARRYOVER, '2026 - Rainbow GMO / Sungrown'].sort());
+});
+
+// Koa 2026-11-10: "Cells: Sungrown only". Two Greenhouse picks that day.
+const MIXED = [
+  variant('2026 - Purple Snowman', 'Greenhouse', '1st Cut'),
+  variant('2026 - Purple Snowman', 'Sungrown', '1st Cut'),
+  variant('2026 - Strawberry Doughnuts', 'Greenhouse', '1st Cut'),
+  variant('2026 - Strawberry Doughnuts', 'Sungrown', '1st Cut'),
+  variant('2026 - Angel Cake', 'Sungrown', '1st Cut'),
+];
+
+test('the hourly log keeps every 2026 entry, with Sungrown first', () => {
+  const opts = buildCultivarOptions(['2026 - Gravy Train / Greenhouse'], MIXED);
+  assert.deepEqual(opts, [
+    '2026 - Angel Cake / Sungrown',
+    '2026 - Purple Snowman / Sungrown',
+    '2026 - Strawberry Doughnuts / Sungrown',
+    '2026 - Gravy Train / Greenhouse',
+    '2026 - Purple Snowman / Greenhouse',
+    '2026 - Strawberry Doughnuts / Greenhouse',
+  ]);
+});
+
+test('cells (cell screen, raw hand-out): 2026 Sungrown only', () => {
+  const opts = buildCultivarOptions(['2026 - Gravy Train / Greenhouse', '2026 - Lifter / Sungrown'], MIXED, { sungrownOnly: true });
+  assert.deepEqual(opts, [
+    '2026 - Angel Cake / Sungrown',
+    '2026 - Lifter / Sungrown',
+    '2026 - Purple Snowman / Sungrown',
+    '2026 - Strawberry Doughnuts / Sungrown',
+  ]);
+  assert.ok(opts.every((c) => isCurrentSungrown(c)));
+  assert.equal(isCurrentSungrown('2026 - Lifter / Greenhouse'), false);
+  assert.equal(isCurrentSungrown('2025 - Lifter / Sungrown'), false);
 });
