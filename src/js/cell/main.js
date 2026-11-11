@@ -367,15 +367,11 @@ function step() {
     save();
     return;
   }
-  if (z && z.kind === 'untared') {
-    // A loaded basket lifted off an un-tared scale and back (lift.mjs). Empty
-    // back is a pickup; back where it was changes nothing; anything else a shake.
-    const netBefore = z.before + (state.bankedG || 0);
-    const emptyGross = z.before - netBefore;
-    let ev = null;
-    if (Math.abs(z.back - emptyGross) <= EMPTY_G) ev = { kind: 'pickup', g: netBefore };
-    else if (Math.abs(z.back - z.before) > EMPTY_G) ev = { kind: 'shake', g: Math.max(0, z.before - z.back), backNet: net() };
-    if (ev && onLift(ev)) { save(); return; }
+  if (z && z.kind === 'pickup') {
+    // A loaded basket off and the reading back about empty with no negative seen
+    // (lift.mjs): the full basket went to the pickup spot and the matched empty
+    // one went on. A pickup of what the job held, same as the lift rule.
+    if (onLift({ kind: 'pickup', g: z.before + (state.bankedG || 0) })) { save(); return; }
   }
   if (z && z.kind === 'tare') {
     const before = z.before;
@@ -399,7 +395,7 @@ function step() {
   }
   if (lift && onLift(lift)) { save(); return; }
   // Basket off the pan, or still coming down: nothing starts or finishes on it.
-  if (watch.lifted || zero.holding) return;
+  if (watch.lifted) return;
   // Just after an empty-basket TARE, a basket-sized reading may be that basket
   // coming back (an un-tared lift): it never starts or finishes a job.
   if (zero.provisional && gross >= BASKET_MIN_G) return;
