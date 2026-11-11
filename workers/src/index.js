@@ -223,7 +223,14 @@ export default {
       // Route to appropriate handler
       let response;
 
-      if (path.startsWith('/api/production')) {
+      if (path.startsWith('/api/demo/production')) {
+        // Practice / demo mode (lib/demo-env.js): the same handlers on the DEMO_DB database.
+        const { demoEnv, verifyDemoDb } = await import('./lib/demo-env.js');
+        const denv = demoEnv(env);
+        response = denv && await verifyDemoDb(denv.DB)
+          ? await handleProductionD1(request, denv, ctx)
+          : errorResponse('Demo mode is not set up (no practice database, or it has no demo marker)', 'NOT_READY', 503);
+      } else if (path.startsWith('/api/production')) {
         response = await handleProductionD1(request, env, ctx);
       } else if (path.startsWith('/api/wholesale')) {
         response = await handleWholesaleD1(request, env, ctx);

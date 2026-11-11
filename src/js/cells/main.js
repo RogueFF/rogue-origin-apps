@@ -19,6 +19,7 @@
  * Worker's time, so a computer with a wrong clock still shows the right time.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
+import { isDemo, demoApi, withDemo, showDemoBanner } from '../shared/demo.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const POLL_MS = 2000;
@@ -57,10 +58,13 @@ const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 
 const params = new URLSearchParams(location.search);
 const apiParam = params.get('api') || '';
-const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
+const API = demoApi(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API);   // ?demo=1: the practice database
 if (API !== PROD_API) document.getElementById('rawLink').href = `rawout.html?api=${encodeURIComponent(API)}`;
 if (API !== PROD_API) document.getElementById('queueLink').href = `bagtag.html?api=${encodeURIComponent(API)}`;
 if (API !== PROD_API) document.getElementById('pullLink').href = `pull.html?api=${encodeURIComponent(API)}`;
+for (const id of ['rawLink', 'queueLink', 'pullLink']) { const a = document.getElementById(id); a.href = withDemo(a.getAttribute('href')); }
+if (isDemo()) document.getElementById('rawLink').hidden = true;   // the raw hand-out has no practice mode
+showDemoBanner();
 
 const $ = id => document.getElementById(id);
 const el = { pickups: $('pickups'), grid: $('grid'), quiet: $('quiet'), status: $('status'), sub: $('sub'), sound: $('soundBtn'), lang: $('langToggle') };
@@ -300,8 +304,14 @@ function renderGrid() {
   const keep = new Set();
   for (const c of onScreen) {
     keep.add(c.stationId);
-    const st = statusOf(c) || 'offline';
-    const j = c.job || {};
+    // A cell with no tablet (no scale, or none open) still has an order from the queue:
+    // show what it's on and its target. A cell with no scale has no tablet to be off,
+    // so its state comes from the queue too (practice mode showed this, 2026-11-11).
+    const qn = (queues.get(c.stationId) || {}).now || null;
+    const tabletJob = c.job && c.job.tabletOnline && c.job.phase !== 'idle' ? c.job : null;
+    let st = statusOf(c) || 'offline';
+    if (qn && !c.scale && !tabletJob) st = qn.started ? 'running' : 'armed';
+    const j = tabletJob || (qn ? { cultivar: qn.cultivar, bag: qn.bag, targetG: qn.targetG } : (c.job || {}));
     const tile = tileFor(c);
     tile.className = `tile ${st}`;
     const target = j.targetG || null;

@@ -52,6 +52,8 @@ function liveTables() {
       .filter(f => f.endsWith('.sql'))
       .sort()
       .map(f => `migrations/${f}`),
+    // The practice database's own tables (demo_*), queried only by handlers/production/demo.js.
+    'migrations-demo/demo-schema.sql',
   ];
 
   const CREATE = /CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`[]?(\w+)/i;

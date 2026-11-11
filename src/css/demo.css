@@ -1,0 +1,32 @@
+/* Practice floor controls (demo.html) and the Shopify stand-in (shopify-stub.html). */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+.ro-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; }
+.ro-head h1 { margin: 0; font-size: 30px; }
+.ro-main { display: grid; gap: 14px; padding: 0 16px 32px; max-width: 900px; margin: 0 auto; }
+.intro { margin: 0; font-size: 17px; color: var(--text-secondary); }
+.card { background: var(--bg-card); border: 2px solid var(--border); border-radius: 16px; padding: 14px 16px; display: grid; gap: 12px; }
+.card h2 { margin: 0; font-size: 22px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font: 600 16px var(--font-ui); }
+.row input[type=date], .row input[type=number] { font: 600 17px var(--font-ui); min-height: 44px; padding: 0 10px; border-radius: 10px;
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); }
+.row input[type=number] { width: 80px; }
+.file { display: grid; gap: 6px; }
+.btn { font: 700 17px var(--font-ui); padding: 8px 16px; min-height: 44px; border-radius: 12px; cursor: pointer;
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; }
+.btn.ghost { font-weight: 600; }
+.btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on { background: var(--info); border-color: var(--info); color: #fff; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.clock { font: 800 32px var(--font-mono); }
+.clock-label { color: var(--text-secondary); }
+.counts { display: flex; flex-wrap: wrap; gap: 8px; }
+.count { font: 700 15px var(--font-ui); padding: 6px 10px; border-radius: 999px; background: var(--bg); border: 2px solid var(--border); }
+.count.s-fulfilled { border-color: var(--green); }
+.count.s-ready { border-color: var(--gold); }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint { margin: 0; font-size: 15px; color: var(--text-secondary); }
+.msg { margin: 0; font: 700 16px var(--font-ui); min-height: 1.2em; color: var(--green); }
+.msg.bad { color: var(--danger); }
+.stub p { margin: 0; font-size: 18px; }
+.stub .step { font-weight: 700; }
