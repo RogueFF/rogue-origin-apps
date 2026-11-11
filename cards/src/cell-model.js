@@ -142,7 +142,7 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
   const phase = shiftDays(PHASE_START, PHASE_DAYS);
   const dayNo = phase.indexOf(date) + 1;
   const final = (day.tops.hourly || []).every((h) => h.final);
-  const pill = v.yield === 'none' ? 'NOT YET: weigh the leftovers'
+  const pill = v.yield === 'none' ? 'NOT YET: needs the EOD weigh'
     : v.yield === 'info' ? `DAY: ${WORD.none}` : v.pass ? `DAY: ${v.yield === 'both' ? WORD.pass : WORD.close}` : `DAY: ${WORD.miss}`;
   const ch = day.changeovers || {};
   const so = phaseSoFar(strip.map((s) => s.day));
