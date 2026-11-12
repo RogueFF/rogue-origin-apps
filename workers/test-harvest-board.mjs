@@ -35,7 +35,7 @@ const CULTIVARS = [
   { cultivar_slug: 'lifter', cultivar: 'Lifter' },
   { cultivar_slug: 'sour-lifter', cultivar: 'Sour Lifter' },
 ].map((c) => ({
-  ...c, stage: 'not_sent', post_date: null, post_thc: null, post_cbd: null, url: null,
+  ...c, stage: 'not_sent', post_sent: null, post_date: null, post_thc: null, post_cbd: null, url: null,
   notes: null, docs: '[]', updated_at: null, updated_by: 'migration',
 }));
 let cards = CULTIVARS.map((c) => ({ ...c }));
@@ -255,6 +255,15 @@ await check('post-harvest figures, date and url are stored and validated', async
   await expectThrow(() => call('board_set', { cultivar: 'lemon' }), 'Nothing to change');
   const cleared = (await body(await call('board_set', { cultivar: 'lemon', url: null })));
   eq(cleared.cultivar.url, null, 'url cleared');
+});
+
+await check('the lab drop-off date is stored, validated and clearable', async () => {
+  const d = (await body(await call('board_set', { cultivar: 'lifter', post_sent: '2026-11-12' })));
+  eq(d.cultivar.post_sent, '2026-11-12', 'stored');
+  eq(d.cultivar.stage, 'photos_done', 'stage untouched');
+  await expectThrow(() => call('board_set', { cultivar: 'lifter', post_sent: 'today' }), 'YYYY-MM-DD');
+  const c = (await body(await call('board_set', { cultivar: 'lifter', post_sent: null })));
+  eq(c.cultivar.post_sent, null, 'cleared');
 });
 
 await check('cultivar writes need the password', () =>

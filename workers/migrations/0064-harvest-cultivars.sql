@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS harvest_cultivars (
   cultivar      TEXT NOT NULL,
   -- not_sent | sent | photos_done | on_website
   stage         TEXT NOT NULL DEFAULT 'not_sent',
+  post_sent     TEXT,            -- sample dropped at the lab for the post-harvest COA
   post_date     TEXT,            -- post-harvest COA report date
   post_thc      REAL,            -- dried-flower Total THC %
   post_cbd      REAL,            -- dried-flower Total CBD %

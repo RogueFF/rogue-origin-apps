@@ -14,12 +14,12 @@ export const BOARD_PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <meta name="robots" content="noindex, nofollow">
 <title>Rogue 2026 Lot Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;700&family=Quicksand:wght@400;500;600;700&display=swap">
 
 <style>
   /* =====================================================================
@@ -152,7 +152,7 @@ export const BOARD_PAGE = `<!doctype html>
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
     font-size: 14px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
@@ -163,11 +163,11 @@ export const BOARD_PAGE = `<!doctype html>
     outline-offset: 2px;
   }
 
-  .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .mono { font-family: "Karla", ui-sans-serif, SFMono-Regular, Menlo, sans-serif; }
   .num  { font-variant-numeric: tabular-nums; }
 
   .cond {
-    font-family: "Barlow Condensed", "Public Sans", ui-sans-serif, sans-serif;
+    font-family: "Quicksand", "Quicksand", ui-sans-serif, sans-serif;
     font-weight: 600;
     letter-spacing: .02em;
   }
@@ -196,7 +196,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   .brand h1 {
     margin: 0;
-    font-family: "Barlow Condensed", "Public Sans", sans-serif;
+    font-family: "Quicksand", "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.25rem;
     letter-spacing: .01em;
@@ -204,7 +204,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .brand .season-tag {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     color: var(--ink-3);
     letter-spacing: .08em;
@@ -225,7 +225,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .field label {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .78rem;
     text-transform: uppercase;
@@ -248,7 +248,7 @@ export const BOARD_PAGE = `<!doctype html>
      dashboard alongside the buttons, and it has to sit on the same baseline
      with the same weight rather than looking like stray body text. */
   button.act, a.act {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .85rem;
     text-transform: uppercase;
@@ -280,7 +280,7 @@ export const BOARD_PAGE = `<!doctype html>
   button.act.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
 
   .save {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .7rem;
     letter-spacing: .04em;
     color: var(--ink-3);
@@ -325,7 +325,7 @@ export const BOARD_PAGE = `<!doctype html>
     white-space: nowrap;
   }
   .season .stat .big {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.45rem;
     line-height: 1;
@@ -333,7 +333,7 @@ export const BOARD_PAGE = `<!doctype html>
     letter-spacing: .01em;
   }
   .season .stat .of {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -375,7 +375,7 @@ export const BOARD_PAGE = `<!doctype html>
     padding: .12rem .5rem .12rem .4rem;
     border: 1px solid transparent;
     border-radius: 999px;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .76rem;
     text-transform: uppercase;
@@ -392,7 +392,7 @@ export const BOARD_PAGE = `<!doctype html>
     background: var(--stage, var(--line));
   }
   .season .chip .n {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-weight: 500;
     font-size: .72rem;
@@ -456,7 +456,7 @@ export const BOARD_PAGE = `<!doctype html>
     border-bottom: 1px solid var(--line-soft);
     /* stage stripe: a real sequence, so the ramp carries order */
     border-top: 3px solid var(--stage, var(--line));
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .82rem;
     text-transform: uppercase;
@@ -470,7 +470,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   .col > h2 .count {
     margin-left: auto;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .74rem;
     font-weight: 500;
@@ -484,7 +484,7 @@ export const BOARD_PAGE = `<!doctype html>
     all: unset;
     cursor: pointer;
     color: var(--ink-3);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .8rem;
     line-height: 1;
     padding: .15rem .25rem;
@@ -581,7 +581,7 @@ export const BOARD_PAGE = `<!doctype html>
   /* The zone is the lot's address. Mono and quiet: it needs to be found, not
      to be the first thing seen. */
   .zone {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-weight: 500;
     font-size: .68rem;
     letter-spacing: .05em;
@@ -594,7 +594,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .farm {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .62rem;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -605,7 +605,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   /* The name is what the eye lands on. */
   .cultivar {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: 1.02rem;
     /* Fixed, not a multiplier: fitNames() shrinks the font on long names, and
@@ -632,7 +632,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .mark {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .7rem;
     letter-spacing: .02em;
@@ -666,7 +666,7 @@ export const BOARD_PAGE = `<!doctype html>
   .group.open .card.grouphead { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 
   .caret {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .7rem;
     line-height: 1;
     color: var(--ink-3);
@@ -688,7 +688,7 @@ export const BOARD_PAGE = `<!doctype html>
   .zcount {
     margin-left: auto;
     flex: 0 0 auto;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .66rem;
     letter-spacing: .02em;
@@ -757,7 +757,7 @@ export const BOARD_PAGE = `<!doctype html>
     align-items: center;
     flex-wrap: wrap;
     gap: .35rem .5rem;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     letter-spacing: .04em;
     color: var(--ink-3);
@@ -765,14 +765,14 @@ export const BOARD_PAGE = `<!doctype html>
   .drawer .head h2 {
     grid-column: 1;
     margin: 0;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.5rem;
     line-height: 1.1;
     text-wrap: balance;
   }
   .drawer .head .stagepill {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .7rem;
     letter-spacing: .08em;
@@ -789,7 +789,7 @@ export const BOARD_PAGE = `<!doctype html>
     align-self: start;
     cursor: pointer;
     color: var(--ink-3);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .95rem;
     line-height: 1;
     padding: .25rem .4rem;
@@ -814,7 +814,7 @@ export const BOARD_PAGE = `<!doctype html>
     display: flex;
     align-items: center;
     gap: .55rem;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .78rem;
     text-transform: uppercase;
@@ -826,7 +826,7 @@ export const BOARD_PAGE = `<!doctype html>
   .grp { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
 
   .grp > .lbl {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .64rem;
     text-transform: uppercase;
     letter-spacing: .08em;
@@ -848,7 +848,7 @@ export const BOARD_PAGE = `<!doctype html>
     font-size: .86rem;
   }
   .grp input[type="number"], .grp input[type="date"] {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .84rem;
   }
@@ -868,7 +868,7 @@ export const BOARD_PAGE = `<!doctype html>
     display: flex;
     align-items: baseline;
     gap: .45rem;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .74rem;
     line-height: 1.4;
     padding: .4rem .55rem;
@@ -907,7 +907,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
   .doc .ref {
     grid-column: 1;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     color: var(--ink-3);
     min-width: 0;
@@ -927,7 +927,7 @@ export const BOARD_PAGE = `<!doctype html>
   .doc a { color: var(--slate); }
   .doc button {
     all: unset; cursor: pointer; color: var(--ink-3);
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600; font-size: .78rem; letter-spacing: .06em;
     text-transform: uppercase;
     padding: .22rem .4rem; border-radius: var(--radius);
@@ -943,14 +943,14 @@ export const BOARD_PAGE = `<!doctype html>
     gap: .25rem;
     padding-top: .8rem;
     border-top: 1px solid var(--line-soft);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .66rem;
     line-height: 1.4;
     color: var(--ink-3);
     word-break: break-all;
   }
   .drawer .meta .k {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-size: .7rem;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -973,7 +973,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
   footer.foot strong { color: var(--ink-2); font-weight: 600; }
   footer.foot code {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .95em;
     color: var(--ink-2);
   }
@@ -1083,7 +1083,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
   .gate-card h1 {
     margin: 0;
-    font-family: "Barlow Condensed", "Public Sans", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.7rem;
     letter-spacing: .01em;
@@ -1123,6 +1123,13 @@ export const BOARD_PAGE = `<!doctype html>
   .coa i { font-style: normal; font-weight: 500; opacity: .8; font-variant-numeric: tabular-nums; }
   .coa.have { color: var(--leaf); background: var(--leaf-soft); }
   .coa.miss { color: var(--amber); background: var(--amber-soft); }
+  .coa.lab  { color: var(--slate); background: var(--slate-soft); }
+  button.coa { border: 0; font-family: inherit; cursor: pointer; }
+  .field[hidden], .act[hidden] { display: none; }
+  .coa.link u { font-weight: 700; text-underline-offset: 2px; }
+  .coa.link:hover { filter: brightness(.95); }
+  .coa.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .coa.busy { opacity: .5; cursor: progress; }
   .coa.mini { padding: .1rem .45rem; font-size: .68rem; margin-left: auto; }
   .season .coagap { display: inline-flex; flex-wrap: wrap; gap: .3rem; margin-left: auto; }
 
@@ -1261,14 +1268,68 @@ export const BOARD_PAGE = `<!doctype html>
     .season .chip { padding: .22rem .6rem .22rem .5rem; }
   }
 
-/* Harvest family styling; retain stage colors and the full board interaction. */
-:root { --paper:#f6f5ef; --surface:#fff; --surface-2:#e9eedf; --line:#c8d2be; --line-soft:#d9dfd1; --ink:#263f32; --ink-2:#455b43; --ink-3:#60715d; }
-.bar { padding-top:20px; padding-bottom:20px; }
-.brand h1 { letter-spacing:-.03em; }
-.act { min-height:44px; border-radius:8px; }
+/* =====================================================================
+   Rogue Origin look -- the store's own palette and type (rogueorigin.com):
+   white pages, sage green #668971, logo gold, grey text, Quicksand + Karla,
+   pill buttons. The store has no dark theme, so neither does this board:
+   the same tokens are restated for both dark hooks above.
+   ===================================================================== */
+:root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+  color-scheme: light;
+  --paper:#f5f5f5; --surface:#fff; --surface-2:#eef3ef; --line:#cbd9cf; --line-soft:#e2eae4;
+  --ink:#3b3b3b; --ink-2:#666565; --ink-3:#8b8b8b; --accent-ink:#fff;
+  --sage:#668971; --sage-deep:#4f6f5a; --gold:#e9b949; --gold-ink:#946d1c;
+  --slate:#3f7396; --slate-soft:#e0ecf3;
+  --amber:#946d1c; --amber-soft:#fbefcf;
+  --leaf:#4f6f5a;  --leaf-soft:#e2efe6;
+  --rust:#b3403a;  --rust-soft:#f7e0de;
+  --st-untested:#a9ada9; --st-to-schedule:#e9b949; --st-scheduled:#5b93b8; --st-cleared:#668971;
+  --st-harvesting:#e9b949; --st-drying:#946d1c; --st-supersacked:#4f6f5a; --st-failed:#b3403a;
+  --shadow:0 1px 2px rgba(60,80,66,.08), 0 6px 18px -10px rgba(60,80,66,.25);
+  --shadow-lift:0 2px 6px rgba(60,80,66,.12), 0 14px 28px -12px rgba(60,80,66,.35);
+  --focus:#668971; --bar:#c3d2c8; --bar-hover:#9fb5a7; --radius:10px; --col-min:11.5rem;
+}
+body { font-family:"Quicksand", sans-serif; color:var(--ink); }
+
+/* Header: the sage card with the gold wordmark, as on the store's front door. */
+header.bar { background:var(--sage); padding-top:18px; padding-bottom:18px; border-bottom:0; }
+.brand h1 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:.01em; color:var(--gold); }
+.bar .season-tag { color:#fff; opacity:.85; }
+.bar .field label { color:var(--ink-3); }
+.bar .save { color:#fff; }
+.act { min-height:44px; border-radius:999px; font-family:"Karla", sans-serif; font-weight:700;
+       letter-spacing:.08em; text-transform:uppercase; }
+.bar .act { background:transparent; color:#fff; border:2px solid #fff; }
+.bar .act:hover { background:#fff; color:var(--sage-deep); }
+button.act.primary, a.act.primary { background:var(--sage); color:#fff; border-color:var(--sage); }
+button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); border-color:var(--sage-deep); }
+.stagerow { grid-template-columns:1fr; }
+
+/* Small uppercase labels are the store's gold Karla eyebrows. */
+.col h2 .label, .sec .sh, .drawer .lbl, .season .stat .of { font-family:"Karla", sans-serif; font-weight:700; letter-spacing:.14em; }
+.col h2 .label, .sec .sh { color:var(--gold-ink); }
+.num, .mark, .zone, .zcount { font-family:"Karla", sans-serif; font-variant-numeric:tabular-nums; }
+
+/* White cards on a soft sage column, like product tiles on the store. */
+.col { background:var(--surface-2); border-color:transparent; }
+.col h2 { background:transparent; }
+.card { border-radius:12px; background:#fff; box-shadow:var(--shadow); }
+.season { background:#fff; }
+.cultivar { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; color:var(--ink); }
+.drawer .head h2 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; }
 .gate-card { border-radius:16px; }
+.gate-card h1 { font-family:"Quicksand", sans-serif !important; color:var(--sage-deep); }
 .foot { font-size:13px; }
+.foot a { color:var(--sage-deep); }
 @media(max-width:600px) { .board { gap:12px; } .doc button { min-height:44px; } }
+/* Phones: the pills wrap instead of pushing the page sideways, and the chip
+   for the panel in view is a solid sage pill. */
+@media(max-width:46rem) {
+  header.bar .controls { flex-wrap:wrap; max-width:100%; }
+  .bar .act { letter-spacing:.04em; padding-left:.7rem; padding-right:.7rem; font-size:.72rem; min-height:40px; }
+  .season .chip.on { background:var(--sage); color:#fff; border-color:var(--sage); }
+  .season .chip.on .n { background:transparent; color:#fff; }
+}
 
 </style>
 </head>
@@ -1276,16 +1337,18 @@ export const BOARD_PAGE = `<!doctype html>
 <div class="shell" hidden>
   <header class="bar">
     <div class="brand">
-      <h1>Rogue Lot Board</h1>
+      <h1>Rogue Origin · 2026 Cultivars</h1>
       <span class="season-tag" id="season-tag">2026</span>
     </div>
 
-    <div class="controls"><a class="act" href="/api/harvest?action=hub">All tools</a>
+    <!-- This board is for the website and photo people: no crew tools here.
+         Farm and Export stay in the DOM because the script reads them. -->
+    <div class="controls">
       <div class="field">
         <label for="q">Find</label>
-        <input id="q" type="search" placeholder="cultivar or zone" autocomplete="off">
+        <input id="q" type="search" placeholder="cultivar" autocomplete="off">
       </div>
-      <div class="field">
+      <div class="field" hidden>
         <label for="farm">Farm</label>
         <span class="sel">
           <select id="farm">
@@ -1296,14 +1359,7 @@ export const BOARD_PAGE = `<!doctype html>
           </select>
         </span>
       </div>
-      <!-- The daily action, so it sits first. Absolute path, not a bare
-           \`?action=\`: the board is served from /api/harvest?action=board_page
-           today, where a relative query string happens to resolve — and that is
-           the exact assumption that silently lost every cutter count and
-           trailer logged from a scanned QR code on 2026-09-04. -->
-      <a class="act" id="printtags" href="/api/harvest?action=sack_print">Print tags</a>
-      <a class="act" id="cycletimes" href="/api/harvest?action=harvest_dash">Cycle times</a>
-      <button class="act" id="export" type="button">Export</button>
+      <button class="act" id="export" type="button" hidden>Export</button>
       <span class="save" id="save">&nbsp;</span>
     </div>
   </header>
@@ -1318,8 +1374,7 @@ export const BOARD_PAGE = `<!doctype html>
   </main>
 
   <footer class="foot">
-    Follow each cultivar from photos to the website. Green and amber chips show which COAs are on file; open a card for its COAs, zone lots and stage.
-    For rack status, crew rates and scan history, open the <a href="/api/harvest?action=harvest_dash">harvest dashboard</a>.
+    Each cultivar from photos to the website. Tap a green COA chip to open that lab report; amber means it is missing, blue means the sample is at the lab.
   </footer>
 </div>
 
@@ -1336,14 +1391,13 @@ export const BOARD_PAGE = `<!doctype html>
   // Board order. Everything is harvested, so the board follows each CULTIVAR
   // after harvest: photos, then the website. One hue per stage, so the same
   // colour means the same stage on the rail, the column stripe, the card edge
-  // and the drawer. "failed" is not a step: it holds the lots destroyed before
-  // harvest, as the record.
+  // and the drawer. There is no failed lane: this board is for the website
+  // and photo people, and a destroyed lot is only a note under its cultivar.
   var STAGES = [
     { id: "not_sent",    name: "Not sent",    full: "Not sent for photos", color: "var(--st-untested)" },
     { id: "sent",        name: "Sent",        full: "Sent for photos",     color: "var(--st-scheduled)" },
     { id: "photos_done", name: "Photos done", full: "Photos done",         color: "var(--st-harvesting)" },
-    { id: "on_website",  name: "On website",  full: "On website",          color: "var(--st-cleared)" },
-    { id: "failed",      name: "Failed",      full: "Failed / destroyed lots", color: "var(--st-failed)", aside: true }
+    { id: "on_website",  name: "On website",  full: "On website",          color: "var(--st-cleared)" }
   ];
   var STAGE_BY_ID = {};
   STAGES.forEach(function (s) { STAGE_BY_ID[s.id] = s; });
@@ -1444,7 +1498,7 @@ export const BOARD_PAGE = `<!doctype html>
     var g = el("div", "gate");
     g.id = "gate";
     var card = el("form", "gate-card");
-    card.appendChild(el("h1", null, "Rogue Lot Board"));
+    card.appendChild(el("h1", null, "Rogue Origin · 2026 Cultivars"));
     card.appendChild(el("p", null,
       "2026 cultivars after harvest: photos, website and COAs. This board carries test results, so it needs the farm password."));
     var input = document.createElement("input");
@@ -1565,9 +1619,10 @@ export const BOARD_PAGE = `<!doctype html>
   // handed to the browser as a blob, so the credential never sits in a URL --
   // and the PDF opens in the built-in viewer, where Print already lives.
   function openDoc(doc, btn) {
+    var chip = btn.classList.contains("coa");   // a chip keeps its content
     var label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "…";
+    if (chip) { btn.classList.add("busy"); } else { btn.textContent = "…"; }
     fetch(API + "?action=board_doc&ref=" + encodeURIComponent(doc.ref), {
       headers: { "Authorization": "Bearer " + pass }
     }).then(function (r) {
@@ -1580,15 +1635,15 @@ export const BOARD_PAGE = `<!doctype html>
     }).then(function (blob) {
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
-      if (!w) {
-        notify("Your browser blocked the popup — allow popups for this page to read COAs.", true);
-      }
+      // Phones often refuse a new tab opened after a download; show the PDF
+      // in this tab instead -- Back returns to the board.
+      if (!w) { window.location.href = url; }
       setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     })["catch"](function (e) {
       notify("Couldn't open that document: " + e.message, true);
     })["finally"](function () {
       btn.disabled = false;
-      btn.textContent = label;
+      if (chip) { btn.classList.remove("busy"); } else { btn.textContent = label; }
     });
   }
 
@@ -1604,6 +1659,11 @@ export const BOARD_PAGE = `<!doctype html>
   function isCoa(doc) {
     return /coa/i.test((doc && doc.label) || "") || /^raw\\/coas\\//i.test((doc && doc.ref) || "");
   }
+  // The newest COA is the one added last.
+  function lastCoa(docs) {
+    for (var i = docs.length - 1; i >= 0; i--) { if (isCoa(docs[i])) { return docs[i]; } }
+    return null;
+  }
   function coaOf(docs) {
     for (var i = 0; i < docs.length; i++) { if (isCoa(docs[i])) { return docs[i]; } }
     return null;
@@ -1614,17 +1674,38 @@ export const BOARD_PAGE = `<!doctype html>
   function coaState(card) {
     var mine = lotsBy[card.cultivar_slug] || [];
     var pre = 0;
-    mine.forEach(function (l) { if (coaOf(l.docs)) { pre += 1; } });
-    return { lots: mine, pre: pre, post: !!coaOf(card.docs) };
+    var preDocs = [];
+    mine.forEach(function (l) { var d = coaOf(l.docs); if (d) { pre += 1; preDocs.push(d); } });
+    // "At the lab": a sample was dropped off and no report has come back
+    // since. A cultivar can have a COA on file AND a retest at the lab.
+    var lab = !!card.post_sent && (!card.post_date || card.post_sent > card.post_date);
+    return { lots: mine, pre: pre, preDocs: preDocs, post: !!coaOf(card.docs), lab: lab };
   }
 
-  function coaChip(label, have, detail) {
-    var c = el("span", "coa " + (have ? "have" : "miss"));
+  // have = true (green, on file), "lab" (blue, sample at the lab), false (amber).
+  // Given a viewable document, the chip is a button that opens it -- the COA
+  // is one tap from the board, no detail panel in between.
+  function coaChip(label, have, detail, doc) {
+    var lab = have === "lab";
+    var open = doc && isViewable(doc);
+    var c = el(open ? "button" : "span", "coa " + (lab ? "lab" : have ? "have" : "miss") + (open ? " link" : ""));
+    if (open) {
+      c.type = "button";
+      c.addEventListener("click", function (ev) { ev.stopPropagation(); openDoc(doc, c); });
+      c.addEventListener("keydown", function (ev) { ev.stopPropagation(); });
+    }
     c.appendChild(el("b", null, label));
-    c.appendChild(document.createTextNode(have ? "✓" : "missing"));
+    c.appendChild(document.createTextNode(lab ? "at lab" : have ? "✓" : "missing"));
     if (detail) { c.appendChild(el("i", null, detail)); }
-    c.title = label + (have ? " on file" : " not on file") + (detail ? " (" + detail + " zone lots)" : "");
+    c.title = (open ? "Open the " + label : label + (lab ? " — sample at the lab" : have ? " on file" : " not on file")) +
+      (detail ? " (" + detail + ")" : "");
+    if (open) { c.appendChild(el("u", null, "open")); }
     return c;
+  }
+
+  function postChip(card, st) {
+    if (st.post) { return coaChip("Post COA", true, st.lab ? "retest" : "", lastCoa(card.docs)); }
+    return coaChip("Post COA", st.lab ? "lab" : false, st.lab ? fmtDate(card.post_sent) : "");
   }
 
   // ---- render ------------------------------------------------------------
@@ -1722,8 +1803,9 @@ export const BOARD_PAGE = `<!doctype html>
 
     var coas = el("div", "coas");
     coas.appendChild(coaChip("Pre COA", st.pre > 0,
-      st.lots.length > 1 ? st.pre + "/" + st.lots.length : ""));
-    coas.appendChild(coaChip("Post COA", st.post, ""));
+      st.preDocs.length > 1 ? st.preDocs.length + " reports" : "",
+      st.preDocs.length === 1 ? st.preDocs[0] : null));
+    coas.appendChild(postChip(card, st));
     node.appendChild(coas);
 
     var marks = el("div", "marks");
@@ -1859,15 +1941,24 @@ export const BOARD_PAGE = `<!doctype html>
       chips.appendChild(chip);
     });
 
-    var noPre = 0, noPost = 0;
+    var noPre = 0, noPost = 0, atLab = 0;
     vCards.forEach(function (c) {
       var st = coaState(c);
       if (!st.pre) { noPre += 1; }
-      if (!st.post) { noPost += 1; }
+      if (st.lab) { atLab += 1; }
+      else if (!st.post) { noPost += 1; }
     });
     var gap = el("span", "coagap");
-    gap.appendChild(coaChip("Pre COA", !noPre, noPre ? noPre + " missing" : "all in"));
-    gap.appendChild(coaChip("Post COA", !noPost, noPost ? noPost + " missing" : "all in"));
+    gap.appendChild(coaChip("Pre COA", !noPre, noPre ? String(noPre) : "all in"));
+    if (atLab) {
+      var labChip = el("span", "coa lab");
+      labChip.appendChild(el("b", null, "Post COA"));
+      labChip.appendChild(document.createTextNode("at lab"));
+      labChip.appendChild(el("i", null, String(atLab)));
+      labChip.title = atLab + " with a post-harvest sample at the lab";
+      gap.appendChild(labChip);
+    }
+    gap.appendChild(coaChip("Post COA", !noPost, noPost ? String(noPost) : "all in"));
     chips.appendChild(gap);
     seasonEl.appendChild(chips);
 
@@ -2214,7 +2305,13 @@ export const BOARD_PAGE = `<!doctype html>
     // Post-harvest: one dried-flower potency COA for the cultivar.
     var postSec = section("Post-harvest COA");
     postSec.appendChild(el("div", "verdict" + (st.post ? " pass" : ""),
-      st.post ? "Post-harvest COA on file." : "No post-harvest COA on file yet."));
+      (st.post ? "Post-harvest COA on file." : "No post-harvest COA on file yet.") +
+      (st.lab ? " Sample dropped at the lab " + fmtDate(card.post_sent) + (st.post ? " for a retest." : ".") : "")));
+    var ds = document.createElement("input");
+    ds.type = "date";
+    ds.value = card.post_sent || "";
+    postSec.appendChild(group("Dropped at lab", bindField(ds, "post_sent", key),
+      "The day the sample went to the lab. The chip reads \\"at lab\\" until a report dated after it is entered."));
     var row = el("div", "row3");
     var d = document.createElement("input");
     d.type = "date";
@@ -2272,7 +2369,7 @@ export const BOARD_PAGE = `<!doctype html>
     var lot = rowOf(key);
     var failed = lot.stage === "failed";
     var parent = cardBy[lot.cultivar_slug];
-    var stage = failed ? STAGE_BY_ID.failed : (STAGE_BY_ID[parent && parent.stage] || STAGES[0]);
+    var stage = failed ? { color: "var(--st-failed)" } : (STAGE_BY_ID[parent && parent.stage] || STAGES[0]);
     drawerEl.textContent = "";
     drawerEl.style.setProperty("--stage", stage.color);
 
@@ -2362,6 +2459,11 @@ export const BOARD_PAGE = `<!doctype html>
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && selected) { closeDrawer(); }
   });
+  // Names are fitted to their card, and the web font is wider than the
+  // fallback it replaces: fit again once it has arrived.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { fitNames(); });
+  }
 
   exportEl.addEventListener("click", function () {
     var payload = JSON.stringify({

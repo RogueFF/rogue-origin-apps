@@ -51,7 +51,7 @@ const CULTIVAR_STAGE_ORDER = ['not_sent', 'sent', 'photos_done', 'on_website'];
 const CULTIVAR_STAGES = new Set(CULTIVAR_STAGE_ORDER);
 
 const SELECT_CULTIVAR = `
-  SELECT cultivar_slug, cultivar, stage, post_date, post_thc, post_cbd, url,
+  SELECT cultivar_slug, cultivar, stage, post_sent, post_date, post_thc, post_cbd, url,
          notes, docs, updated_at, updated_by
     FROM harvest_cultivars
 `;
@@ -305,6 +305,7 @@ async function setCultivar(db, body, actor) {
     }
     put('stage', stage);
   }
+  if (has('post_sent')) put('post_sent', dateOrNull(body.post_sent, 'post_sent'));
   if (has('post_date')) put('post_date', dateOrNull(body.post_date, 'post_date'));
   if (has('post_thc')) put('post_thc', numberOrNull(body.post_thc, 'post_thc'));
   if (has('post_cbd')) put('post_cbd', numberOrNull(body.post_cbd, 'post_cbd'));
@@ -326,7 +327,7 @@ async function setCultivar(db, body, actor) {
   if (!sets.length) {
     throw createError(
       'VALIDATION_ERROR',
-      'Nothing to change. Send at least one of: stage, post_date, post_thc, post_cbd, url, notes, docs',
+      'Nothing to change. Send at least one of: stage, post_sent, post_date, post_thc, post_cbd, url, notes, docs',
     );
   }
 
