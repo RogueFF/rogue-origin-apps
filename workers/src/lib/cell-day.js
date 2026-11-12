@@ -169,3 +169,86 @@ export function mainCultivar(sacks, jobs) {
  * last job) only counts inside it.
  */
 export const SHIFT_MIN = [6 * 60, 16 * 60 + 20];
+
+/** Lunch only (the half hour), for time between pickups: 10-minute breaks stay in (scorecard design). */
+export const LUNCH = CELL_BREAKS.filter(([s, e]) => e - s >= 30);
+
+/**
+ * The pickup timeline (Koa 2026-11-11: "timestamped too so we can track how
+ * often it was picked up"). One item per round/job, from the screen's pickup
+ * marks: at = picked up (the pickup or swap), collectedAt = bag/tag's Collected
+ * tap on the board (null: never tapped), startedAt = the round's first gram (the
+ * screen's first 'running' after the pickup before it, from cell_screen_log;
+ * null when the log has none). Field names match the scorecard's.
+ *   sinceLastS: time since the pickup before, lunch out
+ *   waitS:      picked up -> Collected
+ */
+export function pickupTimeline(jobs, screenLog = [], lunch = LUNCH) {
+  const running = screenLog.filter(r => r.phase === 'running').map(r => msOf(r.ts)).filter(Boolean).sort((a, b) => a - b);
+  const list = [];
+  let prev = null;
+  for (const j of [...jobs].sort((a, b) => a.at - b.at)) {
+    const startedAt = running.find(ms => (prev === null || ms > prev) && ms <= j.at) ?? null;
+    const collectedAt = j.collectedAt ?? null;
+    list.push({
+      at: j.at, g: j.g, collectedAt, startedAt, cultivar: j.cultivar ?? null, bag: j.bag ?? null,
+      sinceLastS: prev === null ? null : Math.round((j.at - prev - breakMsIn(prev, j.at, lunch)) / 1000),
+      waitS: collectedAt !== null && collectedAt >= j.at ? Math.round((collectedAt - j.at) / 1000) : null,
+    });
+    prev = j.at;
+  }
+  const gaps = list.filter(p => p.sinceLastS !== null);
+  const waits = list.filter(p => p.waitS !== null);
+  const avg = xs => (xs.length ? Math.round(xs.reduce((a, x) => a + x, 0) / xs.length) : null);
+  const maxBy = (xs, k) => xs.reduce((m, x) => (m === null || x[k] > m[k] ? x : m), null);
+  const longGap = maxBy(gaps, 'sinceLastS'), longWait = maxBy(waits, 'waitS');
+  const totalG = Math.round(list.reduce((a, p) => a + p.g, 0) * 100) / 100;
+  return {
+    list,
+    summary: {
+      count: list.length, totalG, avgG: list.length ? Math.round((totalG / list.length) * 100) / 100 : null,
+      intervalAvgS: avg(gaps.map(p => p.sinceLastS)), intervalMaxS: longGap ? longGap.sinceLastS : null, intervalMaxEndAt: longGap ? longGap.at : null,
+      waitAvgS: avg(waits.map(p => p.waitS)), waitMaxS: longWait ? longWait.waitS : null, waitMaxAt: longWait ? longWait.at : null,
+      uncollected: list.filter(p => p.collectedAt === null).length,
+    },
+  };
+}
+
+/** A cultivar name as a key: "2026 - Sour Lifter / Sungrown" and "Sour Lifter" are the same raw. */
+export const cultivarKey = c => (c ? String(c).replace(/^\s*\d{4}\s*-\s*/, '').replace(/\s*\/.*$/, '').trim().toLowerCase() : '');
+
+/**
+ * Verified tops/sack per cultivar (Koa 2026-11-11, Continuous changeovers):
+ *   tops(c) x 35 / (c's ticked sack lbs - c's leftover raw)
+ * tops(c) = the grams of the rounds (pickup marks) of that cultivar. Leftover raw
+ * rows (cell_eod 'raw', 0063) carry their cultivar: changeover weighs and End of
+ * day. Only a cultivar's leftover weighed AFTER its last round counts: when the
+ * cell comes back to a cultivar (A -> B -> A), A's earlier leftover went back into
+ * use. Untagged rows (before 0063) belong to the day's last cultivar. A cultivar
+ * is verified once its leftover was weighed after its last round.
+ */
+export function yieldByCultivar({ jobs, sacks, leftovers, sackLbs: full = fullSackLbs(2026) }) {
+  const last = [...jobs].sort((a, b) => a.at - b.at).pop();
+  const lastKey = cultivarKey(last && last.cultivar);
+  const names = new Map();
+  const by = new Map();
+  const slot = (c) => {
+    const k = cultivarKey(c);
+    if (!k) return null;
+    if (!names.has(k) || (c && /^\d{4} - /.test(c))) names.set(k, c);
+    if (!by.has(k)) by.set(k, { g: 0, sacksLb: 0, lastAt: null, leftoverG: 0, weighed: false });
+    return by.get(k);
+  };
+  for (const j of jobs) { const s = slot(j.cultivar); if (s) { s.g += j.g; s.lastAt = Math.max(s.lastAt ?? 0, j.at); } }
+  for (const s of sacks) { const x = slot(s.cultivar); if (x) x.sacksLb += s.lbs; }
+  for (const l of leftovers) {
+    const x = l.cultivar ? slot(l.cultivar) : lastKey ? by.get(lastKey) : null;
+    if (!x || (x.lastAt !== null && l.at < x.lastAt)) continue;   // superseded: the cultivar came back after it
+    x.leftoverG += l.g; x.weighed = true;
+  }
+  return [...by.entries()].map(([k, x]) => {
+    const topsLb = Math.round((x.g / G_PER_LB) * 100) / 100;
+    const v = verifiedYield({ topsLb, sacksLb: x.sacksLb, eodRawG: x.weighed ? x.leftoverG : null, sackLbs: full });
+    return { cultivar: names.get(k), rounds: jobs.filter(j => cultivarKey(j.cultivar) === k).length, topsLb, sacksLb: v.sacksLb, leftoverLb: v.eodRawLb, usedLb: v.usedLb, topsPerSack: v.topsPerSack, verified: v.topsPerSack !== null };
+  });
+}

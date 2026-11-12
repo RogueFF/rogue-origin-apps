@@ -215,6 +215,18 @@ export function cellModel({ date, day, strip = [], generatedAt }) {
     }] : [],
     // One line: the strip takes the room a second would need. Gaps first.
     flags: flags.slice(0, 1),
+    // Data only for now (Continuous rounds, Koa 2026-11-11), not drawn: the pickup
+    // timeline's numbers and tops/sack per cultivar, for a later card section.
+    // Physical numbers only (the card goes to the cron list, §9).
+    pickups: day.pickupSummary ? {
+      count: day.pickupSummary.count, intervalAvgS: day.pickupSummary.intervalAvgS, intervalMaxS: day.pickupSummary.intervalMaxS,
+      waitAvgS: day.pickupSummary.waitAvgS, waitMaxS: day.pickupSummary.waitMaxS, uncollected: day.pickupSummary.uncollected,
+    } : null,
+    byCultivar: (day.yieldByCultivar || []).map((c) => ({
+      cultivar: cultivarShort(c.cultivar), rounds: c.rounds, topsLb: c.topsLb, topsPerSack: c.topsPerSack, verified: c.verified,
+      verdict: c.topsPerSack === null ? 'pending' : (() => { const be = breakEvenFor(c.cultivar); return !be.measured ? 'none' : c.topsPerSack >= be.both ? 'pass' : c.topsPerSack >= be.at ? 'close' : 'miss'; })(),
+    })),
+    cultivarChanges: day.changeovers ? day.changeovers.cultivarChanges ?? 0 : 0,
     foot: {
       left: 'cards/cell · cellDay · tops/sack per 35 lb',
       right: `generated ${shortWeekday(pacificDate(generatedAt))} ${monthDay(pacificDate(generatedAt))} · ${pacificClock(generatedAt)} PT`,

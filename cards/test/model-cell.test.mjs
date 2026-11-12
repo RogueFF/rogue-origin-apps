@@ -153,3 +153,19 @@ test('a blend is NO BASELINE with the reason; a low EOD battery and a mid-aftern
   const late = cellDay({ gaps: { ...day.gaps, offline: { ...day.gaps.offline, uncounted: [{ kind: 'offline', fromMs: Date.parse('2026-11-13T00:10:00Z'), toMs: null, minutes: 10 }] }, window: { fromMs: 0, toMs: Date.parse('2026-11-13T00:05:00Z') } } });
   assert.ok(!cellModel({ date: '2026-11-12', day: late, strip: [], generatedAt: GEN }).flags.some((f) => f.tag === 'Check'));
 });
+
+test('Continuous rounds: the model carries the pickup numbers and tops/sack per cultivar (data only, not drawn)', () => {
+  const day = cellDay({
+    pickupSummary: { count: 5, totalG: 1891.5, avgG: 378.3, intervalAvgS: 2400, intervalMaxS: 3000, intervalMaxEndAt: 0, waitAvgS: 400, waitMaxS: 900, waitMaxAt: 0, uncollected: 1 },
+    yieldByCultivar: [
+      { cultivar: '2026 - Sour Lifter / Sungrown', rounds: 3, topsLb: 2.47, topsPerSack: 6.5, verified: true },
+      { cultivar: '2026 - Lifter / Sungrown', rounds: 2, topsLb: 1.7, topsPerSack: null, verified: false },
+    ],
+    changeovers: { list: [], count: 2, cultivarChanges: 2, medianS: 300, maxS: 600 },
+  });
+  const m = cellModel({ date: '2026-11-12', day, strip: [], generatedAt: GEN });
+  assert.deepEqual(m.pickups, { count: 5, intervalAvgS: 2400, intervalMaxS: 3000, waitAvgS: 400, waitMaxS: 900, uncollected: 1 });
+  assert.deepEqual(m.byCultivar.map((c) => [c.rounds, c.topsPerSack, c.verdict]), [[3, 6.5, 'close'], [2, null, 'pending']]);
+  assert.equal(m.cultivarChanges, 2);
+  assert.ok(!JSON.stringify(m).includes('$'), 'no dollars on a cron card');
+});

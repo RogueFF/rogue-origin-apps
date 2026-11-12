@@ -13,6 +13,13 @@
  * screen's pickup marks (jobs), the queue's Start times, scale_episodes, the
  * quality batches, and the End of day panel (cell_eod, cell_sacks; 0062).
  * Each part reads as empty when its table isn't there yet.
+ *
+ * Continuous rounds (Koa 2026-11-11): every round is a job. `pickups` is the
+ * timeline (picked up, round start, Collected tap, grams; the scorecard's field
+ * names) with `pickupSummary` (time between pickups, lunch out; wait at the spot).
+ * Changeovers between cultivars carry from/to and the leftover weighed in them,
+ * and `yieldByCultivar` works tops/sack out per cultivar from the rounds, the
+ * ticked sacks and the leftover-raw rows tagged with their cultivar (0063).
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { pacificDay, pacificParts, sqliteUtc } from '../../lib/pacific.js';
@@ -22,6 +29,7 @@ import { sackLbs } from '../../lib/sack-weight.js';
 import { autoDay, SLOT_MINUTES } from './cell-hourly.js';
 import {
   changeovers, median, episodesInDay, qualityOf, verifiedYield, msOf, START_G, SHIFT_MIN, personHours, mainCultivar, workWindow,
+  pickupTimeline, yieldByCultivar, cultivarKey,
 } from '../../lib/cell-day.js';
 
 const r2 = x => Math.round(x * 100) / 100;
@@ -54,11 +62,11 @@ export async function getCellDay(params, env, now = Date.now()) {
   const fromSql = sqliteUtc(new Date(dayFrom)), toSql = sqliteUtc(new Date(dayTo));
   const id = station.station_id;
 
-  const [auto, typed, marks, starts, episodes, quality, eod, sacks, reading] = await Promise.all([
+  const [auto, typed, marks, starts, episodes, quality, eod, sacks, reading, screenLog] = await Promise.all([
     autoDay(env, date, [id]).then(m => m.get(id) || null),
     rows(env.DB.prepare(`SELECT time_slot, tops_lbs, cultivar FROM cell_hourly WHERE production_date = ? AND station_id = ?`).bind(date, id)),
     rows(env.DB.prepare(
-      `SELECT id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
+      `SELECT * FROM scale_marks
        WHERE station_id = ? AND kind = 'pickup' AND ts >= ? AND ts < ? ORDER BY ts, id`
     ).bind(id, fromSql, toSql)),
     rows(env.DB.prepare(`SELECT started_at FROM cell_jobs WHERE station_id = ? AND started_at >= ? AND started_at < ?`).bind(id, fromSql, toSql)),
@@ -68,7 +76,7 @@ export async function getCellDay(params, env, now = Date.now()) {
     ).bind(id, toSql, fromSql)),
     rows(env.DB.prepare(`SELECT batch_no, quality, q_mold, q_insects FROM cell_quality WHERE production_date = ? AND station_id = ?`).bind(date, id)),
     rows(env.DB.prepare(
-      `SELECT kind, grams, batt_mv, ts FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind IN ('raw', 'tote') AND undone_at IS NULL ORDER BY ts, id`
+      `SELECT * FROM cell_eod WHERE station_id = ? AND production_date = ? AND kind IN ('raw', 'tote') AND undone_at IS NULL ORDER BY ts, id`
     ).bind(id, date)),
     rows(env.DB.prepare(
       `SELECT cs.sack_id, h.season, h.cultivar, h.fill_lbs FROM cell_sacks cs
@@ -76,6 +84,8 @@ export async function getCellDay(params, env, now = Date.now()) {
        WHERE cs.production_date = ? AND cs.station_id = ? ORDER BY cs.ticked_at`
     ).bind(date, id)),
     rows(env.DB.prepare(`SELECT batt_mv, batt_at, updated_at FROM scale_readings WHERE station_id = ?`).bind(id)),
+    // The screen's change log (0062): when each round started trimming.
+    rows(env.DB.prepare(`SELECT ts, phase, cultivar FROM cell_screen_log WHERE station_id = ? AND ts >= ? AND ts < ? ORDER BY ts, id`).bind(id, fromSql, toSql)),
   ]);
 
   // ---- tops by hour: a typed value wins, otherwise the scale's ----
@@ -102,6 +112,7 @@ export async function getCellDay(params, env, now = Date.now()) {
   // ---- jobs (the screen's pickup marks) and changeovers ----
   const jobs = marks.filter(m => m.kg > 0).map(m => ({
     at: msOf(m.ts), g: r2(m.kg * 1000), cultivar: m.cultivar, bag: m.bag, cycleS: m.cycle_s, jobId: m.job_id ?? null,
+    collectedAt: m.collected_at ? msOf(m.collected_at) : null,
   }));
   const rises = ((auto && auto.rises) || []).map(r => ({ ms: msOf(r.ts), g: r.g }));
   const co = changeovers(jobs.map(j => ({ ms: j.at, jobId: j.jobId })), rises, starts.map(s => msOf(s.started_at)).filter(Boolean));
@@ -129,16 +140,26 @@ export async function getCellDay(params, env, now = Date.now()) {
 
   // ---- End of day, sacks, verified tops/sack ----
   const sum = k => eod.filter(e => e.kind === k).reduce((a, e) => a + e.grams, 0);
-  const has = k => eod.some(e => e.kind === k);
+  const has = k => eod.some(e => e.kind === k && (k !== 'raw' || (e.reason || 'eod') === 'eod'));
+  // Every leftover-raw row comes off the day's raw (changeover weighs too), but the
+  // day is only verified once End of day weighed what was left at the end.
   const eodRawG = has('raw') ? r2(sum('raw')) : null;
+  const changeoverRawG = r2(eod.filter(e => e.kind === 'raw' && e.reason === 'changeover').reduce((a, e) => a + e.grams, 0));
   const eodToteG = has('tote') ? r2(sum('tote')) : null;
   const sackList = sacks.map(s => ({ sackId: s.sack_id, cultivar: s.cultivar, lbs: sackLbs(s), fillLbs: s.fill_lbs ?? null }));
   const sacksLb = sackList.reduce((a, s) => a + s.lbs, 0);
   // No carry-in: the leftover goes back each night (Koa 2026-11-11).
   const yieldOut = verifiedYield({ topsLb, sacksLb, eodRawG, toteG: eodToteG });
 
+  // ---- per cultivar (Continuous changeovers, 0063) ----
+  const leftovers = eod.filter(e => e.kind === 'raw').map(e => ({ cultivar: e.cultivar ?? null, g: e.grams, at: msOf(e.ts), reason: e.reason || 'eod' }));
+  const byCultivar = yieldByCultivar({ jobs, sacks: sackList, leftovers });
+
+  // ---- the pickup timeline ----
+  const timeline = pickupTimeline(jobs, screenLog);
+
   // ---- battery: the last End of day weigh's, else (today) the node's latest ----
-  const lastEod = [...eod].reverse().find(e => e.batt_mv != null);
+  const lastEod = [...eod].reverse().find(e => e.batt_mv != null && (e.reason || 'eod') === 'eod');
   const r = reading[0];
   const battery = lastEod
     ? { pct: battPct(lastEod.batt_mv), mv: lastEod.batt_mv, at: msOf(lastEod.ts), from: 'eod' }
@@ -148,7 +169,7 @@ export async function getCellDay(params, env, now = Date.now()) {
 
   const rawRecord = params.raw === '1' || params.raw === 'true' ? await rawDay(env, id, date, fromSql, toSql, episodes) : undefined;
 
-  return successResponse({
+  const out = {
     stationId: id, label: station.label, date, serverNow: now,
     // A blend (no cultivar at 80% of the raw) has no single break-even: mixed.
     ...(() => { const c = mainCultivar(sackList, jobs); return { cultivar: c.name, cultivarShare: c.share, mixed: c.mixed }; })(),
@@ -157,7 +178,19 @@ export async function getCellDay(params, env, now = Date.now()) {
       personH, perPersonH: personH > 0 ? r2(topsLb / personH) : null, hourly,
     },
     jobs,
-    changeovers: { list: co, count: co.length, medianS: median(coS), maxS: coS.length ? Math.max(...coS) : null, startG: START_G },
+    changeovers: {
+      // A changeover between cultivars says from/to and the leftover weighed in it.
+      list: co.map(c => {
+        const i = jobs.findIndex(j => j.at === c.fromMs);
+        const from = i >= 0 ? jobs[i].cultivar : null, to = i >= 0 && jobs[i + 1] ? jobs[i + 1].cultivar : null;
+        const cultivarChange = !!(from && to && cultivarKey(from) !== cultivarKey(to));
+        const weighedG = r2(leftovers.filter(l => l.reason === 'changeover' && l.at >= c.fromMs && l.at <= c.toMs).reduce((a, l) => a + l.g, 0));
+        return { ...c, fromCultivar: from, toCultivar: to, cultivarChange, leftoverG: cultivarChange ? weighedG : null };
+      }),
+      count: co.length, cultivarChanges: 0, medianS: median(coS), maxS: coS.length ? Math.max(...coS) : null, startG: START_G,
+    },
+    pickups: timeline.list,
+    pickupSummary: timeline.summary,
     gaps: {
       offline: { ...gap(offEps), uncounted },
       notRecording: gap(nrEps),
@@ -165,11 +198,14 @@ export async function getCellDay(params, env, now = Date.now()) {
     },
     quality: qualityOf(quality),
     sacks: { list: sackList, count: sackList.length, lb: r2(sacksLb) },
-    eod: { rawG: eodRawG, toteG: eodToteG },
+    eod: { rawG: eodRawG, toteG: eodToteG, changeoverRawG },
     yield: yieldOut,
+    yieldByCultivar: byCultivar,
     battery,
     ...(rawRecord ? { raw: rawRecord } : {}),
-  });
+  };
+  out.changeovers.cultivarChanges = out.changeovers.list.filter(c => c.cultivarChange).length;
+  return successResponse(out);
 }
 
 /** The day's raw record for one station (raw=1). */

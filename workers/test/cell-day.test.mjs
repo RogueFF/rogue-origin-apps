@@ -130,7 +130,7 @@ test('cellDay: one Phase 1 day end to end', async () => {
   assert.deepEqual(d.gaps.offline.uncounted.map(e => e.minutes), [6]);
   assert.deepEqual(d.quality, { batches: 2, pass: 1, redo: 1, stop: 0 });
   assert.deepEqual([d.sacks.count, d.sacks.lb], [1, 35]);
-  assert.deepEqual(d.eod, { rawG: 1814.4, toteG: 680.4 });
+  assert.deepEqual(d.eod, { rawG: 1814.4, toteG: 680.4, changeoverRawG: 0 });
   assert.deepEqual([d.yield.rawInLb, d.yield.eodRawLb, d.yield.usedLb, d.yield.toteLb], [35, 4, 31, 1.5]);
   assert.equal(d.yield.topsPerSack, Math.round((1.11 * 35 / 31) * 100) / 100);
   assert.deepEqual([d.battery.mv, d.battery.from], [3805, 'eod']);
