@@ -56,6 +56,7 @@ const SHORT_SCREENS = new Map([
   ['/salida', 'salida'],     // Salida de bolsas — scan sacks out to an order
   ['/out', 'salida'],        // the same screen, English
   ['/coming', 'pipeline'],   // What's coming off the racks, by cultivar
+  ['/cultivars', 'board_page'], // 2026 cultivars: photos → website + COAs, for the web and photo people
 ]);
 
 export default {
