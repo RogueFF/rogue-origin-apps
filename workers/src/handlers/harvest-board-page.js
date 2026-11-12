@@ -1329,7 +1329,24 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
   .bar .act { letter-spacing:.04em; padding-left:.7rem; padding-right:.7rem; font-size:.72rem; min-height:40px; }
   .season .chip.on { background:var(--sage); color:#fff; border-color:var(--sage); }
   .season .chip.on .n { background:transparent; color:#fff; }
+  /* The stage chips are one row to swipe; the COA tallies ride at its end
+     instead of wrapping and stretching the row. */
+  .season .chips { align-items:center; }
+  .season .chip { min-height:40px; flex:0 0 auto; }
+  .season .coagap { flex:0 0 auto; flex-wrap:nowrap; margin-left:.4rem; }
+  /* Thumb-sized: a COA chip is a button here, not a label. */
+  .coas { gap:.45rem; margin-top:.5rem; }
+  .card .coa { padding:.5rem .75rem; font-size:.82rem; }
+  .card .coa b { font-size:.72rem; }
+  .prelots .zrow .act.mini { min-height:38px; padding:.45rem .8rem; font-size:.78rem; }
+  .prelots .zrow { padding:.45rem .5rem; }
+  /* iOS zooms the page when a focused control is under 16px -- every control
+     in the detail sheet, whatever its type. */
+  .drawer input, .drawer select, .drawer textarea { font-size:16px !important; }
 }
+.grp input[type="url"] { width:100%; background:var(--paper); color:var(--ink); border:1px solid var(--line);
+  border-radius:var(--radius); padding:.4rem .5rem; font:inherit; font-size:.86rem; }
+
 
 </style>
 </head>
@@ -1623,6 +1640,14 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
     var label = btn.textContent;
     btn.disabled = true;
     if (chip) { btn.classList.add("busy"); } else { btn.textContent = "…"; }
+    // The tab is opened NOW, inside the tap, and pointed at the PDF once it
+    // has downloaded. A phone browser only allows a new tab during the tap
+    // itself; opened after the download it is silently refused.
+    var tab = null;
+    try { tab = window.open("", "_blank"); } catch (e) { tab = null; }
+    if (tab) {
+      try { tab.document.title = "Opening the COA…"; tab.document.body.textContent = "Opening the COA…"; } catch (e) { /* ignore */ }
+    }
     fetch(API + "?action=board_doc&ref=" + encodeURIComponent(doc.ref), {
       headers: { "Authorization": "Bearer " + pass }
     }).then(function (r) {
@@ -1634,12 +1659,21 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
       return r.blob();
     }).then(function (blob) {
       var url = URL.createObjectURL(blob);
-      var w = window.open(url, "_blank");
-      // Phones often refuse a new tab opened after a download; show the PDF
-      // in this tab instead -- Back returns to the board.
-      if (!w) { window.location.href = url; }
-      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      if (tab && !tab.closed) {
+        tab.location.replace(url);
+      } else {
+        // No tab allowed at all: hand the PDF over as a file instead, which
+        // every browser accepts (a phone shows it in its own PDF viewer).
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = String(doc.ref).split("/").pop();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(function () { URL.revokeObjectURL(url); }, 600000);
     })["catch"](function (e) {
+      if (tab && !tab.closed) { tab.close(); }
       notify("Couldn't open that document: " + e.message, true);
     })["finally"](function () {
       btn.disabled = false;
