@@ -52,8 +52,18 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .ring-fill.over { stroke: var(--danger); }
 /* Continuous: no target, so the ring is a steady "recording" ring, never gold or red. */
 .ring-fill.cont, .ring-fill.cont.near, .ring-fill.cont.over { stroke: var(--green); }
-.end-cont { margin-top: 8px; }
-.end-cont[hidden] { display: none; }
+.cont-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.end-cont[hidden], .change-cv[hidden] { display: none; }
+.change-cv { border-color: var(--green); }
+.change-cv:disabled { opacity: .6; cursor: default; border-color: var(--border, #ccc); }
+/* End of day / Change cultivar panel: cultivar tag and bench entry. */
+.eod-card [hidden] { display: none !important; }
+.eod-cv, .eod-cv-fixed { display: flex; gap: 8px; align-items: center; margin: 4px 0 8px; font: 600 16px var(--font-ui); }
+.eod-cv-sel { font: 600 16px var(--font-ui); padding: 6px 8px; min-height: 40px; }
+.eod-bench { margin: 10px 0 4px; }
+.eod-bench .row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.eod-bench-n { width: 120px; font: 600 18px var(--font-ui); padding: 8px; min-height: 44px; }
+.eod-bench-u { font: 600 16px var(--font-ui); min-height: 44px; }
 .ring-center { grid-column: 1; grid-row: 1; text-align: center; pointer-events: none; }
 .net { font: 700 40px var(--font-mono); }
 .of { font-size: 16px; color: var(--text-secondary); }

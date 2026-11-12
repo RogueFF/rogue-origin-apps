@@ -31,7 +31,8 @@ import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.
 import { applyQueue, shortCultivar, calmWait } from './queue.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 import { createEod } from './eod.mjs';
-import { CONT, CONT_BAG, isContinuous, canFinish, roundNo, roundsToday, afterPickup, expireContinuous, endContinuous, queueMayApply } from './rounds.mjs';
+import { CONT, CONT_BAG, isContinuous, canFinish, roundNo, roundsToday, afterPickup, expireContinuous, endContinuous, queueMayApply,
+  changeState, afterChangeover, pickedAfterChangeover } from './rounds.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // Reads cost one Worker request each, so the fast rate is kept to the moments
@@ -116,6 +117,8 @@ registerLabels({
     cont: 'Continuous', contOption: 'Continuous', endCont: 'End continuous',
     contTarget: 'Continuous · round {n}', thisRound: 'This round', roundsToday: 'Rounds today', roundN: 'round {n}', lastRound: 'Last round',
     contLock: 'Continuous: the cultivar stays for every round. To change it: End continuous between rounds, or Hold to reset.',
+    changeCv: 'Change cultivar', finishFirst: 'Finish this round first (pickup or swap)',
+    bannerChange: 'Changeover from {c}: pick the new cultivar, then put the empty basket on.',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
@@ -146,6 +149,8 @@ registerLabels({
     cont: 'Continuo', contOption: 'Continuo', endCont: 'Terminar continuo',
     contTarget: 'Continuo · ronda {n}', thisRound: 'Esta ronda', roundsToday: 'Rondas hoy', roundN: 'ronda {n}', lastRound: 'Última ronda',
     contLock: 'Continuo: la variedad sigue en cada ronda. Para cambiarla: Terminar continuo entre rondas, o Mantenga para reiniciar.',
+    changeCv: 'Cambiar variedad', finishFirst: 'Termine esta ronda primero (recogida o cambio de canasta)',
+    bannerChange: 'Cambio desde {c}: elija la variedad nueva y ponga la canasta vacía.',
   },
 });
 
@@ -171,7 +176,7 @@ const el = {
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'),
   cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
-  of: $('ofLabel'), toGoLabel: $('toGoLabel'), pctLabel: $('pctLabel'), endCont: $('endContBtn'),
+  of: $('ofLabel'), toGoLabel: $('toGoLabel'), pctLabel: $('pctLabel'), endCont: $('endContBtn'), changeCv: $('changeCvBtn'),
   pauseBtn: $('pauseBtn'), resumeBtn: $('resumeBtn'), dialog: $('pauseDialog'), chips: $('pauseChips'),
   note: $('pauseNote'), noteErr: $('pauseError'), pauseOk: $('pauseOk'), pauseCancel: $('pauseCancel'),
 };
@@ -213,11 +218,27 @@ const disconnected = () => serverStale || (failingSince !== null && Date.now() -
 // End of day weighs (eod.mjs, Phase 1 scorecard): while the lead's panel is open
 // the scale belongs to it. No job starts, no lift or pickup is read, and once it
 // closes both watches start fresh so nothing is read off the weighs coming off.
+// Leftover raw is tagged with a cultivar (0063): default the one on the screen.
 const eod = createEod({
   api: API, station,
   isBusy: () => state.phase === 'running' || state.phase === 'finished',
   onOpen: () => { if (state.phase === 'armed') { state.phase = 'idle'; save(); } render(); },
   onClose: () => { watch.reset(); zero.reset(); tareAt = null; overSince = null; render(); },
+  cultivars: () => cultivars, current: () => state.cultivar || state.changeFrom || '', short: shortCultivar,
+});
+// Change cultivar (Continuous, between rounds only): the same panel weighs the old
+// cultivar's leftover raw, then the screen asks for the new cultivar. The window
+// it opens keeps those weighs out of tops, pickups and NOT RECORDING.
+const co = createEod({
+  api: API, station, mode: 'changeover',
+  isBusy: () => changeState(state) !== 'ok',
+  onOpen: () => { if (state.phase === 'armed') { state.phase = 'idle'; save(); } render(); },
+  onClose: () => {
+    watch.reset(); zero.reset(); tareAt = null; overSince = null;
+    afterChangeover(state, co.fromCultivar);
+    save(); renderOrder(); render();
+  },
+  cultivars: () => cultivars, current: () => state.cultivar || state.changeFrom || '', short: shortCultivar,
 });
 
 function save() {
@@ -319,6 +340,11 @@ function renderContinuous(n) {
   el.pctLabel.textContent = t(cont ? 'roundsToday' : 'done');
   el.ring.classList.toggle('cont', cont);
   el.endCont.hidden = !(cont && (state.phase === 'idle' || state.phase === 'armed'));
+  // Change cultivar: between rounds only; mid-round it says how to get there.
+  const cs = changeState(state);
+  el.changeCv.hidden = cs === 'hidden';
+  el.changeCv.disabled = cs !== 'ok';
+  el.changeCv.textContent = t(cs === 'finishFirst' ? 'finishFirst' : 'changeCv');
   if (!cont) return;
   el.targetText.textContent = t('contTarget').replace('{n}', roundNo(state, day));
   el.toGo.textContent = gross === null || state.phase !== 'running' ? '—' : fmtG(n);
@@ -359,6 +385,7 @@ function renderBanner() {
   else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
   else if ((state.phase === 'idle' || state.phase === 'armed') && breakAt(pacificMinutes(Date.now()))) kind = 'break';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
+  else if (state.phase === 'idle' && isContinuous(state.bag) && state.changeFrom && !state.cultivar) kind = 'change';
   else if ((state.phase === 'idle' || state.phase === 'armed') && !hasOrder()) kind = 'order';
   else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
   el.banner.hidden = !kind;
@@ -368,6 +395,12 @@ function renderBanner() {
   if (kind === 'order' && calmWait({ takesOrders: !!(queueCell && queueCell.takesOrders), autoAssign: queueDriven, hasNow: !!queue.now, grossG: gross, onScaleG: ON_SCALE_G })) {
     el.banner.className = 'banner break';
     el.banner.textContent = t('bannerWaitOrder');
+    return;
+  }
+  // Mid-changeover the cell is not trimming: a calm prompt, not NOT RECORDING.
+  if (kind === 'change') {
+    el.banner.className = 'banner break';
+    el.banner.textContent = t('bannerChange').replace('{c}', shortCultivar(state.changeFrom));
     return;
   }
   if (kind === 'break') {
@@ -593,6 +626,7 @@ async function poll() {
   if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
   await read();
   if (eod.isOpen) eod.reading(live ? gross : null, stable);
+  else if (co.isOpen) co.reading(live ? gross : null, stable);
   else if (live) step();   // disconnected: no job starts, nothing is logged
   render();
   const delay = disconnected() ? DOWN_MS : !live ? IDLE_MS
@@ -629,7 +663,7 @@ async function read() {
 function orderLocked() { return state.phase === 'running' || state.phase === 'finished'; }
 el.cultivar.addEventListener('change', () => {
   if (orderLocked()) { renderOrder(); return; }   // locked: put the picker back
-  state.cultivar = el.cultivar.value; armIfReady(); save(); renderOrder(); render();
+  state.cultivar = el.cultivar.value; pickedAfterChangeover(state); armIfReady(); save(); renderOrder(); render();
 });
 // Picking a bag size sets the target. Only while no job is running (renderLock).
 el.bag.addEventListener('change', () => {
@@ -860,6 +894,7 @@ el.endCont.addEventListener('click', () => {
   if (!isContinuous(state.bag) || orderLocked()) return;
   endContinuous(state); overSince = null; save(); renderOrder(); render();
 });
+el.changeCv.addEventListener('click', () => { if (changeState(state) === 'ok') co.show(); });
 // Continuous picked yesterday clears before the first round of a new day.
 function expireDaily() { if (expireContinuous(state, pacificNow().day)) { save(); renderOrder(); render(); } }
 setInterval(() => { expireDaily(); catchUpBreaks(); holdWhileDisconnected(); autoBreak(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
@@ -871,7 +906,7 @@ setInterval(() => { expireDaily(); catchUpBreaks(); holdWhileDisconnected(); aut
 const BUILD = new URL(import.meta.url).searchParams.get('h');
 const BUILD_CHECK_MS = 3 * 60 * 1000;
 async function checkBuild() {
-  if (!BUILD || document.hidden || orderLocked() || watch.lifted) return;
+  if (!BUILD || document.hidden || orderLocked() || watch.lifted || eod.isOpen || co.isOpen) return;
   try {
     const r = await fetch(`${location.pathname}?build=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return;
@@ -939,6 +974,7 @@ setInterval(() => { if (!document.hidden) loadQueue(); }, QUEUE_MS);
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 eod.bindHold($('eodBtn'));
 eod.resume();
+co.resume();
 expireDaily();
 save();
 reportJob(true);

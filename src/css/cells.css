@@ -52,6 +52,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 
 /* Status colours: the left edge and the pill */
 .tile.idle { border-left-color: #a3a79c; } .tile.idle .pill { background: #e6e6e0; color: #4d5140; }
+.tile.changeover { border-left-color: var(--gold, #c9a227); } .tile.changeover .pill { background: var(--gold, #c9a227); color: #fff; }
 .tile.armed { border-left-color: var(--info); } .tile.armed .pill { background: var(--info); color: #fff; }
 .tile.running { border-left-color: var(--green); } .tile.running .pill { background: var(--green); color: #fff; }
 .tile.paused { border-left-color: var(--info); } .tile.paused .pill { background: var(--info); color: #fff; }

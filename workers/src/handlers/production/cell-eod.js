@@ -3,8 +3,15 @@
  * 0062, lib/cell-eod.js). From the cell screen's End of day panel (lead only):
  *
  *   GET  ?action=cellEod&stationId=&date=          the day's weighs, open window, sacks to tick
- *   POST ?action=eodWindow  { stationId, open }    panel opened (true) / left (false)
- *   POST ?action=eodWeigh   { stationId, kind: 'raw'|'tote', grams }
+ *   POST ?action=eodWindow  { stationId, open, reason?, cultivar? }   panel opened (true) / left (false)
+ *   POST ?action=eodWeigh   { stationId, kind: 'raw'|'tote', grams, cultivar?, reason?, source? }
+ *
+ * Changeovers (Continuous mode, migration 0063): the same panel, reason
+ * 'changeover', weighs the old cultivar's leftover raw between rounds. Its window
+ * carries the cultivar changed FROM; leftover-raw rows carry the cultivar they
+ * are (End of day too), and source 'bench' when the number was typed from the
+ * bench scale (a big partial supersack). Before 0063 the weighs still save,
+ * untagged.
  *   POST ?action=eodUndo    { id }                 within 10 min
  *   POST ?action=cellSack   { stationId, sackId, on }   this sack (scanned out today) went to this cell
  *
@@ -16,6 +23,10 @@ import { sackLbs } from '../../lib/sack-weight.js';
 import { UNDO_MS, WINDOW_MAX_MS } from '../../lib/cell-eod.js';
 
 const KINDS = ['raw', 'tote'];
+const REASONS = ['eod', 'changeover'];
+const SOURCES = ['scale', 'bench'];
+const cleanCultivar = v => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null);
+const noColumn = e => /no such column|has no column named/i.test(String(e && e.message));
 const MAX_G = 100000;            // 100 kg: anything over is a typo or a fault, not a leftover
 
 const notReady = () => errorResponse('End of day is not set up yet (migration 0062)', 'NOT_READY', 503);
@@ -56,8 +67,7 @@ export async function getCellEod(params, env, now = Date.now()) {
   try {
     [rows, sacks] = await Promise.all([
       env.DB.prepare(
-        `SELECT id, kind, grams, batt_mv, ts, ended_at, undone_at FROM cell_eod
-         WHERE station_id = ? AND production_date = ? ORDER BY ts, id`
+        `SELECT * FROM cell_eod WHERE station_id = ? AND production_date = ? ORDER BY ts, id`
       ).bind(station.station_id, date).all().then(r => r.results || []),
       daySacks(env, date),
     ]);
@@ -68,6 +78,7 @@ export async function getCellEod(params, env, now = Date.now()) {
   const at = ts => parseSqliteUtc(String(ts)).getTime();
   const weighs = rows.filter(r => r.kind !== 'window').map(r => ({
     id: r.id, kind: r.kind, g: r.grams, at: at(r.ts), battMv: r.batt_mv,
+    cultivar: r.cultivar ?? null, reason: r.reason || 'eod', source: r.source || 'scale',
     undone: !!r.undone_at, canUndo: !r.undone_at && now - at(r.ts) <= UNDO_MS,
   }));
   const total = k => Math.round(weighs.filter(w => w.kind === k && !w.undone).reduce((s, w) => s + w.g, 0) * 100) / 100;
@@ -75,7 +86,7 @@ export async function getCellEod(params, env, now = Date.now()) {
   return successResponse({
     stationId: station.station_id, date, serverNow: now,
     weighs, rawG: total('raw'), toteG: total('tote'),
-    windowOpen: open ? { id: open.id, at: at(open.ts) } : null,
+    windowOpen: open ? { id: open.id, at: at(open.ts), reason: open.reason || 'eod', cultivar: open.cultivar ?? null } : null,
     sacks: sacks.filter(s => !s.stationId || s.stationId === station.station_id),
   });
 }
@@ -91,10 +102,19 @@ export async function eodWindow(body, env, now = Date.now()) {
     ).bind(station.station_id, since).first();
     if (body.open) {
       if (open) return successResponse({ success: true, id: open.id, open: true });
-      const r = await env.DB.prepare(
-        `INSERT INTO cell_eod (station_id, production_date, kind, ts) VALUES (?, ?, 'window', ?)`
-      ).bind(station.station_id, date, sqliteUtc(new Date(now))).run();
-      return successResponse({ success: true, id: r.meta && r.meta.last_row_id, open: true });
+      const reason = REASONS.includes(body.reason) ? body.reason : 'eod';
+      const ts = sqliteUtc(new Date(now));
+      let r;
+      try {
+        r = await env.DB.prepare(
+          `INSERT INTO cell_eod (station_id, production_date, kind, ts, reason, cultivar) VALUES (?, ?, 'window', ?, ?, ?)`
+        ).bind(station.station_id, date, ts, reason, cleanCultivar(body.cultivar)).run();
+      } catch (e) {
+        if (!noColumn(e)) throw e;   // before 0063: the window still keeps the weighs out of tops
+        r = await env.DB.prepare(`INSERT INTO cell_eod (station_id, production_date, kind, ts) VALUES (?, ?, 'window', ?)`)
+          .bind(station.station_id, date, ts).run();
+      }
+      return successResponse({ success: true, id: r.meta && r.meta.last_row_id, open: true, reason });
     }
     // Close every open window for the station (a re-opened tablet may have left one).
     await env.DB.prepare(
@@ -119,11 +139,27 @@ export async function eodWeigh(body, env, now = Date.now()) {
     const r = await env.DB.prepare(`SELECT batt_mv FROM scale_readings WHERE station_id = ?`).bind(station.station_id).first();
     battMv = r && Number.isFinite(r.batt_mv) ? r.batt_mv : null;
   } catch (e) { if (!missing(e)) throw e; }   // before 0055
+  // Leftover raw is tagged with its cultivar; the tote is everything that fell
+  // through, so it has none. A bench number was never on the cell scale: no battery.
+  const cultivar = body.kind === 'raw' ? cleanCultivar(body.cultivar) : null;
+  const reason = REASONS.includes(body.reason) ? body.reason : 'eod';
+  const source = SOURCES.includes(body.source) ? body.source : 'scale';
+  if (source === 'bench') battMv = null;
+  const g2 = Math.round(g * 100) / 100;
+  const day = pacificDay(new Date(now)), ts = sqliteUtc(new Date(now));
   try {
-    const r = await env.DB.prepare(
-      `INSERT INTO cell_eod (station_id, production_date, kind, grams, batt_mv, ts) VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(station.station_id, pacificDay(new Date(now)), body.kind, Math.round(g * 100) / 100, battMv, sqliteUtc(new Date(now))).run();
-    return successResponse({ success: true, id: r.meta && r.meta.last_row_id, kind: body.kind, g: Math.round(g * 100) / 100 });
+    let r;
+    try {
+      r = await env.DB.prepare(
+        `INSERT INTO cell_eod (station_id, production_date, kind, grams, batt_mv, ts, cultivar, reason, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(station.station_id, day, body.kind, g2, battMv, ts, cultivar, reason, source).run();
+    } catch (e) {
+      if (!noColumn(e)) throw e;   // before 0063: saved untagged, never lost
+      r = await env.DB.prepare(
+        `INSERT INTO cell_eod (station_id, production_date, kind, grams, batt_mv, ts) VALUES (?, ?, ?, ?, ?, ?)`
+      ).bind(station.station_id, day, body.kind, g2, battMv, ts).run();
+    }
+    return successResponse({ success: true, id: r.meta && r.meta.last_row_id, kind: body.kind, g: g2, cultivar, reason, source });
   } catch (e) {
     if (missing(e)) return notReady();
     throw e;

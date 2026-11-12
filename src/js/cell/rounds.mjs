@@ -68,3 +68,46 @@ export function endContinuous(state) {
 
 /** The queue never replaces a continuous order (auto-assign is a stand-in, off live). */
 export const queueMayApply = (state) => !isContinuous(state.bag);
+
+/**
+ * Change cultivar (Koa 2026-11-11: "more than 1 changeover on the cells
+ * tomorrow"): only between rounds, so a basket never mixes cultivars.
+ *   'hidden'      not continuous, no cultivar yet, or a changeover already under way
+ *   'finishFirst' a round is trimming: end it with a pickup or swap first
+ *   'ok'          between rounds: tap to weigh the old cultivar's leftover
+ */
+export function changeState(state) {
+  if (!isContinuous(state.bag) || !state.cultivar || state.changeFrom) return 'hidden';
+  return state.phase === 'running' || state.phase === 'finished' ? 'finishFirst' : 'ok';
+}
+
+/**
+ * The leftover is weighed: the old cultivar is put down and the screen asks for
+ * the new one. Continuous stays; the empty basket going back on the tared scale
+ * arms the first round of the new cultivar (main.js armIfReady).
+ */
+export function afterChangeover(state, from) {
+  state.changeFrom = from || state.cultivar || '';
+  state.cultivar = '';
+  state.phase = 'idle';
+  state.basketBack = true;
+}
+
+/** The new cultivar is picked: the changeover is over on the screen (its time runs to the first gram). */
+export function pickedAfterChangeover(state) {
+  // Picking the same cultivar back (a change of mind) also ends it.
+  if (state.changeFrom && state.cultivar) { state.changeFrom = ''; return true; }
+  return false;
+}
+
+export const G_PER_LB = 453.59237;
+export const BENCH_MAX_G = 50000;   // 110 lb: more than a full supersack is a typo
+const BENCH_MIN_G = 0.5;
+
+/** A typed bench-scale number (g or lb) to grams, or null when it isn't a weight. */
+export function benchGrams(text, unit) {
+  const n = Number(String(text ?? '').trim().replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const g = Math.round(n * (unit === 'lb' ? G_PER_LB : 1) * 100) / 100;
+  return g >= BENCH_MIN_G && g <= BENCH_MAX_G ? g : null;
+}
