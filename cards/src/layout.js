@@ -149,7 +149,8 @@ function column(c, ppl, barWidth) {
   } else {
     const h = clampPlot(Math.max(6, Math.round((Number(c.lbs) || 0) * ppl)));
     body = [
-      cap(String(Math.round(Number(c.lbs) || 0)), Math.max(h, tickPx) + 10),
+      // A column may carry its own cap (the cell card's hours are under a pound: 0.52).
+      cap(c.cap ?? String(Math.round(Number(c.lbs) || 0)), Math.max(h, tickPx) + 10),
       div({ width: barWidth, height: h, backgroundColor: INK.bar, borderTopLeftRadius: 10, borderTopRightRadius: 10 }, [], { 'data-role': 'bar' }),
     ];
   }
@@ -166,11 +167,12 @@ function chart(m) {
   return div({ display: 'flex', flexDirection: 'column', marginTop: 18, ...panel(24), ...pad(22, 30, 18) }, [
     div({ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }, [
       div({ fontSize: 28, fontWeight: 500 }, m.chart.title),
-      div({ display: 'flex', alignItems: 'center', gap: 10, ...mono(18), color: INK.muted }, [
+      // No legend (the cell card has no target line): just the sub, no dashed tick.
+      div({ display: 'flex', alignItems: 'center', gap: 10, ...mono(18), color: INK.muted }, m.chart.legend ? [
         div({ width: 28, height: 0, borderTopWidth: 3, borderTopStyle: 'dashed', borderTopColor: INK.tick }, []),
         div({}, `${m.chart.legend} ·`),
         div({ fontSize: 20 }, m.chart.sub),
-      ]),
+      ] : [div({ fontSize: 20 }, m.chart.sub)]),
     ]),
     div({
       display: 'flex', alignItems: 'flex-end', height: PLOT.height, marginTop: 34,
@@ -196,6 +198,19 @@ function mini(x) {
     ]),
     div({ ...mono(20), color: INK.muted, marginTop: 4 }, sub),
   ], { 'data-role': 'mini' });
+}
+
+/** The cell card's 5-day strip (Phase 1): one small panel per shift day, toned by its verdict. */
+function strip(m) {
+  if (!m.strip || !m.strip.length) return null;
+  return div({ display: 'flex', gap: 12, marginTop: 18 }, m.strip.map((s) => {
+    const t = tone(s.kind);
+    return div({ ...flex1, display: 'flex', flexDirection: 'column', ...panel(18), ...pad(12, 16, 10) }, [
+      div({ fontSize: 20, color: INK.label }, s.label),
+      div({ ...mono(32), color: t.color, marginTop: 2 }, s.value),
+      div({ ...mono(16), color: INK.muted, marginTop: 2 }, s.sub),
+    ], { 'data-role': 'day', 'data-kind': s.kind });
+  }), { 'data-section': 'strip' });
 }
 
 function minis(m) {
@@ -247,5 +262,5 @@ export function cardTree(m) {
     width: CANVAS.width, height: CANVAS.height, boxSizing: 'border-box', ...pad(52, 56, BOTTOM_PAD - FOOT_GIVE),
     display: 'flex', flexDirection: 'column', backgroundColor: INK.card, color: INK.text,
     fontFamily: FONT.sans, fontWeight: 500,
-  }, [head(m), tiles(m), chart(m), minis(m), flags(m), foot(m)]);
+  }, [head(m), tiles(m), chart(m), minis(m), strip(m), flags(m), foot(m)]);
 }

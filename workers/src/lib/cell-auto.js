@@ -90,7 +90,8 @@ export function slotFor(minutes, slots) {
  * weighs going on or off.
  *
  * @returns {{ bySlot: Object<string, number>, flags: Object<string, string[]>,
- *             pickups: Array<{ts:string, g:number}> }}  bySlot in lb (2 dp)
+ *             pickups: Array<{ts:string, g:number}>,
+ *             rises: Array<{ts:string, g:number}> }}  bySlot in lb (2 dp); rises in g, real tops only
  */
 export function autoTops({ day, readings = [], marks = [], slots, windows = [] }) {
   const timeline = [
@@ -123,11 +124,18 @@ export function autoTops({ day, readings = [], marks = [], slots, windows = [] }
   let pending = null;       // { fromNet, minutes, ms, tapped }
   let segStart = 0;         // where the segment started: 0, or the day's first reading (a basket already on)
 
+  // Every credit, in order, with when it landed. A credit taken back later (a
+  // basket set down then tared, or learned as the empty basket) is zeroed here
+  // too, so what is left positive is real tops: the changeover clock's "first gram".
+  const log = [];
+  let curTs = null;
   const credit = (g, minutes) => {
     if (!g) return;
     const s = slotFor(minutes, slots);
     gBySlot[s] = (gBySlot[s] || 0) + g;
-    segment.push({ slot: s, g });
+    const c = { slot: s, g, ts: curTs };
+    segment.push(c);
+    log.push(c);
     if (g > 0) rises++;
   };
   const flag = (minutes, what) => {
@@ -158,7 +166,7 @@ export function autoTops({ day, readings = [], marks = [], slots, windows = [] }
     pending = null;
     if (emptyG > 0 ? p.fromNet - emptyG <= EMPTY_G : rises <= 1) {
       // An empty basket, then TARE: that jump was the basket.
-      if (emptyG === 0) for (const c of segment) gBySlot[c.slot] -= c.g;
+      if (emptyG === 0) for (const c of segment) { gBySlot[c.slot] -= c.g; c.g = 0; }
     } else {
       flag(p.minutes, 'scaleTared');                       // mid-job TARE: bank it, flag it
     }
@@ -176,6 +184,7 @@ export function autoTops({ day, readings = [], marks = [], slots, windows = [] }
 
   for (let i = 0; i < timeline.length; i++) {
     const e = timeline[i];
+    curTs = e.ts;
     if (inEodWindow(e)) {
       if (!inEod) { settlePending(); lift = null; lastNet = null; atZero(); inEod = true; }
       continue;
@@ -261,5 +270,6 @@ export function autoTops({ day, readings = [], marks = [], slots, windows = [] }
     const lb = Math.round((g / G_PER_LB) * 100) / 100;
     if (lb !== 0 || flags[s]) bySlot[s] = lb;
   }
-  return { bySlot, flags, pickups };
+  const risesOut = log.filter(c => c.g > 0).map(c => ({ ts: c.ts, g: Math.round(c.g * 100) / 100 }));
+  return { bySlot, flags, pickups, rises: risesOut };
 }
