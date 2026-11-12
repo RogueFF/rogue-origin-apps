@@ -14,12 +14,12 @@ export const BOARD_PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <meta name="robots" content="noindex, nofollow">
 <title>Rogue 2026 Lot Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;700&family=Quicksand:wght@400;500;600;700&display=swap">
 
 <style>
   /* =====================================================================
@@ -152,7 +152,7 @@ export const BOARD_PAGE = `<!doctype html>
     margin: 0;
     background: var(--paper);
     color: var(--ink);
-    font-family: "Public Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    font-family: "Quicksand", ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
     font-size: 14px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
@@ -163,11 +163,11 @@ export const BOARD_PAGE = `<!doctype html>
     outline-offset: 2px;
   }
 
-  .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .mono { font-family: "Karla", ui-sans-serif, SFMono-Regular, Menlo, sans-serif; }
   .num  { font-variant-numeric: tabular-nums; }
 
   .cond {
-    font-family: "Barlow Condensed", "Public Sans", ui-sans-serif, sans-serif;
+    font-family: "Quicksand", "Quicksand", ui-sans-serif, sans-serif;
     font-weight: 600;
     letter-spacing: .02em;
   }
@@ -196,7 +196,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   .brand h1 {
     margin: 0;
-    font-family: "Barlow Condensed", "Public Sans", sans-serif;
+    font-family: "Quicksand", "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.25rem;
     letter-spacing: .01em;
@@ -204,7 +204,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .brand .season-tag {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     color: var(--ink-3);
     letter-spacing: .08em;
@@ -225,7 +225,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .field label {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .78rem;
     text-transform: uppercase;
@@ -248,7 +248,7 @@ export const BOARD_PAGE = `<!doctype html>
      dashboard alongside the buttons, and it has to sit on the same baseline
      with the same weight rather than looking like stray body text. */
   button.act, a.act {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .85rem;
     text-transform: uppercase;
@@ -280,7 +280,7 @@ export const BOARD_PAGE = `<!doctype html>
   button.act.primary:hover { color: var(--accent-ink); filter: brightness(1.08); }
 
   .save {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .7rem;
     letter-spacing: .04em;
     color: var(--ink-3);
@@ -325,7 +325,7 @@ export const BOARD_PAGE = `<!doctype html>
     white-space: nowrap;
   }
   .season .stat .big {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.45rem;
     line-height: 1;
@@ -333,7 +333,7 @@ export const BOARD_PAGE = `<!doctype html>
     letter-spacing: .01em;
   }
   .season .stat .of {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -375,7 +375,7 @@ export const BOARD_PAGE = `<!doctype html>
     padding: .12rem .5rem .12rem .4rem;
     border: 1px solid transparent;
     border-radius: 999px;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .76rem;
     text-transform: uppercase;
@@ -392,7 +392,7 @@ export const BOARD_PAGE = `<!doctype html>
     background: var(--stage, var(--line));
   }
   .season .chip .n {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-weight: 500;
     font-size: .72rem;
@@ -456,7 +456,7 @@ export const BOARD_PAGE = `<!doctype html>
     border-bottom: 1px solid var(--line-soft);
     /* stage stripe: a real sequence, so the ramp carries order */
     border-top: 3px solid var(--stage, var(--line));
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .82rem;
     text-transform: uppercase;
@@ -470,7 +470,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   .col > h2 .count {
     margin-left: auto;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .74rem;
     font-weight: 500;
@@ -484,7 +484,7 @@ export const BOARD_PAGE = `<!doctype html>
     all: unset;
     cursor: pointer;
     color: var(--ink-3);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .8rem;
     line-height: 1;
     padding: .15rem .25rem;
@@ -581,7 +581,7 @@ export const BOARD_PAGE = `<!doctype html>
   /* The zone is the lot's address. Mono and quiet: it needs to be found, not
      to be the first thing seen. */
   .zone {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-weight: 500;
     font-size: .68rem;
     letter-spacing: .05em;
@@ -594,7 +594,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .farm {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .62rem;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -605,7 +605,7 @@ export const BOARD_PAGE = `<!doctype html>
 
   /* The name is what the eye lands on. */
   .cultivar {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: 1.02rem;
     /* Fixed, not a multiplier: fitNames() shrinks the font on long names, and
@@ -632,7 +632,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   .mark {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .7rem;
     letter-spacing: .02em;
@@ -666,7 +666,7 @@ export const BOARD_PAGE = `<!doctype html>
   .group.open .card.grouphead { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 
   .caret {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .7rem;
     line-height: 1;
     color: var(--ink-3);
@@ -688,7 +688,7 @@ export const BOARD_PAGE = `<!doctype html>
   .zcount {
     margin-left: auto;
     flex: 0 0 auto;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .66rem;
     letter-spacing: .02em;
@@ -757,7 +757,7 @@ export const BOARD_PAGE = `<!doctype html>
     align-items: center;
     flex-wrap: wrap;
     gap: .35rem .5rem;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     letter-spacing: .04em;
     color: var(--ink-3);
@@ -765,14 +765,14 @@ export const BOARD_PAGE = `<!doctype html>
   .drawer .head h2 {
     grid-column: 1;
     margin: 0;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.5rem;
     line-height: 1.1;
     text-wrap: balance;
   }
   .drawer .head .stagepill {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .7rem;
     letter-spacing: .08em;
@@ -789,7 +789,7 @@ export const BOARD_PAGE = `<!doctype html>
     align-self: start;
     cursor: pointer;
     color: var(--ink-3);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .95rem;
     line-height: 1;
     padding: .25rem .4rem;
@@ -814,7 +814,7 @@ export const BOARD_PAGE = `<!doctype html>
     display: flex;
     align-items: center;
     gap: .55rem;
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600;
     font-size: .78rem;
     text-transform: uppercase;
@@ -826,7 +826,7 @@ export const BOARD_PAGE = `<!doctype html>
   .grp { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
 
   .grp > .lbl {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .64rem;
     text-transform: uppercase;
     letter-spacing: .08em;
@@ -848,7 +848,7 @@ export const BOARD_PAGE = `<!doctype html>
     font-size: .86rem;
   }
   .grp input[type="number"], .grp input[type="date"] {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-variant-numeric: tabular-nums;
     font-size: .84rem;
   }
@@ -868,7 +868,7 @@ export const BOARD_PAGE = `<!doctype html>
     display: flex;
     align-items: baseline;
     gap: .45rem;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .74rem;
     line-height: 1.4;
     padding: .4rem .55rem;
@@ -907,7 +907,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
   .doc .ref {
     grid-column: 1;
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .68rem;
     color: var(--ink-3);
     min-width: 0;
@@ -927,7 +927,7 @@ export const BOARD_PAGE = `<!doctype html>
   .doc a { color: var(--slate); }
   .doc button {
     all: unset; cursor: pointer; color: var(--ink-3);
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 600; font-size: .78rem; letter-spacing: .06em;
     text-transform: uppercase;
     padding: .22rem .4rem; border-radius: var(--radius);
@@ -943,14 +943,14 @@ export const BOARD_PAGE = `<!doctype html>
     gap: .25rem;
     padding-top: .8rem;
     border-top: 1px solid var(--line-soft);
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .66rem;
     line-height: 1.4;
     color: var(--ink-3);
     word-break: break-all;
   }
   .drawer .meta .k {
-    font-family: "Barlow Condensed", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-size: .7rem;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -973,7 +973,7 @@ export const BOARD_PAGE = `<!doctype html>
   }
   footer.foot strong { color: var(--ink-2); font-weight: 600; }
   footer.foot code {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "Karla", sans-serif;
     font-size: .95em;
     color: var(--ink-2);
   }
@@ -1078,13 +1078,12 @@ export const BOARD_PAGE = `<!doctype html>
     top: 0; left: 0; right: 0;
     height: 4px;
     background: linear-gradient(90deg,
-      var(--st-untested) 0 14%, var(--st-to-schedule) 14% 28%, var(--st-scheduled) 28% 42%,
-      var(--st-cleared) 42% 56%, var(--st-harvesting) 56% 70%, var(--st-drying) 70% 84%,
-      var(--st-supersacked) 84% 100%);
+      var(--st-untested) 0 25%, var(--st-scheduled) 25% 50%,
+      var(--st-harvesting) 50% 75%, var(--st-cleared) 75% 100%);
   }
   .gate-card h1 {
     margin: 0;
-    font-family: "Barlow Condensed", "Public Sans", sans-serif;
+    font-family: "Quicksand", sans-serif;
     font-weight: 700;
     font-size: 1.7rem;
     letter-spacing: .01em;
@@ -1104,6 +1103,49 @@ export const BOARD_PAGE = `<!doctype html>
   .gate-err { color: var(--rust); font-size: .82rem; }
   .gate-err[hidden] { display: none; }
   .shell[hidden] { display: none; }
+
+  /* ---- COA chips ----
+     Two per cultivar card, pre- and post-harvest. Green = on file, amber =
+     missing: read from across the room before the name is. */
+  .coas { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
+  .coa {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    font-size: .74rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .coa b { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: .66rem; }
+  .coa i { font-style: normal; font-weight: 500; opacity: .8; font-variant-numeric: tabular-nums; }
+  .coa.have { color: var(--leaf); background: var(--leaf-soft); }
+  .coa.miss { color: var(--amber); background: var(--amber-soft); }
+  .coa.lab  { color: var(--slate); background: var(--slate-soft); }
+  button.coa { border: 0; font-family: inherit; cursor: pointer; }
+  .field[hidden], .act[hidden] { display: none; }
+  .coa.link u { font-weight: 700; text-underline-offset: 2px; }
+  .coa.link:hover { filter: brightness(.95); }
+  .coa.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .coa.busy { opacity: .5; cursor: progress; }
+  .coa.mini { padding: .1rem .45rem; font-size: .68rem; margin-left: auto; }
+  .season .coagap { display: inline-flex; flex-wrap: wrap; gap: .3rem; margin-left: auto; }
+
+  /* The zone lots listed inside a cultivar's detail. */
+  .prelots { display: flex; flex-direction: column; gap: .25rem; margin-top: .5rem; }
+  .prelots .zrow { cursor: pointer; align-items: center; }
+  .prelots .zrow .farm { color: var(--ink-3); font-size: .74rem; margin: 0; letter-spacing: 0; text-transform: none; }
+  .prelots .zrow .marks { margin: 0; }
+  .prelots .zrow .act.mini {
+    margin-left: auto;
+    min-height: 0;
+    height: auto;
+    padding: .2rem .55rem;
+    font-size: .7rem;
+    line-height: 1.3;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
@@ -1226,14 +1268,68 @@ export const BOARD_PAGE = `<!doctype html>
     .season .chip { padding: .22rem .6rem .22rem .5rem; }
   }
 
-/* Harvest family styling; retain stage colors and the full board interaction. */
-:root { --paper:#f6f5ef; --surface:#fff; --surface-2:#e9eedf; --line:#c8d2be; --line-soft:#d9dfd1; --ink:#263f32; --ink-2:#455b43; --ink-3:#60715d; }
-.bar { padding-top:20px; padding-bottom:20px; }
-.brand h1 { letter-spacing:-.03em; }
-.act { min-height:44px; border-radius:8px; }
+/* =====================================================================
+   Rogue Origin look -- the store's own palette and type (rogueorigin.com):
+   white pages, sage green #668971, logo gold, grey text, Quicksand + Karla,
+   pill buttons. The store has no dark theme, so neither does this board:
+   the same tokens are restated for both dark hooks above.
+   ===================================================================== */
+:root, :root:not([data-theme="light"]), :root[data-theme="dark"] {
+  color-scheme: light;
+  --paper:#f5f5f5; --surface:#fff; --surface-2:#eef3ef; --line:#cbd9cf; --line-soft:#e2eae4;
+  --ink:#3b3b3b; --ink-2:#666565; --ink-3:#8b8b8b; --accent-ink:#fff;
+  --sage:#668971; --sage-deep:#4f6f5a; --gold:#e9b949; --gold-ink:#946d1c;
+  --slate:#3f7396; --slate-soft:#e0ecf3;
+  --amber:#946d1c; --amber-soft:#fbefcf;
+  --leaf:#4f6f5a;  --leaf-soft:#e2efe6;
+  --rust:#b3403a;  --rust-soft:#f7e0de;
+  --st-untested:#a9ada9; --st-to-schedule:#e9b949; --st-scheduled:#5b93b8; --st-cleared:#668971;
+  --st-harvesting:#e9b949; --st-drying:#946d1c; --st-supersacked:#4f6f5a; --st-failed:#b3403a;
+  --shadow:0 1px 2px rgba(60,80,66,.08), 0 6px 18px -10px rgba(60,80,66,.25);
+  --shadow-lift:0 2px 6px rgba(60,80,66,.12), 0 14px 28px -12px rgba(60,80,66,.35);
+  --focus:#668971; --bar:#c3d2c8; --bar-hover:#9fb5a7; --radius:10px; --col-min:11.5rem;
+}
+body { font-family:"Quicksand", sans-serif; color:var(--ink); }
+
+/* Header: the sage card with the gold wordmark, as on the store's front door. */
+header.bar { background:var(--sage); padding-top:18px; padding-bottom:18px; border-bottom:0; }
+.brand h1 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:.01em; color:var(--gold); }
+.bar .season-tag { color:#fff; opacity:.85; }
+.bar .field label { color:var(--ink-3); }
+.bar .save { color:#fff; }
+.act { min-height:44px; border-radius:999px; font-family:"Karla", sans-serif; font-weight:700;
+       letter-spacing:.08em; text-transform:uppercase; }
+.bar .act { background:transparent; color:#fff; border:2px solid #fff; }
+.bar .act:hover { background:#fff; color:var(--sage-deep); }
+button.act.primary, a.act.primary { background:var(--sage); color:#fff; border-color:var(--sage); }
+button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); border-color:var(--sage-deep); }
+.stagerow { grid-template-columns:1fr; }
+
+/* Small uppercase labels are the store's gold Karla eyebrows. */
+.col h2 .label, .sec .sh, .drawer .lbl, .season .stat .of { font-family:"Karla", sans-serif; font-weight:700; letter-spacing:.14em; }
+.col h2 .label, .sec .sh { color:var(--gold-ink); }
+.num, .mark, .zone, .zcount { font-family:"Karla", sans-serif; font-variant-numeric:tabular-nums; }
+
+/* White cards on a soft sage column, like product tiles on the store. */
+.col { background:var(--surface-2); border-color:transparent; }
+.col h2 { background:transparent; }
+.card { border-radius:12px; background:#fff; box-shadow:var(--shadow); }
+.season { background:#fff; }
+.cultivar { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; color:var(--ink); }
+.drawer .head h2 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; }
 .gate-card { border-radius:16px; }
+.gate-card h1 { font-family:"Quicksand", sans-serif !important; color:var(--sage-deep); }
 .foot { font-size:13px; }
+.foot a { color:var(--sage-deep); }
 @media(max-width:600px) { .board { gap:12px; } .doc button { min-height:44px; } }
+/* Phones: the pills wrap instead of pushing the page sideways, and the chip
+   for the panel in view is a solid sage pill. */
+@media(max-width:46rem) {
+  header.bar .controls { flex-wrap:wrap; max-width:100%; }
+  .bar .act { letter-spacing:.04em; padding-left:.7rem; padding-right:.7rem; font-size:.72rem; min-height:40px; }
+  .season .chip.on { background:var(--sage); color:#fff; border-color:var(--sage); }
+  .season .chip.on .n { background:transparent; color:#fff; }
+}
 
 </style>
 </head>
@@ -1241,16 +1337,18 @@ export const BOARD_PAGE = `<!doctype html>
 <div class="shell" hidden>
   <header class="bar">
     <div class="brand">
-      <h1>Rogue Lot Board</h1>
+      <h1>Rogue Origin · 2026 Cultivars</h1>
       <span class="season-tag" id="season-tag">2026</span>
     </div>
 
-    <div class="controls"><a class="act" href="/api/harvest?action=hub">All tools</a>
+    <!-- This board is for the website and photo people: no crew tools here.
+         Farm and Export stay in the DOM because the script reads them. -->
+    <div class="controls">
       <div class="field">
         <label for="q">Find</label>
-        <input id="q" type="search" placeholder="cultivar or zone" autocomplete="off">
+        <input id="q" type="search" placeholder="cultivar" autocomplete="off">
       </div>
-      <div class="field">
+      <div class="field" hidden>
         <label for="farm">Farm</label>
         <span class="sel">
           <select id="farm">
@@ -1261,14 +1359,7 @@ export const BOARD_PAGE = `<!doctype html>
           </select>
         </span>
       </div>
-      <!-- The daily action, so it sits first. Absolute path, not a bare
-           \`?action=\`: the board is served from /api/harvest?action=board_page
-           today, where a relative query string happens to resolve — and that is
-           the exact assumption that silently lost every cutter count and
-           trailer logged from a scanned QR code on 2026-09-04. -->
-      <a class="act" id="printtags" href="/api/harvest?action=bay_tags">Print tags</a>
-      <a class="act" id="cycletimes" href="/api/harvest?action=harvest_dash">Cycle times</a>
-      <button class="act" id="export" type="button">Export</button>
+      <button class="act" id="export" type="button" hidden>Export</button>
       <span class="save" id="save">&nbsp;</span>
     </div>
   </header>
@@ -1279,12 +1370,11 @@ export const BOARD_PAGE = `<!doctype html>
 
   <main>
     <div class="board" id="board"></div>
-    <aside class="drawer" id="drawer" hidden aria-label="Lot detail"></aside>
+    <aside class="drawer" id="drawer" hidden aria-label="Cultivar detail"></aside>
   </main>
 
   <footer class="foot">
-    Follow each lot from testing through bagging. Open a card for test records, documents and stage changes.
-    For rack status, crew rates and scan history, open the <a href="/api/harvest?action=harvest_dash">harvest dashboard</a>.
+    Each cultivar from photos to the website. Tap a green COA chip to open that lab report; amber means it is missing, blue means the sample is at the lab.
   </footer>
 </div>
 
@@ -1298,24 +1388,21 @@ export const BOARD_PAGE = `<!doctype html>
   var API = "/api/harvest";
   var KEY = "rff-harvest-board-key";
 
-  // Board order. The colours are the stage ramp from the stylesheet, one hue
-  // per stage, so the same colour means the same stage on the rail, the
-  // column stripe, the card edge and the drawer.
+  // Board order. Everything is harvested, so the board follows each CULTIVAR
+  // after harvest: photos, then the website. One hue per stage, so the same
+  // colour means the same stage on the rail, the column stripe, the card edge
+  // and the drawer. There is no failed lane: this board is for the website
+  // and photo people, and a destroyed lot is only a note under its cultivar.
   var STAGES = [
-    { id: "untested",    name: "Untested",    full: "Not yet tested",    color: "var(--st-untested)" },
-    { id: "to_schedule", name: "To schedule", full: "Needs scheduling",  color: "var(--st-to-schedule)" },
-    { id: "scheduled",   name: "Scheduled",   full: "Test scheduled",    color: "var(--st-scheduled)" },
-    { id: "cleared",     name: "Cleared",     full: "Test cleared",      color: "var(--st-cleared)" },
-    { id: "harvesting",  name: "Cutting",     full: "Harvesting",        color: "var(--st-harvesting)" },
-    { id: "drying",      name: "Drying",      full: "Drying",            color: "var(--st-drying)" },
-    { id: "supersacked", name: "Sacked",      full: "Supersacked",       color: "var(--st-supersacked)" },
-    { id: "failed",      name: "Failed",      full: "Failed / destroyed", color: "var(--st-failed)", aside: true }
+    { id: "not_sent",    name: "Not sent",    full: "Not sent for photos", color: "var(--st-untested)" },
+    { id: "sent",        name: "Sent",        full: "Sent for photos",     color: "var(--st-scheduled)" },
+    { id: "photos_done", name: "Photos done", full: "Photos done",         color: "var(--st-harvesting)" },
+    { id: "on_website",  name: "On website",  full: "On website",          color: "var(--st-cleared)" }
   ];
   var STAGE_BY_ID = {};
   STAGES.forEach(function (s) { STAGE_BY_ID[s.id] = s; });
 
-  // The forward path. "failed" is off it: nothing advances into failure, it
-  // is chosen on purpose from the stage picker.
+  // The forward path. Nothing advances into "failed".
   function nextStage(id) {
     var i = -1;
     for (var k = 0; k < STAGES.length; k++) { if (STAGES[k].id === id) { i = k; } }
@@ -1323,17 +1410,21 @@ export const BOARD_PAGE = `<!doctype html>
     return (i === -1 || !n || n.aside) ? null : n;
   }
 
-  var THC_LIMIT = 0.3;   // ODA total-THC line, percent
+  var THC_LIMIT = 0.3;   // ODA total-THC line, percent (pre-harvest only)
 
-  var lots = [];        // rows from D1, in board order
-  var byId = {};
+  var cards = [];       // cultivar rows from D1, by name
+  var cardBy = {};      // slug -> card
+  var lots = [];        // the ODA pre-harvest lots
+  var byId = {};        // lot_id -> lot
+  var lotsBy = {};      // slug -> its lots
   var pass = "";
+  // What the drawer shows: "c:<slug>" for a cultivar card, "l:<lot_id>" for
+  // one of its pre-harvest lots.
   var selected = null;
-  var dragId = null;
+  var dragKey = null;
   // Per stage: true = folded by hand, false = opened by hand, absent = automatic
   // (a stage with nothing in it folds to a spine until something lands there).
   var folded = {};
-  var expanded = {};   // "<stage>|<cultivar>" -> group open
 
   var boardEl   = document.getElementById("board");
   var drawerEl  = document.getElementById("drawer");
@@ -1407,9 +1498,9 @@ export const BOARD_PAGE = `<!doctype html>
     var g = el("div", "gate");
     g.id = "gate";
     var card = el("form", "gate-card");
-    card.appendChild(el("h1", null, "Rogue Lot Board"));
+    card.appendChild(el("h1", null, "Rogue Origin · 2026 Cultivars"));
     card.appendChild(el("p", null,
-      "2026 pre-harvest lots. This board carries ODA test results, so it needs the farm password."));
+      "2026 cultivars after harvest: photos, website and COAs. This board carries test results, so it needs the farm password."));
     var input = document.createElement("input");
     input.type = "password";
     input.placeholder = "Farm password";
@@ -1433,6 +1524,7 @@ export const BOARD_PAGE = `<!doctype html>
         try { localStorage.setItem(KEY, v); } catch (e) { /* private window */ }
         g.remove();
         shell.hidden = false;
+        fitNames();
       })["catch"](function (e) {
         pass = "";
         btn.disabled = false;
@@ -1449,51 +1541,69 @@ export const BOARD_PAGE = `<!doctype html>
   }
 
   // ---- load / save -------------------------------------------------------
+  function parseDocs(v) {
+    if (Array.isArray(v)) { return v; }
+    try { return JSON.parse(v || "[]"); } catch (e) { return []; }
+  }
+
+  function adopt(data) {
+    lots = data.lots || [];
+    cards = data.cultivars || [];
+    byId = {};
+    cardBy = {};
+    lotsBy = {};
+    cards.forEach(function (c) {
+      c.docs = parseDocs(c.docs);
+      cardBy[c.cultivar_slug] = c;
+    });
+    lots.forEach(function (l) {
+      l.docs = parseDocs(l.docs);
+      byId[l.lot_id] = l;
+      (lotsBy[l.cultivar_slug] = lotsBy[l.cultivar_slug] || []).push(l);
+    });
+  }
+
   function load() {
     setSave("loading…", "working");
     return call("board", {}).then(function (data) {
-      lots = data.lots || [];
-      byId = {};
-      lots.forEach(function (l) {
-        l.docs = parseDocs(l.docs);
-        byId[l.lot_id] = l;
-      });
+      adopt(data);
       setSave("ready", "ok");
       notify("");
       render();
     });
   }
 
-  function parseDocs(v) {
-    if (Array.isArray(v)) { return v; }
-    try { return JSON.parse(v || "[]"); } catch (e) { return []; }
+  function rowOf(key) {
+    var id = key.slice(2);
+    return key.charAt(0) === "c" ? cardBy[id] : byId[id];
   }
 
-  function patch(id, fields) {
-    var lot = byId[id];
+  // One write path for both kinds of row: change it on screen, send it, and
+  // put it back if the save fails.
+  function patch(key, fields) {
+    var row = rowOf(key);
+    var isCard = key.charAt(0) === "c";
+    var id = key.slice(2);
     var before = {};
-    Object.keys(fields).forEach(function (k) { before[k] = lot[k]; });
-    Object.keys(fields).forEach(function (k) { lot[k] = fields[k]; });
+    Object.keys(fields).forEach(function (k) { before[k] = row[k]; });
+    Object.keys(fields).forEach(function (k) { row[k] = fields[k]; });
     render();
 
     setSave("saving…", "working");
-    var payload = { lot: id };
+    var payload = isCard ? { cultivar: id } : { lot: id };
     Object.keys(fields).forEach(function (k) { payload[k] = fields[k]; });
     if (payload.docs) { payload.docs = JSON.stringify(payload.docs); }
 
     return call("board_set", payload).then(function (data) {
-      if (data && data.lot) {
-        var fresh = data.lot;
+      var fresh = data && (isCard ? data.cultivar : data.lot);
+      if (fresh) {
         fresh.docs = parseDocs(fresh.docs);
-        byId[id] = fresh;
-        for (var i = 0; i < lots.length; i++) {
-          if (lots[i].lot_id === id) { lots[i] = fresh; break; }
-        }
+        Object.keys(fresh).forEach(function (k) { row[k] = fresh[k]; });
         render();
       }
       setSave("saved", "ok");
     })["catch"](function (e) {
-      Object.keys(before).forEach(function (k) { lot[k] = before[k]; });
+      Object.keys(before).forEach(function (k) { row[k] = before[k]; });
       render();
       setSave("not saved", "bad");
       if (e.status === 401) {
@@ -1509,9 +1619,10 @@ export const BOARD_PAGE = `<!doctype html>
   // handed to the browser as a blob, so the credential never sits in a URL --
   // and the PDF opens in the built-in viewer, where Print already lives.
   function openDoc(doc, btn) {
+    var chip = btn.classList.contains("coa");   // a chip keeps its content
     var label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "…";
+    if (chip) { btn.classList.add("busy"); } else { btn.textContent = "…"; }
     fetch(API + "?action=board_doc&ref=" + encodeURIComponent(doc.ref), {
       headers: { "Authorization": "Bearer " + pass }
     }).then(function (r) {
@@ -1524,30 +1635,102 @@ export const BOARD_PAGE = `<!doctype html>
     }).then(function (blob) {
       var url = URL.createObjectURL(blob);
       var w = window.open(url, "_blank");
-      if (!w) {
-        notify("Your browser blocked the popup — allow popups for this page to read COAs.", true);
-      }
+      // Phones often refuse a new tab opened after a download; show the PDF
+      // in this tab instead -- Back returns to the board.
+      if (!w) { window.location.href = url; }
       setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     })["catch"](function (e) {
       notify("Couldn't open that document: " + e.message, true);
     })["finally"](function () {
       btn.disabled = false;
-      btn.textContent = label;
+      if (chip) { btn.classList.remove("busy"); } else { btn.textContent = label; }
     });
   }
 
+  // Mirrors the server's allow-list: lab results and ODA turn-in maps.
+  function isViewable(doc) {
+    return /^(raw\\/coas\\/|outputs\\/compliance\\/pdf\\/).+\\.pdf$/i.test((doc && doc.ref) || "");
+  }
+
+  // ---- COAs --------------------------------------------------------------
+  // A COA is a linked document labelled as one, or filed under raw/coas/.
+  // Turn-in maps, CWD forms and photo folders are documents but not COAs --
+  // and a Drive link is never judged by its address, which is random letters.
+  function isCoa(doc) {
+    return /coa/i.test((doc && doc.label) || "") || /^raw\\/coas\\//i.test((doc && doc.ref) || "");
+  }
+  // The newest COA is the one added last.
+  function lastCoa(docs) {
+    for (var i = docs.length - 1; i >= 0; i--) { if (isCoa(docs[i])) { return docs[i]; } }
+    return null;
+  }
+  function coaOf(docs) {
+    for (var i = 0; i < docs.length; i++) { if (isCoa(docs[i])) { return docs[i]; } }
+    return null;
+  }
+
+  // Pre-harvest COAs belong to the zone lots (one ODA test each); the
+  // post-harvest COA belongs to the cultivar.
+  function coaState(card) {
+    var mine = lotsBy[card.cultivar_slug] || [];
+    var pre = 0;
+    var preDocs = [];
+    mine.forEach(function (l) { var d = coaOf(l.docs); if (d) { pre += 1; preDocs.push(d); } });
+    // "At the lab": a sample was dropped off and no report has come back
+    // since. A cultivar can have a COA on file AND a retest at the lab.
+    var lab = !!card.post_sent && (!card.post_date || card.post_sent > card.post_date);
+    return { lots: mine, pre: pre, preDocs: preDocs, post: !!coaOf(card.docs), lab: lab };
+  }
+
+  // have = true (green, on file), "lab" (blue, sample at the lab), false (amber).
+  // Given a viewable document, the chip is a button that opens it -- the COA
+  // is one tap from the board, no detail panel in between.
+  function coaChip(label, have, detail, doc) {
+    var lab = have === "lab";
+    var open = doc && isViewable(doc);
+    var c = el(open ? "button" : "span", "coa " + (lab ? "lab" : have ? "have" : "miss") + (open ? " link" : ""));
+    if (open) {
+      c.type = "button";
+      c.addEventListener("click", function (ev) { ev.stopPropagation(); openDoc(doc, c); });
+      c.addEventListener("keydown", function (ev) { ev.stopPropagation(); });
+    }
+    c.appendChild(el("b", null, label));
+    c.appendChild(document.createTextNode(lab ? "at lab" : have ? "✓" : "missing"));
+    if (detail) { c.appendChild(el("i", null, detail)); }
+    c.title = (open ? "Open the " + label : label + (lab ? " — sample at the lab" : have ? " on file" : " not on file")) +
+      (detail ? " (" + detail + ")" : "");
+    if (open) { c.appendChild(el("u", null, "open")); }
+    return c;
+  }
+
+  function postChip(card, st) {
+    if (st.post) { return coaChip("Post COA", true, st.lab ? "retest" : "", lastCoa(card.docs)); }
+    return coaChip("Post COA", st.lab ? "lab" : false, st.lab ? fmtDate(card.post_sent) : "");
+  }
+
   // ---- render ------------------------------------------------------------
-  function matches(lot) {
+  function lotMatches(lot) {
     if (farmEl.value && lot.farm !== farmEl.value) { return false; }
     var q = qEl.value.trim().toLowerCase();
     if (!q) { return true; }
     return (lot.cultivar + " " + lot.zone + " " + lot.farm).toLowerCase().indexOf(q) !== -1;
   }
 
+  // A card shows when any of its lots does: filtering to a farm gives that
+  // farm's cultivars, and searching a zone finds what was planted there.
+  function cardMatches(card) {
+    var mine = lotsBy[card.cultivar_slug] || [];
+    if (!mine.length) {
+      return !farmEl.value && card.cultivar.toLowerCase().indexOf(qEl.value.trim().toLowerCase()) !== -1;
+    }
+    for (var i = 0; i < mine.length; i++) { if (lotMatches(mine[i])) { return true; } }
+    return false;
+  }
+
   function thcTone(v) {
     var n = parseFloat(v);
     if (isNaN(n)) { return null; }
-    return n > 0.3 ? "thc-fail" : "thc-pass";
+    return n > THC_LIMIT ? "thc-fail" : "thc-pass";
   }
 
   // A figure with a quiet unit: "0.24 <b>THC</b>" reads as a number first.
@@ -1558,129 +1741,102 @@ export const BOARD_PAGE = `<!doctype html>
     return m;
   }
 
-  // The data line under a name. THC is the only coloured figure, because it
-  // is the only one with a legal line to be on the right side of; CBD says
-  // what the lot is worth, the date says when it was tested, and the rest
-  // is small-caps housekeeping.
+  // The data line for one pre-harvest lot. THC is the only coloured figure,
+  // because pre-harvest it is the only one with a legal line.
   function marksFor(lot) {
     var marks = el("div", "marks");
+    if (lot.stage === "failed") { marks.appendChild(el("span", "mark thc-fail", "failed")); }
     if (isSet(lot.thc)) { marks.appendChild(figure(thcTone(lot.thc) || "", lot.thc, "THC")); }
     if (isSet(lot.cbd)) { marks.appendChild(figure("cbd", lot.cbd, "CBD")); }
-    if (lot.sacks) { marks.appendChild(figure("sacks", lot.sacks, lot.sacks === 1 ? "sack" : "sacks")); }
     if (lot.test_date) { marks.appendChild(el("span", "mark date", fmtDate(lot.test_date))); }
     if (lot.docs.length) {
       marks.appendChild(el("span", "mark meta docs", lot.docs.length + " doc" + (lot.docs.length > 1 ? "s" : "")));
     }
     if ((lot.notes || "").trim()) { marks.appendChild(el("span", "mark meta note", "note")); }
-    if (lot.updated_by === "timber") { marks.appendChild(el("span", "mark meta bot", "timber")); }
     return marks.childNodes.length ? marks : null;
   }
 
-  // Drag and open behave identically on a whole card and on a zone row inside
-  // an expanded group, so both are wired here.
-  function wireLot(node, lot) {
+  function wireOpen(node, key, title) {
     node.tabIndex = 0;
-    node.draggable = true;
-    node.dataset.id = lot.lot_id;
     node.setAttribute("role", "button");
-    node.setAttribute("aria-selected", selected === lot.lot_id ? "true" : "false");
-    node.title = lot.cultivar + " — " + lot.zone + ", " + lot.farm;
-    node.addEventListener("click", function () { openDrawer(lot.lot_id); });
+    node.setAttribute("aria-selected", selected === key ? "true" : "false");
+    if (title) { node.title = title; }
+    node.addEventListener("click", function () { openDrawer(key); });
     node.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openDrawer(lot.lot_id); }
-    });
-    node.addEventListener("dragstart", function (ev) {
-      dragId = lot.lot_id;
-      node.classList.add("dragging");
-      shell.classList.add("lifting");   // folded stages widen into targets
-      ev.dataTransfer.effectAllowed = "move";
-      try { ev.dataTransfer.setData("text/plain", lot.lot_id); } catch (e) { /* older browsers */ }
-    });
-    node.addEventListener("dragend", function () {
-      dragId = null;
-      node.classList.remove("dragging");
-      shell.classList.remove("lifting");
+      if (ev.target !== node) { return; }
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openDrawer(key); }
     });
     return node;
   }
 
-  // Zones repeat across farms, so with every farm on the board a card names
-  // its farm too; filtered to one farm, the label would only be noise.
-  function multiFarm() { return !farmEl.value; }
-
-  // One cultivar planted across several zones collapses to a single row; the
-  // biggest such group is well over a dozen lots. Expanding picks the zone.
-  // The group header is deliberately not draggable: moving a dozen compliance
-  // lots in one gesture is not something anyone should do by accident.
-  // (Deliberately names no cultivar -- this file is served pre-auth, and the
+  // One card per cultivar. The name is the hero; under it, the two COAs as
+  // chips you can read from across the room: green = on file, amber = missing.
+  // (Names no cultivar in this source -- the file is served pre-auth and the
   // public shell must carry no lot data. test-harvest-board.mjs asserts it.)
-  function makeGroup(stage, group) {
-    var key = stage.id + "|" + group.cultivar;
-    var open = !!expanded[key];
-    var wrap = el("div", "group" + (open ? " open" : ""));
-
-    var head = el("div", "card grouphead");
-    head.tabIndex = 0;
-    head.setAttribute("role", "button");
-    head.setAttribute("aria-expanded", open ? "true" : "false");
+  function makeCard(card) {
+    var key = "c:" + card.cultivar_slug;
+    var st = coaState(card);
+    var node = wireOpen(el("div", "card"), key,
+      card.cultivar + " — " + st.lots.map(function (l) { return l.zone; }).join(", "));
+    node.draggable = true;
+    node.dataset.id = key;
+    node.addEventListener("dragstart", function (ev) {
+      dragKey = key;
+      node.classList.add("dragging");
+      shell.classList.add("lifting");   // folded stages widen into targets
+      ev.dataTransfer.effectAllowed = "move";
+      try { ev.dataTransfer.setData("text/plain", key); } catch (e) { /* older browsers */ }
+    });
+    node.addEventListener("dragend", function () {
+      dragKey = null;
+      node.classList.remove("dragging");
+      shell.classList.remove("lifting");
+    });
 
     var top = el("div", "top");
-    top.appendChild(el("span", "caret", open ? "▾" : "▸"));
-    if (!open) {
-      // Closed, the row previews its zones; what won't fit fades out and the
-      // count says how many there really are.
-      var zl = el("span", "zlist");
-      group.lots.forEach(function (l) { zl.appendChild(el("span", "zone", l.zone)); });
-      top.appendChild(zl);
-    }
-    top.appendChild(el("span", "zcount", group.lots.length + " zones"));
-    head.appendChild(top);
-    head.appendChild(el("div", "cultivar", group.cultivar));
-    head.title = group.cultivar + " — " +
-      group.lots.map(function (l) { return l.zone; }).join(", ");
+    var zl = el("span", "zlist");
+    st.lots.forEach(function (l) { zl.appendChild(el("span", "zone", l.zone)); });
+    top.appendChild(zl);
+    if (st.lots.length > 1) { top.appendChild(el("span", "zcount", st.lots.length + " zones")); }
+    node.appendChild(top);
+    node.appendChild(el("div", "cultivar", card.cultivar));
 
-    function toggle() { expanded[key] = !expanded[key]; render(); }
-    head.addEventListener("click", toggle);
-    head.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
-    });
-    wrap.appendChild(head);
+    var coas = el("div", "coas");
+    coas.appendChild(coaChip("Pre COA", st.pre > 0,
+      st.preDocs.length > 1 ? st.preDocs.length + " reports" : "",
+      st.preDocs.length === 1 ? st.preDocs[0] : null));
+    coas.appendChild(postChip(card, st));
+    node.appendChild(coas);
 
-    if (open) {
-      var zones = el("div", "zones");
-      group.lots.forEach(function (lot) {
-        var row = wireLot(el("div", "zrow"), lot);
-        row.appendChild(el("span", "zone", lot.zone));
-        var m = marksFor(lot);
-        if (m) { row.appendChild(m); }
-        zones.appendChild(row);
-      });
-      wrap.appendChild(zones);
-    }
-    return wrap;
+    var marks = el("div", "marks");
+    if (isSet(card.post_cbd)) { marks.appendChild(figure("cbd", card.post_cbd, "CBD")); }
+    if (card.url) { marks.appendChild(el("span", "mark meta docs", "listed")); }
+    if ((card.notes || "").trim()) { marks.appendChild(el("span", "mark meta note", "note")); }
+    if (card.updated_by === "timber") { marks.appendChild(el("span", "mark meta bot", "timber")); }
+    if (marks.childNodes.length) { node.appendChild(marks); }
+
+    return node;
   }
 
-  function makeCard(lot) {
-    var card = wireLot(el("div", "card"), lot);
-
+  // A failed lot, in the aside lane: opens, never drags.
+  function makeLotCard(lot) {
+    var node = wireOpen(el("div", "card"), "l:" + lot.lot_id,
+      lot.cultivar + " — " + lot.zone + ", " + lot.farm);
     var top = el("div", "top");
     top.appendChild(el("span", "zone", lot.zone));
-    if (multiFarm()) { top.appendChild(el("span", "farm", lot.farm)); }
-    card.appendChild(top);
-    card.appendChild(el("div", "cultivar", lot.cultivar));
-
+    top.appendChild(el("span", "farm", lot.farm));
+    node.appendChild(top);
+    node.appendChild(el("div", "cultivar", lot.cultivar));
     var marks = marksFor(lot);
-    if (marks) { card.appendChild(marks); }
-
-    return card;
+    if (marks) { node.appendChild(marks); }
+    return node;
   }
-
 
   // ---- fit long names -----------------------------------------------------
   // A name wider than its column is shrunk until it fits rather than clipped,
   // so nothing is lost to an ellipsis. Reads and writes are batched: measuring
   // one element at a time while also setting styles would force a reflow per
-  // card, 82 times per render.
+  // card.
   var NAME_MIN = 11;   // px — below this it stops shrinking and clips
 
   function fitNames() {
@@ -1718,18 +1874,6 @@ export const BOARD_PAGE = `<!doctype html>
     }
   }
 
-  // Grouped by cultivar *within this stage* — the same cultivar can sit in
-  // several stages at once and must stay a separate row in each.
-  function groupsOf(mine) {
-    var groups = [], byName = {};
-    mine.forEach(function (l) {
-      var gr = byName[l.cultivar];
-      if (!gr) { gr = byName[l.cultivar] = { cultivar: l.cultivar, lots: [] }; groups.push(gr); }
-      gr.lots.push(l);
-    });
-    return groups;
-  }
-
   function isFolded(stage, count) {
     if (folded[stage.id] === true) { return true; }
     if (folded[stage.id] === false) { return false; }
@@ -1749,17 +1893,23 @@ export const BOARD_PAGE = `<!doctype html>
     setTimeout(function () { col.classList.remove("pulse"); markActive(); }, 900);
   }
 
-  // The season rail: counts to scale, in stage order, over a one-line tally.
-  function drawSeason(visible) {
+  // What sits in a stage: cultivar cards on the path, failed lots in the aside.
+  function inStage(stage, vCards, vFailed) {
+    if (stage.aside) { return vFailed; }
+    return vCards.filter(function (c) { return c.stage === stage.id; });
+  }
+
+  // The season rail: counts to scale, in stage order, over a one-line tally,
+  // then how many of the cards on screen still lack each COA.
+  function drawSeason(vCards, vFailed) {
     seasonEl.textContent = "";
-    var total = visible.length;
+    var total = vCards.length;
     var counts = {};
-    STAGES.forEach(function (s) { counts[s.id] = 0; });
-    visible.forEach(function (l) { if (counts[l.stage] !== undefined) { counts[l.stage] += 1; } });
+    STAGES.forEach(function (s) { counts[s.id] = inStage(s, vCards, vFailed).length; });
 
     var stat = el("div", "stat");
-    stat.appendChild(el("span", "big num", String(counts.supersacked)));
-    stat.appendChild(el("span", "of", "of " + total + " sacked"));
+    stat.appendChild(el("span", "big num", String(counts.on_website)));
+    stat.appendChild(el("span", "of", "of " + total + " on website"));
     seasonEl.appendChild(stat);
 
     var track = el("div", "track");
@@ -1767,8 +1917,8 @@ export const BOARD_PAGE = `<!doctype html>
     track.setAttribute("aria-label", STAGES.map(function (s) { return s.name + " " + counts[s.id]; }).join(", "));
     STAGES.forEach(function (s) {
       var n = counts[s.id];
-      if (!n) { return; }
-      var seg = el("span", "seg" + (s.aside ? " aside" : ""));
+      if (!n || s.aside || !total) { return; }
+      var seg = el("span", "seg");
       seg.style.setProperty("--stage", s.color);
       seg.style.width = (100 * n / total).toFixed(2) + "%";
       seg.title = s.name + ": " + n;
@@ -1784,15 +1934,35 @@ export const BOARD_PAGE = `<!doctype html>
       chip.type = "button";
       chip.dataset.stage = s.id;
       chip.style.setProperty("--stage", s.color);
-      chip.title = (s.full || s.name) + " — " + n + (n === 1 ? " lot" : " lots");
+      chip.title = (s.full || s.name) + " — " + n;
       chip.appendChild(document.createTextNode(s.name));
       chip.appendChild(el("span", "n num", String(n)));
       chip.addEventListener("click", function () { jumpTo(s.id); });
       chips.appendChild(chip);
     });
+
+    var noPre = 0, noPost = 0, atLab = 0;
+    vCards.forEach(function (c) {
+      var st = coaState(c);
+      if (!st.pre) { noPre += 1; }
+      if (st.lab) { atLab += 1; }
+      else if (!st.post) { noPost += 1; }
+    });
+    var gap = el("span", "coagap");
+    gap.appendChild(coaChip("Pre COA", !noPre, noPre ? String(noPre) : "all in"));
+    if (atLab) {
+      var labChip = el("span", "coa lab");
+      labChip.appendChild(el("b", null, "Post COA"));
+      labChip.appendChild(document.createTextNode("at lab"));
+      labChip.appendChild(el("i", null, String(atLab)));
+      labChip.title = atLab + " with a post-harvest sample at the lab";
+      gap.appendChild(labChip);
+    }
+    gap.appendChild(coaChip("Post COA", !noPost, noPost ? String(noPost) : "all in"));
+    chips.appendChild(gap);
     seasonEl.appendChild(chips);
 
-    if (tagEl) { tagEl.textContent = "2026 · " + lots.length + " lots"; }
+    if (tagEl) { tagEl.textContent = "2026 · " + cards.length + " cultivars · " + lots.length + " lots"; }
     markActive();
   }
 
@@ -1822,25 +1992,24 @@ export const BOARD_PAGE = `<!doctype html>
 
   function render() {
     boardEl.textContent = "";
-    var visible = lots.filter(matches);
-    drawSeason(visible);
+    var vCards = cards.filter(cardMatches);
+    var vFailed = lots.filter(function (l) { return l.stage === "failed" && lotMatches(l); });
+    drawSeason(vCards, vFailed);
 
     STAGES.forEach(function (stage) {
       var col = el("div", "col" + (stage.aside ? " aside" : ""));
       col.dataset.stage = stage.id;
       col.style.setProperty("--stage", stage.color);
 
-      var mine = visible.filter(function (l) { return l.stage === stage.id; });
-      var groups = groupsOf(mine);
+      var mine = inStage(stage, vCards, vFailed);
       var fold = isFolded(stage, mine.length);
       if (fold) { col.classList.add("folded"); }
 
-      // Width follows weight: a stage holding a dozen rows gets several times
+      // Width follows weight: a stage holding a dozen cards gets several times
       // the room of one holding a single card, and the heaviest may go two
       // cards abreast. Square root keeps the biggest from crowding out the
-      // rest. The failed stage sits aside and never grows.
-      var rows = groups.length + mine.length / 4;
-      col.style.flexGrow = (fold || stage.aside) ? "0" : (0.6 + Math.sqrt(Math.min(rows, 30))).toFixed(2);
+      // rest. The failed lane sits aside and never grows.
+      col.style.flexGrow = (fold || stage.aside) ? "0" : (0.6 + Math.sqrt(Math.min(mine.length, 30))).toFixed(2);
 
       var h = el("h2");
       var foldBtn = el("button", "fold", fold ? "▸" : "▾");
@@ -1865,38 +2034,46 @@ export const BOARD_PAGE = `<!doctype html>
       var stack = el("div", "stack");
       if (!mine.length) {
         var empty = el("div", "empty");
-        empty.appendChild(el("b", null, "No lots " + (stage.aside ? "failed" : stage.name.toLowerCase()) + "."));
-        empty.appendChild(document.createTextNode(phone.matches
-          ? "Set a lot's stage from its detail to move it here."
-          : "Drop a card here to move it."));
+        if (stage.aside) {
+          empty.appendChild(el("b", null, "No lots failed."));
+        } else {
+          empty.appendChild(el("b", null, "Nothing " + stage.name.toLowerCase() + "."));
+          empty.appendChild(document.createTextNode(phone.matches
+            ? "Set a cultivar's stage from its detail to move it here."
+            : "Drop a card here to move it."));
+        }
         stack.appendChild(empty);
       } else {
-        groups.forEach(function (gr) {
-          stack.appendChild(gr.lots.length === 1 ? makeCard(gr.lots[0]) : makeGroup(stage, gr));
+        mine.forEach(function (row) {
+          stack.appendChild(stage.aside ? makeLotCard(row) : makeCard(row));
         });
       }
       col.appendChild(stack);
 
-      col.addEventListener("dragover", function (ev) {
-        if (!dragId) { return; }
-        ev.preventDefault();
-        ev.dataTransfer.dropEffect = "move";
-        col.classList.add("drop");
-      });
-      col.addEventListener("dragleave", function () { col.classList.remove("drop"); });
-      col.addEventListener("drop", function (ev) {
-        col.classList.remove("drop");
-        ev.preventDefault();
-        var id = dragId || ev.dataTransfer.getData("text/plain");
-        if (!id || !byId[id] || byId[id].stage === stage.id) { return; }
-        if (folded[stage.id] === true) { folded[stage.id] = false; }   // show where it went
-        patch(id, { stage: stage.id });
-      });
+      // Only the path takes drops: nothing is dragged into "failed".
+      if (!stage.aside) {
+        col.addEventListener("dragover", function (ev) {
+          if (!dragKey) { return; }
+          ev.preventDefault();
+          ev.dataTransfer.dropEffect = "move";
+          col.classList.add("drop");
+        });
+        col.addEventListener("dragleave", function () { col.classList.remove("drop"); });
+        col.addEventListener("drop", function (ev) {
+          col.classList.remove("drop");
+          ev.preventDefault();
+          var key = dragKey || ev.dataTransfer.getData("text/plain");
+          var row = key && key.charAt(0) === "c" ? rowOf(key) : null;
+          if (!row || row.stage === stage.id) { return; }
+          if (folded[stage.id] === true) { folded[stage.id] = false; }   // show where it went
+          patch(key, { stage: stage.id });
+        });
+      }
 
       boardEl.appendChild(col);
     });
 
-    if (selected && byId[selected]) { drawLot(selected); }
+    if (selected && rowOf(selected)) { drawSelected(); }
     fitNames();
     markActive();
   }
@@ -1909,12 +2086,16 @@ export const BOARD_PAGE = `<!doctype html>
     render();
   }
 
-  function openDrawer(id) {
-    selected = id;
+  function openDrawer(key) {
+    selected = key;
     drawerEl.hidden = false;
     render();
-    var first = drawerEl.querySelector("select, input, textarea");
-    if (first) { first.focus(); }
+    drawerEl.scrollTop = 0;
+  }
+
+  function drawSelected() {
+    if (selected.charAt(0) === "c") { drawCard(selected); }
+    else { drawLot(selected); }
   }
 
   function group(label, node, hint) {
@@ -1925,12 +2106,12 @@ export const BOARD_PAGE = `<!doctype html>
     return g;
   }
 
-  function bindField(node, key, id) {
+  function bindField(node, field, key) {
     node.addEventListener("change", function () {
       var v = node.value;
       var f = {};
-      f[key] = v === "" ? null : v;
-      patch(id, f);
+      f[field] = v === "" ? null : v;
+      patch(key, f);
     });
     return node;
   }
@@ -1941,125 +2122,33 @@ export const BOARD_PAGE = `<!doctype html>
     return s;
   }
 
-  function drawLot(id) {
-    var lot = byId[id];
-    var stage = STAGE_BY_ID[lot.stage] || STAGES[0];
-    drawerEl.textContent = "";
-    drawerEl.style.setProperty("--stage", stage.color);
+  function numberInput(value, step) {
+    var n = document.createElement("input");
+    n.type = "number";
+    n.step = step;
+    n.min = "0";
+    n.placeholder = "0.00";
+    n.inputMode = "decimal";
+    n.value = isSet(value) ? value : "";
+    return n;
+  }
 
-    // Head: where it is, what it is, which stage it's in.
-    var head = el("div", "head");
-    var eyebrow = el("div", "eyebrow");
-    eyebrow.appendChild(el("span", "zone", lot.zone));
-    eyebrow.appendChild(document.createTextNode(lot.farm));
-    var pill = el("span", "stagepill", stage.full || stage.name);
-    pill.style.setProperty("--stage", stage.color);
-    eyebrow.appendChild(pill);
-    head.appendChild(eyebrow);
-    head.appendChild(el("h2", null, lot.cultivar));
+  function closeButton() {
     var x = el("button", "close", "✕");
     x.type = "button";
     x.title = "Close";
-    x.setAttribute("aria-label", "Close lot detail");
+    x.setAttribute("aria-label", "Close detail");
     x.addEventListener("click", closeDrawer);
-    head.appendChild(x);
-    drawerEl.appendChild(head);
+    return x;
+  }
 
-    var body = el("div", "body");
-
-    // Stage: the picker for any move, and one solid button for the move that
-    // is nearly always the one wanted -- the next step along the path.
-    var stageSec = section("Stage");
-    var stagerow = el("div", "stagerow");
-    var sel = document.createElement("select");
-    STAGES.forEach(function (s) {
-      var o = document.createElement("option");
-      o.value = s.id;
-      o.textContent = s.full || s.name;
-      sel.appendChild(o);
-    });
-    sel.value = lot.stage;
-    sel.setAttribute("aria-label", "Stage");
-    sel.addEventListener("change", function () { patch(id, { stage: sel.value }); });
-    var selWrap = el("span", "sel");
-    selWrap.appendChild(sel);
-    var selGrp = el("div", "grp");
-    selGrp.appendChild(selWrap);
-    stagerow.appendChild(selGrp);
-    var next = nextStage(lot.stage);
-    if (next) {
-      var adv = el("button", "act primary", "Advance → " + next.name);
-      adv.type = "button";
-      adv.title = "Move to " + (next.full || next.name);
-      adv.addEventListener("click", function () { patch(id, { stage: next.id }); });
-      stagerow.appendChild(adv);
-    }
-    stageSec.appendChild(stagerow);
-    if (lot.stage === "failed") {
-      stageSec.appendChild(el("div", "hint", "Failed lots stay here as the record of the destroy."));
-    }
-    body.appendChild(stageSec);
-
-    // The ODA test: date and the two figures off the same COA, then the
-    // number read against the line.
-    var testSec = section("ODA test");
-    var row = el("div", "row3");
-    var d = document.createElement("input");
-    d.type = "date";
-    d.value = lot.test_date || "";
-    row.appendChild(group("Test date", bindField(d, "test_date", id)));
-
-    var t = document.createElement("input");
-    t.type = "number";
-    t.step = "0.01";
-    t.min = "0";
-    t.placeholder = "0.00";
-    t.inputMode = "decimal";
-    t.value = isSet(lot.thc) ? lot.thc : "";
-    row.appendChild(group("Total THC %", bindField(t, "thc", id)));
-
-    var cb = document.createElement("input");
-    cb.type = "number";
-    cb.step = "0.01";
-    cb.min = "0";
-    cb.placeholder = "0.00";
-    cb.inputMode = "decimal";
-    cb.value = isSet(lot.cbd) ? lot.cbd : "";
-    row.appendChild(group("Total CBD %", bindField(cb, "cbd", id)));
-    testSec.appendChild(row);
-
-    var verdict;
-    if (!isSet(lot.thc)) {
-      verdict = el("div", "verdict", "No result on file. The limit is " + THC_LIMIT + "% total THC.");
-    } else if (parseFloat(lot.thc) > THC_LIMIT) {
-      verdict = el("div", "verdict fail", lot.thc + "% total THC — over the " + THC_LIMIT + "% limit.");
-    } else {
-      verdict = el("div", "verdict pass", lot.thc + "% total THC — under the " + THC_LIMIT + "% limit.");
-    }
-    testSec.appendChild(verdict);
-    body.appendChild(testSec);
-
-    if (lot.stage === "drying" || lot.stage === "supersacked") {
-      var harvestSec = section("Harvest");
-      var s = document.createElement("input");
-      s.type = "number";
-      s.min = "0";
-      s.placeholder = "0";
-      s.inputMode = "numeric";
-      s.value = isSet(lot.sacks) ? lot.sacks : "";
-      harvestSec.appendChild(group("Supersacks", bindField(s, "sacks", id),
-        "Rough count for the board. Sack tags remain the record."));
-      body.appendChild(harvestSec);
-    }
-
-    var docSec = section("Documents");
+  // The linked documents of a card or a lot: view, remove, add.
+  function docList(key, row, emptyText, labelHint, defaultLabel) {
     var docWrap = el("div", "docs");
-    if (!lot.docs.length) { docWrap.appendChild(el("div", "hint", "No documents linked yet.")); }
-    lot.docs.forEach(function (doc, i) {
+    if (!row.docs.length) { docWrap.appendChild(el("div", "hint", emptyText)); }
+    row.docs.forEach(function (doc, i) {
       var r = el("div", "doc");
       var isUrl = /^https?:\\/\\//i.test(doc.ref || "");
-      // Mirrors the server's allow-list: lab results and ODA turn-in maps.
-      var isViewable = /^(raw\\/coas\\/|outputs\\/compliance\\/pdf\\/).+\\.pdf$/i.test(doc.ref || "");
 
       r.appendChild(el("span", "name", doc.label || "Document"));
       if (isUrl) {
@@ -2075,7 +2164,7 @@ export const BOARD_PAGE = `<!doctype html>
       }
 
       var acts = el("div", "acts");
-      if (isViewable) {
+      if (isViewable(doc)) {
         var open = el("button", null, "View");
         open.type = "button";
         open.title = "Open this document to read or print";
@@ -2087,9 +2176,9 @@ export const BOARD_PAGE = `<!doctype html>
       del.title = "Remove this link";
       del.setAttribute("aria-label", "Remove " + (doc.label || "document"));
       del.addEventListener("click", function () {
-        var next = lot.docs.slice();
+        var next = row.docs.slice();
         next.splice(i, 1);
-        patch(id, { docs: next });
+        patch(key, { docs: next });
       });
       acts.appendChild(del);
       r.appendChild(acts);
@@ -2099,7 +2188,7 @@ export const BOARD_PAGE = `<!doctype html>
     var addRow = el("div", "row2");
     var lab = document.createElement("input");
     lab.type = "text";
-    lab.placeholder = "COA, CWD form…";
+    lab.placeholder = labelHint;
     var ref = document.createElement("input");
     ref.type = "text";
     ref.placeholder = "Drive link or repo path";
@@ -2112,35 +2201,236 @@ export const BOARD_PAGE = `<!doctype html>
     add.addEventListener("click", function () {
       var v = ref.value.trim();
       if (!v) { ref.focus(); return; }
-      patch(id, { docs: lot.docs.concat([{ label: lab.value.trim() || "Document", ref: v }]) });
+      patch(key, { docs: row.docs.concat([{ label: lab.value.trim() || defaultLabel, ref: v }]) });
     });
     docWrap.appendChild(add);
+
     var docGrp = el("div", "grp");
     docGrp.appendChild(docWrap);
     docGrp.appendChild(el("div", "hint",
       "Paste the Drive link or the repo path — the PDF itself stays where it lives."));
-    docSec.appendChild(docGrp);
-    body.appendChild(docSec);
+    return docGrp;
+  }
 
+  function noteSection(key, row, placeholder) {
     var noteSec = section("Notes");
     var n = document.createElement("textarea");
-    n.value = lot.notes || "";
-    n.placeholder = "What the crew saw. Log gaps honestly — don't guess a clean number.";
+    n.value = row.notes || "";
+    n.placeholder = placeholder;
     n.setAttribute("aria-label", "Notes");
     var noteGrp = el("div", "grp");
-    noteGrp.appendChild(bindField(n, "notes", id));
+    noteGrp.appendChild(bindField(n, "notes", key));
     noteSec.appendChild(noteGrp);
-    body.appendChild(noteSec);
+    return noteSec;
+  }
+
+  function touchedLine(row) {
+    if (!row.updated_at) { return null; }
+    var touched = el("div");
+    touched.appendChild(el("span", "k", "Last touched"));
+    touched.appendChild(document.createTextNode(
+      row.updated_at.slice(0, 16).replace("T", " ") + (row.updated_by ? " by " + row.updated_by : "")));
+    return touched;
+  }
+
+  // ---- a cultivar card ---------------------------------------------------
+  function drawCard(key) {
+    var card = rowOf(key);
+    var st = coaState(card);
+    var stage = STAGE_BY_ID[card.stage] || STAGES[0];
+    drawerEl.textContent = "";
+    drawerEl.style.setProperty("--stage", stage.color);
+
+    var head = el("div", "head");
+    var eyebrow = el("div", "eyebrow");
+    eyebrow.appendChild(document.createTextNode(
+      st.lots.length + (st.lots.length === 1 ? " zone lot" : " zone lots")));
+    var pill = el("span", "stagepill", stage.full || stage.name);
+    pill.style.setProperty("--stage", stage.color);
+    eyebrow.appendChild(pill);
+    head.appendChild(eyebrow);
+    head.appendChild(el("h2", null, card.cultivar));
+    head.appendChild(closeButton());
+    drawerEl.appendChild(head);
+
+    var body = el("div", "body");
+
+    // Stage: the picker for any move, and one solid button for the move that
+    // is nearly always the one wanted -- the next step along the path.
+    var stageSec = section("Photos and website");
+    var stagerow = el("div", "stagerow");
+    var sel = document.createElement("select");
+    STAGES.forEach(function (s) {
+      if (s.aside) { return; }
+      var o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = s.full || s.name;
+      sel.appendChild(o);
+    });
+    sel.value = card.stage;
+    sel.setAttribute("aria-label", "Stage");
+    sel.addEventListener("change", function () { patch(key, { stage: sel.value }); });
+    var selWrap = el("span", "sel");
+    selWrap.appendChild(sel);
+    var selGrp = el("div", "grp");
+    selGrp.appendChild(selWrap);
+    stagerow.appendChild(selGrp);
+    var next = nextStage(card.stage);
+    if (next) {
+      var adv = el("button", "act primary", "Advance → " + next.name);
+      adv.type = "button";
+      adv.title = "Move to " + (next.full || next.name);
+      adv.addEventListener("click", function () { patch(key, { stage: next.id }); });
+      stagerow.appendChild(adv);
+    }
+    stageSec.appendChild(stagerow);
+
+    var u = document.createElement("input");
+    u.type = "url";
+    u.placeholder = "https://…";
+    u.value = card.url || "";
+    stageSec.appendChild(group("Product page", bindField(u, "url", key),
+      "The listing's link, once it is on the website."));
+    if (card.url) {
+      var go = document.createElement("a");
+      go.className = "act";
+      go.href = card.url;
+      go.target = "_blank";
+      go.rel = "noopener noreferrer";
+      go.textContent = "Open the listing";
+      stageSec.appendChild(go);
+    }
+    body.appendChild(stageSec);
+
+    // Post-harvest: one dried-flower potency COA for the cultivar.
+    var postSec = section("Post-harvest COA");
+    postSec.appendChild(el("div", "verdict" + (st.post ? " pass" : ""),
+      (st.post ? "Post-harvest COA on file." : "No post-harvest COA on file yet.") +
+      (st.lab ? " Sample dropped at the lab " + fmtDate(card.post_sent) + (st.post ? " for a retest." : ".") : "")));
+    var ds = document.createElement("input");
+    ds.type = "date";
+    ds.value = card.post_sent || "";
+    postSec.appendChild(group("Dropped at lab", bindField(ds, "post_sent", key),
+      "The day the sample went to the lab. The chip reads \\"at lab\\" until a report dated after it is entered."));
+    var row = el("div", "row3");
+    var d = document.createElement("input");
+    d.type = "date";
+    d.value = card.post_date || "";
+    row.appendChild(group("Reported", bindField(d, "post_date", key)));
+    row.appendChild(group("Total THC %", bindField(numberInput(card.post_thc, "0.001"), "post_thc", key)));
+    row.appendChild(group("Total CBD %", bindField(numberInput(card.post_cbd, "0.1"), "post_cbd", key)));
+    postSec.appendChild(row);
+    postSec.appendChild(docList(key, card, "No post-harvest COA linked yet.",
+      "Post-harvest COA", "Post-harvest COA"));
+    body.appendChild(postSec);
+
+    // Pre-harvest: one ODA test per zone lot. Each row opens its lot.
+    var preSec = section("Pre-harvest COA");
+    preSec.appendChild(el("div", "verdict" + (st.pre ? " pass" : ""),
+      st.pre + " of " + st.lots.length + (st.lots.length === 1 ? " zone lot has" : " zone lots have") +
+      " a pre-harvest COA on file."));
+    var zones = el("div", "prelots");
+    st.lots.forEach(function (lot) {
+      var zrow = wireOpen(el("div", "zrow"), "l:" + lot.lot_id, "Open " + lot.zone + ", " + lot.farm);
+      zrow.appendChild(el("span", "zone", lot.zone));
+      zrow.appendChild(el("span", "farm", lot.farm));
+      var m = marksFor(lot);
+      if (m) { zrow.appendChild(m); }
+      var coa = coaOf(lot.docs);
+      if (coa && isViewable(coa)) {
+        var view = el("button", "act mini", "View COA");
+        view.type = "button";
+        view.addEventListener("click", function (ev) { ev.stopPropagation(); openDoc(coa, view); });
+        zrow.appendChild(view);
+      } else if (!coa) {
+        zrow.appendChild(el("span", "coa miss mini", "no COA"));
+      }
+      zones.appendChild(zrow);
+    });
+    preSec.appendChild(zones);
+    body.appendChild(preSec);
+
+    body.appendChild(noteSection(key, card, "Who has the sample, when photos are due, what the listing still needs."));
+
+    var meta = el("div", "meta");
+    var touched = touchedLine(card);
+    if (touched) { meta.appendChild(touched); }
+    var wiki = el("div");
+    wiki.appendChild(el("span", "k", "Wiki"));
+    wiki.appendChild(document.createTextNode("wiki/products/cultivars/" + card.cultivar_slug + ".md"));
+    meta.appendChild(wiki);
+    body.appendChild(meta);
+
+    drawerEl.appendChild(body);
+  }
+
+  // ---- one pre-harvest lot -----------------------------------------------
+  function drawLot(key) {
+    var lot = rowOf(key);
+    var failed = lot.stage === "failed";
+    var parent = cardBy[lot.cultivar_slug];
+    var stage = failed ? { color: "var(--st-failed)" } : (STAGE_BY_ID[parent && parent.stage] || STAGES[0]);
+    drawerEl.textContent = "";
+    drawerEl.style.setProperty("--stage", stage.color);
+
+    var head = el("div", "head");
+    var eyebrow = el("div", "eyebrow");
+    eyebrow.appendChild(el("span", "zone", lot.zone));
+    eyebrow.appendChild(document.createTextNode(lot.farm));
+    var pill = el("span", "stagepill", failed ? "Failed / destroyed" : "Pre-harvest lot");
+    pill.style.setProperty("--stage", stage.color);
+    eyebrow.appendChild(pill);
+    head.appendChild(eyebrow);
+    head.appendChild(el("h2", null, lot.cultivar));
+    head.appendChild(closeButton());
+    drawerEl.appendChild(head);
+
+    var body = el("div", "body");
+
+    if (parent) {
+      var back = el("button", "act", "← Back to the cultivar");
+      back.type = "button";
+      back.addEventListener("click", function () { openDrawer("c:" + parent.cultivar_slug); });
+      body.appendChild(back);
+    }
+    if (failed) {
+      body.appendChild(el("div", "hint", "Failed lots stay here as the record of the destroy."));
+    }
+
+    // The ODA test: date and the two figures off the same COA, then the
+    // number read against the line.
+    var testSec = section("ODA pre-harvest test");
+    var row = el("div", "row3");
+    var d = document.createElement("input");
+    d.type = "date";
+    d.value = lot.test_date || "";
+    row.appendChild(group("Test date", bindField(d, "test_date", key)));
+    row.appendChild(group("Total THC %", bindField(numberInput(lot.thc, "0.01"), "thc", key)));
+    row.appendChild(group("Total CBD %", bindField(numberInput(lot.cbd, "0.01"), "cbd", key)));
+    testSec.appendChild(row);
+
+    var verdict;
+    if (!isSet(lot.thc)) {
+      verdict = el("div", "verdict", "No result on file. The limit is " + THC_LIMIT + "% total THC.");
+    } else if (parseFloat(lot.thc) > THC_LIMIT) {
+      verdict = el("div", "verdict fail", lot.thc + "% total THC — over the " + THC_LIMIT + "% limit.");
+    } else {
+      verdict = el("div", "verdict pass", lot.thc + "% total THC — under the " + THC_LIMIT + "% limit.");
+    }
+    testSec.appendChild(verdict);
+    body.appendChild(testSec);
+
+    var docSec = section("Documents");
+    docSec.appendChild(docList(key, lot, "No documents linked yet.",
+      "Pre-harvest COA, CWD form…", "Pre-harvest COA"));
+    body.appendChild(docSec);
+
+    body.appendChild(noteSection(key, lot, "What the crew saw. Log gaps honestly — don't guess a clean number."));
 
     // Housekeeping, last: who touched it and where it lives in the wiki.
     var meta = el("div", "meta");
-    if (lot.updated_at) {
-      var touched = el("div");
-      touched.appendChild(el("span", "k", "Last touched"));
-      touched.appendChild(document.createTextNode(
-        lot.updated_at.slice(0, 16).replace("T", " ") + (lot.updated_by ? " by " + lot.updated_by : "")));
-      meta.appendChild(touched);
-    }
+    var touched = touchedLine(lot);
+    if (touched) { meta.appendChild(touched); }
     var wiki = el("div");
     wiki.appendChild(el("span", "k", "Wiki"));
     wiki.appendChild(document.createTextNode("wiki/products/cultivars/" + lot.cultivar_slug + ".md"));
@@ -2169,9 +2459,16 @@ export const BOARD_PAGE = `<!doctype html>
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && selected) { closeDrawer(); }
   });
+  // Names are fitted to their card, and the web font is wider than the
+  // fallback it replaces: fit again once it has arrived.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { fitNames(); });
+  }
 
   exportEl.addEventListener("click", function () {
-    var payload = JSON.stringify({ season: 2026, exported: new Date().toISOString(), lots: lots }, null, 2);
+    var payload = JSON.stringify({
+      season: 2026, exported: new Date().toISOString(), cultivars: cards, lots: lots
+    }, null, 2);
     var blob = new Blob([payload], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -2184,24 +2481,16 @@ export const BOARD_PAGE = `<!doctype html>
   });
 
   // Timber writes to the same D1 rows, so pick its changes up without a reload.
+  function stamp(rows, idKey) {
+    return rows.map(function (r) { return r[idKey] + "|" + r.stage + "|" + (r.updated_at || ""); }).join("\\n");
+  }
   setInterval(function () {
     if (!pass || selected) { return; }   // don't yank a card out from under an open drawer
     call("board", {}).then(function (data) {
-      var fresh = data.lots || [];
-      var changed = fresh.length !== lots.length;
-      if (!changed) {
-        for (var i = 0; i < fresh.length; i++) {
-          var mine = byId[fresh[i].lot_id];
-          if (!mine || mine.stage !== fresh[i].stage || mine.updated_at !== fresh[i].updated_at) {
-            changed = true;
-            break;
-          }
-        }
-      }
-      if (!changed) { return; }
-      lots = fresh;
-      byId = {};
-      lots.forEach(function (l) { l.docs = parseDocs(l.docs); byId[l.lot_id] = l; });
+      var same = stamp(data.cultivars || [], "cultivar_slug") === stamp(cards, "cultivar_slug") &&
+                 stamp(data.lots || [], "lot_id") === stamp(lots, "lot_id");
+      if (same || selected) { return; }
+      adopt(data);
       render();
     })["catch"](function () { /* transient; the next tick retries */ });
   }, 30000);
@@ -2215,6 +2504,7 @@ export const BOARD_PAGE = `<!doctype html>
     shell.hidden = true;
     load().then(function () {
       shell.hidden = false;
+      fitNames();
     })["catch"](function (e) {
       pass = "";
       try { localStorage.removeItem(KEY); } catch (err) { /* ignore */ }

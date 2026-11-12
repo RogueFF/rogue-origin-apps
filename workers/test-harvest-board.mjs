@@ -29,8 +29,30 @@ const DB = {
   },
 };
 
+const CULTIVARS = [
+  { cultivar_slug: 'animal-muffins', cultivar: 'Animal Muffins' },
+  { cultivar_slug: 'lemon', cultivar: 'Lemon' },
+  { cultivar_slug: 'lifter', cultivar: 'Lifter' },
+  { cultivar_slug: 'sour-lifter', cultivar: 'Sour Lifter' },
+].map((c) => ({
+  ...c, stage: 'not_sent', post_sent: null, post_date: null, post_thc: null, post_cbd: null, url: null,
+  notes: null, docs: '[]', updated_at: null, updated_by: 'migration',
+}));
+let cards = CULTIVARS.map((c) => ({ ...c }));
+
 function run(sql, args) {
   const s = sql.replace(/\s+/g, ' ').trim();
+  if (s.startsWith('UPDATE harvest_cultivars SET')) {
+    const cols = s.slice(s.indexOf('SET') + 4, s.indexOf(' WHERE')).split(',').map((c) => c.trim().split(' =')[0]);
+    const card = cards.find((c) => c.cultivar_slug === args[args.length - 1]);
+    cols.forEach((c, i) => { card[c] = args[i]; });
+    return [card];
+  }
+  if (s.includes('FROM harvest_cultivars')) {
+    const out = s.includes('WHERE cultivar_slug = ?')
+      ? cards.filter((c) => c.cultivar_slug === args[0]) : cards;
+    return out.map((c) => ({ ...c }));
+  }
   if (s.startsWith('UPDATE harvest_lots SET')) {
     const cols = s.slice(s.indexOf('SET') + 4, s.indexOf(' WHERE')).split(',').map((c) => c.trim().split(' =')[0]);
     const id = args[args.length - 1];
@@ -173,6 +195,79 @@ await check('a lot carries both cannabinoids at once', async () => {
   eq(d.lot.thc, 0.137, 'thc');
   eq(d.lot.cbd, 4.87, 'cbd');
 });
+
+// ---- cultivar cards: the after-harvest track ------------------------------
+
+await check('board returns one card per cultivar with stage counts', async () => {
+  const d = (await body(await call('board')));
+  eq(d.cultivars.length, 4, 'cards');
+  eq(d.cultivars.map((c) => c.cultivar_slug), ['animal-muffins', 'lemon', 'lifter', 'sour-lifter'], 'by name');
+  eq(d.cultivar_counts, { not_sent: 4, sent: 0, photos_done: 0, on_website: 0 }, 'counts');
+});
+
+await check('a lot filter never hides cultivar cards', async () => {
+  const d = (await body(await call('board', { stage: 'failed' })));
+  eq(d.total, 1, 'lots filtered');
+  eq(d.cultivars.length, 4, 'cards untouched');
+});
+
+await check('board_set moves a cultivar card and leaves its lots alone', async () => {
+  const before = rows.filter((r) => r.cultivar_slug === 'sour-lifter').map((r) => r.stage);
+  const d = (await body(await call('board_set', { cultivar: 'sour-lifter', stage: 'sent', actor: 'timber' })));
+  eq(d.cultivar.stage, 'sent', 'stage');
+  eq(d.was.stage, 'not_sent', 'previous stage');
+  eq(d.cultivar.updated_by, 'timber', 'actor');
+  eq(rows.filter((r) => r.cultivar_slug === 'sour-lifter').map((r) => r.stage), before, 'lots untouched');
+});
+
+await check('a cultivar resolves by name, exact name beats a longer match', async () => {
+  // "lifter" is also inside "Sour Lifter"; the exact name must win, not error.
+  const d = (await body(await call('board_set', { cultivar: 'Lifter', stage: 'photos_done' })));
+  eq(d.cultivar.cultivar_slug, 'lifter', 'exact name');
+  const m = (await body(await call('board_set', { cultivar: 'muffins', stage: 'sent' })));
+  eq(m.cultivar.cultivar_slug, 'animal-muffins', 'unique phrase');
+});
+
+await check('an ambiguous or unknown cultivar errors instead of guessing', async () => {
+  await expectThrow(() => call('board_set', { cultivar: 'l', stage: 'sent' }), 'be more specific');
+  await expectThrow(() => call('board_set', { cultivar: 'purple zebra', stage: 'sent' }), 'No cultivar matches');
+});
+
+await check('a cultivar refuses lot stages and a lot refuses cultivar stages', async () => {
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', stage: 'drying' }), 'Unknown stage');
+  await expectThrow(() => call('board_set', { lot: 'rogue-z8-lemon', stage: 'on_website' }), 'Unknown stage');
+});
+
+await check('post-harvest figures, date and url are stored and validated', async () => {
+  const d = (await body(await call('board_set', {
+    cultivar: 'lemon', post_cbd: 12.4, post_thc: 0.387, post_date: '2026-10-08',
+    url: 'https://example.com/lemon',
+    docs: [{ label: 'Post-harvest COA', ref: 'raw/coas/2026/Post-Harvest/Lemon.pdf' }],
+  })));
+  eq(d.cultivar.post_cbd, 12.4, 'cbd');
+  eq(d.cultivar.post_thc, 0.387, 'thc');
+  eq(d.cultivar.post_date, '2026-10-08', 'date');
+  eq(JSON.parse(d.cultivar.docs)[0].label, 'Post-harvest COA', 'doc');
+  eq(d.cultivar.stage, 'not_sent', 'stage untouched by a partial update');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', post_date: '10/8' }), 'YYYY-MM-DD');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', post_cbd: -1 }), 'non-negative');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', url: 'javascript:alert(1)' }), 'http');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon' }), 'Nothing to change');
+  const cleared = (await body(await call('board_set', { cultivar: 'lemon', url: null })));
+  eq(cleared.cultivar.url, null, 'url cleared');
+});
+
+await check('the lab drop-off date is stored, validated and clearable', async () => {
+  const d = (await body(await call('board_set', { cultivar: 'lifter', post_sent: '2026-11-12' })));
+  eq(d.cultivar.post_sent, '2026-11-12', 'stored');
+  eq(d.cultivar.stage, 'photos_done', 'stage untouched');
+  await expectThrow(() => call('board_set', { cultivar: 'lifter', post_sent: 'today' }), 'YYYY-MM-DD');
+  const c = (await body(await call('board_set', { cultivar: 'lifter', post_sent: null })));
+  eq(c.cultivar.post_sent, null, 'cleared');
+});
+
+await check('cultivar writes need the password', () =>
+  expectThrow(() => call('board_set', { cultivar: 'lemon', stage: 'sent' }, ''), 'password'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

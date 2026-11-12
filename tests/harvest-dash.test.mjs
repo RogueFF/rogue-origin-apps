@@ -327,40 +327,19 @@ test('buildMetrics needs no database, so the shapes can be pinned directly', () 
 
 // --- reachable from the board -------------------------------------------------
 
-test('the lot board links to the dashboard, and the link is absolute', async () => {
+test('the lot board carries no links into the crew tools', async () => {
+  // Since 2026-11 the board is the page the website person and the photographer
+  // use: cultivars from photos to the website, with their COAs. The crew
+  // screens (cycle times, tags, the tools hub) were taken off it on purpose, so
+  // an outside reader is never one tap from a barn page. The dashboard still
+  // links TO the board (next test); the board does not link back.
   const { env, ctx } = freshDb();
   const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
 
-  assert.match(html, /href="\/api\/harvest\?action=harvest_dash"/,
-    'the board should offer a way through to the cycle times');
-
-  // The board is served from /api/harvest?action=board_page, where a bare
-  // `?action=harvest_dash` happens to resolve correctly — which is exactly the
-  // assumption that silently lost every cutter count and every trailer logged
-  // from a scanned QR code until 2026-09-04. Resolve it the way a browser does.
-  const hrefs = [...html.matchAll(/href="([^"]*action=harvest_dash[^"]*)"/g)].map(m => m[1]);
-  assert.ok(hrefs.length >= 1);
-  for (const href of hrefs) {
-    const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
-    assert.equal(resolved.pathname, '/api/harvest', `${href} resolves to ${resolved.pathname}`);
-    assert.equal(resolved.searchParams.get('action'), 'harvest_dash');
-  }
-});
-
-test('the board links to the takedown screen, absolutely', async () => {
-  // The daily action the barn actually runs on: pick the lot coming down, pick
-  // the bay, print a tag per sack. Resolved the way a browser would, because a
-  // relative `?action=` on a page served from /api/harvest happens to work and
-  // is exactly the assumption that silently lost every scan on 2026-09-04.
-  const { env, ctx } = freshDb();
-  const html = await (await fetchApi(env, ctx, 'action=board_page')).text();
-
-  const hrefs = [...html.matchAll(/href="([^"]*action=bay_tags[^"]*)"/g)].map(m => m[1]);
-  assert.ok(hrefs.length >= 1, 'the board needs a way to reach the takedown screen');
-  for (const href of hrefs) {
-    const resolved = new URL(href, 'https://x/api/harvest?action=board_page');
-    assert.equal(resolved.pathname, '/api/harvest');
-    assert.equal(resolved.searchParams.get('action'), 'bay_tags');
+  const hrefs = [...html.matchAll(/href="([^"]*action=[^"]*)"/g)].map(m => m[1]);
+  assert.deepEqual(hrefs, [], 'the board should link to no other harvest action');
+  for (const action of ['harvest_dash', 'bay_tags', 'sack_print', 'action=hub']) {
+    assert.ok(!html.includes(action), `the board still mentions ${action}`);
   }
 });
 
@@ -375,18 +354,6 @@ test('the dashboard links back to the board, absolutely', async () => {
     assert.equal(resolved.pathname, '/api/harvest');
     assert.equal(resolved.searchParams.get('action'), 'board_page');
   }
-});
-
-test('both pages reach each other, so neither is a dead end', async () => {
-  const { env, ctx } = freshDb();
-  const [dash, board] = await Promise.all([
-    fetchApi(env, ctx, 'action=harvest_dash').then(r => r.text()),
-    fetchApi(env, ctx, 'action=board_page').then(r => r.text()),
-  ]);
-  // One tool viewed two ways. A link added in one direction and forgotten in
-  // the other is how a page becomes something you have to know the URL for.
-  assert.match(dash, /action=board_page/);
-  assert.match(board, /action=harvest_dash/);
 });
 
 test('the board still ships no lot data of its own', async () => {

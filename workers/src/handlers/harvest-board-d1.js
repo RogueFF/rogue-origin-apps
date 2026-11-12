@@ -1,9 +1,11 @@
 /**
  * Harvest Lot Board — /api/harvest?action=board*
  *
- * The 2026 stage board for every ODA pre-harvest lot: 82 cards moving through
- * untested -> scheduled -> cleared -> harvesting -> drying -> supersacked, plus
- * a failed/destroyed lane.
+ * Since 2026-11 the board follows CULTIVARS after harvest: one card each,
+ * moving not_sent -> sent -> photos_done -> on_website (harvest_cultivars), with
+ * the post-harvest COA on the card. The 82 ODA pre-harvest lots (harvest_lots)
+ * sit under their cultivar and keep each lot's pre-harvest test and COA; their
+ * old stage (untested ... supersacked, failed) stays as the season's record.
  *
  * Why it lives here rather than in a Claude Artifact (where it started): the
  * Artifact's only write primitive was "replace the whole document", so a second
@@ -43,6 +45,16 @@ const STAGES = new Set([
 const STAGE_ORDER = [
   'untested', 'to_schedule', 'scheduled', 'cleared', 'harvesting', 'drying', 'supersacked', 'failed',
 ];
+
+// The after-harvest track a cultivar card moves along. Same two-list rule.
+const CULTIVAR_STAGE_ORDER = ['not_sent', 'sent', 'photos_done', 'on_website'];
+const CULTIVAR_STAGES = new Set(CULTIVAR_STAGE_ORDER);
+
+const SELECT_CULTIVAR = `
+  SELECT cultivar_slug, cultivar, stage, post_sent, post_date, post_thc, post_cbd, url,
+         notes, docs, updated_at, updated_by
+    FROM harvest_cultivars
+`;
 
 const SELECT = `
   SELECT lot_id, farm, zone, cultivar, cultivar_slug, map, stage,
@@ -157,7 +169,18 @@ async function getBoard(db, params) {
   STAGE_ORDER.forEach((s) => { counts[s] = 0; });
   rows.forEach((r) => { counts[r.stage] = (counts[r.stage] || 0) + 1; });
 
-  return successResponse({ lots: orderLots(rows), counts, total: rows.length });
+  // Cultivar cards are never filtered here: the page filters them by the lots
+  // it shows, and a card must not vanish because its lots were filtered out.
+  const cultivars = (await query(db, SELECT_CULTIVAR, []))
+    .sort((a, b) => (a.cultivar < b.cultivar ? -1 : 1));
+  const cultivarCounts = {};
+  CULTIVAR_STAGE_ORDER.forEach((s) => { cultivarCounts[s] = 0; });
+  cultivars.forEach((c) => { cultivarCounts[c.stage] = (cultivarCounts[c.stage] || 0) + 1; });
+
+  return successResponse({
+    lots: orderLots(rows), counts, total: rows.length,
+    cultivars, cultivar_counts: cultivarCounts,
+  });
 }
 
 /**
@@ -224,7 +247,105 @@ function numberOrNull(value, field) {
   return n;
 }
 
+/**
+ * Resolve a cultivar card by slug, by name, or by a phrase that picks out
+ * exactly one. Same rule as lots: ambiguous is an error, never a guess.
+ */
+async function resolveCultivar(db, ref) {
+  const raw = String(ref || '').trim();
+  if (!raw) {
+    throw createError('VALIDATION_ERROR', 'cultivar is required');
+  }
+  const all = await query(db, SELECT_CULTIVAR, []);
+  const low = raw.toLowerCase();
+  const exact = all.find((c) => c.cultivar_slug === low || c.cultivar.toLowerCase() === low);
+  if (exact) return exact;
+
+  const tokens = low.split(/[\s,]+/).filter(Boolean);
+  const hits = all.filter((c) => {
+    const hay = `${c.cultivar} ${c.cultivar_slug}`.toLowerCase();
+    return tokens.every((t) => hay.includes(t));
+  });
+  if (hits.length === 1) return hits[0];
+  if (hits.length === 0) {
+    throw createError('NOT_FOUND', `No cultivar matches "${raw}"`);
+  }
+  throw createError(
+    'VALIDATION_ERROR',
+    `"${raw}" matches ${hits.length} cultivars — be more specific: ` +
+      hits.slice(0, 6).map((h) => h.cultivar_slug).join(', ') +
+      (hits.length > 6 ? ', …' : ''),
+  );
+}
+
+function dateOrNull(value, field) {
+  const d = value === null || value === undefined || value === '' ? null : String(value).trim();
+  if (d !== null && !/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    throw createError('VALIDATION_ERROR', `${field} must be YYYY-MM-DD`);
+  }
+  return d;
+}
+
+async function setCultivar(db, body, actor) {
+  const card = await resolveCultivar(db, body.cultivar);
+
+  const sets = [];
+  const args = [];
+  const changed = {};
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const put = (col, v) => { sets.push(`${col} = ?`); args.push(v); changed[col] = v; };
+
+  if (has('stage')) {
+    const stage = String(body.stage || '').trim();
+    if (!CULTIVAR_STAGES.has(stage)) {
+      throw createError(
+        'VALIDATION_ERROR',
+        `Unknown stage "${stage}". Use one of: ${CULTIVAR_STAGE_ORDER.join(', ')}`,
+      );
+    }
+    put('stage', stage);
+  }
+  if (has('post_sent')) put('post_sent', dateOrNull(body.post_sent, 'post_sent'));
+  if (has('post_date')) put('post_date', dateOrNull(body.post_date, 'post_date'));
+  if (has('post_thc')) put('post_thc', numberOrNull(body.post_thc, 'post_thc'));
+  if (has('post_cbd')) put('post_cbd', numberOrNull(body.post_cbd, 'post_cbd'));
+  if (has('url')) {
+    const u = body.url === null || body.url === '' ? null : String(body.url).trim().slice(0, 500);
+    if (u !== null && !/^https?:\/\//i.test(u)) {
+      throw createError('VALIDATION_ERROR', 'url must start with http:// or https://');
+    }
+    put('url', u);
+  }
+  if (has('notes')) put('notes', body.notes === null ? null : String(body.notes));
+  if (has('docs')) {
+    const docs = normaliseDocs(body.docs);
+    sets.push('docs = ?');
+    args.push(JSON.stringify(docs));
+    changed.docs = docs;
+  }
+
+  if (!sets.length) {
+    throw createError(
+      'VALIDATION_ERROR',
+      'Nothing to change. Send at least one of: stage, post_sent, post_date, post_thc, post_cbd, url, notes, docs',
+    );
+  }
+
+  sets.push('updated_at = ?', 'updated_by = ?');
+  args.push(new Date().toISOString(), actor);
+  args.push(card.cultivar_slug);
+
+  await query(db, `UPDATE harvest_cultivars SET ${sets.join(', ')} WHERE cultivar_slug = ?`, args);
+  const fresh = await queryOne(db, `${SELECT_CULTIVAR} WHERE cultivar_slug = ?`, [card.cultivar_slug]);
+
+  return successResponse({ cultivar: fresh, changed, was: { stage: card.stage } });
+}
+
 async function setBoard(db, body, actor) {
+  // A cultivar card and a lot are different rows; `cultivar` picks the card.
+  if (body.cultivar !== undefined && body.cultivar !== null && body.cultivar !== '') {
+    return setCultivar(db, body, actor);
+  }
   const lot = await resolveLot(db, body.lot ?? body.lot_id);
 
   const sets = [];
