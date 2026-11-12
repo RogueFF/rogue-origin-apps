@@ -204,6 +204,16 @@ test('sack_out_today: groups, can_undo, tz, chips, and a null-cultivar row does 
   assert.deepEqual(r.chips.map(c => [c.cultivar, c.in_inventory]), [['Purple Snowman', 2]]);
 });
 
+test('sack_out_today: each sack carries its takedown fill_lbs (null for a full sack)', async () => {
+  const { sqlite, env, ctx } = freshDb(); poolStub();
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  seed(sqlite, { opened_at: now });
+  seed(sqlite, { id: `${YY}-PURPSNOW-3`, serial: 3, opened_at: now, fill_lbs: 18 });
+  const r = await get(env, ctx, 'sack_out_today');
+  const fills = Object.fromEntries(r.groups.flatMap(g => g.sacks).map(s => [s.sack_id, s.fill_lbs]));
+  assert.deepEqual(fills, { [`${YY}-PURPSNOW-2`]: null, [`${YY}-PURPSNOW-3`]: 18 });
+});
+
 // The season printed both example numbers for real (Sour Lifter #142, Lifter
 // #87), and on 2026-11-02 the scanner refused the real #142 as "Test mode".
 // Real first, as everywhere else: a row in the table is a real bag.

@@ -1,0 +1,254 @@
+// Supersack analytics: scan-out x tracker x hourly merge. All data synthetic.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+// package.json is "type": "commonjs" and the page loads this .js as an ES
+// module, so load the same file's source as an ES module here (no copy).
+const SRC = readFileSync(new URL('../src/js/shared/supersack-days.js', import.meta.url), 'utf8');
+const D = await import('data:text/javascript,' + encodeURIComponent(SRC));
+const W = await import('data:text/javascript,' + encodeURIComponent(
+  readFileSync(new URL('../workers/src/lib/sack-weight.js', import.meta.url), 'utf8')));
+
+const scan = (date, groups) => ({ date, total: groups.reduce((n, g) => n + g[2], 0),
+  groups: groups.map(([season, cultivar, sacks_today]) => ({ season, cultivar, sacks_today })) });
+const row = (date, strain, sacks, o = {}) => ({ date, strain, sacks_opened: sacks, raw_lbs: o.raw ?? sacks * 35,
+  tops_lbs: o.tops ?? 0, smalls_lbs: o.smalls ?? 0, biomass_lbs: o.bio ?? 0, trim_lbs: o.trim ?? 0, waste_lbs: 0 });
+const hour = (c1, t1, s1, c2, t2, s2) => ({ cultivar1: c1, tops1: t1, smalls1: s1, cultivar2: c2 || '', tops2: t2 || 0, smalls2: s2 || 0 });
+
+test('fullSackLbs mirrors the worker lib', () => {
+  for (const y of [2023, 2024, 2025, 2026, 2027, 'x', null]) assert.equal(D.fullSackLbs(y), W.fullSackLbs(y), String(y));
+});
+
+test('parseTitle reads year and cultivar', () => {
+  assert.deepEqual(D.parseTitle('2026 - Sour Lifter / Sungrown / 1st Cut'), { season: 2026, cultivar: 'Sour Lifter' });
+  assert.deepEqual(D.parseTitle('2025 - Lifter / Sungrown'), { season: 2025, cultivar: 'Lifter' });
+  assert.deepEqual(D.parseTitle('Lifter'), { season: null, cultivar: 'Lifter' });
+});
+
+test('scan-only day (tracker not closed): sacks from scans, tops from hourly, raw estimated, not weighed', () => {
+  const d = D.mergeDay({
+    date: '2030-01-07',
+    scan: scan('2030-01-07', [[2026, 'Alpha', 8], [2026, 'Beta', 14]]),
+    hourly: [hour('2026 - Alpha / Sungrown', 30, 20), hour('2026 - Beta / Sungrown', 40, 10, '2026 - Alpha / Sungrown', 5, 0)],
+  });
+  assert.equal(d.sacks, 22);
+  assert.equal(d.raw, 22 * 35);
+  assert.equal(d.processed, 22 * 35);
+  assert.equal(d.rawEstimated, false); // scanned sacks x their weight is the definition, not a guess
+  assert.equal(d.weighed, false);
+  assert.equal(d.waste, null);
+  assert.equal(d.trackerFilled, false);
+  const a = d.cultivars.find(c => c.cultivar === 'Alpha');
+  assert.deepEqual([a.sacks, a.sacksFrom, a.tops, a.smalls], [8, 'scan', 35, 20]);
+  assert.equal(d.cultivars[0].cultivar, 'Beta'); // most sacks first
+});
+
+test('closed day: scan count, tracker raw + bio/trim, hourly tops; waste is the remainder', () => {
+  const d = D.mergeDay({
+    date: '2030-01-08',
+    scan: scan('2030-01-08', [[2026, 'Alpha', 10]]),
+    tracker: [row('2030-01-08', '2026 - Alpha / Sungrown / 1st Cut', 10, { tops: 99, smalls: 20, bio: 150, trim: 20 })],
+    hourly: [hour('2026 - Alpha / Sungrown', 40, 20)],
+  });
+  assert.equal(d.sacks, 10);
+  assert.equal(d.raw, 350);
+  assert.equal(d.rawEstimated, false);
+  assert.equal(d.tops, 40); // hourly, not the tracker's 99
+  assert.equal(d.weighed, true);
+  assert.equal(d.waste, 350 - 40 - 20 - 150 - 20);
+});
+
+test('tracker-only day (before scan-out) and no hourly read: tracker sacks and tops', () => {
+  const d = D.mergeDay({ date: '2030-01-02', tracker: [row('2030-01-02', '2025 - Gamma / Sungrown', 5, { raw: 185, tops: 25, smalls: 9, bio: 80, trim: 9 })] });
+  assert.equal(d.sacks, 5);
+  assert.equal(d.raw, 185);
+  assert.equal(d.tops, 25);
+  assert.equal(d.topsFrom, 'tracker');
+  assert.equal(d.cultivars[0].sacksFrom, 'tracker');
+});
+
+test('scan count wins over a disagreeing tracker count, and raw follows the scanned sacks', () => {
+  const d = D.mergeDay({
+    date: '2030-01-09',
+    scan: scan('2030-01-09', [[2026, 'Alpha', 12]]),
+    tracker: [row('2030-01-09', '2026 - Alpha / Sungrown / 1st Cut', 10, { bio: 100, trim: 10 })],
+    hourly: [],
+  });
+  assert.equal(d.sacks, 12);
+  assert.equal(d.raw, 12 * 35);
+  assert.equal(d.rawEstimated, false);
+});
+
+test('raw: a light sack weighs its takedown fill_lbs, from the payload or the sacks list; 2025 sacks are 37 lb', () => {
+  const day = D.mergeDay({
+    date: '2030-01-13',
+    scan: { date: '2030-01-13', total: 5, groups: [
+      { season: 2026, cultivar: 'Alpha', sacks_today: 3, sacks: [{ sack_id: 'A1' }, { sack_id: 'A2' }, { sack_id: 'A3', fill_lbs: 18 }] },
+      { season: 2025, cultivar: 'Beta', sacks_today: 2, sacks: [{ sack_id: 'B1', fill_lbs: null }, { sack_id: 'B2' }] },
+    ] },
+    fills: { A2: 20, B1: 12 },
+    hourly: [],
+  });
+  const a = day.cultivars.find(c => c.cultivar === 'Alpha'), b = day.cultivars.find(c => c.cultivar === 'Beta');
+  assert.deepEqual([a.raw, a.lightSacks], [35 + 20 + 18, 2]);
+  // B1's payload says null (a full sack), which wins over the list.
+  assert.deepEqual([b.raw, b.lightSacks], [37 + 37, 0]);
+  assert.equal(day.raw, 73 + 74);
+  assert.equal(day.lightSacks, 2);
+});
+
+test('raw: sacks the payload counts but does not list are full sacks', () => {
+  const day = D.mergeDay({ date: '2030-01-14', scan: scan('2030-01-14', [[2026, 'Alpha', 4]]), hourly: [] });
+  assert.equal(day.raw, 140);
+});
+
+test('raw: a tracker-only day keeps the tracker raw; no raw anywhere is sacks x weight, flagged', () => {
+  const t = D.mergeDay({ date: '2030-01-15', tracker: [row('2030-01-15', '2025 - Gamma / Sungrown', 3, { raw: 100 })] });
+  assert.deepEqual([t.raw, t.rawEstimated], [100, false]);
+  const e = D.mergeDay({ date: '2030-01-15', tracker: [row('2030-01-15', '2025 - Gamma / Sungrown', 3, { raw: 0 })] });
+  assert.deepEqual([e.raw, e.rawEstimated], [111, true]);
+});
+
+test("processed = raw until leftover is recorded; then minus today's leftover, plus the last working day's", () => {
+  const scans = { '2030-03-02': scan('2030-03-02', [[2026, 'Alpha', 10]]), '2030-03-03': scan('2030-03-03', [[2026, 'Alpha', 10]]) };
+  const plain = D.buildDays({ scansByDate: scans });
+  assert.deepEqual(plain.map(d => [d.raw, d.processed, d.leftover, d.carriedIn]), [[350, 350, null, null], [350, 350, null, null]]);
+  const withLeft = D.buildDays({ scansByDate: scans, leftoverByDate: { '2030-03-02': 20, '2030-03-03': 5 } });
+  assert.deepEqual(withLeft.map(d => [d.raw, d.processed]), [[350, 330], [350, 365]]);
+});
+
+test('a 2025 strain typed on a scan day keeps its tracker count beside the 2026 scans', () => {
+  const d = D.mergeDay({
+    date: '2030-01-10',
+    scan: scan('2030-01-10', [[2026, 'Alpha', 6]]),
+    tracker: [row('2030-01-10', '2025 - Alpha / Sungrown', 3, { raw: 111 })],
+    hourly: [hour('2025 - Alpha / Sungrown', 9, 0), hour('2026 - Alpha / Sungrown', 20, 5)],
+  });
+  assert.equal(d.sacks, 9);
+  const y25 = d.cultivars.find(c => c.season === 2025), y26 = d.cultivars.find(c => c.season === 2026);
+  assert.deepEqual([y25.sacks, y25.tops, y25.seasonFallback], [3, 9, false]);
+  assert.deepEqual([y26.sacks, y26.tops, y26.seasonFallback], [6, 20, false]);
+});
+
+test('hourly logged under the wrong year lands on the only cultivar of that name with sacks (the 10/30 shape), flagged', () => {
+  const d = D.mergeDay({
+    date: '2030-01-11',
+    scan: scan('2030-01-11', [[2026, 'Alpha', 6], [2026, 'Beta', 27]]),
+    hourly: [hour('2025 - Alpha / Sungrown', 43, 27), hour('2026 - Beta / Sungrown', 35, 33)],
+  });
+  const a = d.cultivars.find(c => c.cultivar === 'Alpha');
+  assert.deepEqual([a.season, a.sacks, a.tops, a.seasonFallback], [2026, 6, 43, true]);
+  assert.equal(d.unmatched.length, 0);
+  assert.equal(d.cultivars.length, 2);
+});
+
+test('hourly pounds with no sacks anywhere still count toward the day and are listed', () => {
+  const d = D.mergeDay({
+    date: '2030-01-12',
+    scan: scan('2030-01-12', [[2026, 'Alpha', 4]]),
+    hourly: [hour('2026 - Alpha / Sungrown', 10, 0), hour('2026 - Delta / Sungrown', 7, 3)],
+  });
+  assert.equal(d.tops, 17);
+  assert.deepEqual(d.unmatched.map(u => u.title), ['2026 - Delta / Sungrown']);
+  assert.equal(d.cultivars.find(c => c.cultivar === 'Delta').sacks, 0);
+});
+
+test('an outlier tracker row counts its sacks but not its weights', () => {
+  const d = D.mergeDay({ date: '2030-01-03', tracker: [row('2030-01-03', '2025 - Gamma / Sungrown', 2, { raw: 74, tops: 60, smalls: 30, bio: 40, trim: 10 })] });
+  assert.equal(d.sacks, 2);
+  assert.equal(d.weighed, false);
+  assert.equal(d.biomass, 0);
+});
+
+test('buildDays: tracker and scan dates union, oldest first, empty scan days dropped', () => {
+  const days = D.buildDays({
+    entries: [row('2030-01-05', '2025 - Gamma / Sungrown', 5)],
+    scansByDate: { '2030-01-06': scan('2030-01-06', [[2026, 'Alpha', 3]]), '2030-01-07': scan('2030-01-07', []) },
+    hourlyByDate: { '2030-01-06': [] },
+  });
+  assert.deepEqual(days.map(d => [d.date, d.sacks, d.topsFrom]), [['2030-01-05', 5, 'tracker'], ['2030-01-06', 3, 'hourly']]);
+});
+
+test('unclosedDays skips weighed days and today', () => {
+  const days = [{ date: 'a', sacks: 3, weighed: false }, { date: 'b', sacks: 3, weighed: true }, { date: 'c', sacks: 2, weighed: false }, { date: 'd', sacks: 0, weighed: false }];
+  assert.deepEqual(D.unclosedDays(days, 'c'), ['a']);
+});
+
+test('scanDays never asks before scan-out began', () => {
+  assert.deepEqual(D.scanDays('2026-10-11', '2026-10-14'), ['2026-10-13', '2026-10-14']);
+  assert.deepEqual(D.scanDays('2026-11-01', '2026-10-01'), []);
+  assert.equal(D.daysBetween('2025-01-01', '2025-12-31').length, 365);
+});
+
+test('cultivarTotals: tops per sack from hourly; line rate is sacks per working day', () => {
+  const days = D.buildDays({
+    scansByDate: {
+      '2030-02-02': scan('2030-02-02', [[2026, 'Alpha', 10], [2026, 'Beta', 10]]),
+      '2030-02-03': scan('2030-02-03', [[2026, 'Alpha', 20]]),
+    },
+    hourlyByDate: {
+      '2030-02-02': [hour('2026 - Alpha / Sungrown', 50, 0), hour('2026 - Beta / Sungrown', 40, 0)],
+      '2030-02-03': [hour('2026 - Alpha / Sungrown', 100, 30)],
+    },
+  });
+  const t = D.cultivarTotals(days);
+  const a = t.find(x => x.cultivar === 'Alpha');
+  assert.deepEqual([a.sacks, a.days, a.topsPerSack, a.thin], [30, 2, 5, false]);
+  assert.equal(t.find(x => x.cultivar === 'Beta').thin, false);
+  assert.equal(D.lineSacksPerDay(days), 20);
+  assert.equal(D.lineSacksPerDay([]), null);
+});
+
+test('projectVariant: days supply is line time for every cultivar; a thin sample gets no yield projection', () => {
+  const totals = [{ season: 2026, cultivar: 'Tiny', sacks: 1, topsPerSack: 0, smallsPerSack: 0, thin: true }];
+  const p = D.projectVariant('2026 - Tiny / Sungrown / 1st Cut', 48, totals, 24);
+  assert.deepEqual([p.daysLeft, p.topsLbs, p.thin], [2, null, true]);
+  // A cultivar never opened in the range still has line time.
+  assert.equal(D.projectVariant('2026 - Unopened / Sungrown / 1st Cut', 12, totals, 24).daysLeft, 0.5);
+  assert.equal(D.projectVariant('2026 - Unopened / Sungrown / 1st Cut', 12, totals, null).daysLeft, null);
+});
+
+test('projectVariant: yields match by year and cultivar across cuts; under a day is never 0; empty is null', () => {
+  const totals = [{ season: 2026, cultivar: 'Alpha', sacks: 40, topsPerSack: 5, smallsPerSack: 2, thin: false }];
+  const p = D.projectVariant('2026 - Alpha / Sungrown / 2nd Cut', 100, totals, 20);
+  assert.deepEqual([p.daysLeft, p.topsLbs, p.smallsLbs], [5, 500, 200]);
+  assert.equal(D.projectVariant('2026 - Alpha / Sungrown / 1st Cut', 3, totals, 20).daysLeft, 0.5);
+  assert.equal(D.projectVariant('2026 - Alpha / Sungrown / 1st Cut', 0, totals, 20).daysLeft, null);
+  assert.equal(D.projectVariant('2025 - Alpha / Sungrown', 100, totals, 20).topsLbs, null);
+});
+
+test('slotMinutes reads the hourly slot labels', () => {
+  assert.deepEqual(D.slotMinutes('7:03 AM – 8:00 AM'), [423, 480]);
+  assert.deepEqual(D.slotMinutes('12:30 PM – 1:00 PM'), [750, 780]);
+  assert.deepEqual(D.slotMinutes('4:00 PM - 4:30 PM'), [960, 990]);
+  assert.equal(D.slotMinutes('lunch'), null);
+});
+
+test('loggedHours: union of slots with crew or output; overlapping cell and line rows count once', () => {
+  const r = (timeSlot, o = {}) => ({ timeSlot, trimmers1: 0, buckers1: 0, tops1: 0, smalls1: 0, ...o });
+  const rows = [
+    r('7:00 AM – 8:00 AM', { trimmers1: 5 }),
+    r('7:03 AM – 8:00 AM', { tops1: 10 }),
+    r('8:00 AM – 9:00 AM', { tops1: 12 }),
+    r('9:00 AM – 10:00 AM'),                      // nobody, nothing: not counted
+    r('12:30 PM – 1:00 PM', { trimmers1: 4 }),
+  ];
+  assert.equal(D.loggedHours(rows), 2.5);
+  assert.equal(D.loggedHours([r('9:00 AM – 10:00 AM')]), null);
+  assert.equal(D.loggedHours(null), null);
+});
+
+test('mapLimit keeps order and caps concurrency', async () => {
+  let live = 0, peak = 0;
+  const out = await D.mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+    live++; peak = Math.max(peak, live);
+    await new Promise(r => setTimeout(r, 5));
+    live--; return n * 2;
+  });
+  assert.deepEqual(out, [2, 4, 6, 8, 10, 12, 14]);
+  assert.ok(peak <= 3);
+});
+
+test('lbsFillMap keeps only real takedown weights', () => {
+  assert.deepEqual(D.lbsFillMap([{ sack_id: 'A', fill_lbs: 18 }, { sack_id: 'B', fill_lbs: null }, { sack_id: 'C', fill_lbs: 0 }, { fill_lbs: 9 }]), { A: 18 });
+});
