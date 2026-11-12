@@ -43,3 +43,13 @@ test('short cultivar names', () => {
   assert.equal(shortCultivar('2026 - Sour Lifter / Sungrown'), 'Sour Lifter');
   assert.equal(shortCultivar(''), '');
 });
+
+test('the calm wait only when something feeds the cell orders; live keeps NOT RECORDING', async () => {
+  const { calmWait } = await import('../src/js/cell/queue.mjs');
+  const base = { takesOrders: true, autoAssign: true, hasNow: false, grossG: 0.4, onScaleG: 2 };
+  assert.equal(calmWait(base), true);
+  assert.equal(calmWait({ ...base, autoAssign: false }), false, 'live today: nothing assigns, the red prompt stays');
+  assert.equal(calmWait({ ...base, hasNow: true }), false);
+  assert.equal(calmWait({ ...base, grossG: 12 }), false, 'weight going in with no order is still NOT RECORDING');
+  assert.equal(calmWait({ ...base, takesOrders: false }), false);
+});
