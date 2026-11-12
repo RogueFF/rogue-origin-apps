@@ -1517,10 +1517,10 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
     var card = el("form", "gate-card");
     card.appendChild(el("h1", null, "Rogue Origin · 2026 Cultivars"));
     card.appendChild(el("p", null,
-      "2026 cultivars after harvest: photos, website and COAs. This board carries test results, so it needs the farm password."));
+      "2026 cultivars after harvest: photos, website and COAs. This board carries test results, so it needs its password."));
     var input = document.createElement("input");
     input.type = "password";
-    input.placeholder = "Farm password";
+    input.placeholder = "Board password";
     input.autocomplete = "current-password";
     card.appendChild(input);
     var btn = el("button", "act", "Open board");

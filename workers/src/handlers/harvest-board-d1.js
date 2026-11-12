@@ -26,7 +26,7 @@
 import { query, queryOne } from '../lib/db.js';
 import { successResponse } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
-import { requireAuth } from '../lib/auth.js';
+import { requireAuth, extractPassword, constantTimeEqual } from '../lib/auth.js';
 import { BOARD_PAGE } from './harvest-board-page.js';
 
 export const BOARD_ACTIONS = new Set(['board', 'board_set', 'board_page', 'board_doc']);
@@ -440,13 +440,33 @@ function actorFrom(body, params) {
   return /^[a-z0-9_-]{1,24}$/.test(raw) ? raw : 'board';
 }
 
+/**
+ * The board's own password, for the people it is for.
+ *
+ * The board is used by the website person and the photographer. Giving them
+ * the farm password would also hand them every other page that password
+ * opens, so the board accepts a secret of its own (`BOARD_PASSWORD`) that
+ * opens nothing else. The farm password still works here: Koa, Timber and
+ * the CLI keep the key they already have.
+ *
+ * `BOARD_PASSWORD` unset means the board has no password of its own yet, and
+ * only the farm password opens it -- never a silent pass.
+ */
+function requireBoardAuth(request, body, env, label) {
+  const given = extractPassword(request, body);
+  if (given && env.BOARD_PASSWORD && constantTimeEqual(given, env.BOARD_PASSWORD)) {
+    return;
+  }
+  requireAuth(request, body, env, label);
+}
+
 export async function handleHarvestBoard(request, env, ctx, { action, params, body }) {
   if (action === 'board_page') {
     return boardPage();
   }
 
   // Everything below returns lot data (THC results included) — gate it.
-  requireAuth(request, body, env, `harvest-${action}`);
+  requireBoardAuth(request, body, env, `harvest-${action}`);
 
   const db = env.DB;
   if (!db) {

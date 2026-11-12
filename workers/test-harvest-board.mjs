@@ -269,5 +269,30 @@ await check('the lab drop-off date is stored, validated and clearable', async ()
 await check('cultivar writes need the password', () =>
   expectThrow(() => call('board_set', { cultivar: 'lemon', stage: 'sent' }, ''), 'password'));
 
+// ---- the board's own password ----------------------------------------------
+
+await check('with no board password set, only the farm password opens the board', async () => {
+  await expectThrow(() => call('board', {}, 'boardpw'), 'Invalid');
+  eq((await body(await call('board', {}, 'sekrit'))).total, 5, 'farm password');
+});
+
+await check('the board password reads and writes; the farm password still works', async () => {
+  const withBoard = { ...env, BOARD_PASSWORD: 'boardpw' };
+  const as = (pw, action, b = {}) =>
+    handleHarvestBoard(req(pw), withBoard, {}, { action, params: {}, body: b });
+  eq((await body(await as('boardpw', 'board'))).total, 5, 'reads');
+  const d = await body(await as('boardpw', 'board_set', { cultivar: 'lemon', stage: 'sent' }));
+  eq(d.cultivar.stage, 'sent', 'writes');
+  eq((await body(await as('sekrit', 'board'))).total, 5, 'farm password still opens it');
+  await expectThrow(() => as('nope', 'board'), 'Invalid');
+  await expectThrow(() => as('', 'board'), 'password');
+});
+
+await check('an empty board secret never matches an empty or missing password', async () => {
+  const blank = { ...env, BOARD_PASSWORD: '' };
+  await expectThrow(
+    () => handleHarvestBoard(req(''), blank, {}, { action: 'board', params: {}, body: {} }), 'password');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
