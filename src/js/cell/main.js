@@ -19,6 +19,10 @@
  * aside. The pickup mark carries the job's id, which closes it on the Worker, and
  * NEXT moves up with no taps. With nothing assigned, the dropdowns work as before
  * (wholesale batches, or a day the queue is down).
+ *
+ * Continuous (wholesale, Koa 2026-11-11, rounds.mjs): the bag size "Continuous"
+ * has no target. The cultivar is picked once; each pickup ends a round (saved as
+ * a job, a pickup mark) and the next round starts by itself on the same cultivar.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
@@ -27,6 +31,7 @@ import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.
 import { applyQueue, shortCultivar, calmWait } from './queue.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 import { createEod } from './eod.mjs';
+import { CONT, CONT_BAG, isContinuous, canFinish, roundNo, roundsToday, afterPickup, expireContinuous, endContinuous, queueMayApply } from './rounds.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // Reads cost one Worker request each, so the fast rate is kept to the moments
@@ -108,6 +113,9 @@ registerLabels({
     netHint: 'net · container tared',
     nowLabel: 'NOW', nextLabel: 'NEXT', basketOf: 'basket {n} of {m}', nothingNext: 'Nothing next yet',
     newCultivar: 'New cultivar', changedShopify: 'Changed in Shopify: ask bag/tag', rushTag: 'RUSH',
+    cont: 'Continuous', contOption: 'Continuous', endCont: 'End continuous',
+    contTarget: 'Continuous · round {n}', thisRound: 'This round', roundsToday: 'Rounds today', roundN: 'round {n}', lastRound: 'Last round',
+    contLock: 'Continuous: the cultivar stays for every round. To change it: End continuous between rounds, or Hold to reset.',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
@@ -135,6 +143,9 @@ registerLabels({
     netHint: 'neto · contenedor en tara',
     nowLabel: 'AHORA', nextLabel: 'SIGUIENTE', basketOf: 'canasta {n} de {m}', nothingNext: 'Nada después todavía',
     newCultivar: 'Variedad nueva', changedShopify: 'Cambió en Shopify: pregunte a empaque', rushTag: 'URGENTE',
+    cont: 'Continuo', contOption: 'Continuo', endCont: 'Terminar continuo',
+    contTarget: 'Continuo · ronda {n}', thisRound: 'Esta ronda', roundsToday: 'Rondas hoy', roundN: 'ronda {n}', lastRound: 'Última ronda',
+    contLock: 'Continuo: la variedad sigue en cada ronda. Para cambiarla: Terminar continuo entre rondas, o Mantenga para reiniciar.',
   },
 });
 
@@ -160,6 +171,7 @@ const el = {
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   tare: $('tareBtn'),
   cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
+  of: $('ofLabel'), toGoLabel: $('toGoLabel'), pctLabel: $('pctLabel'), endCont: $('endContBtn'),
   pauseBtn: $('pauseBtn'), resumeBtn: $('resumeBtn'), dialog: $('pauseDialog'), chips: $('pauseChips'),
   note: $('pauseNote'), noteErr: $('pauseError'), pauseOk: $('pauseOk'), pauseCancel: $('pauseCancel'),
 };
@@ -174,7 +186,7 @@ const state = { cultivar: '', bag: '', targetG: 0, bankedG: 0, tareFlagG: 0, pha
   breakKey: '', breakPause: false, breakEndsAt: null, tickAt: null, ...load() };
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
 // The target is always the picked bag size's fill standard.
-const bagOf = key => PRESETS.find(p => p.key === key);
+const bagOf = key => (key === CONT ? CONT_BAG : PRESETS.find(p => p.key === key));
 if (state.bag && !bagOf(state.bag)) state.bag = '';
 // A queued order's basket keeps its own target (bags x fill, slice 2).
 state.targetG = state.jobId && state.jobTargetG > 0 && state.bag ? state.jobTargetG : state.bag ? bagOf(state.bag).g : 0;
@@ -256,6 +268,9 @@ function renderOrder() {
     o.value = p.key; o.textContent = `${t(p.key)} · ${fmtTarget(p.g)}`;
     el.bag.appendChild(o);
   }
+  const cont = document.createElement('option');
+  cont.value = CONT; cont.textContent = t('contOption');
+  el.bag.appendChild(cont);
   el.bag.value = state.bag || '';
   el.bag.classList.toggle('missing', !state.bag);
 }
@@ -283,6 +298,7 @@ function render() {
   el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - Math.min(1, frac))));
   el.ring.classList.toggle('near', frac >= NEAR && frac < 1);
   el.ring.classList.toggle('over', frac > 1.02);
+  renderContinuous(n);
 
   el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
   el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
@@ -290,6 +306,24 @@ function render() {
   renderBanner();
   renderCycle();
   renderLock();
+}
+
+// Continuous: no target. The ring is full while a round is trimming (empty
+// while it waits for the first gram), the line under the number says the round,
+// and the two stats are this round's grams and the rounds closed today.
+function renderContinuous(n) {
+  const cont = isContinuous(state.bag);
+  const day = pacificNow().day;
+  el.of.hidden = cont;
+  el.toGoLabel.textContent = t(cont ? 'thisRound' : 'toGo');
+  el.pctLabel.textContent = t(cont ? 'roundsToday' : 'done');
+  el.ring.classList.toggle('cont', cont);
+  el.endCont.hidden = !(cont && (state.phase === 'idle' || state.phase === 'armed'));
+  if (!cont) return;
+  el.targetText.textContent = t('contTarget').replace('{n}', roundNo(state, day));
+  el.toGo.textContent = gross === null || state.phase !== 'running' ? '—' : fmtG(n);
+  el.pct.textContent = String(roundsToday(state, day));
+  el.ring.setAttribute('stroke-dashoffset', String(state.phase === 'running' ? 0 : RING_LEN));
 }
 
 // The order can't change under a running or finished job (Koa 2026-11-10: hard
@@ -301,6 +335,7 @@ function renderLock() {
   if (el.cultivar.disabled !== locked) el.cultivar.disabled = locked;
   if (el.bag.disabled !== locked) el.bag.disabled = locked;
   el.orderLock.hidden = !locked;
+  el.orderLock.textContent = t(isContinuous(state.bag) ? 'contLock' : 'orderLocked');
 }
 
 // Scale node battery, beside the live dot. Red under BATT_LOW_PCT: charge it at
@@ -439,7 +474,7 @@ function step() {
   if (state.phase === 'armed' && n >= START_G) {
     state.phase = 'running'; state.startedAt = Date.now(); state.finishedMs = null; overSince = null; clearPauses();
   } else if (state.phase === 'running') {
-    if (n >= state.targetG) {
+    if (canFinish(state, n)) {
       if (overSince === null) overSince = Date.now();
       if (stable === true || Date.now() - overSince >= HOLD_MS) {
         state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n;
@@ -488,7 +523,9 @@ function closeJob(g) {
   // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be
   // re-inputted. shouldn't matter once auto assign is working"): the pickup
   // clears the order, and the next job records only once one is picked.
-  if (ORDER_PER_JOB) { state.cultivar = ''; state.bag = ''; state.targetG = 0; renderOrder(); }
+  // Continuous (rounds.mjs): the order stays and the next round is the same
+  // cultivar; the round count for the day goes up. ORDER_PER_JOB never clears it.
+  if (afterPickup(state, { day: pacificNow().day, perJob: ORDER_PER_JOB }) !== 'kept') renderOrder();
   // The basket is back on the tared scale, so once the order is there the next
   // job is ready with no Start tap. Crumbs in it (under 2 g) aren't the next job's tops.
   state.basketBack = true;
@@ -520,7 +557,8 @@ function renderCycle() {
     el.cycle.textContent = '--:--';
     const hint = state.phase === 'armed' ? t('armed') : t('tareToStart');
     // The finished time stays readable after the container leaves the scale.
-    el.cycleSub.textContent = state.lastMs ? `${hint} · ${t('lastJob')} ${fmtClock(state.lastMs)}` : hint;
+    const last = isContinuous(state.bag) ? t('lastRound') : t('lastJob');
+    el.cycleSub.textContent = state.lastMs ? `${hint} · ${last} ${fmtClock(state.lastMs)}` : hint;
     return;
   }
   const elapsed = elapsedMs();
@@ -532,6 +570,12 @@ function renderCycle() {
   if (disconnected()) { el.cycleSub.textContent = t('clockHeld'); return; }
   const mins = elapsed / 60000;
   const n = net();
+  if (isContinuous(state.bag)) {
+    // No target, so no finish time: the pace and the round.
+    const round = t('roundN').replace('{n}', roundNo(state, pacificNow().day));
+    el.cycleSub.textContent = mins > 0.5 && n > 0 ? `${(n / mins).toFixed(1)} ${t('pace')} · ${round}` : round;
+    return;
+  }
   if (mins > 0.5 && n > 0) {
     const rate = n / mins;
     const left = Math.max(0, state.targetG - n) / rate;
@@ -592,6 +636,8 @@ el.bag.addEventListener('change', () => {
   const p = bagOf(el.bag.value);
   if (orderLocked()) { renderOrder(); return; }
   state.bag = p ? p.key : ''; state.targetG = p ? p.g : 0; overSince = null;
+  // Continuous is for today only (rounds.mjs expireContinuous).
+  if (p && p.continuous) state.contDay = pacificNow().day;
   armIfReady(); save(); renderOrder(); render();
 });
 // The Worker only sees gross weight (basket included). Tare and pickup marks let
@@ -809,7 +855,14 @@ function reportJob(force = false) {
   fetch(`${API}?action=setCellState`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(snap) })
     .catch(() => { lastReportKey = ''; });   // retry on the next tick
 }
-setInterval(() => { catchUpBreaks(); holdWhileDisconnected(); autoBreak(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
+// End continuous (between rounds only): the order clears and the screen asks for a pick.
+el.endCont.addEventListener('click', () => {
+  if (!isContinuous(state.bag) || orderLocked()) return;
+  endContinuous(state); overSince = null; save(); renderOrder(); render();
+});
+// Continuous picked yesterday clears before the first round of a new day.
+function expireDaily() { if (expireContinuous(state, pacificNow().day)) { save(); renderOrder(); render(); } }
+setInterval(() => { expireDaily(); catchUpBreaks(); holdWhileDisconnected(); autoBreak(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
 
 // A tablet left open keeps running the code it loaded (Koa 2026-11-10: Cell 1
 // read "Tablet off" all morning while trimming). Every few minutes, ask Pages
@@ -856,7 +909,8 @@ async function loadQueue() {
       .then(() => loadQueue()).catch(() => jobDoneSent.delete(stuck));
   }
   for (const [id, at] of closedJobs) if (id !== stuck && Date.now() - at > 10 * 60000) { closedJobs.delete(id); jobDoneSent.delete(id); }
-  const changed = applyQueue(state, queue.now, { locked: orderLocked(), closed: new Set(closedJobs.keys()), bagOk: k => !!bagOf(k) });
+  // A continuous order is never replaced by an assigned NOW (rounds.mjs).
+  const changed = queueMayApply(state) && applyQueue(state, queue.now, { locked: orderLocked(), closed: new Set(closedJobs.keys()), bagOk: k => !!bagOf(k) });
   if (changed) { overSince = null; armIfReady(); save(); renderOrder(); }
   renderQueue();
   render();
@@ -885,6 +939,7 @@ setInterval(() => { if (!document.hidden) loadQueue(); }, QUEUE_MS);
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 eod.bindHold($('eodBtn'));
 eod.resume();
+expireDaily();
 save();
 reportJob(true);
 enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });

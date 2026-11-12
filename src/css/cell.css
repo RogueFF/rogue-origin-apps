@@ -50,6 +50,10 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .ring-fill { fill: none; stroke: var(--green); stroke-width: 16; stroke-linecap: round; transition: stroke-dashoffset .4s ease, stroke .3s; }
 .ring-fill.near { stroke: var(--gold); }
 .ring-fill.over { stroke: var(--danger); }
+/* Continuous: no target, so the ring is a steady "recording" ring, never gold or red. */
+.ring-fill.cont, .ring-fill.cont.near, .ring-fill.cont.over { stroke: var(--green); }
+.end-cont { margin-top: 8px; }
+.end-cont[hidden] { display: none; }
 .ring-center { grid-column: 1; grid-row: 1; text-align: center; pointer-events: none; }
 .net { font: 700 40px var(--font-mono); }
 .of { font-size: 16px; color: var(--text-secondary); }
