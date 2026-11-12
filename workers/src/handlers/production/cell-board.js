@@ -16,6 +16,11 @@
  * board until bag/tag taps it collected. Only the last WAITING_HOURS count, so a
  * forgotten tap can't fill the board for good.
  *
+ * Continuous (wholesale) rounds (Koa 2026-11-11): bag 'cont' has no target; each
+ * pickup ends a round. The board gives each cell the rounds it closed today
+ * (Pacific day, from its 'cont' pickup marks), so the tile reads
+ * "Continuous · cultivar · round N".
+ *
  * No token, like scaleMark: it only describes the screen, it moves no stock
  * and holds no buyer data. Times are this Worker's clock, never the tablet's.
  */
@@ -24,9 +29,10 @@ import { batteryOf } from '../../lib/battery.js';
 import { recentEvents, notRecording, WINDOW_MS } from '../../lib/untracked.js';
 import { eodActive } from '../../lib/cell-eod.js';
 import { startJob, markCollected } from './order-flow.js';
+import { pacificParts } from '../../lib/pacific.js';
 
 const PHASES = ['idle', 'armed', 'running', 'finished'];
-const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
+const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1', 'cont'];   // cont: continuous rounds, no target
 const MAX_MS = 12 * 3600e3;
 const TABLET_STALE_MS = 90e3;   // the tablet reports every 30 s while it's open
 const LEGACY_STALE_S = 3;
@@ -45,6 +51,23 @@ const num = (v, min, max) => {
   const n = Number(v);
   return Number.isFinite(n) && n >= min && n <= max ? n : undefined;
 };
+
+/**
+ * Mid-changeover (Continuous, 0063): the cell's latest changeover today came
+ * after its last pickup, and the screen is between rounds (no round of the new
+ * cultivar trimming yet). { from, to } with to = the new cultivar once picked.
+ */
+export function changeoverOf(job, co, lastPickupTs) {
+  if (!job || !co || job.bag !== 'cont' || !(job.phase === 'idle' || job.phase === 'armed')) return null;
+  if (lastPickupTs && String(lastPickupTs) > String(co.ts)) return null;
+  return { from: co.cultivar ?? null, to: job.cultivar && job.cultivar !== co.cultivar ? job.cultivar : null, since: parseUtc(co.ts) };
+}
+
+/** The instant of Pacific midnight starting the day that contains now. */
+export function pacificMidnight(now) {
+  const p = pacificParts(new Date(now));
+  return now - (p.hour * 60 + p.minute) * 60e3 - (now % 60e3);
+}
 
 async function allOrEmpty(stmt) {
   try { return (await stmt.all()).results || []; } catch (e) {
@@ -117,7 +140,7 @@ export async function setCellState(body, env, now = Date.now()) {
 }
 
 export async function getCellBoard(params, env, now = Date.now()) {
-  const [roster, states, readings, stations, events, waitingRows, eod] = await Promise.all([
+  const [roster, states, readings, stations, events, waitingRows, eod, rounds, coRows, lastPickups] = await Promise.all([
     env.DB.prepare(`SELECT station_id, label, lane, sort FROM cell_roster WHERE active = 1 ORDER BY sort, station_id`).all(),
     allOrEmpty(env.DB.prepare(`SELECT * FROM cell_screen_state`)),
     allOrEmpty(env.DB.prepare(`SELECT * FROM scale_readings`)),   // * : batt_* exist only after 0055
@@ -129,7 +152,24 @@ export async function getCellBoard(params, env, now = Date.now()) {
        WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
     ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
     eodActive(env, now, WINDOW_MS),
+    // Continuous rounds closed today, per cell (Pacific midnight; offsets are whole minutes).
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, COUNT(*) AS n FROM scale_marks
+       WHERE kind = 'pickup' AND bag = 'cont' AND kg > 0 AND ts >= ? GROUP BY station_id`
+    ).bind(sqlTime(pacificMidnight(now)))),
+    // Changeovers today (0063): the latest changeover window per cell, and the
+    // cell's last pickup, so the tile knows whether it is still mid-changeover.
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, cultivar, ts, ended_at FROM cell_eod
+       WHERE kind = 'window' AND reason = 'changeover' AND ts >= ? ORDER BY ts, id`
+    ).bind(sqlTime(pacificMidnight(now)))),
+    allOrEmpty(env.DB.prepare(
+      `SELECT station_id, MAX(ts) AS ts FROM scale_marks WHERE kind = 'pickup' AND kg > 0 AND ts >= ? GROUP BY station_id`
+    ).bind(sqlTime(pacificMidnight(now)))),
   ]);
+  const roundsBy = new Map(rounds.map(r => [r.station_id, r.n]));
+  const coBy = new Map(coRows.map(r => [r.station_id, r]));   // ordered by ts: the last one wins
+  const lastPickup = new Map(lastPickups.map(r => [r.station_id, r.ts]));
   const byId = (rows) => new Map(rows.map(r => [r.station_id, r]));
   const st = byId(states), rd = byId(readings), sc = byId(stations);
   const cells = (roster.results || []).map(c => {
@@ -157,7 +197,10 @@ export async function getCellBoard(params, env, now = Date.now()) {
         clockStart: s.clock_start, clockMs: s.clock_ms, paused: s.paused === 1, pauseNote: s.pause_note,
         finishedNetG: s.finished_net_g, finishedAt: s.finished_at, updatedAt: s.updated_at,
         tabletOnline: now - s.updated_at <= TABLET_STALE_MS,
+        // Continuous: rounds closed today; the one on the scale is round rounds + 1.
+        rounds: s.bag === 'cont' ? roundsBy.get(c.station_id) || 0 : null,
       } : null,
+      changeover: changeoverOf(s, coBy.get(c.station_id), lastPickup.get(c.station_id)),
     };
   });
   const label = new Map((roster.results || []).map(c => [c.station_id, c.label]));

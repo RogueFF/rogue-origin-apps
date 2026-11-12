@@ -11,13 +11,22 @@
  * Weighing: the scale reads gross, so the panel takes its own zero with the
  * empty tray on and saves (settled reading - zero). The scale tops out at 2 kg,
  * so a big leftover goes on in parts: every Save adds to the day's total.
+ *
+ * Change cultivar (Continuous, Koa 2026-11-11, migration 0063): the same panel in
+ * mode 'changeover', opened between rounds from the screen's Change cultivar
+ * button. It weighs the OLD cultivar's leftover raw (no tote, no sacks), tagged
+ * with that cultivar, then hands back to the screen to pick the new one. In both
+ * modes leftover raw carries a cultivar, and a big leftover (a partial supersack
+ * the water spider weighs) can be typed from the bench scale in g or lb instead.
  */
 import { registerLabels, t } from '../shared/i18n.js';
+import { benchGrams } from './rounds.mjs';
 
 export const HOLD_OPEN_MS = 1200;
 export const SETTLE_MS = 2000;      // unchanged this long (within SETTLE_TOL_G) counts as settled
 export const SETTLE_TOL_G = 0.05;
 export const MIN_G = 0.5;           // less than this on the tray is nothing to save
+
 
 registerLabels({
   en: {
@@ -32,6 +41,10 @@ registerLabels({
     eodDone: 'Done', eodUndo: 'Undo', eodBusy: 'Finish or reset the job first.',
     eodNotReady: 'End of day is not set up yet. Tell Koa.', eodFail: 'Could not save. Try again.',
     eodSaved: 'Saved', eodTaken: 'ticked to another cell',
+    eodCv: 'Leftover raw is', eodBench: 'Or type the bench-scale weight (big leftover, partial supersack)',
+    eodBenchSave: 'Save bench weight', eodBenchBad: 'Type the weight first', eodBenchTag: 'bench',
+    coTitle: 'Change cultivar: weigh the leftover', coStep2: '2. Put the leftover raw of {c} on the tray. When it settles, save it.',
+    coOf: 'Leftover of', coDone: 'Next: pick the new cultivar', coNone: 'No leftover? Tap Next.',
   },
   es: {
     eodBtn: 'Fin del día', eodTitle: 'Fin del día: pesar lo que sobra',
@@ -45,6 +58,10 @@ registerLabels({
     eodDone: 'Listo', eodUndo: 'Deshacer', eodBusy: 'Termine o reinicie el trabajo primero.',
     eodNotReady: 'Fin del día todavía no está listo. Avísele a Koa.', eodFail: 'No se pudo guardar. Intente otra vez.',
     eodSaved: 'Guardado', eodTaken: 'marcado a otra celda',
+    eodCv: 'La materia prima sobrante es', eodBench: 'O escriba el peso de la báscula de banco (sobrante grande, supersaco parcial)',
+    eodBenchSave: 'Guardar peso de banco', eodBenchBad: 'Escriba el peso primero', eodBenchTag: 'banco',
+    coTitle: 'Cambiar variedad: pesar lo que sobra', coStep2: '2. Ponga la materia prima sobrante de {c} en la charola. Cuando se estabilice, guárdela.',
+    coOf: 'Sobrante de', coDone: 'Siguiente: elija la variedad nueva', coNone: '¿No sobró nada? Toque Siguiente.',
   },
 });
 
@@ -63,9 +80,14 @@ export function createSettle() {
 }
 
 /**
- * @param {{ api: string, station: string, isBusy: () => boolean, onOpen: () => void, onClose: () => void }} o
+ * @param {{ api: string, station: string, isBusy: () => boolean, onOpen: () => void, onClose: () => void,
+ *   mode?: 'eod'|'changeover', cultivars?: () => string[], current?: () => string, short?: (c: string) => string }} o
+ *   cultivars: the picker's list; current: the cultivar on the screen (changeover: the one being left).
  */
-export function createEod({ api, station, isBusy, onOpen, onClose }) {
+export function createEod({ api, station, isBusy, onOpen, onClose, mode = 'eod', cultivars = () => [], current = () => '', short = c => c }) {
+  const co = mode === 'changeover';
+  let fromCultivar = '';   // changeover: the cultivar being left, fixed when the panel opens
+  let openedAt = 0;        // changeover: only this changeover's weighs are listed
   const post = (action, body) => fetch(`${api}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
   const settle = createSettle();
   let open = false, zeroG = null, gross = null, settled = false, day = null, msg = '', busySave = false;
@@ -79,16 +101,27 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
     <h2 data-k="eodTitle"></h2>
     <p class="eod-step" data-k="eodStep1"></p>
     <button type="button" class="btn eod-zero" data-k="eodZero"></button>
-    <p class="eod-step" data-k="eodStep2"></p>
+    <p class="eod-step eod-step2"></p>
+    <label class="eod-cv"><span data-k="eodCv"></span> <select class="eod-cv-sel"></select></label>
+    <p class="eod-cv-fixed"><span data-k="coOf"></span> <b class="eod-from"></b></p>
     <div class="eod-live"><span data-k="eodOnScale"></span> <b class="eod-g">—</b> <small class="eod-state"></small></div>
     <div class="row eod-saves">
       <button type="button" class="btn primary eod-save" data-kind="raw" data-k="eodSaveRaw"></button>
       <button type="button" class="btn primary eod-save" data-kind="tote" data-k="eodSaveTote"></button>
     </div>
     <small class="eod-hint" data-k="eodParts"></small>
+    <div class="eod-bench">
+      <small data-k="eodBench"></small>
+      <div class="row">
+        <input class="eod-bench-n" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="bench-scale weight">
+        <select class="eod-bench-u"><option value="lb">lb</option><option value="g">g</option></select>
+        <button type="button" class="btn eod-bench-save" data-k="eodBenchSave"></button>
+      </div>
+    </div>
     <ul class="eod-list"></ul>
-    <p class="eod-step" data-k="eodSacks"></p>
+    <p class="eod-step eod-sacks-step" data-k="eodSacks"></p>
     <ul class="eod-sacks"></ul>
+    <small class="eod-hint eod-co-none" data-k="coNone"></small>
     <div class="eod-msg error" hidden></div>
     <div class="row"><button type="button" class="btn eod-done" data-k="eodDone"></button></div>
   </div>`;
@@ -97,8 +130,28 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
 
   const netG = () => (gross === null || zeroG === null ? null : Math.round((gross - zeroG) * 100) / 100);
 
+  // Changeover: only the raw save; no tote, no sacks; the cultivar is the one being left.
+  root.classList.toggle('co', co);
+  q('.eod-save[data-kind="tote"]').hidden = co;
+  q('.eod-sacks-step').hidden = co; q('.eod-sacks').hidden = co;
+  q('.eod-cv').hidden = co; q('.eod-cv-fixed').hidden = !co; q('.eod-co-none').hidden = !co;
+
+  // The cultivar a leftover-raw save is tagged with.
+  const rawCultivar = () => (co ? fromCultivar : q('.eod-cv-sel').value) || null;
+  function renderCultivars() {
+    const sel = q('.eod-cv-sel');
+    const keep = sel.value || current() || '';
+    const opts = [...new Set([current(), ...cultivars()].filter(Boolean))];
+    sel.textContent = '';
+    for (const c of opts) { const o = document.createElement('option'); o.value = c; o.textContent = short(c); sel.appendChild(o); }
+    sel.value = opts.includes(keep) ? keep : opts[0] || '';
+    q('.eod-from').textContent = short(fromCultivar) || '—';
+  }
+
   function render() {
     root.querySelectorAll('[data-k]').forEach(n => { n.textContent = t(n.dataset.k); });
+    if (co) { q('h2').textContent = t('coTitle'); q('.eod-done').textContent = t('coDone'); }
+    q('.eod-step2').textContent = co ? t('coStep2').replace('{c}', short(fromCultivar) || '—') : t('eodStep2');
     const g = netG();
     q('.eod-g').textContent = zeroG === null ? '—' : fmt(g);
     q('.eod-state').textContent = zeroG === null ? t('eodNeedZero') : settled ? '' : t('eodSettling');
@@ -115,19 +168,20 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
     const list = q('.eod-list');
     list.textContent = '';
     if (day) {
-      for (const kind of ['raw', 'tote']) {
-        const parts = day.weighs.filter(w => w.kind === kind && !w.undone);
+      for (const kind of co ? ['raw'] : ['raw', 'tote']) {
+        const parts = day.weighs.filter(w => w.kind === kind && !w.undone && (!co || (w.reason === 'changeover' && w.at >= openedAt - 60000)));
         if (!parts.length) continue;
         const li = document.createElement('li');
         li.className = 'eod-total';
-        const total = kind === 'raw' ? day.rawG : day.toteG;
+        const total = Math.round(parts.reduce((s, w) => s + w.g, 0) * 100) / 100;
         li.textContent = `${t(kind === 'raw' ? 'eodRaw' : 'eodTote')}: ${fmt(total)} · ${t(parts.length === 1 ? 'eodParts1' : 'eodPartsN').replace('{n}', parts.length)}`;
         list.appendChild(li);
         for (const w of parts) {
           const p = document.createElement('li');
           p.className = 'eod-part';
           p.innerHTML = '<span></span>';
-          p.firstChild.textContent = fmt(w.g);
+          // Which cultivar, and a bench number says so.
+          p.firstChild.textContent = [fmt(w.g), w.kind === 'raw' && w.cultivar ? short(w.cultivar) : '', w.source === 'bench' ? t('eodBenchTag') : ''].filter(Boolean).join(' · ');
           if (w.canUndo) {
             const u = document.createElement('button');
             u.type = 'button'; u.className = 'btn ghost'; u.textContent = t('eodUndo');
@@ -170,10 +224,24 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
     if (g === null || g < MIN_G || !settled) return;
     busySave = true; render();
     try {
-      const r = await post('eodWeigh', { stationId: station, kind, grams: g });
+      const r = await post('eodWeigh', { stationId: station, kind, grams: g, cultivar: kind === 'raw' ? rawCultivar() : null, reason: mode, source: 'scale' });
       if (r.status === 503) msg = t('eodNotReady');
       else if (!r.ok) throw new Error(String(r.status));
       else msg = '';
+    } catch { msg = t('eodFail'); }
+    busySave = false;
+    await load();
+  }
+  // A typed bench-scale weight: never on the cell scale, so no zero or settle needed.
+  async function saveBench() {
+    const g = benchGrams(q('.eod-bench-n').value, q('.eod-bench-u').value);
+    if (g === null) { msg = t('eodBenchBad'); render(); return; }
+    busySave = true; render();
+    try {
+      const r = await post('eodWeigh', { stationId: station, kind: 'raw', grams: g, cultivar: rawCultivar(), reason: mode, source: 'bench' });
+      if (r.status === 503) msg = t('eodNotReady');
+      else if (!r.ok) throw new Error(String(r.status));
+      else { msg = ''; q('.eod-bench-n').value = ''; }
     } catch { msg = t('eodFail'); }
     busySave = false;
     await load();
@@ -194,10 +262,11 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
     if (open) return;
     if (!resumed && isBusy()) { window.alert(t('eodBusy')); return; }
     open = true; zeroG = null; msg = ''; settle.reset();
+    if (!resumed || !fromCultivar) { fromCultivar = current() || fromCultivar; openedAt = Date.now(); }
     root.hidden = false;
     onOpen();
-    render(); renderLists();
-    if (!resumed) post('eodWindow', { stationId: station, open: true }).then(r => { if (r.status === 503) { msg = t('eodNotReady'); render(); } }).catch(() => {});
+    renderCultivars(); render(); renderLists();
+    if (!resumed) post('eodWindow', { stationId: station, open: true, reason: mode, cultivar: co ? fromCultivar : null }).then(r => { if (r.status === 503) { msg = t('eodNotReady'); render(); } }).catch(() => {});
     await load();
   }
   function hide() {
@@ -211,7 +280,8 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
   q('.eod-zero').addEventListener('click', () => { if (gross !== null && settled) { zeroG = gross; render(); } });
   root.querySelectorAll('.eod-save').forEach(b => b.addEventListener('click', () => save(b.dataset.kind)));
   q('.eod-done').addEventListener('click', hide);
-  document.addEventListener('ro:langchange', () => { if (open) { render(); renderLists(); } });
+  q('.eod-bench-save').addEventListener('click', saveBench);
+  document.addEventListener('ro:langchange', () => { if (open) { renderCultivars(); render(); renderLists(); } });
 
   // The small hold button that opens it (lead only: a tap does nothing).
   function bindHold(btn) {
@@ -230,7 +300,10 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
 
   return {
     get isOpen() { return open; },
+    /** The cultivar this changeover is leaving (changeover mode). */
+    get fromCultivar() { return fromCultivar; },
     bindHold,
+    show,
     /** Each poll's reading while open. */
     reading(g, stableFlag) {
       gross = g;
@@ -240,7 +313,12 @@ export function createEod({ api, station, isBusy, onOpen, onClose }) {
     /** A page reloaded mid-weigh: reopen the panel the Worker still has open. */
     async resume() {
       const d = await load();
-      if (d && d.windowOpen && !open) show(true);
+      // Each panel reopens only its own kind of window (a changeover or End of day).
+      const w = d && d.windowOpen;
+      if (w && !open && (w.reason || 'eod') === mode) {
+        if (co && w.cultivar) { fromCultivar = w.cultivar; openedAt = w.at; }
+        show(true);
+      }
     },
   };
 }

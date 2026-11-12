@@ -86,3 +86,17 @@ test('before 0056 is applied the cron does nothing and never throws', async () =
   const { env: e } = env({ with0056: false });
   assert.deepEqual(await runUntrackedWatch(e, new Date(NOW)), { alert: [], clear: [] });
 });
+
+test('the cron: a continuous cell between rounds (armed, bag cont, cultivar) never alerts; armed retail still does', async () => {
+  const { raw, env: e } = env();
+  const sent = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { sent.push(JSON.parse(init.body)); return new Response('{"ok":true}'); };
+  try {
+    raw.prepare(`INSERT INTO cell_screen_state (station_id, phase, cultivar, bag, updated_at) VALUES ('table1', 'armed', '2026 - Lifter / Sungrown', 'cont', ?)`).run(NOW - 20000);
+    assert.deepEqual(await runUntrackedWatch(e, new Date(NOW)), { alert: [], clear: [] });
+    raw.prepare(`UPDATE cell_screen_state SET bag = 'oz1'`).run();
+    assert.deepEqual(await runUntrackedWatch(e, new Date(NOW + 1000)), { alert: ['table1'], clear: [] });
+    assert.equal(sent.length, 1);
+  } finally { globalThis.fetch = real; }
+});

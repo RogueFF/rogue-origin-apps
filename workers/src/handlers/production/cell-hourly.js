@@ -133,7 +133,8 @@ async function autoRows(env, date, stationIds, now = new Date()) {
 }
 
 // Retail bag sizes a cell job can be (fill-weight standards; the cell screen's keys).
-const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1'];
+// cont: a continuous (wholesale) round, no target (cell screen rounds.mjs).
+const BAGS = ['qOz', 'hOz', 'oz1', 'qLb', 'hLb', 'lb1', 'cont'];
 const MAX_CYCLE_S = 12 * 3600;
 
 async function scaleMark(body, env) {

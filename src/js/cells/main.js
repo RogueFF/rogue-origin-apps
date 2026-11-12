@@ -37,7 +37,8 @@ registerLabels({
     collectFail: 'Could not mark it collected. Try again.',
     retail: 'retail', notOnScreen: 'Not on a screen yet', loadFail: 'Can\'t reach the server. Retrying…',
     cellsLive: '{n} cell(s) on a screen', ago: '{m} min ago', justNow: 'just now', startsAt: 'starts on the first gram',
-    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
+    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cont: 'Continuous', roundN: 'round {n}',
+    changeover: 'Changeover', coLine: 'Changeover · {a} → {b}', coWeigh: 'weighing the leftover, then the new cultivar',
     qNow: 'NOW', qNext: 'NEXT', orderReady: 'Order ready', atSpotOf: 'at {cell}’s pickup spot · {n} basket(s)',
   },
   es: {
@@ -49,7 +50,8 @@ registerLabels({
     collectFail: 'No se pudo marcar como recogido. Intente otra vez.',
     retail: 'menudeo', notOnScreen: 'Todavía sin pantalla', loadFail: 'No hay conexión con el servidor. Reintentando…',
     cellsLive: '{n} celda(s) con pantalla', ago: 'hace {m} min', justNow: 'ahora', startsAt: 'empieza con el primer gramo',
-    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb',
+    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cont: 'Continuo', roundN: 'ronda {n}',
+    changeover: 'Cambio', coLine: 'Cambio · {a} → {b}', coWeigh: 'pesando lo que sobra, luego la variedad nueva',
     qNow: 'AHORA', qNext: 'SIGUIENTE', orderReady: 'Orden lista', atSpotOf: 'en el lugar de recogida de {cell} · {n} canasta(s)',
   },
 });
@@ -126,6 +128,8 @@ function statusOf(c) {
   if (!j.tabletOnline) return 'offline';
   if (c.scale && !c.scale.live && j.phase !== 'finished') return 'down';
   if (j.phase === 'running' && j.paused) return 'paused';
+  // Continuous, between the old cultivar's last pickup and the new one's first gram (0063).
+  if (c.changeover) return 'changeover';
   return j.phase;                                        // idle, armed, running, finished
 }
 function clockOf(j) {
@@ -187,7 +191,9 @@ function renderPickups() {
     card.querySelector('.p-what small').textContent = `${fmtG(w.g)}${w.cycleS ? ` · ${fmtClock(w.cycleS * 1000)}` : ''}`;
     card.querySelector('.p-tag .r').textContent = o && o.orderReady ? t('orderReady') : t('atSpot');
     const mins = Math.floor((workerNow() - w.at) / 60000);
-    card.querySelector('.p-tag small').textContent = mins < 1 ? t('justNow') : tf('ago', { m: mins });
+    // The pickup's own time stays on the card (Koa 2026-11-11: track how often it is picked up).
+    const clock = new Date(w.at).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' });
+    card.querySelector('.p-tag small').textContent = `${clock} · ${mins < 1 ? t('justNow') : tf('ago', { m: mins })}`;
     card.querySelector('.collect').textContent = t('collected');
     place(el.pickups, card, keep.size - 1);
   }
@@ -323,8 +329,14 @@ function renderGrid() {
     const batt = tile.querySelector('.batt');
     batt.textContent = b && b.pct != null ? `🔋 ${b.pct}%` : '';
     batt.classList.toggle('low', !!b && b.pct < BATT_LOW_PCT);
-    tile.querySelector('.t-order .o').textContent = j.cultivar || j.bag ? (shortCultivar(j.cultivar) || '—') : (c.job ? t('noOrder') : '');
-    tile.querySelector('.t-order small').textContent = j.bag ? ` · ${t(j.bag)}` : '';
+    // Continuous (wholesale rounds, no target): "Continuous · cultivar · round N",
+    // N from the round marks the Worker counted today (cell-board.js).
+    const cont = j.bag === 'cont';
+    const co = st === 'changeover' ? c.changeover : null;
+    tile.querySelector('.t-order .o').textContent = co ? tf('coLine', { a: shortCultivar(co.from) || '—', b: shortCultivar(co.to) || '…' })
+      : cont ? `${t('cont')} · ${shortCultivar(j.cultivar) || '—'}`
+      : j.cultivar || j.bag ? (shortCultivar(j.cultivar) || '—') : (c.job ? t('noOrder') : '');
+    tile.querySelector('.t-order small').textContent = co ? '' : cont ? ` · ${tf('roundN', { n: (j.rounds || 0) + 1 })}` : j.bag ? ` · ${t(j.bag)}` : '';
     tile.querySelector('.t-weight b').textContent = shown == null ? '—' : fmtG(shown);
     tile.querySelector('.t-weight span').textContent = target ? `${t('of')} ${fmtTarget(target)}` : '';
     const bar = tile.querySelector('.bar i');
@@ -339,6 +351,7 @@ function renderGrid() {
     tile.querySelector('.t-clock').textContent = clock == null ? '--:--' : fmtClock(clock);
     tile.querySelector('.t-note').textContent =
       st === 'paused' ? (j.pauseNote || '') :
+      st === 'changeover' ? (co.to ? t('startsAt') : t('coWeigh')) :
       st === 'armed' ? t('startsAt') :
       st === 'finished' ? t('waiting') :
       st === 'notrec' ? `${t(c.notRecording.why)} · +${c.notRecording.riseG} g` :

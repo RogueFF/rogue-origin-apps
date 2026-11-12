@@ -60,7 +60,10 @@ export async function recentEvents(env, now) {
 export function recording(job, now) {
   if (!job) return false;
   if (now - job.updated_at > TABLET_STALE_MS) return false;
-  return job.phase === 'running' || job.phase === 'finished';
+  if (job.phase === 'running' || job.phase === 'finished') return true;
+  // Continuous between rounds: armed on the cultivar, the next gram starts the
+  // round (cell screen rounds.mjs), so trimming there is never NOT RECORDING.
+  return job.phase === 'armed' && job.bag === 'cont' && !!job.cultivar;
 }
 
 /**
