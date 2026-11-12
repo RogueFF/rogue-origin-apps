@@ -113,7 +113,7 @@ export function createEod({ api, station, isBusy, onOpen, onClose, mode = 'eod',
     <div class="eod-bench">
       <small data-k="eodBench"></small>
       <div class="row">
-        <input class="eod-bench-n" type="text" inputmode="decimal" autocomplete="off">
+        <input class="eod-bench-n" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="bench-scale weight">
         <select class="eod-bench-u"><option value="lb">lb</option><option value="g">g</option></select>
         <button type="button" class="btn eod-bench-save" data-k="eodBenchSave"></button>
       </div>
