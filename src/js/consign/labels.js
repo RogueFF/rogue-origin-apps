@@ -141,6 +141,7 @@ export const LABELS = {
     lotsCount: '{n} lots',
     leaveConfirm: 'Leave without saving? What you typed will be lost.',
     required: 'Required',
+    notFound: 'Not found. It may have been voided.',
     balance: 'Balance',
   },
   es: {
@@ -279,6 +280,7 @@ export const LABELS = {
     lotsCount: '{n} lotes',
     leaveConfirm: '¿Salir sin guardar? Se pierde lo que escribió.',
     required: 'Obligatorio',
+    notFound: 'No se encontró. Puede que se haya anulado.',
     balance: 'Saldo',
   },
 };

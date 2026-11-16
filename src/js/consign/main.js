@@ -15,11 +15,15 @@ import './labels.js';
 import { t, getLang, toggleLang } from '../shared/i18n.js';
 import * as home from './views/home.js';
 import * as dropoff from './views/dropoff.js';
+import * as weigh from './views/weigh.js';
+import * as screen from './views/screen.js';
 import { setGo } from './nav.js';
 
 const ROUTES = [
   [/^$/, home, []],
   [/^dropoff$/, dropoff, []],
+  [/^weigh\/(\d+)\/(\d+)$/, weigh, ['dropoffId', 'lotId']],
+  [/^screen\/(\d+)\/(\d+)$/, screen, ['dropoffId', 'lotId']],
 ];
 
 const root = document.getElementById('view');
