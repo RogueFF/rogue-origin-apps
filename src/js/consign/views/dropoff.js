@@ -353,19 +353,10 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
       const [uid, ty] = b.dataset.split.split('|');
       const slot = findRow(uid).types[ty];
       if (slot.parts.length > 1) {
-        const sumOf = (get) => Math.round(slot.parts.reduce((a, p) => a + (num(get(p)) || 0), 0) * 100) / 100;
-        const total = sumOf((p) => p.lbs);
-        const merged = newPart(defaultTerm(), total > 0 ? String(total) : '');
-        // Keep the finals only when every part in use has one; otherwise the final is asked again.
-        const used = slot.parts.filter((p) => !blank(p.lbs) || !blank(p.final));
-        if (used.length && used.every((p) => !blank(p.final))) {
-          merged.final = String(sumOf((p) => p.final));
-          for (const k of Object.keys(merged.loss)) {
-            const v = sumOf((p) => (finalMode(p) === 'losses' ? p.loss[k] : ''));
-            merged.loss[k] = v > 0 ? String(v) : '';
-          }
-        }
-        slot.parts = [merged];
+        const total = Math.round(slot.parts.reduce((a, p) => a + (num(p.lbs) || 0), 0) * 100) / 100;
+        // Finals are not merged: summed finals can disagree with the summed weight (a part with
+        // no weight, two small in-tolerance gaps). The final is asked again for the whole line.
+        slot.parts = [newPart(defaultTerm(), total > 0 ? String(total) : '')];
       } else {
         // One part per term: the server refuses the same cultivar, type and term twice.
         const first = slot.parts[0];

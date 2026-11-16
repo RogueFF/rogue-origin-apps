@@ -187,6 +187,35 @@ test.describe('Consignment: finished at dropoff', () => {
     await expect(page.locator('#saveBtn')).toBeDisabled();
   });
 
+  test('review: "1,000" is refused, never read as 1 lb; "12,5" is 12.5', async ({ page }) => {
+    const { fake } = await open(page);
+    await startAlpha(page);
+    await box(page, 'Alpha', 'tops').fill('1,000');
+    await box(page, 'Alpha', 'tops', 'final').fill('1,000');
+    await expect(page.locator('#saveBtn')).toBeDisabled();
+    await box(page, 'Alpha', 'tops').fill('12,5');
+    await box(page, 'Alpha', 'tops', 'final').fill('12,5');
+    await expect(page.locator('#saveBtn')).toBeEnabled();
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    expect(savedLines(fake)).toEqual([{ cultivar: 'Alpha', type: 'tops', term: 'dropoff', intake_lbs: 12.5, final: { final_lbs: 12.5 } }]);
+  });
+
+  test('review: unsplitting clears the finals so the merged line is asked again', async ({ page }) => {
+    await open(page);
+    await startAlpha(page);
+    const split = page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]');
+    await split.click();
+    const finals = page.locator('[data-row="Alpha"] [data-type="tops"] input[data-final]');
+    await finals.nth(0).fill('5');
+    await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').nth(1).fill('10');
+    await finals.nth(1).fill('10');
+    await split.click();
+    await expect(box(page, 'Alpha', 'tops')).toHaveValue('10');
+    await expect(box(page, 'Alpha', 'tops', 'final')).toHaveValue('');
+    await expect(page.locator('#saveBtn')).toBeEnabled();
+  });
+
   test('final with no weight: accepted as weighed, no more questions', async ({ page }) => {
     const { fake } = await open(page);
     await startAlpha(page);

@@ -73,6 +73,7 @@ export function dropoffPrompt(ctx = {}) {
 This is the DROPOFF sheet. Header boxes: Farm, Date, Dropped by. Then a table of rows: Cultivar | Tops lb | Tops final | Smalls lb | Smalls final | Note. A footer box holds a dropoff note.
 - "Tops final" and "Smalls final" are the weight after checking, filled only when the product was checked at dropoff. Read them into "tops_final" and "smalls_final". Most rows leave them empty: "value": null, "unsure": false. A zero ("0") is a real number there.
 - Never copy a weight into its final box or a final into its weight box: read each box on its own.
+- A check mark or anything but a number in a final box: "value": null, "unsure": true.
 - One entry in "rows" per row that has anything written or ticked, top to bottom. Skip rows that are crossed out and rows that are completely empty.
 - Some cultivar names may be printed already. Use the printed or written name. If a handwritten name is hard to read, give your best reading and set "cultivar_unsure": true.
 - A check mark or tick in a weight box (no number) means the item came in but was not weighed yet: "value": null, "unsure": false, "check": true. Otherwise "check": false.

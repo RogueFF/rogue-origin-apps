@@ -281,3 +281,8 @@ test('dropoff finals: tops_final and smalls_final as {value, unsure}; 0 is a rea
   assert.equal(only.rows.length, 1);
   assert.equal(only.rows[0].tops_final.value, 7);
 });
+
+test('dropoff finals: a tick (no number) in a Final box comes back unsure, never silently blank', () => {
+  const r = normalizeSheetRead('dropoff', { rows: [{ cultivar: 'Alpha', tops: box(10), tops_final: box(null, { check: true }) }] }, CTX);
+  assert.deepEqual(r.rows[0].tops_final, { value: null, unsure: true });
+});

@@ -68,8 +68,13 @@ function dropoffRows(raw, ctx) {
     const t = readBox(r.tops);
     const s = readBox(r.smalls);
     // Final (after) weight, filled only when the lot was checked at dropoff. 0 is a real final.
-    const tf = readBox(r.tops_final, { zero: true });
-    const sf = readBox(r.smalls_final, { zero: true });
+    // A tick (or anything unreadable) in a Final box comes back unsure: never silently blank.
+    const finalBox = (b) => {
+      const f = readBox(b, { zero: true });
+      return f.value == null && boxWritten(b) ? { value: null, unsure: true } : f;
+    };
+    const tf = finalBox(r.tops_final);
+    const sf = finalBox(r.smalls_final);
     const tops = { value: t.value, unsure: t.unsure, on: t.value != null || boxWritten(r.tops) || boxWritten(r.tops_final) };
     const smalls = { value: s.value, unsure: s.unsure, on: s.value != null || boxWritten(r.smalls) || boxWritten(r.smalls_final) };
     if (!name && !tops.on && !smalls.on) continue;

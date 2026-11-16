@@ -32,8 +32,16 @@ const clean = (v) => (typeof v === 'string' ? v.trim() : '');
 /** A UNIQUE failure on client_key: a resend racing the first send. */
 const isKeyClash = (e) => /UNIQUE constraint failed: \w+\.client_key/i.test(String(e && e.message));
 const isNameClash = (e) => /UNIQUE constraint failed: cl_farms\.name/i.test(String(e && e.message));
+/** A number as typed: a finite number, or a plain decimal string ("12.5"). Arrays, booleans, hex: NaN. */
+const strictNum = (v) => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(v)) return Number(v);
+  return NaN;
+};
+/** Largest weight one dropoff line may carry, in lb. */
+const MAX_LINE_LBS = 100000;
 const posNum = (v, label) => {
-  const n = Number(v);
+  const n = strictNum(v);
   if (!Number.isFinite(n) || n <= 0) throw bad(`${label} must be a positive number`);
   return n;
 };
@@ -135,9 +143,9 @@ async function dropoffDetail(env, dropoffId, extra = {}) {
 
 /** A required number >= 0 (a final weight): empty is missing, not 0. */
 const reqNonNeg = (v, label) => {
-  const n = v === '' || v == null || typeof v === 'boolean' ? NaN : Number(v);
   if (v === '' || v == null) throw bad(`${label} is required`);
-  if (!Number.isFinite(n) || n < 0) throw bad(`${label} must be a number, 0 or more`);
+  const n = strictNum(v);
+  if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${label} must be a number, 0 or more`);
   return n;
 };
 
@@ -149,8 +157,8 @@ const reqNonNeg = (v, label) => {
 function finalRun(fin, type, intake, at) {
   if (fin === null || typeof fin !== 'object' || Array.isArray(fin)) throw bad(`${at}: final must be a set of weights`);
   const loss = (v, label) => {
-    const n = v === '' || v == null ? 0 : Number(v);
-    if (typeof v === 'boolean' || !Number.isFinite(n) || n < 0) throw bad(`${at}: ${label} must be a number, 0 or more`);
+    const n = v === '' || v == null ? 0 : strictNum(v);
+    if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${at}: ${label} must be a number, 0 or more`);
     return n;
   };
   const run = {
@@ -162,6 +170,7 @@ function finalRun(fin, type, intake, at) {
   if (type === 'smalls' && run.to_smalls_lbs > 0) throw bad(`${at}: a smalls lot cannot turn into smalls`);
   const out = round2(run.final_lbs + run.to_smalls_lbs + run.biomass_lbs + run.mold_lbs);
   run.pulled_lbs = intake == null ? posNum(out, `${at}: weight`) : intake;
+  if (run.pulled_lbs > MAX_LINE_LBS) throw bad(`${at}: weight must be ${MAX_LINE_LBS} lb or less`);
   if (run.final_lbs > run.pulled_lbs + screenTolerance(run.pulled_lbs)) {
     throw bad(`${at}: the final weight (${run.final_lbs} lb) is more than the ${run.pulled_lbs} lb dropped off`);
   }
@@ -192,6 +201,7 @@ async function saveDropoff(body, env) {
     const term = ln.term || farm.default_term;
     if (!TERMS.has(term)) throw bad(`Line ${i + 1}: term must be dropoff or sold`);
     let intake = ln.intake_lbs === '' || ln.intake_lbs == null ? null : posNum(ln.intake_lbs, `Line ${i + 1}: weight`);
+    if (intake > MAX_LINE_LBS) throw bad(`Line ${i + 1}: weight must be ${MAX_LINE_LBS} lb or less`);
     const k = `${cultivar.toLowerCase()}|${ln.type}|${term}`;
     if (seen.has(k)) throw bad(`Line ${i + 1}: ${cultivar} ${ln.type} is listed twice`);
     seen.add(k);

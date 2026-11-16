@@ -58,10 +58,12 @@ export const typeLabel = (type) => t(type === 'smalls' ? 'smalls' : 'tops');
  * (screenTolerance + checkRun). Keep the two in step.
  */
 export function runCheck(pulled, outputs) {
+  // round2 exactly as the server's (Number.EPSILON included), so both sides agree at the edges.
+  const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
   const p = Number(pulled) || 0;
   const sum = outputs.reduce((a, v) => a + (Number(v) || 0), 0);
-  const diff = Math.round((p - sum) * 100) / 100;
-  const tolerance = Math.round(Math.max(0.5, 0.01 * p) * 100) / 100;
+  const diff = round2(p - sum);
+  const tolerance = round2(Math.max(0.5, 0.01 * p));
   return { ok: p > 0 && Math.abs(diff) <= tolerance, diff, tolerance };
 }
 
@@ -75,11 +77,19 @@ export function checkBarHtml(r, id = '') {
   return `<div class="cs-checkbar bad"${idAttr}>✕ ${esc(t('offBy'))} ${lbs(Math.abs(r.diff))} ${esc(t('lbs'))} (${esc(t('allowed'))} ${lbs(r.tolerance)} ${esc(t('lbs'))})</div>`;
 }
 
-/** Parse a typed number; '' and junk are null. */
+/**
+ * Parse a typed number; '' and junk are null. A single comma is a decimal point ("12,5"),
+ * but "1,000" could be a thousand or one: refused (null), so it can never save as 1 lb.
+ */
 export function num(v) {
   if (v == null) return null;
-  const s = String(v).trim().replace(',', '.');
+  let s = String(v).trim();
   if (!s) return null;
+  if (s.includes(',')) {
+    if (!/^\d+,\d+$/.test(s) || /^\d{1,3},\d{3}$/.test(s)) return null;
+    s = s.replace(',', '.');
+  }
+  if (!/^-?\d*\.?\d+$|^-?\d+\.$/.test(s)) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }

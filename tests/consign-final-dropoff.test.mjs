@@ -270,3 +270,20 @@ test('scenario: paid on dropoff for the weight, finished at dropoff lower: a cre
   assert.equal(t.balance, -130);
   assert.equal(t.credit, 130);
 });
+
+test('review: arrays, booleans, hex and huge numbers in a final line are refused', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const farm = await setup(env);
+  const line = (o) => ({ farm_id: farm.id, lines: [{ cultivar: 'Alpha', type: 'tops', ...o }] });
+  await refuse(env, 'saveDropoff', line({ intake_lbs: 10, final: { final_lbs: [10] } }), /Line 1: final/i);
+  await refuse(env, 'saveDropoff', line({ intake_lbs: 10, final: { final_lbs: 0, biomass_lbs: [10] } }), /Line 1: biomass/i);
+  await refuse(env, 'saveDropoff', line({ intake_lbs: 10, final: { final_lbs: true } }), /Line 1: final/i);
+  await refuse(env, 'saveDropoff', line({ intake_lbs: true, final: { final_lbs: 1 } }), /Line 1: weight/i);
+  await refuse(env, 'saveDropoff', line({ intake_lbs: 16, final: { final_lbs: '0x10' } }), /Line 1: final/i);
+  await refuse(env, 'saveDropoff', line({ intake_lbs: 1e300, final: { final_lbs: 1e300 } }), /Line 1: weight/i);
+  await refuse(env, 'saveDropoff', line({ final: { final_lbs: 200000 } }), /Line 1/i);
+  assert.equal(count(sqlite, 'cl_dropoffs'), 0);
+  // Numeric strings still work, as the app has always sent them.
+  const d = await drop(env, farm, [{ cultivar: 'Alpha', type: 'tops', intake_lbs: '12.5', final: { final_lbs: '12.5', mold_lbs: '' } }]);
+  assert.equal(d.lots[0].money.status, 'closed');
+});
