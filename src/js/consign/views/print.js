@@ -30,6 +30,7 @@ function qrSvg(text) {
 
 export function mount(root, { kind, farmId, dropoffId }) {
   const s = { html: null, titleKey: '', titleName: null, back: '#/', error: null, empty: false };
+  const photoHref = kind === 'screen' ? `#/photo/screen/${dropoffId}` : `#/photo/dropoff${farmId ? `/${farmId}` : ''}`;
   const title = () => `${t(s.titleKey)}: ${s.titleName == null ? t('blankSheet') : s.titleName}`;
   const area = document.getElementById('printArea');
 
@@ -51,6 +52,7 @@ export function mount(root, { kind, farmId, dropoffId }) {
         <h2 class="cs-h3">${esc(title())}</h2>
         <p class="cs-muted">${esc(t('printHint'))}</p>
         <div class="cs-row-btns"><a class="cs-btn ghost" href="${s.back}">${esc(t('cancel'))}</a>
+          <a class="cs-btn" id="photoAfterPrint" href="${photoHref}">📷 ${esc(t('photoSheet'))}</a>
           <button type="button" class="cs-btn primary big" id="printBtn">${esc(t('printBtn'))}</button></div>
       </section>
       <div class="sh-preview" id="sheetPreview" aria-label="${esc(title())}"><div class="sh-paper">${s.html}</div></div>

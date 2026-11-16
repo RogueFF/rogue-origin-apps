@@ -1,6 +1,10 @@
 /**
  * New dropoff, in four numbered steps: farm, cultivars and pounds, names and notes, check and save.
  * Staff record pounds only: prices show locked, and no money totals appear here.
+ *
+ * Prefill (stage 2): views/photo.js mounts this with { prefill: read } after a sheet photo is
+ * read. Every box the reader was unsure of, and every cultivar it could not match, is marked
+ * "Check" until the person edits it or taps OK; Save stays off while any mark is left.
  */
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
@@ -12,10 +16,11 @@ import { go } from '../nav.js';
 const TYPES = ['tops', 'smalls'];
 let uidSeq = 0;
 
-export function mount(root) {
+export function mount(root, { prefill = null, farmId = null } = {}) {
   const s = {
     farms: null, farm: null, detail: null, error: null, loadingFarm: false,
     rows: [], droppedBy: actor(), note: '', key: newKey(), saving: false, saveError: '', saved: false,
+    fromPhoto: !!prefill, pending: prefill,
   };
 
   const priceOf = (cultivar, type) => {
@@ -57,6 +62,27 @@ export function mount(root) {
     }
     return lines;
   }
+  /** Boxes still marked "Check", plus photo rows with no cultivar name yet. */
+  const marksLeft = () => s.rows.reduce((n, r) => n + (r.marks ? ['name', ...TYPES].filter((k) => r.marks[k]).length : 0), 0)
+    + s.rows.filter((r) => !r.cultivar.trim() && !(r.marks && r.marks.name)).length;
+
+  /** Put a sheet read into the form. Weights are text, exactly as read; nothing is saved here. */
+  function applyPrefill(read) {
+    s.rows = [];
+    for (const pr of read.rows) {
+      const raw = String(pr.cultivar || '').trim();
+      const known = raw ? pricedCultivars().find((c) => c.toLowerCase() === raw.toLowerCase()) : undefined;
+      const dup = raw && s.rows.some((r) => r.cultivar.toLowerCase() === raw.toLowerCase());
+      s.rows.push({
+        uid: `r${++uidSeq}`, cultivar: known || raw, note: pr.note || '',
+        types: Object.fromEntries(TYPES.map((ty) => [ty, { on: !!pr[ty].on, parts: [{ term: defaultTerm(), lbs: pr[ty].value == null ? '' : String(pr[ty].value) }] }])),
+        marks: { name: !pr.cultivar_known || !known || !!dup, tops: !!pr.tops.unsure, smalls: !!pr.smalls.unsure },
+      });
+    }
+    if (read.dropped_by) s.droppedBy = read.dropped_by;
+    if (read.note) s.note = read.note;
+  }
+
   const badWeight = () => s.rows.some((r) => TYPES.some((ty) => r.types[ty].on && r.types[ty].parts.some((p) => String(p.lbs).trim() !== '' && !(num(p.lbs) > 0))));
 
   // ---------- rendering ----------
@@ -67,29 +93,43 @@ export function mount(root) {
       return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
         <div class="cs-crowhead"><span class="cs-crowname" id="farmName">${esc(s.farm.name)}</span>
         <button type="button" class="cs-btn small" id="changeFarm">${esc(t('change'))}</button></div>
-        <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">🖨 ${esc(t('printFarmSheet'))}</a></div></section>`;
+        <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">🖨 ${esc(t('printFarmSheet'))}</a>
+          ${s.fromPhoto ? '' : `<a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff/${s.farm.id}">📷 ${esc(t('fillFromPhoto'))}</a>`}</div></section>`;
     }
     const live = s.farms.filter((f) => f.active);
     return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
       <p class="cs-muted">${esc(t('chooseFarm'))}</p>
       ${live.length ? `<div class="cs-farmpick">${live.map((f) => `<button type="button" class="cs-btn big" data-farm="${f.id}">${esc(f.name)}</button>`).join('')}</div>` : `<p>${esc(t('noFarms'))}</p>`}
+      ${s.fromPhoto ? '' : `<div class="cs-row-btns"><a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff">📷 ${esc(t('fillFromPhoto'))}</a></div>`}
     </section>`;
   }
+
+  /** The attention mark: colour AND the word, never colour alone. */
+  const markTail = (key) => `<span class="cs-markword" data-markword="${key}">${esc(t('checkMark'))}</span><button type="button" class="cs-btn small cs-okbtn" data-okmark="${key}">${esc(t('okBox'))}</button>`;
 
   function partHtml(r, ty, p, i, split) {
     const price = priceOf(r.cultivar, ty);
     const id = `${r.uid}-${ty}-${i}`;
-    return `<div class="cs-part">
+    const marked = i === 0 && r.marks && r.marks[ty];
+    return `<div class="cs-part${marked ? ' cs-marked' : ''}">
       <label class="cs-label" for="${id}">${esc(typeLabel(ty))} ${esc(t('lbs'))}${split ? ` · ${esc(termLabel(p.term))}` : ''}</label>
-      <input id="${id}" class="cs-input cs-num" inputmode="decimal" autocomplete="off" data-lbs="${r.uid}|${ty}|${i}" value="${esc(p.lbs)}" placeholder="${esc(r.types[ty].on ? t('notWeighedYet') : t('notBrought'))}">
+      <input id="${id}" class="cs-input cs-num${marked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-lbs="${r.uid}|${ty}|${i}" value="${esc(p.lbs)}" placeholder="${esc(r.types[ty].on ? t('notWeighedYet') : t('notBrought'))}">
+      ${marked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}`)}</div>` : ''}
       <div class="cs-price">${price == null ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : `${esc(t('price'))}: ${money(price)} ${esc(t('perLb'))}`}</div>
       ${split ? '' : `<button type="button" class="cs-termbtn ${p.term}" data-term="${r.uid}|${ty}|${i}">${esc(termLabel(p.term))}</button>`}
     </div>`;
   }
 
+  function nameHtml(r) {
+    if (!(r.marks && (r.marks.name || !r.cultivar.trim()))) return `<span class="cs-crowname">${esc(r.cultivar)}</span>`;
+    const listed = pricedCultivars().some((c) => c.toLowerCase() === r.cultivar.trim().toLowerCase());
+    return `<div class="cs-namefix cs-marked"><input class="cs-input cs-mark" data-name="${r.uid}" value="${esc(r.cultivar)}" aria-label="${esc(t('cultivar'))}" placeholder="${esc(t('otherPlaceholder'))}" autocomplete="off">
+      <div class="cs-markline">${markTail(`${r.uid}|name`)}${listed || !r.cultivar.trim() ? '' : `<span class="cs-muted">${esc(t('notOnPriceList'))}</span>`}</div></div>`;
+  }
+
   function rowHtml(r) {
-    return `<div class="cs-crow" data-row="${esc(r.cultivar)}">
-      <div class="cs-crowhead"><span class="cs-crowname">${esc(r.cultivar)}</span>
+    return `<div class="cs-crow" data-row="${esc(r.cultivar)}" data-uid="${r.uid}">
+      <div class="cs-crowhead">${nameHtml(r)}
         <button type="button" class="cs-btn small danger" data-remove="${r.uid}" aria-label="${esc(t('remove'))} ${esc(r.cultivar)}">✕ ${esc(t('remove'))}</button></div>
       <div class="cs-types">
         ${TYPES.map((ty) => {
@@ -135,11 +175,14 @@ export function mount(root) {
       }).join('')}</tbody></table>`;
   }
 
+  const canSave = () => buildLines().length > 0 && !badWeight() && !marksLeft() && !s.saving;
+  const blockMsg = () => s.saveError || (marksLeft() ? `${t('checksLeft')}: ${marksLeft()}` : '') || (badWeight() ? t('badWeight') : '');
+
   function confirmStep() {
-    const can = buildLines().length > 0 && !badWeight() && !s.saving;
+    const can = canSave();
     return `<section class="cs-card cs-step st-closed">${stepHead(4, 'stepConfirm')}
       <div id="summary">${confirmBody()}</div>
-      <p class="cs-error" id="saveError"${s.saveError || badWeight() ? '' : ' hidden'}>${esc(s.saveError || (badWeight() ? t('badWeight') : ''))}</p>
+      <p class="cs-error" id="saveError"${blockMsg() ? '' : ' hidden'}>${esc(blockMsg())}</p>
       <div class="cs-row-btns"><button type="button" class="cs-btn primary big" id="saveBtn"${can ? '' : ' disabled'}>${esc(s.saving ? t('saving') : t('saveDropoff'))}</button></div>
     </section>`;
   }
@@ -147,7 +190,8 @@ export function mount(root) {
   function render() {
     if (s.error) return errorCard(root, s.error, load);
     if (!s.farms || s.loadingFarm) return loading(root);
-    root.innerHTML = `<h2 class="cs-h2">${esc(t('newDropoff'))}</h2><div class="cs-stack">
+    const banner = s.fromPhoto ? `<div class="cs-photobanner" id="photoBanner" role="status">${esc(t('fromPhoto'))}</div>` : '';
+    root.innerHTML = `<h2 class="cs-h2">${esc(t('newDropoff'))}</h2>${banner}<div class="cs-stack">
       ${farmStep()}${s.farm ? cultivarStep() + notesStep() + confirmStep() : ''}</div>`;
   }
 
@@ -157,10 +201,10 @@ export function mount(root) {
     if (!sum) return;
     sum.innerHTML = confirmBody();
     const err = root.querySelector('#saveError');
-    const msg = s.saveError || (badWeight() ? t('badWeight') : '');
+    const msg = blockMsg();
     err.textContent = msg;
     err.hidden = !msg;
-    root.querySelector('#saveBtn').disabled = !(buildLines().length > 0 && !badWeight() && !s.saving);
+    root.querySelector('#saveBtn').disabled = !canSave();
   }
 
   // ---------- events (delegated, so re-renders need no rewiring) ----------
@@ -194,8 +238,34 @@ export function mount(root) {
       }
       return render();
     }
+    if (b.dataset.okmark) {
+      const [uid, key] = b.dataset.okmark.split('|');
+      const r = findRow(uid);
+      if (key === 'name' && !r.cultivar.trim()) { const inp = root.querySelector(`[data-name="${uid}"]`); if (inp) inp.focus(); return; }
+      r.marks[key] = false;
+      if (key === 'name') r.cultivar = canonical(r.cultivar);
+      return render();
+    }
     if (b.id === 'saveBtn') return save();
   });
+
+  /** The price list's spelling of a typed cultivar name, so the server finds the price point. */
+  const canonical = (name) => {
+    const raw = String(name || '').trim();
+    return pricedCultivars().find((c) => c.toLowerCase() === raw.toLowerCase()) || raw;
+  };
+  /** An edit counts as checking that box: drop its mark in place, so typing keeps focus. */
+  function clearMarkInPlace(el, r, key) {
+    if (!r.marks || !r.marks[key]) return;
+    if (key === 'name' && !el.value.trim()) return;
+    r.marks[key] = false;
+    el.classList.remove('cs-mark');
+    const wrap = el.closest('.cs-marked');
+    if (wrap) {
+      wrap.classList.remove('cs-marked');
+      wrap.querySelectorAll('.cs-markword, .cs-okbtn').forEach((x) => x.remove());
+    }
+  }
 
   root.addEventListener('input', (e) => {
     const el = e.target;
@@ -203,6 +273,7 @@ export function mount(root) {
       const [uid, ty, i] = el.dataset.lbs.split('|');
       const slot = findRow(uid).types[ty];
       slot.parts[Number(i)].lbs = el.value;
+      if (i === '0') clearMarkInPlace(el, findRow(uid), ty);
       if (el.value.trim() && !slot.on) {
         // Typing a weight ticks the box.
         slot.on = true;
@@ -210,6 +281,10 @@ export function mount(root) {
         if (box) { box.checked = true; box.closest('.cs-type').classList.remove('off'); }
         root.querySelectorAll(`[data-lbs^="${uid}|${ty}|"]`).forEach((inp) => { inp.placeholder = t('notWeighedYet'); });
       }
+    } else if (el.dataset.name) {
+      const r = findRow(el.dataset.name);
+      r.cultivar = el.value;
+      clearMarkInPlace(el, r, 'name');
     } else if (el.dataset.rownote) findRow(el.dataset.rownote).note = el.value;
     else if (el.id === 'droppedBy') s.droppedBy = el.value;
     else if (el.id === 'dropNote') s.note = el.value;
@@ -220,9 +295,12 @@ export function mount(root) {
 
   root.addEventListener('change', (e) => {
     const el = e.target;
+    if (el.dataset.name) { findRow(el.dataset.name).cultivar = canonical(el.value); return; }
     if (!el.dataset.on) return;
     const [uid, ty] = el.dataset.on.split('|');
-    findRow(uid).types[ty].on = el.checked;
+    const r = findRow(uid);
+    r.types[ty].on = el.checked;
+    if (r.marks) r.marks[ty] = false; // ticking or unticking the box is checking it
     render();
   });
 
@@ -243,6 +321,7 @@ export function mount(root) {
       s.farm = s.detail.farm;
     } catch (err) { s.error = err; s.farm = null; s.detail = null; }
     s.loadingFarm = false;
+    if (s.pending && s.detail) { applyPrefill(s.pending); s.pending = null; }
     // Rows added before a farm change take the new farm's default term.
     for (const r of s.rows) for (const ty of TYPES) if (r.types[ty].parts.length === 1) r.types[ty].parts[0].term = defaultTerm();
     render();
@@ -250,12 +329,13 @@ export function mount(root) {
 
   async function save() {
     const lines = buildLines();
-    if (!lines.length || badWeight() || s.saving) return;
+    if (!canSave()) return;
     setActor(s.droppedBy.trim());
     s.saving = true; s.saveError = ''; refreshConfirm();
     root.querySelector('#saveBtn').textContent = t('saving');
     // farm_name is ignored by the server; it lets a held entry say whose it was.
     const body = { farm_id: s.farm.id, farm_name: s.farm.name, dropped_by: s.droppedBy.trim(), note: s.note.trim(), client_key: s.key, lines };
+    if (s.fromPhoto) body.source = 'paper';
     try {
       const res = await submit('saveDropoff', body);
       s.saved = true;
@@ -273,12 +353,15 @@ export function mount(root) {
   async function load() {
     s.error = null; s.farms = null; render();
     try { s.farms = await call('farms'); } catch (err) { s.error = err; }
+    // A read that named a farm (or a sheet printed for one) opens on that farm.
+    const want = s.farms && farmId ? s.farms.find((f) => f.id === farmId && f.active) : null;
+    if (want) return pickFarm(want.id);
     render();
   }
 
   load();
   return {
     rerender: render,
-    dirty: () => !s.saved && (s.rows.length > 0 || !!s.note.trim()),
+    dirty: () => !s.saved && (s.fromPhoto || s.rows.length > 0 || !!s.note.trim()),
   };
 }

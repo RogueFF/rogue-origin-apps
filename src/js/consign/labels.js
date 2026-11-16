@@ -183,6 +183,7 @@ export const LABELS = {
     saveThisOne: 'Save this one',
     heldRest: 'No signal. The rest are held on this device.',
     allSaved: 'All saved',
+    readFailed: 'Could not read the sheet. Enter the numbers by hand.',
   },
   es: {
     title: 'Consignación',
@@ -361,6 +362,7 @@ export const LABELS = {
     saveThisOne: 'Guardar este',
     heldRest: 'Sin señal. Lo demás queda guardado en este aparato.',
     allSaved: 'Todo guardado',
+    readFailed: 'No se pudo leer la hoja. Escriba los números a mano.',
   },
 };
 

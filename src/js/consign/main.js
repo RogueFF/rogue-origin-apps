@@ -11,6 +11,8 @@
  *   #/pay or #/pay/<farm>      record a payment
  *   #/print/dropoff(/<farm>)   print a dropoff sheet (blank, or for one farm)
  *   #/print/screen/<dropoff>   print a screening sheet
+ *   #/photo/dropoff(/<farm>)   photo of a dropoff sheet -> prefilled dropoff form
+ *   #/photo/screen/<dropoff>   photo of a screening sheet -> review of every lot
  * Weigh and screen carry the dropoff id because the API reads lots through their dropoff.
  */
 import './labels.js';
@@ -22,6 +24,7 @@ import * as screen from './views/screen.js';
 import * as farm from './views/farm.js';
 import * as pay from './views/pay.js';
 import * as print from './views/print.js';
+import * as photo from './views/photo.js';
 import { initOwner } from './owner.js';
 import { setGo } from './nav.js';
 import { queue, flush } from './held.js';
@@ -36,6 +39,8 @@ const ROUTES = [
   [/^pay(?:\/(\d+))?$/, pay, ['farmId']],
   [/^print\/dropoff(?:\/(\d+))?$/, print, ['farmId'], { kind: 'dropoff' }],
   [/^print\/screen\/(\d+)$/, print, ['dropoffId'], { kind: 'screen' }],
+  [/^photo\/dropoff(?:\/(\d+))?$/, photo, ['farmId'], { kind: 'dropoff' }],
+  [/^photo\/screen\/(\d+)$/, photo, ['dropoffId'], { kind: 'screen' }],
 ];
 
 const root = document.getElementById('view');
