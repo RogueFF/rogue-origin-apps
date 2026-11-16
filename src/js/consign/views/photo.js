@@ -99,8 +99,8 @@ export function mount(root, { kind, farmId, dropoffId, lotIds }) {
   function openReview(result) {
     root.innerHTML = '';
     window.scrollTo(0, 0);
-    // A farm read from handwriting (not from the route or the printed code) must be confirmed.
-    if (kind === 'dropoff') inner = dropoffView.mount(root, { prefill: result, farmId: farmId || result.farm_id || null, farmCheck: !farmId && result.farm_from === 'name' });
+    // A farm that came from the photo (handwriting or a read code), not from the route, must be confirmed.
+    if (kind === 'dropoff') inner = dropoffView.mount(root, { prefill: result, farmId: farmId || result.farm_id || null, farmCheck: !farmId && !!result.farm_id });
     else inner = reviewView.mount(root, { dropoffId, read: result, detail: s.detail });
   }
 

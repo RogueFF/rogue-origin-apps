@@ -438,6 +438,23 @@ test.describe('Consignment photo: review findings', () => {
     await expect(page.locator('#saveBtn')).toBeEnabled();
   });
 
+  test('a farm read from the printed code (no farm in the link) is marked Check too', async ({ page }) => {
+    const fake = makeFake({ read: { ...DROP_READ, farm_from: 'code', rows: [{ ...DROP_READ.rows[0], tops: { value: 52, unsure: false, on: true } }] } });
+    await open(page, { hash: '#/photo/dropoff', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('[data-okmark="farm"]')).toBeVisible();
+    await expect(page.locator('#saveBtn')).toBeDisabled();
+  });
+
+  test('opened from a farm sheet\'s QR, the farm needs no Check', async ({ page }) => {
+    const fake = makeFake({ read: { ...DROP_READ, farm_from: 'code', rows: [{ ...DROP_READ.rows[0], tops: { value: 52, unsure: false, on: true } }] } });
+    await open(page, { hash: '#/photo/dropoff/1', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('#farmName')).toHaveText('Farm A');
+    await expect(page.locator('[data-okmark="farm"]')).toHaveCount(0);
+    await expect(page.locator('#saveBtn')).toBeEnabled();
+  });
+
   test('ticking a type off and on again does not clear an unsure weight', async ({ page }) => {
     const fake = makeFake({ read: { ...DROP_READ, rows: [DROP_READ.rows[0]] } });
     await open(page, { hash: '#/photo/dropoff/1', fake });

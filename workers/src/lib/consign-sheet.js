@@ -98,8 +98,17 @@ function farmFor(raw, ctx, code) {
 
 const SCREEN_FIELDS = ['pulled', 'final', 'to_smalls', 'biomass', 'mold'];
 
+/** "L10" / "10" -> 10; anything else -> null. */
+const parseRef = (v) => {
+  const m = typeof v === 'string' ? v.trim().match(/^L?\s*(\d{1,9})$/i) : null;
+  return m ? Number(m[1]) : null;
+};
+
 function screenRows(raw, ctx, warn) {
   const lots = (ctx.lots || []).filter((l) => isObj(l));
+  // Every lot of the dropoff (open or not): the printed lot reference on a row ("L10") is
+  // matched here first, so rows keep their lots even when the order changed since printing.
+  const refLots = (ctx.refLots || []).filter((l) => isObj(l));
   const used = new Set();
   const out = [];
   for (const r of raw.rows) {
@@ -108,7 +117,11 @@ function screenRows(raw, ctx, warn) {
     const cult = cleanText(r.cultivar, 60);
     const type = r.type === 'tops' || r.type === 'smalls' ? r.type : null;
     let lot = null;
-    if (Number.isInteger(r.index) && r.index >= 1 && r.index <= lots.length) {
+    const fitsRow = (l) => (!cult || lower(cult) === lower(l.cultivar)) && (!type || type === l.type);
+    const ref = parseRef(r.lot_ref);
+    const byRef = ref == null ? null : refLots.find((l) => l.id === ref);
+    if (byRef && fitsRow(byRef)) lot = byRef;
+    if (!lot && Number.isInteger(r.index) && r.index >= 1 && r.index <= lots.length) {
       const byIndex = lots[r.index - 1];
       const fits = (!cult || lower(cult) === lower(byIndex.cultivar)) && (!type || type === byIndex.type);
       if (fits) lot = byIndex;
@@ -141,6 +154,7 @@ function screenRows(raw, ctx, warn) {
  *   kind: 'dropoff' | 'screen'
  *   raw:  whatever JSON.parse gave back from the model (may be anything)
  *   ctx:  { farms: [{id, name}], cultivars: [string], lots: [{id, cultivar, type, intake_lbs, remainder_lbs, open?}],
+ *           refLots?: [{id, cultivar, type, open}] (every lot of the dropoff, for the printed "L<id>" reference),
  *           dropoff_id?, farm_id? }  (dropoff_id / farm_id: the sheet the photo was opened for)
  */
 export function normalizeSheetRead(kind, raw, ctx) {

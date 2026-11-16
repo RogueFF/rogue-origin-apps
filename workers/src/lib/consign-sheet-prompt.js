@@ -39,6 +39,7 @@ export const SCREEN_SCHEMA = obj({
     type: 'array',
     items: obj({
       index: { type: 'integer' },
+      lot_ref: STR,
       cultivar: STR,
       type: nullable({ type: 'string', enum: ['tops', 'smalls'] }),
       pulled: weightBox(false),
@@ -92,6 +93,7 @@ export function screenPrompt(ctx = {}) {
 
 This is the SCREENING sheet for one dropoff. Each numbered row is one lot, printed with cultivar, type and the pounds before screening. Handwritten boxes: Pulled | Final | To smalls | Biomass | Mold | Finished (a tick box).
 - One entry in "rows" per printed row that has anything written or ticked. "index" is the printed row number (1, 2, 3...). Copy that row's printed cultivar and type.
+- Under each cultivar name a small lot reference is printed, like "L1042". Copy it into "lot_ref" exactly as printed on that row in the photo, or null if you cannot read it.
 - "To smalls" is greyed out on smalls rows; return null there.
 - "finished.value" is true only when the Finished box is clearly ticked. If you cannot tell, value false and unsure true.
 - A zero ("0") is a real number; a dash or empty box is null.

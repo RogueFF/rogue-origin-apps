@@ -37,7 +37,7 @@ export function mount(root, { read, detail }) {
     card.marks.finishes = !!(r && r.finishes.unsure);
     return card;
   });
-  const skipped = read.warnings.some((w) => w === 'unknown_row' || w === 'duplicate_row');
+  const skipped = read.warnings.some((w) => w === 'unknown_row' || w === 'duplicate_row' || w === 'lot_changed');
   let saving = false;
   let done = false;
 

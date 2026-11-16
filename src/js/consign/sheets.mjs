@@ -87,7 +87,7 @@ export function screenSheet({ dropoff, lots = [], qrSvg, code }) {
       const partly = l.money.status === 'screening';
       return `<tr class="sh-row" data-lot="${esc(l.id)}">
         <td class="sh-idx">${idx}</td>
-        <td class="sh-name">${esc(l.cultivar)}</td>
+        <td class="sh-name">${esc(l.cultivar)}<span class="sh-ref">L${esc(l.id)}</span></td>
         <td class="sh-type">${smalls ? 'smalls' : 'tops'}${term}</td>
         <td class="sh-before">${lb(l.money.remainder_lbs)}${partly ? `<span class="sh-left">${bi('left to screen', 'queda')}</span>` : ''}</td>
         <td class="sh-box" data-box="pulled"></td>

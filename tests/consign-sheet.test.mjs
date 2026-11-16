@@ -230,3 +230,25 @@ test('a printed lot that is no longer open takes no numbers', () => {
   assert.deepEqual(r.rows.map((x) => x.lot_id), [12]);
   assert.deepEqual(r.warnings, ['lot_changed']);
 });
+
+test('the printed lot reference wins over the row number; a reference to a lot no longer open takes nothing', () => {
+  // Printed when lots were [11, 13]; lot 12 was weighed since, so today's open order is [11, 12, 13].
+  const refLots = [...LOTS.map((l) => ({ ...l, open: true })), { id: 14, cultivar: 'Alpha', type: 'tops', open: false }];
+  const ctx = { ...SCTX, refLots };
+  const r = normalizeSheetRead('screen', { rows: [
+    { index: 2, lot_ref: 'L13', cultivar: 'Beta', type: 'tops', pulled: box(20), final: box(20) },
+    { index: 1, lot_ref: 'l14', cultivar: 'Alpha', type: 'tops', pulled: box(5), final: box(5) },
+  ] }, ctx);
+  assert.deepEqual(r.rows.map((x) => x.lot_id), [13]);
+  assert.deepEqual(r.warnings, ['lot_changed']);
+});
+
+test('a lot reference that is unreadable, unknown or contradicts the row falls back to the row number', () => {
+  const ctx = { ...SCTX, refLots: LOTS.map((l) => ({ ...l, open: true })) };
+  const r = normalizeSheetRead('screen', { rows: [
+    { index: 1, lot_ref: 'L99', cultivar: 'Alpha', type: 'tops', pulled: box(5) },
+    { index: 2, lot_ref: 'L13', cultivar: 'Alpha', type: 'smalls', pulled: box(5) },
+    { index: 3, lot_ref: '1?', pulled: box(5) },
+  ] }, ctx);
+  assert.deepEqual(r.rows.map((x) => x.lot_id), [11, 12, 13]);
+});

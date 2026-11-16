@@ -527,6 +527,7 @@ async function readSheet(body, env) {
         id: l.id, cultivar: l.cultivar, type: l.type, term: l.term, intake_lbs: l.intake_lbs,
         remainder_lbs: l.money.remainder_lbs, open: open.has(l.id),
       })),
+      refLots: all.map((l) => ({ id: l.id, cultivar: l.cultivar, type: l.type, open: open.has(l.id) })),
       dropoff_id: id,
     };
   }

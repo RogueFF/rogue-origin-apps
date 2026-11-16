@@ -124,3 +124,9 @@ test('sheet B prints the term only on look-alike rows (same cultivar and type)',
   assert.match(rows[1], />sold</);
   assert.ok(!/>sold<|>dropoff</.test(rows[2]));
 });
+
+test('sheet B prints a lot reference on every row', () => {
+  const h = screenSheet({ dropoff, lots: [lot(1042, 'Alpha', 'tops', 'weighed', 10, 10), lot(7, 'Beta', 'smalls', 'weighed', 5, 5)], qrSvg: QR, code: 'SCREEN-D7' });
+  assert.match(h, /<span class="sh-ref">L7<\/span>/);
+  assert.match(h, /<span class="sh-ref">L1042<\/span>/);
+});

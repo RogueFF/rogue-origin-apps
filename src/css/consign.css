@@ -298,6 +298,7 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-type { font-size: 10pt; }
 .sh-before { font-size: 13pt; font-weight: 700; }
 .sh-left { display: block; font-size: 7.5pt; font-weight: 400; }
+.sh-ref { display: block; font-family: 'JetBrains Mono', monospace; font-size: 8pt; font-weight: 700; }
 .sh-na { background: repeating-linear-gradient(45deg, #bbb 0 2px, #fff 2px 7px); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 .sh-tick { text-align: center !important; }
 .sh-tickbox { display: inline-block; width: 0.3in; height: 0.3in; border: 1.5pt solid #000; }
