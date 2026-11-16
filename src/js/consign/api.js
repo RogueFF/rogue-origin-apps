@@ -28,9 +28,10 @@ function networkError() {
 /**
  * POST one action. Resolves with `data`. Rejects with an Error whose message is the
  * server's own; `err.network` is true when the request never got an answer, and
- * `err.owner` when the owner password was refused.
+ * `err.owner` when the owner password was refused. opts.timeoutMs: give up after this long
+ * (a sheet photo read takes longer than a save).
  */
-export async function call(action, body = {}) {
+export async function call(action, body = {}, { timeoutMs = TIMEOUT_MS } = {}) {
   const owner = OWNER_ACTIONS.has(action);
   const payload = owner ? { ...body, owner_password: ownerPw() } : body;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw networkError();
@@ -38,7 +39,7 @@ export async function call(action, body = {}) {
   // A barn connection can be "online" and still dead: give up after a while and
   // treat it as no signal. client_key makes the later resend safe.
   const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT_MS) : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
   try {
     res = await fetch(`${ROOT}/consign?action=${encodeURIComponent(action)}`, {
       method: 'POST',

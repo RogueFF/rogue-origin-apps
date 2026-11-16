@@ -239,3 +239,86 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
   .cs-banner .cs-big { font-size: 38px; }
 }
 body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
+
+/* ---------- photo of a sheet (stage 2) ----------
+   An unsure number: red outline (the attention colour) AND the word "Check", never colour alone. */
+.cs-photobtns { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-top: 12px; }
+.cs-filebtn { position: relative; cursor: pointer; text-align: center; }
+.cs-fileinput { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.cs-filebtn:focus-within { outline: 3px solid var(--gold); outline-offset: 2px; }
+.cs-reading { text-align: center; }
+.cs-photoprev { display: block; max-width: 100%; max-height: 50vh; margin: 0 auto 12px; border-radius: var(--radius-md); }
+.cs-photobanner {
+  margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius-md);
+  border: 2px solid var(--st-price); background: color-mix(in srgb, var(--st-price) var(--cs-tint), var(--bg-card));
+  font-size: 19px; font-weight: 700;
+}
+.cs-input.cs-mark { border: 3px solid var(--st-price); box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-price) 25%, transparent); }
+.cs-markline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.cs-markword {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  background: var(--st-price); color: #fff; font-weight: 700; font-size: 16px; letter-spacing: 0.02em;
+}
+[data-theme="dark"] .cs-markword { color: #111; }
+.cs-okbtn { min-width: 64px; }
+.cs-namefix { flex: 1 1 220px; min-width: 0; }
+.cs-namefix .cs-input { font-size: 20px; font-weight: 700; }
+.cs-rcard.closed { opacity: 0.7; }
+.cs-rcard .cs-idx { display: inline-grid; place-items: center; min-width: 32px; height: 32px; margin-right: 6px; border-radius: 999px; background: var(--text); color: var(--bg-card); font-size: 16px; }
+
+/* ---------- paper sheets (stage 2) ----------
+   Paper is always black on white, whatever the screen theme. Borders 1.5pt solid black,
+   handwriting rows at least 0.42 in. The page is 7.7 x 10.1 in inside a 0.4 in @page margin. */
+.sh-page {
+  width: 7.7in; height: 10.1in; overflow: hidden;
+  display: flex; flex-direction: column; gap: 0.14in;
+  background: #fff; color: #000;
+  font-family: 'Outfit', Arial, sans-serif; font-size: 11pt; line-height: 1.15;
+}
+.sh-en { display: block; font-weight: 700; }
+.sh-es { display: block; font-size: 0.78em; font-weight: 400; color: #333; }
+.sh-head { display: flex; gap: 0.2in; align-items: flex-start; }
+.sh-headl { flex: 1 1 auto; min-width: 0; }
+.sh-title { margin: 0 0 0.1in; font-size: 18pt; line-height: 1.05; }
+.sh-title .sh-es { font-size: 11pt; }
+.sh-fields { display: grid; grid-template-columns: 1.5fr 1fr 1.2fr; gap: 0.15in; }
+.sh-flabel { font-size: 10pt; }
+.sh-fvalue { min-height: 0.42in; border-bottom: 1.5pt solid #000; font-size: 14pt; font-weight: 700; display: flex; align-items: flex-end; padding-bottom: 2pt; }
+.sh-qr { flex: 0 0 1.3in; text-align: center; }
+.sh-qrimg svg { display: block; width: 1.3in; height: 1.3in; }
+.sh-code { margin-top: 4pt; font-family: 'JetBrains Mono', monospace; font-size: 11pt; font-weight: 700; letter-spacing: 0.04em; }
+.sh-pageno { font-size: 9pt; }
+.sh-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sh-table th, .sh-table td { border: 1.5pt solid #000; padding: 3pt 5pt; vertical-align: middle; text-align: left; }
+.sh-table th { font-size: 10pt; background: #eee; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.sh-a .sh-row td { height: 0.5in; }
+.sh-b .sh-row td { height: 0.56in; }
+.sh-name { font-size: 12pt; font-weight: 700; overflow-wrap: anywhere; }
+.sh-idx { text-align: center !important; font-weight: 700; }
+.sh-type { font-size: 10pt; }
+.sh-before { font-size: 13pt; font-weight: 700; }
+.sh-left { display: block; font-size: 7.5pt; font-weight: 400; }
+.sh-ref { display: block; font-family: 'JetBrains Mono', monospace; font-size: 8pt; font-weight: 700; }
+.sh-na { background: repeating-linear-gradient(45deg, #bbb 0 2px, #fff 2px 7px); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.sh-tick { text-align: center !important; }
+.sh-tickbox { display: inline-block; width: 0.3in; height: 0.3in; border: 1.5pt solid #000; }
+.sh-note .sh-line { height: 0.42in; border-bottom: 1.5pt solid #000; }
+.sh-weighfirst ul { margin: 2pt 0 0; padding-left: 16pt; columns: 2; }
+.sh-help { margin: auto 0 0; font-size: 10pt; }
+.sh-help .sh-es { font-size: 9pt; }
+.sh-row { break-inside: avoid; }
+
+/* On-screen preview: pages at reduced scale (print.js sets zoom to fit the width). */
+.sh-preview { overflow: hidden; }
+.sh-paper { width: 8.5in; }
+.sh-paper .sh-page { width: 8.5in; height: 11in; padding: 0.4in; margin-bottom: 0.3in; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15)); }
+
+#printArea { display: none; }
+@media print {
+  @page { size: letter; margin: 0.4in; }
+  html, body.consign { background: #fff !important; min-height: 0; }
+  body.consign > *:not(#printArea) { display: none !important; }
+  #printArea { display: block !important; }
+  #printArea .sh-page { break-after: page; page-break-after: always; }
+  #printArea .sh-page:last-child { break-after: auto; page-break-after: auto; }
+}

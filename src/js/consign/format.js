@@ -1,10 +1,11 @@
 /** Formatting helpers for the consignment page. */
 import { t, getLang } from '../shared/i18n.js';
+import { esc } from './escape.mjs';
 
 const locale = () => (getLang() === 'es' ? 'es-US' : 'en-US');
 
-/** HTML-escape anything that came from a person or the server. */
-export const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/** HTML-escape anything that came from a person or the server (escape.mjs, shared with sheets.mjs). */
+export { esc };
 
 /** Label with {n}-style placeholders filled in. */
 export const tf = (key, vars = {}) => t(key).replace(/\{(\w+)\}/g, (_, k) => (k in vars ? vars[k] : `{${k}}`));
