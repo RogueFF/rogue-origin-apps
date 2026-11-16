@@ -28,7 +28,11 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .cb-name { font: 800 clamp(24px, 3vw, 58px)/1.05 "Outfit", var(--font-ui), sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cb-bar { position: relative; height: clamp(10px, 1vw, 18px); background: var(--border); border-radius: 9px; }
 .cb-bar i { display: block; height: 100%; background: var(--green); border-radius: 9px; }
-.cb-bar s { position: absolute; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; background: var(--gold); border-radius: 2px; }
+.cb-bar s { position: absolute; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; background: var(--gold); border-radius: 2px; text-decoration: none; }
+.cb-bar s em { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 clamp(11px, 1vw, 18px) var(--font-ui); font-style: normal; color: var(--gold); }
+.cb-goalkey { display: flex; align-items: center; gap: 10px; font-size: clamp(15px, 1.35vw, 26px); font-weight: 800; color: var(--gold); margin: -4px 0 -2px; }
+.cb-goalkey[hidden] { display: none; }
+.cb-goalkey i { display: inline-block; width: 6px; height: 1.2em; background: var(--gold); border-radius: 3px; }
 .cb-val { text-align: right; line-height: 1.05; }
 .cb-val b { display: block; font: 800 clamp(26px, 3.2vw, 62px) "Outfit", var(--font-ui), sans-serif; font-variant-numeric: tabular-nums; }
 .cb-val span { font-size: clamp(12px, 1.15vw, 22px); color: var(--text-secondary); }
