@@ -14,10 +14,12 @@
 import './labels.js';
 import { t, getLang, toggleLang } from '../shared/i18n.js';
 import * as home from './views/home.js';
+import * as dropoff from './views/dropoff.js';
 import { setGo } from './nav.js';
 
 const ROUTES = [
   [/^$/, home, []],
+  [/^dropoff$/, dropoff, []],
 ];
 
 const root = document.getElementById('view');
