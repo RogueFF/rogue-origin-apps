@@ -7,10 +7,12 @@
  * The response names only the top 5 and the most-improved person. It never
  * carries the full list, anyone else's rate, a rank below 5, or a card token.
  *
- * Rate = all of a person's full days to date: sum of tops g / sum of work
- * minutes over their full_day = 1 rows. Ranked once they have MIN_DAYS full days.
+ * Top 5 = the previous workday only (Koa 2026-11-16: "top 5 from the previous
+ * workday"): the latest work_date with full-day rows, ranked by that day's tops
+ * g / work minutes. Anyone with a full day that day is ranked.
  * Most improved = the biggest rise from a person's first full day to their
- * latest (at least MIN_DAYS full days), not counting the top 5.
+ * latest (at least MIN_DAYS full days), where the latest is that same workday,
+ * not counting the top 5.
  */
 import { successResponse } from '../../lib/response.js';
 
@@ -27,40 +29,43 @@ const pack = (lb) => (lb === null || lb === undefined ? null : { gph: Math.round
  * meta: the latest crew_day_meta row ({ work_date, target_lb_hr, room_lb_hr }) or null.
  */
 export function boardFrom(rows, meta) {
+  const full = rows.filter((r) => r.work_min > 0);
+  const day = full.reduce((d, r) => (!d || r.work_date > d ? r.work_date : d), null);
+
+  // the previous workday: one row per person, ranked by that day's rate
+  const ranked = full.filter((r) => r.work_date === day)
+    .map((r) => ({ id: r.person_id, name: r.name, rate: lbHr(r.tops_g, r.work_min) }))
+    .sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
+  const top = ranked.slice(0, TOP);
+  const topIds = new Set(top.map((p) => p.id));
+
+  // most improved: first full day -> that workday, outside the top 5
   const by = new Map();
-  for (const r of rows) {
-    if (!(r.work_min > 0)) continue;
+  for (const r of full) {
     let p = by.get(r.person_id);
-    if (!p) { p = { name: r.name, g: 0, min: 0, days: [] }; by.set(r.person_id, p); }
-    p.g += r.tops_g;
-    p.min += r.work_min;
+    if (!p) { p = { name: r.name, days: [] }; by.set(r.person_id, p); }
     p.days.push({ date: r.work_date, rate: lbHr(r.tops_g, r.work_min) });
   }
-  const people = [...by.values()].map((p) => {
-    p.days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    return { ...p, rate: lbHr(p.g, p.min), n: p.days.length };
-  });
-  const ranked = people.filter((p) => p.n >= MIN_DAYS)
-    .sort((a, b) => b.rate - a.rate || b.n - a.n || a.name.localeCompare(b.name));
-  const top = ranked.slice(0, TOP);
-  const topSet = new Set(top);
   let improved = null;
-  for (const p of ranked) {
-    if (topSet.has(p)) continue;
+  for (const [id, p] of by) {
+    if (topIds.has(id) || p.days.length < MIN_DAYS) continue;
+    p.days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     const first = p.days[0], last = p.days[p.days.length - 1];
+    if (last.date !== day) continue;
     const rise = last.rate - first.rate;
     if (rise > 0 && (!improved || rise > improved.rise)) improved = { p, first, last, rise };
   }
-  const allG = rows.reduce((a, r) => a + (r.work_min > 0 ? r.tops_g : 0), 0);
-  const allMin = rows.reduce((a, r) => a + (r.work_min > 0 ? r.work_min : 0), 0);
+  const allG = full.reduce((a, r) => a + r.tops_g, 0);
+  const allMin = full.reduce((a, r) => a + r.work_min, 0);
   return {
     success: true,
+    day,
     minDays: MIN_DAYS,
     rankedCount: ranked.length,
-    top: top.map((p, i) => ({ rank: i + 1, name: p.name, days: p.n, ...pack(p.rate) })),
+    top: top.map((p, i) => ({ rank: i + 1, name: p.name, ...pack(p.rate) })),
     mostImproved: improved ? {
       name: improved.p.name,
-      days: improved.p.n,
+      days: improved.p.days.length,
       from: { date: improved.first.date, ...pack(improved.first.rate) },
       to: { date: improved.last.date, ...pack(improved.last.rate) },
       rise: pack(improved.rise),
@@ -71,7 +76,7 @@ export function boardFrom(rows, meta) {
       goal: pack(meta.target_lb_hr),
     } : null,
     roomAllDays: pack(lbHr(allG, allMin)),
-    days: [...new Set(rows.map((r) => r.work_date))].sort(),
+    days: [...new Set(full.map((r) => r.work_date))].sort(),
   };
 }
 
