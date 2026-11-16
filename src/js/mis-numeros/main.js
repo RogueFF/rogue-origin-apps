@@ -15,23 +15,23 @@ const $ = (id) => document.getElementById(id);
 registerLabels({
   es: {
     eyebrow: 'Mis números', speed: 'Tu velocidad', gPerHour: 'g de tops por hora', rank: 'Tu lugar', dayTotal: 'Tops del día',
-    byHour: 'Hora por hora', byHourSub: 'Gramos de tops por hora de trabajo. La línea es la meta.', myDays: 'Tus días',
+    byHour: 'Hora por hora', byHourSub: 'Tops por hora de trabajo, en gramos y libras. La línea es la meta.', myDays: 'Tus días',
     privacy: 'Solo tú ves esta página. Guarda tu tarjeta; si la pierdes, pide una nueva.',
     noCard: 'Escanea el código QR de tu tarjeta para ver tus números.', badCard: 'Esta tarjeta no funciona. Pide una nueva a tu líder.',
     noDays: 'Todavía no hay números para ti. Aparecen al día siguiente de trabajar.', loadFail: 'No se pudo cargar. Revisa tu conexión e intenta otra vez.',
-    goal: 'Meta', overGoal: '¡Arriba de la meta!', toGoal: 'Te faltan {g} g por hora para la meta', of: 'de', partDay: 'Día parcial',
+    goal: 'Meta', overGoal: '¡Arriba de la meta!', toGoal: 'Te faltan {g} g ({lb} lb) por hora para la meta', of: 'de', partDay: 'Día parcial',
     partDaySub: 'Sin lugar: no trabajaste el día completo en tu celda', top3: '¡Top 3 del día!', cell: 'Celda', hours: 'h',
-    best: 'Tu mejor día: {d}, {g} g por hora', lbHr: '{lb} lb por hora', notTrimming: '—', today: 'Hoy',
+    best: 'Tu mejor día: {d}, {g} g ({lb} lb) por hora', lbHr: '{lb} lb por hora', notTrimming: '—', today: 'Hoy',
   },
   en: {
     eyebrow: 'My numbers', speed: 'Your speed', gPerHour: 'g of tops per hour', rank: 'Your place', dayTotal: 'Tops for the day',
-    byHour: 'Hour by hour', byHourSub: 'Grams of tops per working hour. The line is the goal.', myDays: 'Your days',
+    byHour: 'Hour by hour', byHourSub: 'Tops per working hour, in grams and pounds. The line is the goal.', myDays: 'Your days',
     privacy: 'Only you see this page. Keep your card; if you lose it, ask for a new one.',
     noCard: 'Scan the QR code on your card to see your numbers.', badCard: "This card doesn't work. Ask your lead for a new one.",
     noDays: 'No numbers for you yet. They show up the day after you work.', loadFail: "Couldn't load. Check your connection and try again.",
-    goal: 'Goal', overGoal: 'Above the goal!', toGoal: '{g} g per hour to reach the goal', of: 'of', partDay: 'Part day',
+    goal: 'Goal', overGoal: 'Above the goal!', toGoal: '{g} g ({lb} lb) per hour to reach the goal', of: 'of', partDay: 'Part day',
     partDaySub: "No place: you didn't work the full day at your cell", top3: 'Top 3 of the day!', cell: 'Cell', hours: 'h',
-    best: 'Your best day: {d}, {g} g per hour', lbHr: '{lb} lb per hour', notTrimming: '—', today: 'Today',
+    best: 'Your best day: {d}, {g} g ({lb} lb) per hour', lbHr: '{lb} lb per hour', notTrimming: '—', today: 'Today',
   },
 });
 let stored = null;
@@ -41,6 +41,8 @@ setLang(stored === 'en' ? 'en' : 'es');
 const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const gph = (lbHr) => (lbHr === null || lbHr === undefined ? null : Math.round(lbHr * G));
+const lb2 = (lbHr) => (lbHr === null || lbHr === undefined ? '—' : Number(lbHr).toFixed(2));
+const gl = (g, lbs) => `<b>${g}</b> g<small>${lbs} lb</small>`;
 function fmtShort(iso) {
   const d = new Date(`${iso}T12:00:00`);
   return d.toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' });
@@ -74,7 +76,7 @@ function render() {
     `<button type="button" data-i="${i}" aria-pressed="${i === sel}">${esc(fmtDate(x.date))}</button>`).join('');
 
   $('rateG').textContent = me ?? '—';
-  $('rateLb').textContent = d.rate !== null ? fill(t('lbHr'), { lb: d.rate.toFixed(2) }) + (goal ? ` · ${t('goal')} ${goal} g` : '') : '';
+  $('rateLb').textContent = d.rate !== null ? fill(t('lbHr'), { lb: d.rate.toFixed(2) }) + (goal ? ` · ${t('goal')} ${goal} g (${lb2(d.target)} lb)` : '') : '';
   $('meterFill').style.width = `${me ? Math.min(100, me / scale * 100) : 0}%`;
   $('meterGoal').style.left = `${goal ? goal / scale * 100 : 0}%`;
   $('meterGoal').hidden = !goal;
@@ -82,7 +84,7 @@ function render() {
   if (goal && me !== null) {
     const up = me >= goal;
     st.className = `mn-status ${up ? 'up' : 'down'}`;
-    st.textContent = up ? t('overGoal') : fill(t('toGoal'), { g: goal - me });
+    st.textContent = up ? t('overGoal') : fill(t('toGoal'), { g: goal - me, lb: lb2(d.target - d.rate) });
   } else { st.textContent = ''; }
 
   const rankCard = $('rank').closest('.mn-rank');
@@ -98,22 +100,23 @@ function render() {
     rankCard.classList.remove('top');
   }
   $('topsG').textContent = d.topsG.toLocaleString();
+  $('topsLb').textContent = `${d.topsLb.toFixed(2)} lb`;
   $('daySub').textContent = [d.cell ? `${t('cell')} ${d.cell}` : null, `${d.hours} ${t('hours')}`, d.cultivar].filter(Boolean).join(' · ');
 
   const hmax = Math.max(...d.hourly.map((h) => gph(h.rate) || 0), goal || 0, 1) * 1.15;
   $('hours').innerHTML = d.hourly.map((h) => {
     const v = gph(h.rate);
     const off = !h.min;
-    return `<div class="mn-row${off ? ' off' : ''}"><span class="t">${esc(h.slot)}</span><span class="b"><i style="width:${v ? Math.min(100, v / hmax * 100) : 0}%"></i>${goal ? `<s style="left:${goal / hmax * 100}%"></s>` : ''}</span><span class="v">${off ? t('notTrimming') : v}</span></div>`;
+    return `<div class="mn-row${off ? ' off' : ''}"><span class="t">${esc(h.slot)}</span><span class="b"><i style="width:${v ? Math.min(100, v / hmax * 100) : 0}%"></i>${goal ? `<s style="left:${goal / hmax * 100}%"></s>` : ''}</span><span class="v">${off ? t('notTrimming') : gl(v, lb2(h.rate))}</span></div>`;
   }).join('');
 
   const tmax = Math.max(...data.days.map((x) => gph(x.rate) || 0), ...data.days.map((x) => gph(x.target) || 0), 1) * 1.15;
   $('trend').innerHTML = data.days.map((x, i) => {
     const v = gph(x.rate);
     const g2 = gph(x.target);
-    return `<div class="mn-row${i === sel ? ' sel' : ''}"><span class="t">${esc(fmtShort(x.date))}</span><span class="b"><i style="width:${v ? Math.min(100, v / tmax * 100) : 0}%"></i>${g2 ? `<s style="left:${g2 / tmax * 100}%"></s>` : ''}</span><span class="v">${v ?? '—'}</span></div>`;
+    return `<div class="mn-row${i === sel ? ' sel' : ''}"><span class="t">${esc(fmtShort(x.date))}</span><span class="b"><i style="width:${v ? Math.min(100, v / tmax * 100) : 0}%"></i>${g2 ? `<s style="left:${g2 / tmax * 100}%"></s>` : ''}</span><span class="v">${v === null ? '—' : gl(v, lb2(x.rate))}</span></div>`;
   }).join('');
-  $('best').textContent = data.best ? fill(t('best'), { d: fmtDate(data.best.date), g: gph(data.best.rate) }) : '';
+  $('best').textContent = data.best ? fill(t('best'), { d: fmtDate(data.best.date), g: gph(data.best.rate), lb: lb2(data.best.rate) }) : '';
 }
 
 $('days').addEventListener('click', (e) => {
