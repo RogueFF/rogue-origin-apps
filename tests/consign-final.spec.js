@@ -307,8 +307,8 @@ test.describe('Consignment: finished at dropoff', () => {
 
   test('Spanish labels; every state at 375 and 1024 in EN and ES, no sideways scroll; screenshots', async ({ page }) => {
     const want = {
-      en: { final: 'Final lb', done: 'Finished at dropoff', where: 'Where did the 20 lb go?', addsUp: 'Adds up' },
-      es: { final: 'Libras finales', done: 'Terminado en la entrega', where: '¿A dónde fueron las 20 lb?', addsUp: 'Cuadra' },
+      en: { final: 'Final lb', done: 'Finished at dropoff', where: 'Where did the 20 lb go?', addsUp: 'Adds up', over: 'more than the weight' },
+      es: { final: 'Libras finales', done: 'Terminado en la entrega', where: '¿A dónde fueron las 20 lb?', addsUp: 'Cuadra', over: 'más que el peso' },
     };
     test.setTimeout(120000);
     const { blocked } = await open(page);
@@ -332,7 +332,20 @@ test.describe('Consignment: finished at dropoff', () => {
         await loss(page, 'Alpha', 'smalls', 'mold').fill('5');
         await expect(finalx(page, 'Alpha', 'smalls')).toContainText(want[lang].addsUp);
         expect(await noHorizontalScroll(page)).toBe(true);
+        await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(SHOTS, `final-lower-${lang}-${width}.png`), fullPage: true });
+        // Higher than the weight: inline error, Save off.
+        await box(page, 'Alpha', 'tops', 'final').fill('55');
+        await expect(finalx(page, 'Alpha', 'tops')).toContainText(want[lang].over);
+        await expect(page.locator('#saveBtn')).toBeDisabled();
+        expect(await noHorizontalScroll(page)).toBe(true);
+        // No weight: taken as weighed.
+        await box(page, 'Alpha', 'tops').fill('');
+        await box(page, 'Alpha', 'tops', 'final').fill('70');
+        await expect(finalx(page, 'Alpha', 'tops')).toContainText('70 → 70');
+        await expect(page.locator('#summary')).toContainText('70 → 70');
+        await expect(page.locator('#saveBtn')).toBeEnabled();
+        expect(await noHorizontalScroll(page)).toBe(true);
       }
     }
     expect(blocked).toEqual([]);
