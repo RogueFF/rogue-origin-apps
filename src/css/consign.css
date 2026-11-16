@@ -1,30 +1,35 @@
 /* Consignment lot ledger, staff page.
-   Palette (Koa 2026-11-16): black, white and one green. Statuses are plain word
-   chips; red appears only when something needs attention. The shared-base
-   variables are re-pointed inside .consign so every rule below follows. */
+   Palette (Koa 2026-11-16, from a reference dashboard): one family of deep teal,
+   mid teal, mist and sage on a light grey page with white cards. Each step has
+   its own shade of that family and always carries its word too. Red is kept for
+   attention only. The shared-base variables are re-pointed inside .consign so
+   every rule below follows. */
 
 .consign {
-  --cs-green: #1f6b3a;
+  --cs-green: #24594f;   /* deep teal: top bar, main buttons, done */
+  --cs-teal: #5f9c90;    /* mid teal */
+  --cs-mist: #9cc0b8;    /* light teal */
+  --cs-sage: #a8bf8a;    /* sage green */
   --cs-red: #b3261e;
-  --cs-line: #cfd2cf;
-  --bg: #f3f4f3;
+  --cs-line: #cdd3d0;
+  --bg: #ececec;
   --bg-card: #ffffff;
-  --text: #111111;
-  --text-secondary: #555955;
-  --border: #e1e3e1;
+  --text: #14211e;
+  --text-secondary: #55615d;
+  --border: #e0e4e2;
   --border-strong: var(--cs-line);
   --header-bg: var(--cs-green);
   --header-text: #ffffff;
   --ro-green: var(--cs-green);
   --green: var(--cs-green);
-  --gold: var(--text);            /* focus ring */
-  --st-dropped: var(--cs-line);   /* neutral: dropped off, waiting to be weighed */
-  --st-weighed: var(--cs-line);   /* neutral: weighed, waiting on screening */
-  --st-screening: var(--cs-line); /* neutral: partly screened */
+  --gold: var(--cs-green);        /* focus ring */
+  --st-dropped: var(--cs-sage);   /* sage: dropped off, waiting to be weighed */
+  --st-weighed: var(--cs-teal);   /* mid teal: weighed, waiting on screening */
+  --st-screening: var(--cs-mist); /* mist: partly screened */
   --st-voided: var(--cs-line);
-  --st-closed: var(--cs-green);   /* green: done, adds up */
+  --st-closed: var(--cs-green);   /* deep teal: done, adds up */
   --st-price: var(--cs-red);      /* red: needs attention */
-  --cs-tint: 10%;
+  --cs-tint: 24%;
   margin: 0;
   min-height: 100vh;
   background: var(--bg);
@@ -35,17 +40,20 @@
   -webkit-text-size-adjust: 100%;
 }
 [data-theme="dark"] .consign {
-  --cs-green: #56b97c;
+  --cs-green: #6fb3a5;
+  --cs-teal: #4f8a7f;
+  --cs-mist: #3f6f67;
+  --cs-sage: #8fa873;
   --cs-red: #f2867f;
-  --cs-line: #3d413d;
-  --bg: #0f1110;
-  --bg-card: #1a1c1a;
-  --text: #f3f3f3;
-  --text-secondary: #a9ada9;
-  --border: #2a2d2a;
-  --header-bg: #16271c;
-  --header-text: #f3f3f3;
-  --cs-tint: 16%;
+  --cs-line: #3a4441;
+  --bg: #0f1413;
+  --bg-card: #18201e;
+  --text: #eef3f1;
+  --text-secondary: #a3b0ac;
+  --border: #27302e;
+  --header-bg: #173a34;
+  --header-text: #eef3f1;
+  --cs-tint: 28%;
 }
 .consign *, .consign *::before, .consign *::after { box-sizing: border-box; }
 :where(.consign) :where(button, input, select, textarea) { font: inherit; color: inherit; }
