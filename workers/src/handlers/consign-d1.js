@@ -8,6 +8,9 @@ import { createError } from '../lib/errors.js';
 import { requireAuth, constantTimeEqual } from '../lib/auth.js';
 import { pacificDay } from '../lib/pacific.js';
 import { checkRun, lotMoney, farmTotals, screenTolerance, round2 } from '../lib/consign-ledger.js';
+import { normalizeSheetRead } from '../lib/consign-sheet.js';
+import { dropoffPrompt, screenPrompt } from '../lib/consign-sheet-prompt.js';
+import { getConfig } from '../lib/production-utils.js';
 
 const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms']);
 
@@ -397,6 +400,130 @@ async function openWork(env) {
   });
 }
 
+/* ---------- readSheet: read a photo of a printed sheet. Never writes. ---------- */
+
+const SHEET_MEDIA = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SHEET_MAX_BYTES = 4 * 1024 * 1024;
+const SHEET_MODEL = 'claude-sonnet-5-5';
+const SHEET_TIMEOUT_MS = 25000;
+// Models that take server-side refusal fallbacks (fallbacks: "default").
+const FALLBACK_MODELS = new Set(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-fable-5-2']);
+const SHEET_FAIL = 'Could not read the sheet. Enter the numbers by hand.';
+const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+async function pricedCultivars(env, farmId) {
+  const rows = (await env.DB.prepare(
+    'SELECT DISTINCT cultivar FROM cl_price_points WHERE farm_id = ? AND effective_from <= ? ORDER BY cultivar'
+  ).bind(farmId, pacificDay(new Date())).all()).results;
+  return rows.map((r) => r.cultivar);
+}
+
+/** The lots a screening sheet prints rows for, in printed order. Same rule as src/js/consign/sheets.js. */
+const screenable = (lots) => lots.filter((l) => l.money.status === 'weighed' || l.money.status === 'screening');
+
+async function sheetModel(env) {
+  const v = await getConfig(env, 'consign.sheet_model');
+  return typeof v === 'string' && /^claude-[a-z0-9-]{1,40}$/.test(v) ? v : SHEET_MODEL;
+}
+
+/** One call to the Claude API. Any failure becomes the same friendly error: no upstream text leaves here. */
+async function askClaude(env, prompt, image, mediaType) {
+  const model = await sheetModel(env);
+  const ms = Number(env.CONSIGN_SHEET_TIMEOUT_MS) > 0 ? Number(env.CONSIGN_SHEET_TIMEOUT_MS) : SHEET_TIMEOUT_MS;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  const fallback = FALLBACK_MODELS.has(model);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: ctl.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        ...(fallback ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8000,
+        system: prompt.system,
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: prompt.schema } },
+        ...(fallback ? { fallbacks: 'default' } : {}),
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: image } },
+            { type: 'text', text: prompt.user },
+          ],
+        }],
+      }),
+    });
+    if (!res.ok) throw new Error('upstream');
+    const out = await res.json();
+    if (out.stop_reason === 'refusal' || out.stop_reason === 'max_tokens') throw new Error('stopped');
+    const text = (out.content || []).filter((b) => b && b.type === 'text').map((b) => b.text).join('').trim();
+    try {
+      return JSON.parse(text);
+    } catch {
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('unparsable');
+      return JSON.parse(m[0]);
+    }
+  } catch {
+    // Deliberately no logging: the error could carry the model's reply or upstream body.
+    throw createError('INTERNAL_ERROR', SHEET_FAIL);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readSheet(body, env) {
+  const kind = body.kind;
+  if (kind !== 'dropoff' && kind !== 'screen') throw bad('kind must be dropoff or screen');
+  if (!SHEET_MEDIA.has(body.media_type)) throw bad('The photo must be a JPEG, PNG or WebP image');
+  const image = typeof body.image_b64 === 'string' ? body.image_b64 : '';
+  if (!image) throw bad('A photo is required');
+  if ((image.length * 3) / 4 > SHEET_MAX_BYTES) throw bad('The photo is too large (4 MB at most)');
+  if (image.length % 4 !== 0 || !B64.test(image)) throw bad('The photo could not be read as an image');
+
+  const farms = (await env.DB.prepare('SELECT id, name FROM cl_farms WHERE active = 1 ORDER BY name').all()).results;
+  let ctx;
+  if (kind === 'dropoff') {
+    const farmId = Number(body.farm_id) || null;
+    if (farmId) {
+      const farm = farms.find((f) => f.id === farmId);
+      if (!farm) throw bad('Unknown farm');
+      ctx = { farms: [farm], cultivars: await pricedCultivars(env, farmId), lots: [], farm_id: farmId };
+    } else {
+      ctx = { farms, cultivars: [], lots: [] };
+    }
+  } else {
+    const id = Number(body.dropoff_id) || 0;
+    const d = id ? await env.DB.prepare(
+      'SELECT d.id, d.voided_at, f.id AS farm_id, f.name AS farm_name FROM cl_dropoffs d JOIN cl_farms f ON f.id = d.farm_id WHERE d.id = ?'
+    ).bind(id).first() : null;
+    if (!d || d.voided_at) throw bad('Unknown dropoff');
+    const lots = screenable(await loadLots(env, 'l.dropoff_id = ? AND l.voided_at IS NULL', [id]));
+    if (!lots.length) throw bad('Nothing on this dropoff is ready to screen');
+    ctx = {
+      farms: [{ id: d.farm_id, name: d.farm_name }],
+      cultivars: [],
+      lots: lots.map((l) => ({ id: l.id, cultivar: l.cultivar, type: l.type, intake_lbs: l.intake_lbs, remainder_lbs: l.money.remainder_lbs })),
+      dropoff_id: id,
+    };
+  }
+  if (!env.ANTHROPIC_API_KEY) throw createError('INTERNAL_ERROR', 'Sheet reading is not set up');
+
+  const prompt = kind === 'dropoff' ? dropoffPrompt(ctx) : screenPrompt(ctx);
+  const raw = await askClaude(env, prompt, image, body.media_type);
+  let read = normalizeSheetRead(kind, raw, ctx);
+  // A sheet with no farm chosen: match cultivars once the farm is known (the prompt never saw any).
+  if (kind === 'dropoff' && !ctx.farm_id && read.farm_id) {
+    read = normalizeSheetRead(kind, raw, { ...ctx, cultivars: await pricedCultivars(env, read.farm_id) });
+  }
+  return ok({ read });
+}
+
 export async function handleConsignD1(request, env, _ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
@@ -418,6 +545,7 @@ export async function handleConsignD1(request, env, _ctx) {
     case 'farms': return listFarms(env);
     case 'farm': return farmDetail(body, env);
     case 'open': return openWork(env);
+    case 'readSheet': return readSheet(body, env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }

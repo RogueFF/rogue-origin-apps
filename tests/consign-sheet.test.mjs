@@ -110,6 +110,12 @@ test('a screening sheet photographed as a dropoff (or the wrong dropoff) is refu
   assert.deepEqual(b.warnings, ['wrong_sheet']);
   const c = normalizeSheetRead('screen', { code: 'DROP-F3', rows: [{ index: 1, pulled: box(10), final: box(10) }] }, SCTX);
   assert.deepEqual(c.warnings, ['wrong_sheet']);
+  // opened from one farm's QR, but the sheet printed for another farm
+  const d = normalizeSheetRead('dropoff', { code: 'DROP-F4', rows: [{ cultivar: 'Alpha', tops: box(1) }] }, { ...CTX, farm_id: 3 });
+  assert.deepEqual(d.warnings, ['wrong_sheet']);
+  const e = normalizeSheetRead('dropoff', { code: 'DROP-F3', rows: [{ cultivar: 'Alpha', tops: box(1) }] }, { ...CTX, farm_id: 3 });
+  assert.equal(e.farm_id, 3);
+  assert.equal(e.rows.length, 1);
 });
 
 test('rule 6: screen rows match by printed index or cultivar + type; unknown dropped', () => {

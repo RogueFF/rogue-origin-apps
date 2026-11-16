@@ -7,7 +7,6 @@
 const MAX_LBS = 5000;
 const MAX_ROWS = 30;
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/g;
 
 /** Trim, strip control characters, cap. Non-strings become ''. */
@@ -138,7 +137,8 @@ function screenRows(raw, ctx, warn) {
  * normalizeSheetRead(kind, raw, ctx) -> { kind, farm_id, dropped_by, note, date, rows, warnings }
  *   kind: 'dropoff' | 'screen'
  *   raw:  whatever JSON.parse gave back from the model (may be anything)
- *   ctx:  { farms: [{id, name}], cultivars: [string], lots: [{id, cultivar, type, intake_lbs, remainder_lbs}], dropoff_id? }
+ *   ctx:  { farms: [{id, name}], cultivars: [string], lots: [{id, cultivar, type, intake_lbs, remainder_lbs}],
+ *           dropoff_id?, farm_id? }  (dropoff_id / farm_id: the sheet the photo was opened for)
  */
 export function normalizeSheetRead(kind, raw, ctx) {
   const k = kind === 'screen' ? 'screen' : kind === 'dropoff' ? 'dropoff' : String(kind).slice(0, 20);
@@ -148,7 +148,9 @@ export function normalizeSheetRead(kind, raw, ctx) {
   const warnings = [];
   const warn = (w) => { if (!warnings.includes(w)) warnings.push(w); };
   const code = sheetCode(raw);
-  const wrong = code && (code.kind !== k || (k === 'screen' && c.dropoff_id != null && code.dropoff !== Number(c.dropoff_id)));
+  const wrong = code && (code.kind !== k
+    || (k === 'screen' && c.dropoff_id != null && code.dropoff !== Number(c.dropoff_id))
+    || (k === 'dropoff' && c.farm_id != null && code.farm != null && code.farm !== Number(c.farm_id)));
   if (wrong) return empty(k, ['wrong_sheet']);
 
   const date = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date.trim()) ? raw.date.trim() : null;
