@@ -25,6 +25,7 @@ import { rawOut, rawBack, rawUndo, getRawBoard } from './cell-raw.js';
 import { getOrderQueue, orderSync } from './order-queue.js';
 import { getCellQueue, orderAction, jobDone } from './order-flow.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
+import { getMyNumbers, crewLoadDay, crewPeople } from './crew-numbers.js';
 
 async function test(env) {
   return successResponse({
@@ -117,6 +118,12 @@ export async function handleProductionD1(request, env, ctx) {
         return await getRawBoard(params, env);
       case 'cellBoard':
         return await getCellBoard(params, env);
+      case 'myNumbers':
+        return await getMyNumbers(params, env);
+      case 'crewLoadDay':
+        return await crewLoadDay(body, env, request);
+      case 'crewPeople':
+        return await crewPeople(body, env, request);
       case 'orderQueue':
         return await getOrderQueue(params, env);
       case 'orderSync':
