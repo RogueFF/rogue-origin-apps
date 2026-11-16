@@ -48,7 +48,7 @@ export function dropoffSheet({ farm, cultivars = [], qrSvg, code }) {
   const groups = chunk(cultivars, DROPOFF_ROWS);
   const total = groups.length;
   return groups.map((names, p) => {
-    const rows = Array.from({ length: DROPOFF_ROWS }, (_, i) => `<tr class="sh-row"><td class="sh-name">${names[i] ? esc(names[i]) : ''}</td><td class="sh-box"></td><td class="sh-box"></td><td class="sh-box sh-wide"></td></tr>`).join('');
+    const rows = Array.from({ length: DROPOFF_ROWS }, (_, i) => `<tr class="sh-row"><td class="sh-name">${names[i] ? esc(names[i]) : ''}</td><td class="sh-box" data-box="tops"></td><td class="sh-box" data-box="tops_final"></td><td class="sh-box" data-box="smalls"></td><td class="sh-box" data-box="smalls_final"></td><td class="sh-box sh-wide"></td></tr>`).join('');
     const last = p === total - 1;
     return `<section class="sh-page sh-a">
       ${head({
@@ -57,14 +57,14 @@ export function dropoffSheet({ farm, cultivars = [], qrSvg, code }) {
         qrSvg, code, page: p + 1, total,
       })}
       <table class="sh-table">
-        <colgroup><col style="width:32%"><col style="width:17%"><col style="width:17%"><col style="width:34%"></colgroup>
-        <thead><tr><th>${bi('Cultivar', 'Variedad')}</th><th>${bi('Tops lb', 'Libras de tops')}</th><th>${bi('Smalls lb', 'Libras de smalls')}</th><th>${bi('Note', 'Nota')}</th></tr></thead>
+        <colgroup><col style="width:24%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
+        <thead><tr><th>${bi('Cultivar', 'Variedad')}</th><th>${bi('Tops lb', 'Libras de tops')}</th><th>${bi('Tops final', 'Final de tops')}</th><th>${bi('Smalls lb', 'Libras de smalls')}</th><th>${bi('Smalls final', 'Final de smalls')}</th><th>${bi('Note', 'Nota')}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${last ? `<div class="sh-note"><div class="sh-flabel">${bi('Dropoff note', 'Nota de la entrega')}</div><div class="sh-line"></div><div class="sh-line"></div></div>` : ''}
       <p class="sh-help">${bi(
-        'Write the pounds. Put a ✓ in the box if it came in but was not weighed. Leave the box empty if it did not come in. Cross out a row that was not brought.',
-        'Escriba las libras. Ponga ✓ en la casilla si llegó pero no se pesó. Déjela vacía si no llegó. Tache la fila que no se trajo.',
+        'Write the pounds. Put a ✓ in the box if it came in but was not weighed. Leave the box empty if it did not come in. Cross out a row that was not brought. Fill Final only if it was checked at dropoff; leave it empty if it will be screened later.',
+        'Escriba las libras. Ponga ✓ en la casilla si llegó pero no se pesó. Déjela vacía si no llegó. Tache la fila que no se trajo. Llene Final solo si se revisó en la entrega; déjelo vacío si se va a cribar después.',
       )}</p>
     </section>`;
   }).join('');

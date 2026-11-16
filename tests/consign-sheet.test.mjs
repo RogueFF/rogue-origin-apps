@@ -68,7 +68,9 @@ test('rule 4: dropoff rows, cultivar matching, ticks and dropped empties', () =>
   assert.deepEqual(a, {
     cultivar: 'Alpha', cultivar_known: true,
     tops: { value: 100, unsure: false, on: true },
+    tops_final: { value: null, unsure: false },
     smalls: { value: null, unsure: false, on: true },
+    smalls_final: { value: null, unsure: false },
     note: 'wet',
   });
   assert.equal(g.cultivar, 'Gamma');
@@ -198,7 +200,7 @@ test('rule 8: no model keys pass through', () => {
   };
   const r = normalizeSheetRead('dropoff', evil, CTX);
   assert.deepEqual(Object.keys(r).sort(), ['date', 'dropped_by', 'farm_from', 'farm_id', 'kind', 'note', 'rows', 'warnings']);
-  assert.deepEqual(Object.keys(r.rows[0]).sort(), ['cultivar', 'cultivar_known', 'note', 'smalls', 'tops']);
+  assert.deepEqual(Object.keys(r.rows[0]).sort(), ['cultivar', 'cultivar_known', 'note', 'smalls', 'smalls_final', 'tops', 'tops_final']);
   assert.deepEqual(Object.keys(r.rows[0].tops).sort(), ['on', 'unsure', 'value']);
   const s = normalizeSheetRead('screen', { rows: [{ index: 1, pulled: box(1), lot_id: 999, extra: 1 }] }, SCTX);
   assert.deepEqual(Object.keys(s.rows[0]).sort(), ['biomass', 'final', 'finishes', 'lot_id', 'mold', 'pulled', 'to_smalls']);
@@ -251,4 +253,36 @@ test('a lot reference that is unreadable, unknown or contradicts the row falls b
     { index: 3, lot_ref: '1?', pulled: box(5) },
   ] }, ctx);
   assert.deepEqual(r.rows.map((x) => x.lot_id), [11, 12, 13]);
+});
+
+test('dropoff finals: tops_final and smalls_final as {value, unsure}; 0 is a real final; a final ticks its type', () => {
+  const r = normalizeSheetRead('dropoff', {
+    rows: [
+      { cultivar: 'Alpha', tops: box(100), tops_final: box(80), smalls: box(null), smalls_final: box(null) },
+      { cultivar: 'Beta', tops: box(null), tops_final: box(0), smalls: box(null), smalls_final: box('2O', { unsure: false }) },
+      { cultivar: 'Gamma', tops: box(null), smalls: box(null), smalls_final: box(12.25, { unsure: true }) },
+      { cultivar: 'Delta', tops: box(5) },
+    ],
+  }, CTX);
+  const [a, b, g, d] = r.rows;
+  assert.deepEqual(a.tops_final, { value: 80, unsure: false });
+  assert.deepEqual(a.smalls_final, { value: null, unsure: false });
+  assert.equal(a.smalls.on, false);
+  assert.deepEqual(b.tops_final, { value: 0, unsure: false });
+  assert.equal(b.tops.on, true, 'a written final means the type came in');
+  assert.deepEqual(b.smalls_final, { value: null, unsure: true }, 'unreadable final is unsure');
+  assert.equal(b.smalls.on, true);
+  assert.deepEqual(g.smalls_final, { value: 12.3, unsure: true });
+  assert.equal(g.smalls.on, true);
+  assert.deepEqual(d.tops_final, { value: null, unsure: false }, 'a model that left finals out: empty, not unsure');
+  assert.deepEqual(d.smalls_final, { value: null, unsure: false });
+  // A row with only a final written is kept.
+  const only = normalizeSheetRead('dropoff', { rows: [{ cultivar: '', tops_final: box(7) }] }, CTX);
+  assert.equal(only.rows.length, 1);
+  assert.equal(only.rows[0].tops_final.value, 7);
+});
+
+test('dropoff finals: a tick (no number) in a Final box comes back unsure, never silently blank', () => {
+  const r = normalizeSheetRead('dropoff', { rows: [{ cultivar: 'Alpha', tops: box(10), tops_final: box(null, { check: true }) }] }, CTX);
+  assert.deepEqual(r.rows[0].tops_final, { value: null, unsure: true });
 });

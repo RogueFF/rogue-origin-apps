@@ -7,7 +7,7 @@
  */
 import { t } from '../../shared/i18n.js';
 import { newKey } from '../api.js';
-import { esc, lbs, num, typeLabel, runCheck } from '../format.js';
+import { esc, lbs, num, typeLabel, runCheck, checkBarHtml } from '../format.js';
 import { toast } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { hold } from '../held.js';
@@ -50,11 +50,7 @@ export function mount(root, { read, detail }) {
 
   const markTail = (key) => `<span class="cs-markword">${esc(t('checkMark'))}</span><button type="button" class="cs-btn small cs-okbtn" data-okmark="${key}">${esc(t('okBox'))}</button>`;
 
-  function checkBar(c) {
-    const r = check(c);
-    if (r.ok) return `<div class="cs-checkbar good">✓ ${esc(t('addsUp'))}</div>`;
-    return `<div class="cs-checkbar bad">✕ ${esc(t('offBy'))} ${lbs(Math.abs(r.diff))} ${esc(t('lbs'))} (${esc(t('allowed'))} ${lbs(r.tolerance)} ${esc(t('lbs'))})</div>`;
-  }
+  const checkBar = (c) => checkBarHtml(check(c));
 
   function statusLine(c) {
     if (c.status === 'saving') return `<p class="cs-muted" data-status="saving">${esc(t('saving'))}</p>`;

@@ -4,7 +4,7 @@
  */
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
-import { esc, lbs, num, when, typeLabel, termLabel, statusChip, runCheck } from '../format.js';
+import { esc, lbs, num, when, typeLabel, termLabel, statusChip, runCheck, checkBarHtml } from '../format.js';
 import { errorCard, loading, toast, dialog } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { go } from '../nav.js';
@@ -22,11 +22,7 @@ export function mount(root, { dropoffId, lotId }) {
   const tol = (m) => Math.max(0.5, 0.01 * (Number(m.intake_lbs) || 0));
   const check = (l) => runCheck(s.pulled, fields(l).map(([k]) => s.out[k]));
 
-  function checkBar(l) {
-    const c = check(l);
-    if (c.ok) return `<div class="cs-checkbar good" id="checkBar">✓ ${esc(t('addsUp'))}</div>`;
-    return `<div class="cs-checkbar bad" id="checkBar">✕ ${esc(t('offBy'))} ${lbs(Math.abs(c.diff))} ${esc(t('lbs'))} (${esc(t('allowed'))} ${lbs(c.tolerance)} ${esc(t('lbs'))})</div>`;
-  }
+  const checkBar = (l) => checkBarHtml(check(l), 'checkBar');
 
   function runsHtml(l) {
     const runs = l.runs || [];

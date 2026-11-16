@@ -32,8 +32,16 @@ const clean = (v) => (typeof v === 'string' ? v.trim() : '');
 /** A UNIQUE failure on client_key: a resend racing the first send. */
 const isKeyClash = (e) => /UNIQUE constraint failed: \w+\.client_key/i.test(String(e && e.message));
 const isNameClash = (e) => /UNIQUE constraint failed: cl_farms\.name/i.test(String(e && e.message));
+/** A number as typed: a finite number, or a plain decimal string ("12.5"). Arrays, booleans, hex: NaN. */
+const strictNum = (v) => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(v)) return Number(v);
+  return NaN;
+};
+/** Largest weight one dropoff line may carry, in lb. */
+const MAX_LINE_LBS = 100000;
 const posNum = (v, label) => {
-  const n = Number(v);
+  const n = strictNum(v);
   if (!Number.isFinite(n) || n <= 0) throw bad(`${label} must be a positive number`);
   return n;
 };
@@ -133,6 +141,45 @@ async function dropoffDetail(env, dropoffId, extra = {}) {
   return ok({ dropoff, lots, ...extra });
 }
 
+/** A required number >= 0 (a final weight): empty is missing, not 0. */
+const reqNonNeg = (v, label) => {
+  if (v === '' || v == null) throw bad(`${label} is required`);
+  const n = strictNum(v);
+  if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${label} must be a number, 0 or more`);
+  return n;
+};
+
+/**
+ * A dropoff line's final (lot finished at dropoff) -> the screening run it saves.
+ * Same rule as a screening run (checkRun): the outputs must add up to the intake within
+ * the tolerance. No intake: the intake is the final plus its losses (accepted as weighed).
+ */
+function finalRun(fin, type, intake, at) {
+  if (fin === null || typeof fin !== 'object' || Array.isArray(fin)) throw bad(`${at}: final must be a set of weights`);
+  const loss = (v, label) => {
+    const n = v === '' || v == null ? 0 : strictNum(v);
+    if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${at}: ${label} must be a number, 0 or more`);
+    return n;
+  };
+  const run = {
+    final_lbs: reqNonNeg(fin.final_lbs, `${at}: final weight`),
+    to_smalls_lbs: loss(fin.to_smalls_lbs, 'turned to smalls'),
+    biomass_lbs: loss(fin.biomass_lbs, 'biomass'),
+    mold_lbs: loss(fin.mold_lbs, 'mold'),
+  };
+  if (type === 'smalls' && run.to_smalls_lbs > 0) throw bad(`${at}: a smalls lot cannot turn into smalls`);
+  const out = round2(run.final_lbs + run.to_smalls_lbs + run.biomass_lbs + run.mold_lbs);
+  run.pulled_lbs = intake == null ? posNum(out, `${at}: weight`) : intake;
+  if (run.pulled_lbs > MAX_LINE_LBS) throw bad(`${at}: weight must be ${MAX_LINE_LBS} lb or less`);
+  if (run.final_lbs > run.pulled_lbs + screenTolerance(run.pulled_lbs)) {
+    throw bad(`${at}: the final weight (${run.final_lbs} lb) is more than the ${run.pulled_lbs} lb dropped off`);
+  }
+  const chk = checkRun(run, type);
+  if (!chk.ok) throw bad(`${at}: outputs are off by ${chk.diff} lb (allowed ${chk.tolerance} lb)`);
+  run.diff = chk.diff;
+  return run;
+}
+
 async function saveDropoff(body, env) {
   // A resend of a save that already landed is answered first, whatever changed since.
   const key = clean(body.client_key) || crypto.randomUUID();
@@ -153,11 +200,17 @@ async function saveDropoff(body, env) {
     if (!TYPES.has(ln.type)) throw bad(`Line ${i + 1}: type must be tops or smalls`);
     const term = ln.term || farm.default_term;
     if (!TERMS.has(term)) throw bad(`Line ${i + 1}: term must be dropoff or sold`);
-    const intake = ln.intake_lbs === '' || ln.intake_lbs == null ? null : posNum(ln.intake_lbs, `Line ${i + 1}: weight`);
+    let intake = ln.intake_lbs === '' || ln.intake_lbs == null ? null : posNum(ln.intake_lbs, `Line ${i + 1}: weight`);
+    if (intake > MAX_LINE_LBS) throw bad(`Line ${i + 1}: weight must be ${MAX_LINE_LBS} lb or less`);
     const k = `${cultivar.toLowerCase()}|${ln.type}|${term}`;
     if (seen.has(k)) throw bad(`Line ${i + 1}: ${cultivar} ${ln.type} is listed twice`);
     seen.add(k);
-    return { cultivar, type: ln.type, term, intake, note: clean(ln.note) || null };
+    let run = null;
+    if (ln.final != null) {
+      run = finalRun(ln.final, ln.type, intake, `Line ${i + 1}`);
+      intake = run.pulled_lbs;
+    }
+    return { cultivar, type: ln.type, term, intake, run, note: clean(ln.note) || null };
   });
 
   const today = pacificDay(new Date());
@@ -175,11 +228,28 @@ async function saveDropoff(body, env) {
        VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`
     ).bind(key, farmId, ln.cultivar, ln.type, ln.term, ln.intake, ln.intake, ln.price, ln.smallsPrice, ln.note)),
   ];
+  // Finished at dropoff: the lot closes and gets its one run in the same batch. The run finds
+  // its lot by dropoff key + cultivar + type + term (unique within a dropoff, checked above);
+  // a miss is a NULL lot_id, which fails NOT NULL and rolls the whole dropoff back.
+  lines.forEach((ln, i) => {
+    if (!ln.run) return;
+    const r = ln.run;
+    const lotId = `(SELECT id FROM cl_lots WHERE dropoff_id = (SELECT id FROM cl_dropoffs WHERE client_key = ?) AND cultivar = ? AND type = ? AND term = ?)`;
+    stmts.push(
+      env.DB.prepare(`UPDATE cl_lots SET closed_at = datetime('now') WHERE id = ${lotId}`).bind(key, ln.cultivar, ln.type, ln.term),
+      env.DB.prepare(
+        `INSERT INTO cl_screen_runs (lot_id, pulled_lbs, final_lbs, to_smalls_lbs, biomass_lbs, mold_lbs, diff_lbs, client_key)
+         VALUES (${lotId}, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(key, ln.cultivar, ln.type, ln.term, r.pulled_lbs, r.final_lbs, r.to_smalls_lbs, r.biomass_lbs, r.mold_lbs, r.diff, `${key}#${i}`),
+    );
+  });
   try {
     await env.DB.batch(stmts);
   } catch (e) {
     if (!isKeyClash(e)) throw e;
+    // Only a resend of THIS dropoff is a duplicate; any other key clash is a real failure.
     const won = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
+    if (!won) throw e;
     return dropoffDetail(env, won.id, { duplicate: true });
   }
   const row = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();

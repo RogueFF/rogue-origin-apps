@@ -68,7 +68,8 @@ test('readSheet dropoff: one image block, the model id, the farm\'s cultivars; n
     assert.equal(read.dropped_by, 'Sam');
     assert.deepEqual(read.rows, [{
       cultivar: 'Alpha', cultivar_known: true,
-      tops: { value: 52.3, unsure: false, on: true }, smalls: { value: null, unsure: true, on: false }, note: '',
+      tops: { value: 52.3, unsure: false, on: true }, tops_final: { value: null, unsure: false },
+      smalls: { value: null, unsure: true, on: false }, smalls_final: { value: null, unsure: false }, note: '',
     }]);
   });
 });
@@ -251,4 +252,27 @@ test('readSheet dropoff says when the farm came from handwriting', async () => {
     assert.equal(read.farm_id, a.id);
     assert.equal(read.farm_from, 'name');
   });
+});
+
+test('readSheet dropoff: the schema and prompt ask for the finals; finals come back normalised', async () => {
+  const p = dropoffPrompt({ farms: [{ id: 1, name: 'Farm A' }], cultivars: ['Alpha'] });
+  const row = p.schema.properties.rows.items;
+  for (const k of ['tops_final', 'smalls_final']) {
+    assert.ok(row.required.includes(k), k);
+    assert.deepEqual(Object.keys(row.properties[k].properties).sort(), ['unsure', 'value']);
+  }
+  assert.match(p.system, /Tops lb \| Tops final \| Smalls lb \| Smalls final \| Note/);
+  assert.match(p.system, /final/i);
+
+  const { env, sqlite, a } = await seeded();
+  const before = counts(sqlite);
+  const model = { code: `DROP-F${a.id}`, farm: 'Farm A', date: null, dropped_by: null, note: null,
+    rows: [{ cultivar: 'Alpha', cultivar_unsure: false, tops: box(100), tops_final: { value: 90, unsure: false }, smalls: box(null), smalls_final: { value: 30, unsure: true }, note: null }] };
+  await withFetch(() => reply(model), async () => {
+    const { read } = await call(env, 'readSheet', { kind: 'dropoff', image_b64: IMG, media_type: 'image/jpeg', farm_id: a.id });
+    assert.deepEqual(read.rows[0].tops_final, { value: 90, unsure: false });
+    assert.deepEqual(read.rows[0].smalls_final, { value: 30, unsure: true });
+    assert.equal(read.rows[0].smalls.on, true);
+  });
+  assert.deepEqual(counts(sqlite), before, 'readSheet still never writes');
 });

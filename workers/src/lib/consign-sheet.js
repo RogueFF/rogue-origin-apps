@@ -67,14 +67,24 @@ function dropoffRows(raw, ctx) {
     const match = name ? known.get(lower(name)) : undefined;
     const t = readBox(r.tops);
     const s = readBox(r.smalls);
-    const tops = { value: t.value, unsure: t.unsure, on: t.value != null || boxWritten(r.tops) };
-    const smalls = { value: s.value, unsure: s.unsure, on: s.value != null || boxWritten(r.smalls) };
+    // Final (after) weight, filled only when the lot was checked at dropoff. 0 is a real final.
+    // A tick (or anything unreadable) in a Final box comes back unsure: never silently blank.
+    const finalBox = (b) => {
+      const f = readBox(b, { zero: true });
+      return f.value == null && boxWritten(b) ? { value: null, unsure: true } : f;
+    };
+    const tf = finalBox(r.tops_final);
+    const sf = finalBox(r.smalls_final);
+    const tops = { value: t.value, unsure: t.unsure, on: t.value != null || boxWritten(r.tops) || boxWritten(r.tops_final) };
+    const smalls = { value: s.value, unsure: s.unsure, on: s.value != null || boxWritten(r.smalls) || boxWritten(r.smalls_final) };
     if (!name && !tops.on && !smalls.on) continue;
     out.push({
       cultivar: match || name,
       cultivar_known: !!match && r.cultivar_unsure !== true,
       tops,
+      tops_final: { value: tf.value, unsure: tf.unsure },
       smalls,
+      smalls_final: { value: sf.value, unsure: sf.unsure },
       note: cleanText(r.note),
     });
   }
