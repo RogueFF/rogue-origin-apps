@@ -68,3 +68,76 @@ test('savePricePoint rejects zero and negative prices', async () => {
 });
 
 export { seedFarm, price };
+
+const lines2 = [
+  { cultivar: 'Alpha', type: 'tops', intake_lbs: 100 },
+  { cultivar: 'Alpha', type: 'smalls', intake_lbs: 40 },
+  { cultivar: 'Beta', type: 'tops' },
+];
+
+test('saveDropoff writes one dropoff and a lot per line, copying prices', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env);
+  await price(env, farm.id, 'Alpha', 'tops', 10);
+  await price(env, farm.id, 'Alpha', 'smalls', 4);
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, dropped_by: 'T', lines: lines2, client_key: 'k1' });
+  assert.equal(d.lots.length, 3);
+  const [aTops, aSmalls, bTops] = d.lots;
+  assert.equal(aTops.price_per_lb, 10);
+  assert.equal(aTops.smalls_price_per_lb, 4);
+  assert.equal(aSmalls.price_per_lb, 4);
+  assert.equal(aTops.term, 'dropoff');
+  assert.ok(aTops.weighed_at);
+  assert.equal(bTops.intake_lbs, null);
+  assert.equal(bTops.weighed_at, null);
+  assert.equal(bTops.money.needs_price, true);
+  assert.equal(bTops.money.status, 'dropped');
+  assert.ok(d.dropoff.dropped_at);
+});
+
+test('a later price change does not touch an existing lot', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env);
+  await price(env, farm.id, 'Alpha', 'tops', 10, { effective_from: '2026-01-01' });
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, lines: [lines2[0]], client_key: 'k1' });
+  await price(env, farm.id, 'Alpha', 'tops', 12);
+  const again = await call(env, 'dropoff', { dropoff_id: d.dropoff.id });
+  assert.equal(again.lots[0].price_per_lb, 10);
+  const d2 = await call(env, 'saveDropoff', { farm_id: farm.id, lines: [lines2[0]], client_key: 'k2' });
+  assert.equal(d2.lots[0].price_per_lb, 12);
+});
+
+test('resending the same client_key does not create a second dropoff', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const farm = await seedFarm(env);
+  await call(env, 'saveDropoff', { farm_id: farm.id, lines: lines2, client_key: 'k1' });
+  const again = await call(env, 'saveDropoff', { farm_id: farm.id, lines: lines2, client_key: 'k1' });
+  assert.equal(again.duplicate, true);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_dropoffs').get().n, 1);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_lots').get().n, 3);
+});
+
+test('a bad line saves nothing', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const farm = await seedFarm(env);
+  const linesBad = [lines2[0], { cultivar: 'Beta', type: 'tops', intake_lbs: -5 }];
+  await assert.rejects(handleConsignD1(post('saveDropoff', { farm_id: farm.id, lines: linesBad, client_key: 'k1' }), env, {}), /weight|positive/i);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_dropoffs').get().n, 0);
+});
+
+test('one cultivar line can be split across terms, but not duplicated', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env);
+  const split = [{ cultivar: 'Alpha', type: 'tops', term: 'dropoff', intake_lbs: 30 }, { cultivar: 'Alpha', type: 'tops', term: 'sold', intake_lbs: 70 }];
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, lines: split, client_key: 'k1' });
+  assert.deepEqual(d.lots.map((l) => l.term), ['dropoff', 'sold']);
+  const dup = [split[0], split[0]];
+  await assert.rejects(handleConsignD1(post('saveDropoff', { farm_id: farm.id, lines: dup, client_key: 'k2' }), env, {}), /twice|duplicate/i);
+});
+
+test('saveDropoff rejects an unknown farm and an empty line list', async () => {
+  const { env } = freshConsignDb();
+  await assert.rejects(handleConsignD1(post('saveDropoff', { farm_id: 99, lines: lines2 }), env, {}), /farm/i);
+  const farm = await seedFarm(env);
+  await assert.rejects(handleConsignD1(post('saveDropoff', { farm_id: farm.id, lines: [] }), env, {}), /line/i);
+});

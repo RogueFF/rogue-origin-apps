@@ -90,6 +90,82 @@ async function savePricePoint(body, env) {
   return ok({ price_point, lots_priced: lotsPriced });
 }
 
+/** Load lots (with runs, sold, money) for a WHERE clause on cl_lots aliased l. */
+async function loadLots(env, where, args) {
+  const lots = (await env.DB.prepare(
+    `SELECT l.*, f.name AS farm_name, d.dropped_at FROM cl_lots l
+     JOIN cl_farms f ON f.id = l.farm_id JOIN cl_dropoffs d ON d.id = l.dropoff_id
+     WHERE ${where} ORDER BY l.id`
+  ).bind(...args).all()).results;
+  if (!lots.length) return [];
+  const runs = (await env.DB.prepare(
+    `SELECT r.* FROM cl_screen_runs r JOIN cl_lots l ON l.id = r.lot_id WHERE ${where} ORDER BY r.id`
+  ).bind(...args).all()).results;
+  const sold = (await env.DB.prepare(
+    `SELECT s.* FROM cl_sold s JOIN cl_lots l ON l.id = s.lot_id WHERE ${where} ORDER BY s.id`
+  ).bind(...args).all()).results;
+  return lots.map((lot) => {
+    const r = runs.filter((x) => x.lot_id === lot.id);
+    const s = sold.filter((x) => x.lot_id === lot.id);
+    return { ...lot, runs: r, sold: s, money: lotMoney(lot, r, s) };
+  });
+}
+
+async function dropoffDetail(env, dropoffId, extra = {}) {
+  const dropoff = await env.DB.prepare(
+    'SELECT d.*, f.name AS farm_name FROM cl_dropoffs d JOIN cl_farms f ON f.id = d.farm_id WHERE d.id = ?'
+  ).bind(dropoffId).first();
+  if (!dropoff) throw createError('NOT_FOUND', 'Dropoff not found');
+  const lots = await loadLots(env, 'l.dropoff_id = ?', [dropoffId]);
+  return ok({ dropoff, lots, ...extra });
+}
+
+async function saveDropoff(body, env) {
+  const farmId = Number(body.farm_id);
+  const farm = farmId ? await env.DB.prepare('SELECT * FROM cl_farms WHERE id = ? AND active = 1').bind(farmId).first() : null;
+  if (!farm) throw bad('Unknown farm');
+  const raw = Array.isArray(body.lines) ? body.lines : [];
+  if (!raw.length) throw bad('A dropoff needs at least one line');
+
+  const key = clean(body.client_key) || crypto.randomUUID();
+  const existing = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
+  if (existing) return dropoffDetail(env, existing.id, { duplicate: true });
+
+  // Validate every line before anything is written.
+  const seen = new Set();
+  const lines = raw.map((ln, i) => {
+    const cultivar = clean(ln.cultivar);
+    if (!cultivar) throw bad(`Line ${i + 1}: cultivar is required`);
+    if (!TYPES.has(ln.type)) throw bad(`Line ${i + 1}: type must be tops or smalls`);
+    const term = ln.term || farm.default_term;
+    if (!TERMS.has(term)) throw bad(`Line ${i + 1}: term must be dropoff or sold`);
+    const intake = ln.intake_lbs === '' || ln.intake_lbs == null ? null : posNum(ln.intake_lbs, `Line ${i + 1}: weight`);
+    const k = `${cultivar.toLowerCase()}|${ln.type}|${term}`;
+    if (seen.has(k)) throw bad(`Line ${i + 1}: ${cultivar} ${ln.type} is listed twice`);
+    seen.add(k);
+    return { cultivar, type: ln.type, term, intake, note: clean(ln.note) || null };
+  });
+
+  const today = pacificDay(new Date());
+  for (const ln of lines) {
+    ln.price = await priceFor(env, farmId, ln.cultivar, ln.type, today);
+    ln.smallsPrice = ln.type === 'tops' ? await priceFor(env, farmId, ln.cultivar, 'smalls', today) : null;
+  }
+
+  const source = ['paper', 'telegram'].includes(body.source) ? body.source : 'app';
+  const stmts = [
+    env.DB.prepare('INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key) VALUES (?, ?, ?, ?, ?)')
+      .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key),
+    ...lines.map((ln) => env.DB.prepare(
+      `INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term, intake_lbs, weighed_at, price_per_lb, smalls_price_per_lb, note)
+       VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`
+    ).bind(key, farmId, ln.cultivar, ln.type, ln.term, ln.intake, ln.intake, ln.price, ln.smallsPrice, ln.note)),
+  ];
+  await env.DB.batch(stmts);
+  const row = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
+  return dropoffDetail(env, row.id);
+}
+
 export async function handleConsignD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
@@ -99,6 +175,8 @@ export async function handleConsignD1(request, env, ctx) {
   switch (action) {
     case 'saveFarm': return saveFarm(body, env);
     case 'savePricePoint': return savePricePoint(body, env);
+    case 'saveDropoff': return saveDropoff(body, env);
+    case 'dropoff': return dropoffDetail(env, Number(body.dropoff_id));
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }
