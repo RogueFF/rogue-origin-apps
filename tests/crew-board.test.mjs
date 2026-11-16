@@ -1,11 +1,11 @@
 /**
  * Crew leaderboard (barn TV + QR page), Koa 2026-11-16: name only the top 5,
  * show the room against the goal and a "most improved" slot, never shame the
- * bottom. Rate = all of a person's full days to date.
+ * bottom. Top 5 = the previous workday only (Koa 2026-11-16).
  *
- *   · ranking is over all full days (sum g / sum minutes), not the best day
- *   · nobody is ranked before MIN_DAYS (2) full days; part days never count
- *   · most improved = biggest rise first → latest full day, outside the top 5
+ *   · ranking is that one workday's rate; part days never count
+ *   · anyone with a full day that day is ranked, even their first day
+ *   · most improved = biggest rise first full day → that workday, outside the top 5
  *   · the response never names rank 6+ (except the most-improved slot) and
  *     never carries a card token
  *
@@ -62,16 +62,16 @@ const D2 = [['P1', 400], ['P2', 380], ['P3', 360], ['P4', 340], ['P5', 320], ['P
 
 before((t) => { if (!DatabaseSync) t.skip('node:sqlite unavailable (Node < 22.5)'); });
 
-test('top 5 over all full days; one-day people and part days are not ranked', async () => {
+test('top 5 from the previous workday only; part days are not ranked', async () => {
   const { env } = freshDb();
   await post(env, 'crewLoadDay', day('2026-11-12', D1));
   await post(env, 'crewLoadDay', day('2026-11-13', D2, 0.51, 0.45));
   const b = await (await get(env, 'action=crewBoard')).json();
   assert.equal(b.minDays, MIN_DAYS);
+  assert.equal(b.day, '2026-11-13');
   assert.deepEqual(b.top.map((p) => p.name), ['P1', 'P2', 'P3', 'P4', 'P5']);
   assert.equal(b.top[0].gph, 400);
-  assert.equal(b.top[0].days, 2);
-  assert.equal(b.rankedCount, 8, 'Solo (1 day) and Part (part day only) are not ranked');
+  assert.equal(b.rankedCount, 8, 'Solo (not on 11/13) and Part (part day) are not ranked');
   assert.equal(b.room.date, '2026-11-13');
   assert.equal(b.room.goal.lbHr, 0.51);
   assert.equal(b.room.rate.lbHr, 0.45);
@@ -101,7 +101,7 @@ test('the response names only the top 5 + most improved, and carries no token', 
 });
 
 test('nobody ranked yet: empty board, no most improved, no crash', () => {
-  const b = boardFrom([{ person_id: 1, name: 'A', work_date: '2026-11-12', tops_g: 300, work_min: 60 }], null);
+  const b = boardFrom([], null);
   assert.deepEqual(b.top, []);
   assert.equal(b.mostImproved, null);
   assert.equal(b.room, null);
@@ -116,10 +116,27 @@ test('no one improved: the slot stays empty rather than naming a decline', () =>
   assert.equal(boardFrom(rows, null).mostImproved, null);
 });
 
-test('rate is total grams over total minutes, not the average of daily rates', () => {
+test('only the latest workday counts: an earlier fast day does not rank', () => {
   const rows = [
-    { person_id: 1, name: 'A', work_date: '2026-11-12', tops_g: 600, work_min: 60 },   // 600 g/hr for 1 hr
-    { person_id: 1, name: 'A', work_date: '2026-11-13', tops_g: 600, work_min: 300 },  // 120 g/hr for 5 hr
+    { person_id: 1, name: 'A', work_date: '2026-11-12', tops_g: 600, work_min: 60 },   // 600 g/hr, older day
+    { person_id: 1, name: 'A', work_date: '2026-11-13', tops_g: 600, work_min: 300 },  // 120 g/hr that day
+    { person_id: 2, name: 'B', work_date: '2026-11-13', tops_g: 300, work_min: 60 },   // 300 g/hr, first day
+    { person_id: 3, name: 'C', work_date: '2026-11-12', tops_g: 900, work_min: 60 },   // didn't work 11/13
   ];
-  assert.equal(boardFrom(rows, null).top[0].gph, 200); // 1200 g / 6 hr, not (600+120)/2
+  const b = boardFrom(rows, null);
+  assert.equal(b.day, '2026-11-13');
+  assert.deepEqual(b.top.map((p) => [p.name, p.gph]), [['B', 300], ['A', 120]]);
+});
+
+test('most improved must have worked the board day', () => {
+  const rows = [];
+  for (const [i, g] of [[1, 500], [2, 490], [3, 480], [4, 470], [5, 460], [6, 100]]) {
+    rows.push({ person_id: i, name: `N${i}`, work_date: '2026-11-13', tops_g: g, work_min: 60 });
+  }
+  // N7 rose a lot between 11/11 and 11/12 but didn't work 11/13
+  rows.push({ person_id: 7, name: 'N7', work_date: '2026-11-11', tops_g: 100, work_min: 60 });
+  rows.push({ person_id: 7, name: 'N7', work_date: '2026-11-12', tops_g: 400, work_min: 60 });
+  rows.push({ person_id: 6, name: 'N6', work_date: '2026-11-12', tops_g: 50, work_min: 60 });
+  const b = boardFrom(rows, null);
+  assert.equal(b.mostImproved.name, 'N6');
 });

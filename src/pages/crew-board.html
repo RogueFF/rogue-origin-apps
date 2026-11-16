@@ -18,18 +18,18 @@
 <script type="importmap">
 {
   "imports": {
-    "../js/crew-board/main.js": "../js/crew-board/main.js?h=08966c72",
+    "../js/crew-board/main.js": "../js/crew-board/main.js?h=01cfc36a",
     "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7"
   }
 }
 </script>
 <!-- module-hashes:end -->
-  <script type="module" src="../js/crew-board/main.js?h=08966c72"></script>
+  <script type="module" src="../js/crew-board/main.js?h=01cfc36a"></script>
 </head>
 <body>
   <header class="cb-head">
     <div>
-      <span class="cb-eyebrow" data-i18n="eyebrow">Celdas · todos los días completos</span>
+      <span class="cb-eyebrow" id="eyebrow" data-i18n="eyebrow">Celdas · último día de trabajo</span>
       <h1 data-i18n="title">Los mejores 5</h1>
     </div>
     <div class="cb-tools">
@@ -64,8 +64,8 @@
   </main>
 
   <footer class="cb-foot">
-    <p data-i18n="howRate">Velocidad = gramos de tops por hora de trabajo, sumando todos los días completos de cada persona (mínimo 2 días).</p>
-    <p data-i18n="howImp">Más mejorado = la mayor subida del primer día completo al último, fuera de los mejores 5.</p>
+    <p data-i18n="howRate">Los mejores 5 = gramos de tops por hora de trabajo en el último día de trabajo (día completo).</p>
+    <p data-i18n="howImp">Más mejorado = la mayor subida de su primer día completo a ese día, fuera de los mejores 5.</p>
     <p id="updated"></p>
   </footer>
 </body>
