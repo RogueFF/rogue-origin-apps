@@ -69,6 +69,7 @@ export function mount(root, { farmId }) {
       ${ds.length ? `<div class="cs-stack">${ds.map((d) => `<section class="cs-card" data-dropoff="${d.id}">
         <div class="cs-cardhead"><h3 class="cs-h3">${esc(when(d.dropped_at))}</h3>
           <button type="button" class="cs-btn small danger" data-void="dropoff|${d.id}">${esc(t('void'))}</button></div>
+        ${d.lots.some((l) => l.money.status === 'weighed' || l.money.status === 'screening') ? `<div class="cs-row-btns"><a class="cs-btn small" href="#/print/screen/${d.id}" data-printscreen="${d.id}">🖨 ${esc(t('printScreenSheet'))}</a></div>` : ''}
         ${d.dropped_by || d.note ? `<p class="cs-muted">${esc(d.dropped_by || '')}${d.dropped_by && d.note ? ' · ' : ''}${esc(d.note || '')}</p>` : ''}
         ${d.lots.map((l) => lotHtml(d, l)).join('')}
       </section>`).join('')}</div>` : `<p class="cs-muted">${esc(t('noDropoffs'))}</p>`}`;

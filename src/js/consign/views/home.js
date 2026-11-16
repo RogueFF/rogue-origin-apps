@@ -80,6 +80,7 @@ export function mount(root) {
       <div class="cs-actions">
         <a class="cs-btn primary big" href="#/dropoff" id="newDropoffBtn">＋ ${esc(t('newDropoff'))}</a>
         <a class="cs-btn big" href="#/pay" id="payBtn">$ ${esc(t('recordPayment'))}</a>
+        <a class="cs-btn big" href="#/print/dropoff" id="printSheetBtn">🖨 ${esc(t('printDropoffSheet'))}</a>
         <button type="button" class="cs-btn big cs-owner-only" id="addFarmBtn">${esc(t('addFarm'))}</button>
       </div>
       <div id="heldBox">${heldBox()}</div>

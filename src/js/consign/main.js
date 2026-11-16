@@ -9,6 +9,8 @@
  *   #/screen/<dropoff>/<lot>   screening run
  *   #/farm/<farm>              farm page
  *   #/pay or #/pay/<farm>      record a payment
+ *   #/print/dropoff(/<farm>)   print a dropoff sheet (blank, or for one farm)
+ *   #/print/screen/<dropoff>   print a screening sheet
  * Weigh and screen carry the dropoff id because the API reads lots through their dropoff.
  */
 import './labels.js';
@@ -19,6 +21,7 @@ import * as weigh from './views/weigh.js';
 import * as screen from './views/screen.js';
 import * as farm from './views/farm.js';
 import * as pay from './views/pay.js';
+import * as print from './views/print.js';
 import { initOwner } from './owner.js';
 import { setGo } from './nav.js';
 import { queue, flush } from './held.js';
@@ -31,6 +34,8 @@ const ROUTES = [
   [/^screen\/(\d+)\/(\d+)$/, screen, ['dropoffId', 'lotId']],
   [/^farm\/(\d+)$/, farm, ['farmId']],
   [/^pay(?:\/(\d+))?$/, pay, ['farmId']],
+  [/^print\/dropoff(?:\/(\d+))?$/, print, ['farmId'], { kind: 'dropoff' }],
+  [/^print\/screen\/(\d+)$/, print, ['dropoffId'], { kind: 'screen' }],
 ];
 
 const root = document.getElementById('view');
@@ -38,9 +43,9 @@ let current = null;
 let currentHash = null;
 
 function match(hash) {
-  for (const [re, view, names] of ROUTES) {
+  for (const [re, view, names, extra] of ROUTES) {
     const m = re.exec(hash);
-    if (m) return { view, params: Object.fromEntries(names.map((n, i) => [n, m[i + 1] ? Number(m[i + 1]) : null])) };
+    if (m) return { view, params: { ...extra, ...Object.fromEntries(names.map((n, i) => [n, m[i + 1] ? Number(m[i + 1]) : null])) } };
   }
   return { view: home, params: {} };
 }

@@ -66,7 +66,8 @@ export function mount(root) {
     if (s.farm) {
       return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
         <div class="cs-crowhead"><span class="cs-crowname" id="farmName">${esc(s.farm.name)}</span>
-        <button type="button" class="cs-btn small" id="changeFarm">${esc(t('change'))}</button></div></section>`;
+        <button type="button" class="cs-btn small" id="changeFarm">${esc(t('change'))}</button></div>
+        <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">🖨 ${esc(t('printFarmSheet'))}</a></div></section>`;
     }
     const live = s.farms.filter((f) => f.active);
     return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
