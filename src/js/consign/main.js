@@ -40,6 +40,7 @@ function route() {
     return;
   }
   currentHash = hash;
+  if (current && current.unmount) current.unmount();
   const { view, params } = match(hash);
   root.innerHTML = '';
   window.scrollTo(0, 0);
@@ -48,6 +49,7 @@ function route() {
 
 /** Views call go() (nav.js) to move on without the dirty prompt, after a save. */
 setGo((hash) => {
+  if (current && current.unmount) current.unmount();
   current = null;
   currentHash = null;
   if (location.hash === hash) route();

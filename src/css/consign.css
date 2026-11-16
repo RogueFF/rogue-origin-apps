@@ -216,3 +216,4 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
   .cs-band .cs-big { font-size: 26px; }
   .cs-banner .cs-big { font-size: 38px; }
 }
+body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
