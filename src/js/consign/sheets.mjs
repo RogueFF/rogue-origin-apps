@@ -48,7 +48,7 @@ export function dropoffSheet({ farm, cultivars = [], qrSvg, code }) {
   const groups = chunk(cultivars, DROPOFF_ROWS);
   const total = groups.length;
   return groups.map((names, p) => {
-    const rows = Array.from({ length: DROPOFF_ROWS }, (_, i) => `<tr class="sh-row"><td class="sh-name">${names[i] ? esc(names[i]) : ''}</td><td class="sh-box" data-box="tops"></td><td class="sh-box sh-final" data-box="tops_final"></td><td class="sh-box" data-box="smalls"></td><td class="sh-box sh-final" data-box="smalls_final"></td><td class="sh-box sh-wide"></td></tr>`).join('');
+    const rows = Array.from({ length: DROPOFF_ROWS }, (_, i) => `<tr class="sh-row"><td class="sh-name">${names[i] ? esc(names[i]) : ''}</td><td class="sh-box" data-box="tops"></td><td class="sh-box" data-box="tops_final"></td><td class="sh-box" data-box="smalls"></td><td class="sh-box" data-box="smalls_final"></td><td class="sh-box sh-wide"></td></tr>`).join('');
     const last = p === total - 1;
     return `<section class="sh-page sh-a">
       ${head({
@@ -58,7 +58,7 @@ export function dropoffSheet({ farm, cultivars = [], qrSvg, code }) {
       })}
       <table class="sh-table">
         <colgroup><col style="width:24%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:20%"></colgroup>
-        <thead><tr><th>${bi('Cultivar', 'Variedad')}</th><th>${bi('Tops lb', 'Libras de tops')}</th><th class="sh-final">${bi('Tops final', 'Final de tops')}</th><th>${bi('Smalls lb', 'Libras de smalls')}</th><th class="sh-final">${bi('Smalls final', 'Final de smalls')}</th><th>${bi('Note', 'Nota')}</th></tr></thead>
+        <thead><tr><th>${bi('Cultivar', 'Variedad')}</th><th>${bi('Tops lb', 'Libras de tops')}</th><th>${bi('Tops final', 'Final de tops')}</th><th>${bi('Smalls lb', 'Libras de smalls')}</th><th>${bi('Smalls final', 'Final de smalls')}</th><th>${bi('Note', 'Nota')}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${last ? `<div class="sh-note"><div class="sh-flabel">${bi('Dropoff note', 'Nota de la entrega')}</div><div class="sh-line"></div><div class="sh-line"></div></div>` : ''}

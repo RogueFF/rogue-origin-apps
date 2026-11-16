@@ -65,6 +65,16 @@ export function runCheck(pulled, outputs) {
   return { ok: p > 0 && Math.abs(diff) <= tolerance, diff, tolerance };
 }
 
+/**
+ * The "Adds up / Off by X lb" bar for a runCheck result. One copy, shared by the screening
+ * screen, the photo review and the dropoff form's loss boxes. id: optional element id.
+ */
+export function checkBarHtml(r, id = '') {
+  const idAttr = id ? ` id="${esc(id)}"` : '';
+  if (r.ok) return `<div class="cs-checkbar good"${idAttr}>✓ ${esc(t('addsUp'))}</div>`;
+  return `<div class="cs-checkbar bad"${idAttr}>✕ ${esc(t('offBy'))} ${lbs(Math.abs(r.diff))} ${esc(t('lbs'))} (${esc(t('allowed'))} ${lbs(r.tolerance)} ${esc(t('lbs'))})</div>`;
+}
+
 /** Parse a typed number; '' and junk are null. */
 export function num(v) {
   if (v == null) return null;

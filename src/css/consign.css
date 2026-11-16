@@ -187,6 +187,21 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-part { display: grid; gap: 6px; }
 .cs-part + .cs-part { border-top: 1px dashed var(--border-strong); padding-top: 8px; }
 .cs-price { font-size: 16px; color: var(--text-secondary); }
+/* Final lb (finished at dropoff) under each weight */
+.cs-finalbox { display: grid; gap: 6px; }
+.cs-finalx:empty { display: none; }
+.cs-finalnote {
+  padding: 10px 12px; border-radius: var(--radius-md); font-size: 17px; font-weight: 700;
+  border: 2px solid var(--st-closed); background: color-mix(in srgb, var(--st-closed) var(--cs-tint), transparent);
+}
+.cs-losses { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-md); border: 2px solid var(--cs-teal); background: var(--bg-card); }
+.cs-losses.cs-marked { border: 3px solid var(--st-price); }
+.cs-losshead { font-size: 17px; font-weight: 700; color: var(--text); }
+.cs-lossgrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+.cs-losses .cs-checkbar { margin-top: 0; font-size: 17px; padding: 10px 12px; }
+.cs-sumdone .cs-chip { white-space: normal; }
+.cs-summary td:first-child { overflow-wrap: anywhere; }
+.cs-sumdone { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 16px; }
 .cs-termbtn {
   min-height: 44px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 700;
   border: 2px solid var(--border-strong); background: transparent; color: var(--text); text-align: center;
@@ -301,8 +316,6 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-table th { font-size: 10pt; background: #eee; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 .sh-a .sh-row td { height: 0.5in; }
 .sh-b .sh-row td { height: 0.56in; }
-/* Final columns: a light rule on the left groups each final with its weight. */
-.sh-a .sh-final { border-left-style: dashed; }
 .sh-name { font-size: 12pt; font-weight: 700; overflow-wrap: anywhere; }
 .sh-idx { text-align: center !important; font-weight: 700; }
 .sh-type { font-size: 10pt; }
