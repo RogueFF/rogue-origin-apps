@@ -27,7 +27,9 @@ export const DROPOFF_SCHEMA = obj({
       cultivar: STR,
       cultivar_unsure: { type: 'boolean' },
       tops: weightBox(true),
+      tops_final: weightBox(false),
       smalls: weightBox(true),
+      smalls_final: weightBox(false),
       note: STR,
     }),
   },
@@ -62,13 +64,15 @@ Rules for every number:
 - Copy the short code printed under the QR code (top right) into "code" exactly, or null if you cannot read it.
 - Return JSON only, in the given schema.`;
 
-/** Sheet A: one dropoff, rows of cultivar | tops lb | smalls lb | note. */
+/** Sheet A: one dropoff, rows of cultivar | tops lb | tops final | smalls lb | smalls final | note. */
 export function dropoffPrompt(ctx = {}) {
   const farms = (ctx.farms || []).map((f) => f.name);
   const cultivars = ctx.cultivars || [];
   const system = `${COMMON}
 
-This is the DROPOFF sheet. Header boxes: Farm, Date, Dropped by. Then a table of rows: Cultivar | Tops lb | Smalls lb | Note. A footer box holds a dropoff note.
+This is the DROPOFF sheet. Header boxes: Farm, Date, Dropped by. Then a table of rows: Cultivar | Tops lb | Tops final | Smalls lb | Smalls final | Note. A footer box holds a dropoff note.
+- "Tops final" and "Smalls final" are the weight after checking, filled only when the product was checked at dropoff. Read them into "tops_final" and "smalls_final". Most rows leave them empty: "value": null, "unsure": false. A zero ("0") is a real number there.
+- Never copy a weight into its final box or a final into its weight box: read each box on its own.
 - One entry in "rows" per row that has anything written or ticked, top to bottom. Skip rows that are crossed out and rows that are completely empty.
 - Some cultivar names may be printed already. Use the printed or written name. If a handwritten name is hard to read, give your best reading and set "cultivar_unsure": true.
 - A check mark or tick in a weight box (no number) means the item came in but was not weighed yet: "value": null, "unsure": false, "check": true. Otherwise "check": false.
