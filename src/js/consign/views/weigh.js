@@ -53,7 +53,7 @@ export function mount(root, { dropoffId, lotId }) {
     if (!(w > 0) || s.saving) return;
     s.saving = true; render();
     try {
-      const res = await submit('setWeight', { lot_id: lotId, intake_lbs: w, actor: actor() });
+      const res = await submit('setWeight', { lot_id: lotId, intake_lbs: w, actor: actor(), lot_label: `${s.data.dropoff.farm_name} · ${lot().cultivar} ${lot().type}` });
       if (res.held) { toast(t('savedHeld'), 'warn'); return go('#/'); }
       toast(t('saved'));
       s.data.lots = s.data.lots.map((l) => (l.id === lotId ? res.data.lot : l));

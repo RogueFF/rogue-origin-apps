@@ -6,7 +6,7 @@
 import { t } from '../shared/i18n.js';
 import { call, ownerPw, setOwnerPw } from './api.js';
 import { dialog, toast } from './ui.js';
-import { todayLocal } from './format.js';
+import { todayLocal, num } from './format.js';
 
 export const isOwner = () => document.body.dataset.owner === '1';
 
@@ -68,7 +68,7 @@ export async function priceDialog(farm, cultivar = '') {
   });
   if (!v) return;
   try {
-    await ownerCall('savePricePoint', { farm_id: farm.id, ...v, price_per_lb: Number(v.price_per_lb) });
+    await ownerCall('savePricePoint', { farm_id: farm.id, ...v, price_per_lb: num(v.price_per_lb) });
     toast(t('saved'));
     reload();
   } catch (err) { showErr(err); }
@@ -86,8 +86,8 @@ export async function lotTermsDialog(lot) {
   });
   if (!v) return;
   const body = { lot_id: lot.id, term: v.term };
-  if (v.price_per_lb !== '') body.price_per_lb = Number(v.price_per_lb);
-  if (v.smalls_price_per_lb) body.smalls_price_per_lb = Number(v.smalls_price_per_lb);
+  if (v.price_per_lb !== '') body.price_per_lb = num(v.price_per_lb);
+  if (v.smalls_price_per_lb) body.smalls_price_per_lb = num(v.smalls_price_per_lb);
   try {
     await ownerCall('setLotTerms', body);
     toast(t('saved'));

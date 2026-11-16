@@ -33,7 +33,7 @@ const PRICES = CULTIVARS.flatMap((c, i) => [
 
 function makeFake({ open, farms } = {}) {
   const state = {
-    posts: [], offline: false, delay: 0,
+    posts: [], offline: false, delay: 0, refuse: null, readsOffline: false,
     open: open || { to_weigh: [LOT_B], to_screen: [LOT_A], needs_price: [] },
     farms: farms || FARMS,
   };
@@ -72,8 +72,10 @@ async function isolate(context, fake) {
     if (action.startsWith('save') || action === 'setWeight') {
       fake.posts.push({ action, body });
       if (fake.offline) return route.abort('internetdisconnected');
+      if (fake.refuse) return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ success: false, error: fake.refuse, code: 'VALIDATION_ERROR' }) });
       if (fake.delay) await new Promise((r) => setTimeout(r, fake.delay));
     }
+    else if (fake.readsOffline) return route.abort('internetdisconnected');
     const data = fake.answer(action, body);
     if (data == null) { blocked.push(req.url()); return route.abort(); }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
@@ -184,6 +186,42 @@ test.describe('Consignment lot ledger', () => {
     const sends = fake.posts.filter((p) => p.action === 'saveDropoff');
     expect(sends).toHaveLength(2);
     expect(sends[1].body.client_key).toBe(sends[0].body.client_key);
+    expect(blocked).toEqual([]);
+  });
+
+  test('a split with one side left empty saves one lot, not a phantom', async ({ page }) => {
+    const fake = makeFake();
+    const { blocked } = await open(page, { hash: '#/dropoff', fake });
+    await page.locator('[data-farm="1"]').click();
+    await page.getByRole('button', { name: '＋ Alpha' }).click();
+    await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
+    await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').first().fill('30');
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    expect(fake.posts[0].body.lines).toEqual([{ cultivar: 'Alpha', type: 'tops', term: 'dropoff', intake_lbs: 30 }]);
+    expect(blocked).toEqual([]);
+  });
+
+  test('a held entry the server refuses is listed with its numbers; Home shows held entries with no signal', async ({ page }) => {
+    const fake = makeFake();
+    fake.offline = true;
+    const { blocked } = await open(page, { hash: '#/dropoff', fake });
+    await page.locator('[data-farm="1"]').click();
+    await page.getByRole('button', { name: '＋ Gamma' }).click();
+    await page.locator('[data-row="Gamma"] [data-type="smalls"] input[data-lbs]').fill('7.5');
+    fake.readsOffline = true;
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#heldChip')).toHaveText('1 held');
+    // Home cannot load with no signal, but the held entry is still listed with its numbers.
+    await expect(page.locator('#errWrap')).toBeVisible();
+    await expect(page.locator('#heldBox')).toContainText('Farm A: Gamma smalls 7.5 lb');
+    fake.offline = false; fake.readsOffline = false; fake.refuse = 'Unknown farm';
+    await page.locator('#heldChip').click();
+    await expect(page.locator('#heldChip')).toBeHidden();
+    await expect(page.locator('#heldBox')).toContainText('Not saved');
+    await expect(page.locator('#heldBox')).toContainText('Gamma smalls 7.5 lb');
+    await expect(page.locator('#heldBox')).toContainText('Unknown farm');
+    await expect(page.locator('#retryRejected')).toBeVisible();
     expect(blocked).toEqual([]);
   });
 

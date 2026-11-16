@@ -44,7 +44,13 @@ export function mount(root) {
       for (const ty of TYPES) {
         const slot = r.types[ty];
         if (!slot.on) continue;
-        for (const p of slot.parts) {
+        // A split side left empty is not a lot; an empty split is one unweighed lot on the default term.
+        let parts = slot.parts;
+        if (parts.length > 1) {
+          parts = parts.filter((p) => String(p.lbs).trim() !== '');
+          if (!parts.length) parts = [{ term: defaultTerm(), lbs: '' }];
+        }
+        for (const p of parts) {
           lines.push({ cultivar: r.cultivar, type: ty, term: p.term, intake_lbs: num(p.lbs), note: r.note.trim() || undefined });
         }
       }
@@ -234,7 +240,7 @@ export function mount(root) {
     try {
       s.detail = await call('farm', { farm_id: id });
       s.farm = s.detail.farm;
-    } catch (err) { s.error = err; }
+    } catch (err) { s.error = err; s.farm = null; s.detail = null; }
     s.loadingFarm = false;
     // Rows added before a farm change take the new farm's default term.
     for (const r of s.rows) for (const ty of TYPES) if (r.types[ty].parts.length === 1) r.types[ty].parts[0].term = defaultTerm();
@@ -247,7 +253,8 @@ export function mount(root) {
     setActor(s.droppedBy.trim());
     s.saving = true; s.saveError = ''; refreshConfirm();
     root.querySelector('#saveBtn').textContent = t('saving');
-    const body = { farm_id: s.farm.id, dropped_by: s.droppedBy.trim(), note: s.note.trim(), client_key: s.key, lines };
+    // farm_name is ignored by the server; it lets a held entry say whose it was.
+    const body = { farm_id: s.farm.id, farm_name: s.farm.name, dropped_by: s.droppedBy.trim(), note: s.note.trim(), client_key: s.key, lines };
     try {
       const res = await submit('saveDropoff', body);
       s.saved = true;

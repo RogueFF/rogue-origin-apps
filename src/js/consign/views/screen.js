@@ -18,6 +18,8 @@ export function mount(root, { dropoffId, lotId }) {
   const fields = (l) => (l.type === 'smalls'
     ? [['final', 'finalSmalls'], ['biomass', 'biomass'], ['mold', 'mold']]
     : [['final', 'finalTops'], ['toSmalls', 'toSmalls'], ['biomass', 'biomass'], ['mold', 'mold']]);
+  // Same tolerance as the server's screenTolerance (workers/src/lib/consign-ledger.js).
+  const tol = (m) => Math.max(0.5, 0.01 * (Number(m.intake_lbs) || 0));
   const check = (l) => runCheck(s.pulled, fields(l).map(([k]) => s.out[k]));
 
   function checkBar(l) {
@@ -56,6 +58,11 @@ export function mount(root, { dropoffId, lotId }) {
       body = `<section class="cs-card"><p>${esc(t('weighFirst'))}</p><a class="cs-btn primary" href="#/weigh/${dropoffId}/${l.id}">${esc(t('weigh'))} ›</a></section>`;
     } else if (l.closed_at) {
       body = `<section class="cs-card st st-closed"><p class="cs-h3">${esc(t('lotClosed'))}</p></section>`;
+    } else if (m.pulled_lbs > 0 && m.remainder_lbs <= tol(m)) {
+      // Runs already cover the intake but no run finished the lot: close it, no bogus run needed.
+      body = `<section class="cs-card st st-closed"><p>${esc(t('closeLotHint'))}</p>
+        <p class="cs-error" id="saveError"${s.saveError ? '' : ' hidden'}>${esc(s.saveError)}</p>
+        <div class="cs-row-btns"><button type="button" class="cs-btn primary big" id="closeLotBtn"${s.saving ? ' disabled' : ''}>${esc(t('closeLot'))}</button></div></section>`;
     } else {
       if (s.whole && !s.touched) s.pulled = String(m.remainder_lbs);
       const c = check(l);
@@ -86,7 +93,14 @@ export function mount(root, { dropoffId, lotId }) {
 
   root.addEventListener('input', (e) => {
     const el = e.target;
-    if (el.id === 'pulled') { s.pulled = el.value; s.touched = true; } else if (el.dataset.out) { s.out[el.dataset.out] = el.value; s.touched = true; } else if (el.id === 'runNote') { s.note = el.value; return; } else return;
+    if (el.id === 'pulled') {
+      s.pulled = el.value; s.touched = true;
+      // Pulling what is left finishes the lot; less than that does not.
+      const m = lot().money;
+      s.finishes = (num(s.pulled) || 0) >= m.remainder_lbs - tol(m);
+      const fin = root.querySelector('#finishes');
+      if (fin) fin.checked = s.finishes;
+    } else if (el.dataset.out) { s.out[el.dataset.out] = el.value; s.touched = true; } else if (el.id === 'runNote') { s.note = el.value; return; } else return;
     s.saveError = '';
     const err = root.querySelector('#saveError'); if (err) err.hidden = true;
     refreshCheck();
@@ -109,6 +123,19 @@ export function mount(root, { dropoffId, lotId }) {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.id === 'saveBtn') return save();
+    if (b.id === 'closeLotBtn') {
+      s.saving = true; render();
+      try {
+        await call('closeLot', { lot_id: lotId, actor: actor() });
+        s.saved = true;
+        toast(t('saved'));
+        return go('#/');
+      } catch (err) {
+        s.saveError = err.network ? t('errOffline') : err.message;
+      }
+      s.saving = false; render();
+      return;
+    }
     if (b.dataset.voidrun) {
       const v = await dialog({ title: `${t('void')}: ${t('screening')}`, fields: [{ name: 'reason', label: t('voidReason'), required: true }], okLabel: t('void'), danger: true });
       if (!v) return;
@@ -130,6 +157,7 @@ export function mount(root, { dropoffId, lotId }) {
       lot_id: l.id, pulled_lbs: num(s.pulled), final_lbs: num(s.out.final) || 0, to_smalls_lbs: num(s.out.toSmalls) || 0,
       biomass_lbs: num(s.out.biomass) || 0, mold_lbs: num(s.out.mold) || 0,
       finishes_lot: !!s.finishes, note: s.note.trim(), client_key: s.key, actor: actor(),
+      lot_label: `${s.data.dropoff.farm_name} · ${l.cultivar} ${l.type}`,
     };
     try {
       const res = await submit('saveScreenRun', body);

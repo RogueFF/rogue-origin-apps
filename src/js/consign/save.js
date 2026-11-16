@@ -11,7 +11,8 @@ export async function submit(action, body) {
   try {
     return { data: await call(action, body) };
   } catch (err) {
-    if (!err.network) throw err;
+    // No signal, or a failure worth retrying (auth, rate limit, server trouble): keep it.
+    if (!err.network && !err.retry) throw err;
     if (!hold(action, body)) {
       const e = new Error('hold failed');
       e.blocking = true;

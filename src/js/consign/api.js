@@ -16,6 +16,7 @@ const OWNER_KEY = 'consign_owner_pw';
 export const ownerPw = () => { try { return sessionStorage.getItem(OWNER_KEY) || ''; } catch { return ''; } };
 export const setOwnerPw = (v) => { try { if (v) sessionStorage.setItem(OWNER_KEY, v); else sessionStorage.removeItem(OWNER_KEY); } catch { /* private mode */ } };
 
+const TIMEOUT_MS = 20000;
 const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms']);
 
 function networkError() {
@@ -34,14 +35,21 @@ export async function call(action, body = {}) {
   const payload = owner ? { ...body, owner_password: ownerPw() } : body;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw networkError();
   let res;
+  // A barn connection can be "online" and still dead: give up after a while and
+  // treat it as no signal. client_key makes the later resend safe.
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), TIMEOUT_MS) : null;
   try {
     res = await fetch(`${ROOT}/consign?action=${encodeURIComponent(action)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', Authorization: `Bearer ${storedPassword()}` },
       body: JSON.stringify(payload),
+      signal: ctl ? ctl.signal : undefined,
     });
   } catch {
     throw networkError();
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   let json = null;
   try { json = await res.json(); } catch { /* not JSON */ }
@@ -52,6 +60,9 @@ export async function call(action, body = {}) {
     err.status = res.status;
     err.code = json && json.code;
     err.owner = owner && res.status === 401 && /owner/i.test(err.message);
+    // Worth trying again later (a held entry stays held): auth, timeout, rate limit,
+    // server trouble. Only 400/404 mean the entry itself is wrong.
+    err.retry = !err.owner && (res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500);
     throw err;
   }
   return json.data;

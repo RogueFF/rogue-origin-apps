@@ -13,17 +13,26 @@ const storage = {
   setItem: (k, v) => localStorage.setItem(k, v),
 };
 
-export const queue = makeQueue({ storage, send: (action, body) => call(action, body) });
-
 export function rejectedList() {
   try { return JSON.parse(storage.getItem(REJECTED_KEY) || '[]'); } catch { return []; }
 }
-function addRejected(rows) {
-  if (!rows.length) return;
-  try { storage.setItem(REJECTED_KEY, JSON.stringify([...rejectedList(), ...rows])); } catch { /* storage blocked */ }
+function addRejected(row) {
+  try { storage.setItem(REJECTED_KEY, JSON.stringify([...rejectedList(), row])); } catch { /* storage blocked */ }
 }
 export function clearRejected() {
   try { storage.setItem(REJECTED_KEY, '[]'); } catch { /* storage blocked */ }
+  changed();
+}
+
+// A refused entry is kept in the "not saved" list before it leaves the held list.
+export const queue = makeQueue({ storage, send: (action, body) => call(action, body), onReject: addRejected });
+
+/** Put refused entries back in the held list (after the cause is fixed) and send them. */
+export function retryRejected() {
+  const rows = rejectedList();
+  for (const r of rows) queue.hold(r.action, r.body);
+  clearRejected();
+  return flush();
 }
 
 const changed = () => document.dispatchEvent(new CustomEvent('consign:held'));
@@ -44,7 +53,6 @@ export function flush() {
     try {
       if (!before) return { sent: 0, left: 0, rejected: [] };
       const r = await queue.flush();
-      addRejected(r.rejected);
       return { sent: before - r.left - r.rejected.length, ...r };
     } finally {
       flushing = null;

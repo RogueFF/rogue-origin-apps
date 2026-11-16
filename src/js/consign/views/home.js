@@ -4,8 +4,8 @@
 import { t } from '../../shared/i18n.js';
 import { call } from '../api.js';
 import { esc, lbs, money, when, typeLabel } from '../format.js';
-import { errorCard, loading } from '../ui.js';
-import { queue, rejectedList, clearRejected } from '../held.js';
+import { errorCard, loading, dialog } from '../ui.js';
+import { queue, rejectedList, clearRejected, retryRejected } from '../held.js';
 
 const lotLine = (l) => `<b>${esc(l.farm_name)}</b> · ${esc(l.cultivar)} · ${esc(typeLabel(l.type))}`;
 
@@ -27,7 +27,21 @@ function farmCard(f) {
 }
 
 const ACTION_KEYS = { saveDropoff: 'newDropoff', setWeight: 'weigh', saveScreenRun: 'screening', saveSold: 'addSold', savePayment: 'recordPayment' };
-const entryLine = (e) => `<li class="cs-tap static"><b>${esc(t(ACTION_KEYS[e.action] || 'save'))}</b><span class="cs-muted">${esc(new Date(e.held_at).toLocaleString())}</span>${e.error ? `<span class="cs-error">${esc(e.error)}</span>` : ''}</li>`;
+const w = (n) => (n == null || n === '' ? '—' : `${lbs(n)} ${t('lbs')}`);
+
+/** What the entry was, in enough detail to re-enter it by hand. */
+function entryWhat(e) {
+  const b = e.body || {};
+  switch (e.action) {
+    case 'saveDropoff': return `${b.farm_name || ''}: ${(b.lines || []).map((l) => `${l.cultivar} ${typeLabel(l.type)} ${w(l.intake_lbs)}`).join(', ')}`;
+    case 'setWeight': return `${b.lot_label || ''}: ${w(b.intake_lbs)}`;
+    case 'saveScreenRun': return `${b.lot_label || ''}: ${t('pulled')} ${w(b.pulled_lbs)} · ${t('final')} ${w(b.final_lbs)} · ${t('toSmalls')} ${w(b.to_smalls_lbs)} · ${t('biomass')} ${w(b.biomass_lbs)} · ${t('mold')} ${w(b.mold_lbs)}`;
+    case 'saveSold': return `${b.lot_label || ''}: ${w(b.lbs)}`;
+    case 'savePayment': return `${b.farm_name || ''}: ${money(b.amount)} ${b.method ? t(b.method) : ''} ${b.reference ? `#${b.reference}` : ''}`;
+    default: return '';
+  }
+}
+const entryLine = (e) => `<li class="cs-tap static"><b>${esc(t(ACTION_KEYS[e.action] || 'save'))}</b><span>${esc(entryWhat(e))}</span><span class="cs-muted">${esc(new Date(e.held_at).toLocaleString())}</span>${e.error ? `<span class="cs-error">${esc(e.error)}</span>` : ''}</li>`;
 
 /** Held entries waiting for a signal, and any the server refused on resend. */
 function heldBox() {
@@ -42,7 +56,8 @@ function heldBox() {
   if (rejected.length) {
     html += `<section class="cs-card st st-price" style="margin-bottom:16px"><div class="cs-cardhead"><h3 class="cs-h3">${esc(t('notSaved'))}</h3><span class="cs-count">${rejected.length}</span></div>
       <ul class="cs-list">${rejected.map(entryLine).join('')}</ul>
-      <div class="cs-row-btns"><button type="button" class="cs-btn" id="dismissRejected">${esc(t('dismiss'))}</button></div></section>`;
+      <div class="cs-row-btns"><button type="button" class="cs-btn danger" id="dismissRejected">${esc(t('dismiss'))}</button>
+        <button type="button" class="cs-btn primary" id="retryRejected">${esc(t('retry'))}</button></div></section>`;
   }
   return html;
 }
@@ -52,7 +67,12 @@ export function mount(root) {
   let error = null;
 
   const render = () => {
-    if (error) return errorCard(root, error, load);
+    if (error) {
+      // No signal: still show what is held on this device.
+      root.innerHTML = `<div id="heldBox">${heldBox()}</div><div id="errWrap"></div>`;
+      errorCard(root.querySelector('#errWrap'), error, load);
+      return wireHeld();
+    }
     if (!data) return loading(root);
     const { open, farms } = data;
     const live = farms.filter((f) => f.active);
@@ -77,7 +97,6 @@ export function mount(root) {
     });
     root.querySelector('#addFarmBtn').addEventListener('click', () => document.dispatchEvent(new CustomEvent('consign:addfarm')));
     wireHeld();
-    document.dispatchEvent(new CustomEvent('consign:homerendered', { detail: { root } }));
   };
 
   async function load() {
@@ -93,7 +112,14 @@ export function mount(root) {
     const send = root.querySelector('#sendHeldBtn');
     if (send) send.addEventListener('click', () => document.getElementById('heldChip').click());
     const dis = root.querySelector('#dismissRejected');
-    if (dis) dis.addEventListener('click', () => { clearRejected(); refreshHeld(); });
+    if (dis) {
+      dis.addEventListener('click', async () => {
+        const ok = await dialog({ title: t('dismiss'), fields: [{ name: 'sure', label: t('dismissConfirm'), type: 'checkbox', value: false }], okLabel: t('dismiss'), danger: true });
+        if (ok && ok.sure) clearRejected();
+      });
+    }
+    const retry = root.querySelector('#retryRejected');
+    if (retry) retry.addEventListener('click', async () => { await retryRejected(); document.dispatchEvent(new CustomEvent('consign:reload')); });
   }
   function refreshHeld() {
     const box = root.querySelector('#heldBox');

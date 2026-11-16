@@ -69,7 +69,7 @@ export function mount(root, { farmId }) {
   async function save() {
     if (!(num(s.amount) > 0) || s.saving) return;
     s.saving = true; render();
-    const body = { farm_id: s.farmId, amount: num(s.amount), paid_on: s.paidOn, method: s.method, reference: s.reference.trim(), note: s.note.trim(), client_key: s.key };
+    const body = { farm_id: s.farmId, farm_name: farm().name, amount: num(s.amount), paid_on: s.paidOn, method: s.method, reference: s.reference.trim(), note: s.note.trim(), client_key: s.key };
     try {
       const res = await submit('savePayment', body);
       s.saved = true;

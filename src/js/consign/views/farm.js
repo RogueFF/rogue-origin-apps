@@ -4,7 +4,7 @@
  */
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
-import { esc, lbs, money, when, day, typeLabel, termLabel, statusChip, todayLocal } from '../format.js';
+import { esc, lbs, money, num, when, day, typeLabel, termLabel, statusChip, todayLocal } from '../format.js';
 import { errorCard, loading, toast, dialog } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { farmDialog, priceDialog, lotTermsDialog } from '../owner.js';
@@ -123,7 +123,7 @@ export function mount(root, { farmId }) {
       });
       if (!v) return;
       try {
-        const res = await submit('saveSold', { lot_id: lot.id, lbs: Number(v.lbs), kind: v.kind, sold_on: v.sold_on, note: v.note, client_key: newKey() });
+        const res = await submit('saveSold', { lot_id: lot.id, lot_label: `${s.data.farm.name} · ${lot.cultivar} ${lot.type}`, lbs: num(v.lbs), kind: v.kind, sold_on: v.sold_on, note: v.note, client_key: newKey() });
         toast(res.held ? t('savedHeld') : t('saved'), res.held ? 'warn' : 'ok');
         if (!res.held) load();
       } catch (err) { toast(err.blocking ? t('holdFailed') : err.message, 'err'); }

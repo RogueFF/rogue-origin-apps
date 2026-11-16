@@ -65,3 +65,37 @@ test('each held body keeps its client_key, so a resend cannot double-save', asyn
   assert.deepEqual(keys, ['k-123', 'k-123']);
   assert.equal(q.list().length, 0);
 });
+
+test('an entry held while a flush is running is kept and sent, not overwritten', async () => {
+  const sent = [];
+  let q;
+  q = makeQueue({ storage: fakeStorage(), send: async (a, b) => {
+    sent.push(b.client_key);
+    if (b.client_key === 'a') q.hold('saveDropoff', { client_key: 'c' }); // signal dropped mid-flush
+  } });
+  q.hold('x', { client_key: 'a' });
+  q.hold('x', { client_key: 'b' });
+  const r = await q.flush();
+  assert.deepEqual(sent, ['a', 'b', 'c']);
+  assert.equal(r.left, 0);
+});
+
+test('auth, rate-limit and server errors keep the entry held instead of dropping it', async () => {
+  const q = makeQueue({ storage: fakeStorage(), send: async () => { throw Object.assign(new Error('Invalid password'), { retry: true }); } });
+  q.hold('saveDropoff', { client_key: 'a' });
+  const r = await q.flush();
+  assert.equal(r.left, 1);
+  assert.equal(r.rejected.length, 0);
+});
+
+test('a refused entry is handed to onReject before it leaves the held list', async () => {
+  const storage = fakeStorage();
+  const seen = [];
+  const q = makeQueue({ storage, send: async () => { throw new Error('Unknown farm'); },
+    onReject: (row) => seen.push({ row, stillHeld: JSON.parse(storage.getItem('consign_held_v1')).some((r) => r.id === row.id) }) });
+  q.hold('saveDropoff', { client_key: 'a' });
+  await q.flush();
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].stillHeld, true);
+  assert.equal(q.list().length, 0);
+});
