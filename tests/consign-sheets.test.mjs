@@ -130,3 +130,29 @@ test('sheet B prints a lot reference on every row', () => {
   assert.match(h, /<span class="sh-ref">L7<\/span>/);
   assert.match(h, /<span class="sh-ref">L1042<\/span>/);
 });
+
+test('sheet A: a Final column beside each weight, one letter page at 12 rows, two at 13', () => {
+  const h = dropoffSheet({ farm, cultivars: names(12), qrSvg: QR, code: 'DROP-F3' });
+  const heads = [...h.matchAll(/<th[^>]*>.*?<span class="sh-en">([^<]*)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(heads, ['Cultivar', 'Tops lb', 'Tops final', 'Smalls lb', 'Smalls final', 'Note']);
+  for (const es of ['Tops final', 'Smalls final']) assert.ok(h.includes(es));
+  assert.ok(h.includes('Final de tops') && h.includes('Final de smalls'), 'Spanish under each Final');
+  // Every row: name + 4 weight boxes + note.
+  const firstRow = h.match(/<tr class="sh-row">([\s\S]*?)<\/tr>/)[1];
+  assert.equal((firstRow.match(/<td/g) || []).length, 6);
+  assert.equal((firstRow.match(/data-box="(tops|tops_final|smalls|smalls_final)"/g) || []).length, 4);
+  assert.equal((h.match(/<col /g) || []).length, 6);
+  const widths = [...h.matchAll(/<col style="width:(\d+)%">/g)].map((m) => Number(m[1]));
+  assert.equal(widths.reduce((a, b) => a + b, 0), 100);
+  assert.ok(Math.min(...widths.slice(1, 5)) >= 13, 'weight boxes wide enough to write in');
+  assert.equal(pages(h), 1);
+  assert.equal(pages(dropoffSheet({ farm, cultivars: names(13), qrSvg: QR, code: 'DROP-F3' })), 2);
+});
+
+test('sheet A: the instruction says when to fill Final, and no prices', () => {
+  const h = dropoffSheet({ farm, cultivars: ['Alpha'], qrSvg: QR, code: 'DROP-F3' });
+  assert.match(h, /Fill Final only if it was checked at dropoff/);
+  assert.match(h, /empty if it will be screened later/);
+  assert.match(h, /Llene Final solo si se revisó en la entrega/);
+  assert.ok(!/\$|price|precio/i.test(h));
+});

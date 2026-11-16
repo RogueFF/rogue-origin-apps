@@ -301,6 +301,8 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-table th { font-size: 10pt; background: #eee; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 .sh-a .sh-row td { height: 0.5in; }
 .sh-b .sh-row td { height: 0.56in; }
+/* Final columns: a light rule on the left groups each final with its weight. */
+.sh-a .sh-final { border-left-style: dashed; }
 .sh-name { font-size: 12pt; font-weight: 700; overflow-wrap: anywhere; }
 .sh-idx { text-align: center !important; font-weight: 700; }
 .sh-type { font-size: 10pt; }
