@@ -38,12 +38,15 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .mn-mid b { font-size: 34px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
 
 .mn-hours, .mn-trend { display: grid; gap: 8px; }
-.mn-row { display: grid; grid-template-columns: 74px 1fr 62px; align-items: center; gap: 10px; font-size: 15px; }
+.mn-row { display: grid; grid-template-columns: 70px 1fr 78px; align-items: center; gap: 10px; font-size: 15px; }
 .mn-row .t { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
 .mn-row .b { position: relative; height: 22px; background: var(--border); border-radius: 0 8px 8px 0; }
 .mn-row .b i { display: block; height: 100%; background: var(--green); border-radius: 0 8px 8px 0; }
 .mn-row .b s { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: var(--gold); border-radius: 2px; }
-.mn-row .v { font-family: var(--font-mono); font-weight: 700; text-align: right; }
+.mn-row .v { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); text-align: right; line-height: 1.15; }
+.mn-row .v b { font-size: 15px; color: var(--text); }
+.mn-row .v small { display: block; font-size: 12px; color: var(--text-secondary); }
+.mn-lb { font-size: 20px; font-weight: 700; color: var(--text-secondary); }
 .mn-row.off .b i { background: transparent; }
 .mn-row.off .v { color: var(--text-muted); font-weight: 400; }
 .mn-row.sel .t { color: var(--text); font-weight: 700; }
