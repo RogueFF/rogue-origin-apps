@@ -1,0 +1,52 @@
+/* Mis números (mis-numeros.html). One trimmer's own numbers, phone first, big and plain. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); -webkit-text-size-adjust: 100%; }
+.mn-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 18px 16px 8px; max-width: 560px; margin: 0 auto; }
+.mn-head h1 { margin: 2px 0 0; font-size: 30px; line-height: 1.1; font-weight: 800; }
+.mn-eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+.mn-lang { font: 700 15px var(--font-ui); min-width: 52px; min-height: 44px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text); }
+.mn-main { display: grid; gap: 12px; padding: 4px 16px 28px; max-width: 560px; margin: 0 auto; }
+#content { display: grid; gap: 12px; }
+#content[hidden], .mn-msg[hidden] { display: none; }
+.mn-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; padding: 16px; display: grid; gap: 8px; }
+.mn-card h2 { margin: 0; font-size: 20px; }
+.mn-msg { font-size: 18px; line-height: 1.4; text-align: center; padding: 28px 18px; }
+.mn-k { font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+.mn-sub { font-size: 14px; color: var(--text-secondary); }
+
+.mn-days { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; -webkit-overflow-scrolling: touch; }
+.mn-days button { flex: 0 0 auto; min-height: 44px; padding: 6px 14px; border-radius: 12px; border: 1px solid var(--border-strong);
+  background: var(--bg-card); color: var(--text); font: 600 15px var(--font-ui); }
+.mn-days button[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: #fff; }
+
+.mn-hero { border-top: 6px solid var(--green); }
+.mn-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.mn-big b { font-family: "Outfit", var(--font-ui), system-ui, sans-serif; font-size: 64px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.mn-big span { font-size: 16px; color: var(--text-secondary); }
+.mn-meter { position: relative; height: 20px; background: var(--border); border-radius: 10px; margin-top: 6px; }
+.mn-meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--green); border-radius: 10px; transition: width .4s; }
+.mn-meter s { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; background: var(--gold); border-radius: 2px; }
+.mn-status { font-size: 17px; font-weight: 700; }
+.mn-status.up { color: var(--success, var(--green)); }
+.mn-status.down { color: var(--warning, var(--gold)); }
+
+.mn-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mn-rankv { font-family: "Outfit", var(--font-ui), system-ui, sans-serif; font-size: 44px; font-weight: 800; line-height: 1; }
+.mn-rankv.txt { font-size: 26px; line-height: 1.15; }
+.mn-rankv small { font-size: 18px; font-weight: 600; color: var(--text-secondary); margin-left: 4px; }
+.mn-rank.top { border-top: 6px solid var(--gold); }
+.mn-mid { font-size: 18px; color: var(--text-secondary); }
+.mn-mid b { font-size: 34px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.mn-hours, .mn-trend { display: grid; gap: 8px; }
+.mn-row { display: grid; grid-template-columns: 74px 1fr 62px; align-items: center; gap: 10px; font-size: 15px; }
+.mn-row .t { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); }
+.mn-row .b { position: relative; height: 22px; background: var(--border); border-radius: 0 8px 8px 0; }
+.mn-row .b i { display: block; height: 100%; background: var(--green); border-radius: 0 8px 8px 0; }
+.mn-row .b s { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: var(--gold); border-radius: 2px; }
+.mn-row .v { font-family: var(--font-mono); font-weight: 700; text-align: right; }
+.mn-row.off .b i { background: transparent; }
+.mn-row.off .v { color: var(--text-muted); font-weight: 400; }
+.mn-row.sel .t { color: var(--text); font-weight: 700; }
+.mn-foot { font-size: 13px; color: var(--text-muted); text-align: center; margin: 4px 0 0; }
+
+@media (max-width: 360px) { .mn-two { grid-template-columns: 1fr; } .mn-big b { font-size: 54px; } }

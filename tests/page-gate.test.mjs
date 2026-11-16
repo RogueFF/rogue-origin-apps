@@ -42,6 +42,7 @@ const OPEN = [
   'tag-desk.html',            // Supply Kanban
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',
+  'mis-numeros.html',         // Mis números: one trimmer's own numbers; the personal QR card's token is the key, not the farm password (Koa 2026-11-16)
 ];
 
 // Gated pages with no language toggle of their own: the gate tag pins the
