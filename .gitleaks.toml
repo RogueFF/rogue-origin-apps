@@ -17,6 +17,7 @@ regexTarget = "line"
 regexes = [
   '''salida\.(queue|cultivar|recent)\.v\d+''',   # harvest-salida-client.js localStorage keys
   '''ro-tagdesk-v\d+''',                          # tag-desk/store.js localStorage key
+  '''consign_(held|rejected)_v\d+''',             # consign/queue.mjs + held.js localStorage keys
   '''TOKEN_ALPHABET = 'ABCDEF''',                 # grove-bag-bins design doc, a base-32 alphabet
 ]
 
