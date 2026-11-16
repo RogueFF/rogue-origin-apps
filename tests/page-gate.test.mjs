@@ -25,6 +25,7 @@ const GATED = [
   'wholesale.html',
   'complaints.html',
   'consignment.html',         // its old login overlay now defers to the gate
+  'consign.html',             // Consignment lot ledger (staff app); has its own language toggle
 ];
 // Left open to the public on purpose.
 const OPEN = [
