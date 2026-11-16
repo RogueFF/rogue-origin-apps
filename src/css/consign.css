@@ -1,14 +1,30 @@
-/* Consignment lot ledger, staff page. Colours come from shared-base.css variables;
-   the step colours are defined once here, with a dark-theme override. */
+/* Consignment lot ledger, staff page.
+   Palette (Koa 2026-11-16): black, white and one green. Statuses are plain word
+   chips; red appears only when something needs attention. The shared-base
+   variables are re-pointed inside .consign so every rule below follows. */
 
 .consign {
-  --st-dropped: #b7791f;   /* amber: dropped off, waiting to be weighed */
-  --st-weighed: #2b6cb0;   /* blue: weighed, waiting on screening */
-  --st-screening: #6b46c1; /* violet: partly screened */
-  --st-closed: #2f855a;    /* green: closed */
-  --st-price: #c53030;     /* red: needs a price */
-  --st-voided: #718096;
-  --cs-tint: 14%;
+  --cs-green: #1f6b3a;
+  --cs-red: #b3261e;
+  --cs-line: #cfd2cf;
+  --bg: #f3f4f3;
+  --bg-card: #ffffff;
+  --text: #111111;
+  --text-secondary: #555955;
+  --border: #e1e3e1;
+  --border-strong: var(--cs-line);
+  --header-bg: var(--cs-green);
+  --header-text: #ffffff;
+  --ro-green: var(--cs-green);
+  --green: var(--cs-green);
+  --gold: var(--text);            /* focus ring */
+  --st-dropped: var(--cs-line);   /* neutral: dropped off, waiting to be weighed */
+  --st-weighed: var(--cs-line);   /* neutral: weighed, waiting on screening */
+  --st-screening: var(--cs-line); /* neutral: partly screened */
+  --st-voided: var(--cs-line);
+  --st-closed: var(--cs-green);   /* green: done, adds up */
+  --st-price: var(--cs-red);      /* red: needs attention */
+  --cs-tint: 10%;
   margin: 0;
   min-height: 100vh;
   background: var(--bg);
@@ -19,13 +35,17 @@
   -webkit-text-size-adjust: 100%;
 }
 [data-theme="dark"] .consign {
-  --st-dropped: #f6ad55;
-  --st-weighed: #63b3ed;
-  --st-screening: #b794f4;
-  --st-closed: #68d391;
-  --st-price: #fc8181;
-  --st-voided: #a0aec0;
-  --cs-tint: 22%;
+  --cs-green: #56b97c;
+  --cs-red: #f2867f;
+  --cs-line: #3d413d;
+  --bg: #0f1110;
+  --bg-card: #1a1c1a;
+  --text: #f3f3f3;
+  --text-secondary: #a9ada9;
+  --border: #2a2d2a;
+  --header-bg: #16271c;
+  --header-text: #f3f3f3;
+  --cs-tint: 16%;
 }
 .consign *, .consign *::before, .consign *::after { box-sizing: border-box; }
 :where(.consign) :where(button, input, select, textarea) { font: inherit; color: inherit; }
@@ -45,8 +65,8 @@
   cursor: pointer; font-size: 16px;
 }
 .cs-topbtn:focus-visible, .cs-btn:focus-visible, .cs-tap:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-body[data-owner="1"] #ownerBtn { background: var(--gold); color: #1a1a1a !important; border-color: var(--gold); }
-.cs-held { background: var(--st-dropped); border-color: var(--st-dropped); color: #1a1a1a !important; font-weight: 700; }
+body[data-owner="1"] #ownerBtn { background: #fff; color: #111 !important; border-color: #fff; font-weight: 700; }
+.cs-held { background: #fff; border-color: #fff; color: #111 !important; font-weight: 700; }
 
 /* ---------- layout ---------- */
 .cs-view { max-width: 1100px; margin: 0 auto; padding: 16px 16px 120px; outline: none; }
@@ -76,6 +96,8 @@ body[data-owner="1"] #ownerBtn { background: var(--gold); color: #1a1a1a !import
 .st-closed { --st: var(--st-closed); }
 .st-price { --st: var(--st-price); }
 .st-voided { --st: var(--st-voided); }
+/* The needs-a-price card is red only while it has rows. */
+.cs-card.st-price:not(:has(.cs-list)) { --st: var(--cs-line); }
 
 /* ---------- buttons ---------- */
 .cs-btn {
@@ -84,8 +106,8 @@ body[data-owner="1"] #ownerBtn { background: var(--gold); color: #1a1a1a !import
   cursor: pointer; font-size: 18px; font-weight: 600; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
 }
-.cs-btn.primary { background: var(--ro-green, #2d3a2e); border-color: var(--ro-green, #2d3a2e); color: #fff; }
-[data-theme="dark"] .cs-btn.primary { background: var(--green, #668971); border-color: var(--green, #668971); color: #0f1210; }
+.cs-btn.primary { background: var(--cs-green); border-color: var(--cs-green); color: #fff; }
+[data-theme="dark"] .cs-btn.primary { color: #0f1110; }
 .cs-btn.danger { border-color: var(--st-price); color: var(--st-price); }
 .cs-btn.ghost { background: transparent; }
 .cs-btn.small { min-height: 44px; padding: 6px 12px; font-size: 16px; }
@@ -114,7 +136,7 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
   background: color-mix(in srgb, var(--st, transparent) var(--cs-tint), transparent);
   font-size: 15px; font-weight: 700; white-space: nowrap;
 }
-.cs-chip.est { --st: var(--st-dropped); font-weight: 600; }
+.cs-chip.est { font-weight: 600; }
 .cs-chip.noprice { --st: var(--st-price); }
 
 /* ---------- farm cards on home ---------- */
@@ -144,7 +166,7 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--st, var(--ro-green, #2d3a2e)); color: #fff; font-weight: 700; font-size: 22px;
 }
-[data-theme="dark"] .cs-stepnum { color: #0f1210; }
+[data-theme="dark"] .cs-stepnum { color: #0f1110; }
 .cs-farmpick { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
 
 /* dropoff grid row */
@@ -161,10 +183,10 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
   min-height: 44px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 700;
   border: 2px solid var(--border-strong); background: transparent; color: var(--text); text-align: center;
 }
-.cs-termbtn.sold { border-color: var(--st-screening); background: color-mix(in srgb, var(--st-screening) var(--cs-tint), transparent); }
+.cs-termbtn.sold { border-color: var(--text); }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .cs-chipbtn { min-height: 48px; padding: 6px 16px; border-radius: 999px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 18px; font-weight: 600; }
-.cs-chipbtn.on { border-color: var(--ro-green, #2d3a2e); background: color-mix(in srgb, var(--green, #668971) 25%, transparent); }
+.cs-chipbtn.on { border-color: var(--cs-green); background: color-mix(in srgb, var(--cs-green) 14%, transparent); }
 .cs-other { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .cs-other .cs-input { flex: 1 1 200px; width: auto; }
 .cs-summary { width: 100%; border-collapse: collapse; font-size: 18px; }
@@ -196,7 +218,6 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
 
 /* ---------- dialog + toast ---------- */
 .cs-dialog { border: 0; border-radius: var(--radius-lg); padding: 0; width: min(560px, calc(100vw - 32px)); background: var(--bg-card); color: var(--text); box-shadow: var(--shadow-elevated); }
-[data-theme="dark"] .cs-dialog { background: var(--bg-dark, #0f1210); }
 .cs-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .cs-dialog-form { padding: 20px; }
 .cs-dialog h2 { margin: 0 0 8px; font-size: 22px; }
@@ -208,7 +229,7 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
   opacity: 0; visibility: hidden;
 }
 .cs-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
-.cs-toast.warn { background: var(--st-dropped); color: #1a1a1a; }
+.cs-toast.warn { background: var(--text); color: var(--bg-card); }
 .cs-toast.err { background: var(--st-price); color: #fff; }
 
 @media (max-width: 599px) {
