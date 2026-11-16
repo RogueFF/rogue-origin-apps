@@ -5,6 +5,7 @@ import { t } from '../../shared/i18n.js';
 import { call } from '../api.js';
 import { esc, lbs, money, when, typeLabel } from '../format.js';
 import { errorCard, loading } from '../ui.js';
+import { queue, rejectedList, clearRejected } from '../held.js';
 
 const lotLine = (l) => `<b>${esc(l.farm_name)}</b> · ${esc(l.cultivar)} · ${esc(typeLabel(l.type))}`;
 
@@ -25,6 +26,27 @@ function farmCard(f) {
   </a>`;
 }
 
+const ACTION_KEYS = { saveDropoff: 'newDropoff', setWeight: 'weigh', saveScreenRun: 'screening', saveSold: 'addSold', savePayment: 'recordPayment' };
+const entryLine = (e) => `<li class="cs-tap static"><b>${esc(t(ACTION_KEYS[e.action] || 'save'))}</b><span class="cs-muted">${esc(new Date(e.held_at).toLocaleString())}</span>${e.error ? `<span class="cs-error">${esc(e.error)}</span>` : ''}</li>`;
+
+/** Held entries waiting for a signal, and any the server refused on resend. */
+function heldBox() {
+  const held = queue.list();
+  const rejected = rejectedList();
+  let html = '';
+  if (held.length) {
+    html += `<section class="cs-card st st-dropped" style="margin-bottom:16px"><div class="cs-cardhead"><h3 class="cs-h3">${esc(t('heldSend'))}</h3><span class="cs-count">${held.length}</span></div>
+      <ul class="cs-list">${held.map(entryLine).join('')}</ul>
+      <div class="cs-row-btns"><button type="button" class="cs-btn primary" id="sendHeldBtn">${esc(t('heldSend'))}</button></div></section>`;
+  }
+  if (rejected.length) {
+    html += `<section class="cs-card st st-price" style="margin-bottom:16px"><div class="cs-cardhead"><h3 class="cs-h3">${esc(t('notSaved'))}</h3><span class="cs-count">${rejected.length}</span></div>
+      <ul class="cs-list">${rejected.map(entryLine).join('')}</ul>
+      <div class="cs-row-btns"><button type="button" class="cs-btn" id="dismissRejected">${esc(t('dismiss'))}</button></div></section>`;
+  }
+  return html;
+}
+
 export function mount(root) {
   let data = null;
   let error = null;
@@ -40,7 +62,7 @@ export function mount(root) {
         <a class="cs-btn big" href="#/pay" id="payBtn">$ ${esc(t('recordPayment'))}</a>
         <button type="button" class="cs-btn big cs-owner-only" id="addFarmBtn">${esc(t('addFarm'))}</button>
       </div>
-      <div id="heldBox"></div>
+      <div id="heldBox">${heldBox()}</div>
       <div class="cs-grid2">
         ${workCard({ key: 'toWeigh', st: 'dropped', rows: open.to_weigh, row: (l) => `<li><a class="cs-tap" href="#/weigh/${l.dropoff_id}/${l.id}">${lotLine(l)}<span class="cs-muted">${esc(when(l.dropped_at))}</span><span class="cs-right">${esc(t('weigh'))} ›</span></a></li>` })}
         ${workCard({ key: 'toScreen', st: 'weighed', rows: open.to_screen, row: (l) => `<li><a class="cs-tap" href="#/screen/${l.dropoff_id}/${l.id}">${lotLine(l)}<span class="cs-muted">${esc(when(l.dropped_at))}</span>${l.money.status === 'screening' ? `<span class="cs-chip st-screening">${lbs(l.money.remainder_lbs)} ${esc(t('lbLeft'))}</span>` : ''}<span class="cs-right">${lbs(l.money.intake_lbs)} ${esc(t('lbs'))}</span></a></li>` })}
@@ -54,6 +76,7 @@ export function mount(root) {
       a.addEventListener('click', (e) => { if (document.body.dataset.owner !== '1') e.preventDefault(); });
     });
     root.querySelector('#addFarmBtn').addEventListener('click', () => document.dispatchEvent(new CustomEvent('consign:addfarm')));
+    wireHeld();
     document.dispatchEvent(new CustomEvent('consign:homerendered', { detail: { root } }));
   };
 
@@ -66,8 +89,25 @@ export function mount(root) {
     render();
   }
 
+  function wireHeld() {
+    const send = root.querySelector('#sendHeldBtn');
+    if (send) send.addEventListener('click', () => document.getElementById('heldChip').click());
+    const dis = root.querySelector('#dismissRejected');
+    if (dis) dis.addEventListener('click', () => { clearRejected(); refreshHeld(); });
+  }
+  function refreshHeld() {
+    const box = root.querySelector('#heldBox');
+    if (!box) return;
+    box.innerHTML = heldBox();
+    wireHeld();
+  }
+
   const onReload = () => load();
   document.addEventListener('consign:reload', onReload);
+  document.addEventListener('consign:held', refreshHeld);
   load();
-  return { rerender: render, unmount: () => document.removeEventListener('consign:reload', onReload) };
+  return {
+    rerender: render,
+    unmount: () => { document.removeEventListener('consign:reload', onReload); document.removeEventListener('consign:held', refreshHeld); },
+  };
 }

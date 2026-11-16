@@ -21,6 +21,8 @@ import * as farm from './views/farm.js';
 import * as pay from './views/pay.js';
 import { initOwner } from './owner.js';
 import { setGo } from './nav.js';
+import { queue, flush } from './held.js';
+import { toast } from './ui.js';
 
 const ROUTES = [
   [/^$/, home, []],
@@ -78,6 +80,27 @@ document.addEventListener('ro:langchange', () => {
   if (current && current.rerender) current.rerender();
 });
 
+// ---------- held entries (no signal) ----------
+function heldChip() {
+  const n = queue.list().length;
+  const chip = $('heldChip');
+  chip.hidden = n === 0;
+  chip.textContent = `${n} ${t('held')}`;
+  chip.title = t('heldSend');
+  chip.setAttribute('aria-label', `${n} ${t('held')}. ${t('heldSend')}`);
+}
+async function sendHeld() {
+  if (!queue.list().length) return;
+  const r = await flush();
+  if (r.rejected.length) toast(`${t('notSaved')}: ${r.rejected.map((x) => x.error).join('; ')}`, 'err');
+  else if (r.sent && !r.left) toast(t('saved'));
+  if (r.sent || r.rejected.length) document.dispatchEvent(new CustomEvent('consign:reload'));
+}
+document.addEventListener('consign:held', heldChip);
+document.addEventListener('ro:langchange', heldChip);
+$('heldChip').addEventListener('click', sendHeld);
+window.addEventListener('online', sendHeld);
+
 window.addEventListener('hashchange', route);
 window.addEventListener('beforeunload', (e) => {
   if (current && current.dirty && current.dirty()) { e.preventDefault(); e.returnValue = ''; }
@@ -88,3 +111,5 @@ langLabel();
 document.title = t('title');
 document.documentElement.setAttribute('lang', getLang());
 route();
+heldChip();
+sendHeld();
