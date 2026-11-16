@@ -1,0 +1,51 @@
+/* Crew board (crew-board.html). Barn TV first (read from across the room), phone second. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); -webkit-text-size-adjust: 100%; }
+.cb-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: clamp(14px, 2vw, 32px) clamp(16px, 3vw, 48px) 8px; }
+.cb-head h1 { margin: 2px 0 0; font: 800 clamp(30px, 4.2vw, 80px)/1.05 "Outfit", var(--font-ui), sans-serif; }
+.cb-eyebrow { font-family: var(--font-mono); font-size: clamp(12px, 1.1vw, 20px); letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
+.cb-tools { display: flex; gap: 8px; }
+.cb-btn { font: 700 15px var(--font-ui); min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text); }
+:fullscreen .cb-btn, .tv .cb-btn { display: none; }
+
+.cb-main { display: grid; gap: clamp(12px, 1.4vw, 24px); padding: 4px clamp(16px, 3vw, 48px) 12px; grid-template-columns: 1fr; }
+@media (min-width: 1000px) { .cb-main { grid-template-columns: 1.55fr 1fr; align-items: start; } }
+.cb-side { display: grid; gap: clamp(12px, 1.4vw, 24px); }
+.cb-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: clamp(16px, 1.4vw, 26px); padding: clamp(14px, 1.6vw, 28px); display: grid; gap: 8px; }
+.cb-msg { font-size: 20px; text-align: center; padding: 28px; grid-column: 1 / -1; }
+.cb-msg[hidden] { display: none; }
+.cb-k { font-size: clamp(14px, 1.3vw, 24px); font-weight: 700; color: var(--text-secondary); }
+.cb-sub { font-size: clamp(14px, 1.25vw, 22px); color: var(--text-secondary); }
+
+.cb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: clamp(10px, 1.2vw, 20px); }
+.cb-row { display: grid; grid-template-columns: clamp(44px, 4.6vw, 86px) 1fr auto; gap: clamp(10px, 1.2vw, 22px); align-items: center; }
+.cb-rk { width: clamp(44px, 4.6vw, 86px); height: clamp(44px, 4.6vw, 86px); border-radius: 50%; display: grid; place-items: center;
+  font: 800 clamp(20px, 2.2vw, 42px) "Outfit", var(--font-ui), sans-serif; background: var(--bg); border: 2px solid var(--border-strong); }
+.cb-rk.r1 { background: #e8b923; border-color: #e8b923; color: #1c211b; }
+.cb-rk.r2 { background: #b9c0c7; border-color: #b9c0c7; color: #1c211b; }
+.cb-rk.r3 { background: #c98a4b; border-color: #c98a4b; color: #1c211b; }
+.cb-who { display: grid; gap: 6px; min-width: 0; }
+.cb-name { font: 800 clamp(24px, 3vw, 58px)/1.05 "Outfit", var(--font-ui), sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-bar { position: relative; height: clamp(10px, 1vw, 18px); background: var(--border); border-radius: 9px; }
+.cb-bar i { display: block; height: 100%; background: var(--green); border-radius: 9px; }
+.cb-bar s { position: absolute; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; background: var(--gold); border-radius: 2px; }
+.cb-val { text-align: right; line-height: 1.05; }
+.cb-val b { display: block; font: 800 clamp(26px, 3.2vw, 62px) "Outfit", var(--font-ui), sans-serif; font-variant-numeric: tabular-nums; }
+.cb-val span { font-size: clamp(12px, 1.15vw, 22px); color: var(--text-secondary); }
+.cb-val small { display: block; font-size: clamp(13px, 1.25vw, 24px); color: var(--text-secondary); font-weight: 600; }
+
+.cb-room { border-top: 6px solid var(--green); }
+.cb-big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cb-big b { font: 800 clamp(52px, 6vw, 120px)/1 "Outfit", var(--font-ui), sans-serif; font-variant-numeric: tabular-nums; }
+.cb-big span { font-size: clamp(15px, 1.4vw, 26px); color: var(--text-secondary); }
+.cb-meter { position: relative; height: clamp(16px, 1.6vw, 28px); background: var(--border); border-radius: 14px; margin-top: 6px; }
+.cb-meter i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--green); border-radius: 14px; transition: width .4s; }
+.cb-meter s { position: absolute; top: -6px; bottom: -6px; width: 5px; margin-left: -2px; background: var(--gold); border-radius: 3px; }
+.cb-status { font-size: clamp(17px, 1.6vw, 30px); font-weight: 800; }
+.cb-status.up { color: var(--success, var(--green)); }
+.cb-status.down { color: var(--warning, var(--gold)); }
+.cb-imp { border-top: 6px solid var(--gold); }
+.cb-impname { font: 800 clamp(28px, 3.4vw, 64px)/1.05 "Outfit", var(--font-ui), sans-serif; }
+
+.cb-foot { padding: 4px clamp(16px, 3vw, 48px) 24px; color: var(--text-muted); font-size: clamp(12px, 1.05vw, 19px); display: grid; gap: 2px; }
+.cb-foot p { margin: 0; }
+@media (max-width: 420px) { .cb-row { grid-template-columns: 40px 1fr auto; } .cb-name { font-size: 22px; } }
