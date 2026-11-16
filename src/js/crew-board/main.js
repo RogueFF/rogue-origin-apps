@@ -16,7 +16,7 @@ registerLabels({
   es: {
     eyebrow: 'Celdas · último día de trabajo', eyebrowOn: 'Celdas · {d}', title: 'Los mejores 5', fullscreen: 'Pantalla completa',
     room: 'El equipo', roomOn: 'El equipo · {d}', gPerHour: 'g de tops por hora', improved: 'Más mejorado',
-    goal: 'Meta', overGoal: '¡El equipo está arriba de la meta!', toGoal: 'Faltan {g} g ({lb} lb) por hora para la meta',
+    goal: 'Meta', goalKey: 'Meta: {g} g ({lb} lb) por hora', goalTick: 'Meta {g}', overGoal: '¡El equipo está arriba de la meta!', toGoal: 'Faltan {g} g ({lb} lb) por hora para la meta',
     allDays: 'Todos los días: {g} g ({lb} lb) por hora', days: '{n} días', lbHr: '{lb} lb por hora',
     impLine: 'De {g1} g ({lb1} lb) a {g2} g ({lb2} lb) por hora: +{gd} g en {n} días',
     noImp: 'Todavía nadie fuera de los 5. ¡Puede ser tú!', empty: 'Todavía no hay días completos.',
@@ -27,7 +27,7 @@ registerLabels({
   en: {
     eyebrow: 'Cells · last workday', eyebrowOn: 'Cells · {d}', title: 'Top 5', fullscreen: 'Full screen',
     room: 'The crew', roomOn: 'The crew · {d}', gPerHour: 'g of tops per hour', improved: 'Most improved',
-    goal: 'Goal', overGoal: 'The crew is above the goal!', toGoal: '{g} g ({lb} lb) per hour to reach the goal',
+    goal: 'Goal', goalKey: 'Goal: {g} g ({lb} lb) per hour', goalTick: 'Goal {g}', overGoal: 'The crew is above the goal!', toGoal: '{g} g ({lb} lb) per hour to reach the goal',
     allDays: 'All days: {g} g ({lb} lb) per hour', days: '{n} days', lbHr: '{lb} lb per hour',
     impLine: 'From {g1} g ({lb1} lb) to {g2} g ({lb2} lb) per hour: +{gd} g over {n} days',
     noImp: 'No one outside the top 5 yet. It could be you!', empty: 'No full days yet.',
@@ -60,10 +60,13 @@ function render() {
   $('top').innerHTML = data.top.length ? data.top.map((p) => `
     <li class="cb-row"><span class="cb-rk r${p.rank}">${p.rank}</span>
       <div class="cb-who"><span class="cb-name">${esc(p.name)}</span>
-        <span class="cb-bar"><i style="width:${Math.min(100, p.gph / topMax * 100)}%"></i>${goal ? `<s style="left:${goal / topMax * 100}%"></s>` : ''}</span></div>
+        <span class="cb-bar"><i style="width:${Math.min(100, p.gph / topMax * 100)}%"></i>${goal ? `<s style="left:${goal / topMax * 100}%">${p.rank === 1 ? `<em>${esc(fill(t('goalTick'), { g: goal }))}</em>` : ''}</s>` : ''}</span></div>
       <div class="cb-val"><b>${p.gph}</b><span>g/h</span><small>${lb2(p.lbHr)} lb/h</small></div></li>`).join('')
     : `<li class="cb-sub">${esc(t('empty'))}</li>`;
 
+  const gk = $('goalKey');
+  gk.hidden = !goal;
+  gk.innerHTML = goal ? `<i aria-hidden="true"></i><span>${esc(fill(t('goalKey'), { g: goal, lb: lb2(data.room.goal.lbHr) }))}</span>` : '';
   $('eyebrow').textContent = data.day ? fill(t('eyebrowOn'), { d: fmtDate(data.day) }) : t('eyebrow');
   const r = data.room;
   $('roomTitle').textContent = r ? fill(t('roomOn'), { d: fmtDate(r.date) }) : t('room');
