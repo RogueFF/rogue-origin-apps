@@ -227,6 +227,86 @@ async function saveScreenRun(body, env) {
   return ok({ lot: await oneLot(env, lot.id) });
 }
 
+async function saveSold(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  const key = clean(body.client_key) || crypto.randomUUID();
+  if (await env.DB.prepare('SELECT id FROM cl_sold WHERE client_key = ?').bind(key).first()) return ok({ lot, duplicate: true });
+  if (lot.term !== 'sold') throw bad('Sold pounds are only tracked on consignment (owed as sold) lots');
+  const lbs = posNum(body.lbs, 'Pounds sold');
+  const kind = body.kind === 'smalls' ? 'smalls' : 'main';
+  const m = lot.money;
+  const left = kind === 'smalls' ? round2(m.payable_smalls_lbs - m.sold_smalls_lbs) : round2(m.payable_main_lbs - m.sold_main_lbs);
+  if (lbs > left + 0.005) throw bad(`Only ${left} lb is left on hand for this lot`);
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(body.sold_on || '') ? body.sold_on : pacificDay(new Date());
+  await env.DB.prepare('INSERT INTO cl_sold (lot_id, sold_on, lbs, kind, note, client_key) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(lot.id, day, lbs, kind, clean(body.note) || null, key).run();
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+async function farmTotalsFor(env, farmId) {
+  const lots = await loadLots(env, 'l.farm_id = ? AND l.voided_at IS NULL', [farmId]);
+  const payments = (await env.DB.prepare('SELECT * FROM cl_payments WHERE farm_id = ? ORDER BY paid_on DESC, id DESC').bind(farmId).all()).results;
+  return { lots, payments, totals: farmTotals(lots.map((l) => l.money), payments) };
+}
+
+async function savePayment(body, env) {
+  const farmId = Number(body.farm_id);
+  if (!farmId || !(await env.DB.prepare('SELECT id FROM cl_farms WHERE id = ?').bind(farmId).first())) throw bad('Unknown farm');
+  const key = clean(body.client_key) || crypto.randomUUID();
+  let row = await env.DB.prepare('SELECT * FROM cl_payments WHERE client_key = ?').bind(key).first();
+  if (!row) {
+    const amount = posNum(body.amount, 'Amount');
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(body.paid_on || '') ? body.paid_on : pacificDay(new Date());
+    await env.DB.prepare('INSERT INTO cl_payments (farm_id, paid_on, amount, method, reference, note, client_key) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(farmId, day, amount, clean(body.method) || null, clean(body.reference) || null, clean(body.note) || null, key).run();
+    row = await env.DB.prepare('SELECT * FROM cl_payments WHERE client_key = ?').bind(key).first();
+  }
+  const { totals } = await farmTotalsFor(env, farmId);
+  return ok({ payment: row, totals });
+}
+
+const VOID_TABLES = { dropoff: 'cl_dropoffs', lot: 'cl_lots', run: 'cl_screen_runs', sold: 'cl_sold', payment: 'cl_payments' };
+
+async function voidRow(body, env) {
+  const tbl = VOID_TABLES[body.table];
+  if (!tbl) throw bad('Unknown table');
+  const reason = clean(body.reason);
+  if (!reason) throw bad('A reason is required to void an entry');
+  const id = Number(body.id);
+  const row = await env.DB.prepare(`SELECT * FROM ${tbl} WHERE id = ?`).bind(id).first();
+  if (!row) throw createError('NOT_FOUND', 'Entry not found');
+  if (row.voided_at) return ok({ ok: true, already: true });
+  const stmts = [
+    env.DB.prepare(`UPDATE ${tbl} SET voided_at = datetime('now'), void_reason = ? WHERE id = ?`).bind(reason, id),
+    history(env, tbl, id, 'void', row, { void_reason: reason }, body.actor),
+  ];
+  if (body.table === 'dropoff') {
+    stmts.push(env.DB.prepare("UPDATE cl_lots SET voided_at = datetime('now'), void_reason = ? WHERE dropoff_id = ? AND voided_at IS NULL").bind(reason, id));
+  }
+  if (body.table === 'run') {
+    stmts.push(env.DB.prepare('UPDATE cl_lots SET closed_at = NULL WHERE id = ?').bind(row.lot_id));
+  }
+  await env.DB.batch(stmts);
+  return ok({ ok: true });
+}
+
+async function setLotTerms(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  const next = {
+    term: body.term == null ? lot.term : body.term,
+    price_per_lb: body.price_per_lb == null ? lot.price_per_lb : posNum(body.price_per_lb, 'Price per lb'),
+    smalls_price_per_lb: body.smalls_price_per_lb == null ? lot.smalls_price_per_lb : posNum(body.smalls_price_per_lb, 'Smalls price per lb'),
+  };
+  if (!TERMS.has(next.term)) throw bad('term must be dropoff or sold');
+  if (next.term === 'dropoff' && lot.sold.some((s) => !s.voided_at)) throw bad('Void the sold entries before changing this lot to owed on dropoff');
+  const before = { term: lot.term, price_per_lb: lot.price_per_lb, smalls_price_per_lb: lot.smalls_price_per_lb };
+  await env.DB.batch([
+    env.DB.prepare('UPDATE cl_lots SET term = ?, price_per_lb = ?, smalls_price_per_lb = ? WHERE id = ?').bind(next.term, next.price_per_lb, next.smalls_price_per_lb, lot.id),
+    history(env, 'cl_lots', lot.id, 'setLotTerms', before, next, body.actor || 'owner'),
+  ]);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
 export async function handleConsignD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
@@ -240,6 +320,10 @@ export async function handleConsignD1(request, env, ctx) {
     case 'dropoff': return dropoffDetail(env, Number(body.dropoff_id));
     case 'setWeight': return setWeight(body, env);
     case 'saveScreenRun': return saveScreenRun(body, env);
+    case 'saveSold': return saveSold(body, env);
+    case 'savePayment': return savePayment(body, env);
+    case 'voidRow': return voidRow(body, env);
+    case 'setLotTerms': return setLotTerms(body, env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }

@@ -237,3 +237,63 @@ test('setWeight correction is refused below what was already pulled, and is logg
 });
 
 export { dropTwo, goodRun };
+
+test('sold pounds only on sold-term lots, never above what is payable', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env, { default_term: 'sold' });
+  await price(env, farm.id, 'Alpha', 'tops', 10);
+  await price(env, farm.id, 'Alpha', 'smalls', 4);
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 100 }, { cultivar: 'Alpha', type: 'smalls', term: 'dropoff', intake_lbs: 10 }] });
+  const [tops, smalls] = d.lots;
+  await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun });
+  const a = await call(env, 'saveSold', { lot_id: tops.id, lbs: 20, kind: 'main', client_key: 's1' });
+  assert.equal(a.lot.money.owed, 200);
+  assert.equal(a.lot.money.on_hand_lbs, 70);
+  await assert.rejects(handleConsignD1(post('saveSold', { lot_id: tops.id, lbs: 61, kind: 'main' }), env, {}), /on hand|left/i);
+  await assert.rejects(handleConsignD1(post('saveSold', { lot_id: tops.id, lbs: 11, kind: 'smalls' }), env, {}), /on hand|left/i);
+  await assert.rejects(handleConsignD1(post('saveSold', { lot_id: smalls.id, lbs: 1 }), env, {}), /consignment|sold/i);
+});
+
+test('payment is saved once per client_key and returns farm totals', async () => {
+  const { env } = freshConsignDb();
+  const { farm, tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const p = await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1' });
+  assert.equal(p.totals.owed, 1160);
+  assert.equal(p.totals.balance, 0);
+  await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1' });
+  const f = await call(env, 'farm', { farm_id: farm.id });
+  assert.equal(f.payments.length, 1);
+});
+
+test('voidRow needs a reason, keeps the row, and logs it', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await assert.rejects(handleConsignD1(post('voidRow', { table: 'lot', id: tops.id }), env, {}), /reason/i);
+  await call(env, 'voidRow', { table: 'lot', id: tops.id, reason: 'entered twice', actor: 'T' });
+  const row = sqlite.prepare('SELECT * FROM cl_lots WHERE id = ?').get(tops.id);
+  assert.ok(row.voided_at);
+  assert.equal(row.void_reason, 'entered twice');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM cl_history WHERE action = 'void'").get().n, 1);
+});
+
+test('voiding a run reopens its lot, voiding a dropoff voids its lots', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const { lot } = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun });
+  await call(env, 'voidRow', { table: 'run', id: lot.runs[0].id, reason: 'wrong lot' });
+  assert.equal(sqlite.prepare('SELECT closed_at FROM cl_lots WHERE id = ?').get(tops.id).closed_at, null);
+  await call(env, 'voidRow', { table: 'dropoff', id: tops.dropoff_id, reason: 'test entry' });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_lots WHERE voided_at IS NULL').get().n, 0);
+});
+
+test('setLotTerms is owner-only, changes term and price, and is logged', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await assert.rejects(handleConsignD1(post('setLotTerms', { lot_id: tops.id, term: 'sold' }), env, {}), /owner/i);
+  const { lot } = await call(env, 'setLotTerms', { lot_id: tops.id, term: 'sold', price_per_lb: 11, ...OWNER });
+  assert.equal(lot.term, 'sold');
+  assert.equal(lot.price_per_lb, 11);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM cl_history WHERE action = 'setLotTerms'").get().n, 1);
+});
