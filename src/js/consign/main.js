@@ -17,6 +17,9 @@ import * as home from './views/home.js';
 import * as dropoff from './views/dropoff.js';
 import * as weigh from './views/weigh.js';
 import * as screen from './views/screen.js';
+import * as farm from './views/farm.js';
+import * as pay from './views/pay.js';
+import { initOwner } from './owner.js';
 import { setGo } from './nav.js';
 
 const ROUTES = [
@@ -24,6 +27,8 @@ const ROUTES = [
   [/^dropoff$/, dropoff, []],
   [/^weigh\/(\d+)\/(\d+)$/, weigh, ['dropoffId', 'lotId']],
   [/^screen\/(\d+)\/(\d+)$/, screen, ['dropoffId', 'lotId']],
+  [/^farm\/(\d+)$/, farm, ['farmId']],
+  [/^pay(?:\/(\d+))?$/, pay, ['farmId']],
 ];
 
 const root = document.getElementById('view');
@@ -78,6 +83,7 @@ window.addEventListener('beforeunload', (e) => {
   if (current && current.dirty && current.dirty()) { e.preventDefault(); e.returnValue = ''; }
 });
 
+initOwner();
 langLabel();
 document.title = t('title');
 document.documentElement.setAttribute('lang', getLang());
