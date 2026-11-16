@@ -341,3 +341,66 @@ test('open groups live lots by the work they need', async () => {
   await call(env, 'voidRow', { table: 'lot', id: d.lots[0].id, reason: 'x' });
   assert.equal((await call(env, 'open')).to_weigh.length, 0);
 });
+
+// ---- review fixes ----
+
+test('two concurrent sends with one client_key save once and both succeed', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const farm = await seedFarm(env);
+  const body = { farm_id: farm.id, lines: [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 10 }], client_key: 'same' };
+  const [a, b] = await Promise.all([call(env, 'saveDropoff', body), call(env, 'saveDropoff', body)]);
+  assert.equal(a.dropoff.id, b.dropoff.id);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_dropoffs').get().n, 1);
+  const p = { farm_id: farm.id, amount: 5, client_key: 'pay' };
+  await Promise.all([call(env, 'savePayment', p), call(env, 'savePayment', p)]);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_payments').get().n, 1);
+});
+
+test('a resend is a duplicate even after the farm went inactive or the lot was voided', async () => {
+  const { env } = freshConsignDb();
+  const { farm, tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  await call(env, 'saveFarm', { id: farm.id, name: 'Farm A', active: false, ...OWNER });
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'Alpha', type: 'tops' }] });
+  assert.equal(d.duplicate, true);
+  await call(env, 'voidRow', { table: 'lot', id: tops.id, reason: 'x' });
+  const r = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  assert.equal(r.duplicate, true);
+});
+
+test('closeLot closes a lot that is fully pulled, and refuses one that is not', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 40, final_lbs: 30, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1 });
+  await assert.rejects(handleConsignD1(post('closeLot', { lot_id: tops.id }), env, {}), /left/i);
+  await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1 });
+  const { lot } = await call(env, 'closeLot', { lot_id: tops.id, actor: 'T' });
+  assert.equal(lot.money.status, 'closed');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM cl_history WHERE action = 'closeLot'").get().n, 1);
+});
+
+test('price lookup ignores case, so a typed cultivar still gets its price', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env);
+  await price(env, farm.id, 'Alpha', 'tops', 10);
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'alpha', type: 'tops', intake_lbs: 1 }, { cultivar: 'beta', type: 'tops', intake_lbs: 1 }] });
+  assert.equal(d.lots[0].price_per_lb, 10);
+  const p = await price(env, farm.id, 'Beta', 'tops', 7, { apply_to_unpriced: true });
+  assert.equal(p.lots_priced, 1);
+});
+
+test('voidRow refuses inherited keys as tables, a duplicate farm name is a clear error', async () => {
+  const { env } = freshConsignDb();
+  await assert.rejects(handleConsignD1(post('voidRow', { table: 'constructor', id: 1, reason: 'x' }), env, {}), /Unknown table/);
+  await seedFarm(env);
+  await assert.rejects(handleConsignD1(post('saveFarm', { name: 'Farm A', ...OWNER }), env, {}), /already/i);
+});
+
+test('voiding a dropoff writes a history row for each of its lots', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'voidRow', { table: 'dropoff', id: tops.dropoff_id, reason: 'test entry' });
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM cl_history WHERE action = 'void' AND tbl = 'cl_lots'").get().n, 2);
+});

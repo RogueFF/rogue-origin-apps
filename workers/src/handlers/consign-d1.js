@@ -26,6 +26,9 @@ const bad = (msg) => createError('VALIDATION_ERROR', msg);
 const TERMS = new Set(['dropoff', 'sold']);
 const TYPES = new Set(['tops', 'smalls']);
 const clean = (v) => (typeof v === 'string' ? v.trim() : '');
+/** A UNIQUE failure on client_key: a resend racing the first send. */
+const isKeyClash = (e) => /UNIQUE constraint failed: \w+\.client_key/i.test(String(e && e.message));
+const isNameClash = (e) => /UNIQUE constraint failed: cl_farms\.name/i.test(String(e && e.message));
 const posNum = (v, label) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) throw bad(`${label} must be a positive number`);
@@ -40,13 +43,18 @@ async function saveFarm(body, env) {
   const lang = body.lang === 'es' ? 'es' : 'en';
   const active = body.active === false || body.active === 0 ? 0 : 1;
   let id = Number(body.id) || null;
-  if (id) {
-    await env.DB.prepare('UPDATE cl_farms SET name = ?, contact = ?, default_term = ?, lang = ?, active = ? WHERE id = ?')
-      .bind(name, clean(body.contact) || null, term, lang, active, id).run();
-  } else {
-    const r = await env.DB.prepare('INSERT INTO cl_farms (name, contact, default_term, lang, active) VALUES (?, ?, ?, ?, ?)')
-      .bind(name, clean(body.contact) || null, term, lang, active).run();
-    id = r.meta.last_row_id;
+  try {
+    if (id) {
+      await env.DB.prepare('UPDATE cl_farms SET name = ?, contact = ?, default_term = ?, lang = ?, active = ? WHERE id = ?')
+        .bind(name, clean(body.contact) || null, term, lang, active, id).run();
+    } else {
+      const r = await env.DB.prepare('INSERT INTO cl_farms (name, contact, default_term, lang, active) VALUES (?, ?, ?, ?, ?)')
+        .bind(name, clean(body.contact) || null, term, lang, active).run();
+      id = r.meta.last_row_id;
+    }
+  } catch (e) {
+    if (isNameClash(e)) throw bad(`A farm named ${name} already exists`);
+    throw e;
   }
   const farm = await env.DB.prepare('SELECT * FROM cl_farms WHERE id = ?').bind(id).first();
   if (!farm) throw createError('NOT_FOUND', 'Farm not found');
@@ -56,7 +64,7 @@ async function saveFarm(body, env) {
 /** Latest price point on or before a day. Returns null when none. */
 async function priceFor(env, farmId, cultivar, type, day) {
   const row = await env.DB.prepare(
-    'SELECT price_per_lb FROM cl_price_points WHERE farm_id = ? AND cultivar = ? AND type = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1'
+    'SELECT price_per_lb FROM cl_price_points WHERE farm_id = ? AND cultivar = ? COLLATE NOCASE AND type = ? AND effective_from <= ? ORDER BY effective_from DESC, id DESC LIMIT 1'
   ).bind(farmId, cultivar, type, day).first();
   return row ? row.price_per_lb : null;
 }
@@ -76,12 +84,12 @@ async function savePricePoint(body, env) {
   let lotsPriced = 0;
   if (body.apply_to_unpriced) {
     const a = await env.DB.prepare(
-      'UPDATE cl_lots SET price_per_lb = ? WHERE farm_id = ? AND cultivar = ? AND type = ? AND price_per_lb IS NULL AND voided_at IS NULL'
+      'UPDATE cl_lots SET price_per_lb = ? WHERE farm_id = ? AND cultivar = ? COLLATE NOCASE AND type = ? AND price_per_lb IS NULL AND voided_at IS NULL'
     ).bind(p, farmId, cultivar, body.type).run();
     lotsPriced += a.meta.changes;
     if (body.type === 'smalls') {
       const b = await env.DB.prepare(
-        "UPDATE cl_lots SET smalls_price_per_lb = ? WHERE farm_id = ? AND cultivar = ? AND type = 'tops' AND smalls_price_per_lb IS NULL AND voided_at IS NULL"
+        "UPDATE cl_lots SET smalls_price_per_lb = ? WHERE farm_id = ? AND cultivar = ? COLLATE NOCASE AND type = 'tops' AND smalls_price_per_lb IS NULL AND voided_at IS NULL"
       ).bind(p, farmId, cultivar).run();
       lotsPriced += b.meta.changes;
     }
@@ -123,15 +131,16 @@ async function dropoffDetail(env, dropoffId, extra = {}) {
 }
 
 async function saveDropoff(body, env) {
+  // A resend of a save that already landed is answered first, whatever changed since.
+  const key = clean(body.client_key) || crypto.randomUUID();
+  const existing = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
+  if (existing) return dropoffDetail(env, existing.id, { duplicate: true });
+
   const farmId = Number(body.farm_id);
   const farm = farmId ? await env.DB.prepare('SELECT * FROM cl_farms WHERE id = ? AND active = 1').bind(farmId).first() : null;
   if (!farm) throw bad('Unknown farm');
   const raw = Array.isArray(body.lines) ? body.lines : [];
   if (!raw.length) throw bad('A dropoff needs at least one line');
-
-  const key = clean(body.client_key) || crypto.randomUUID();
-  const existing = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
-  if (existing) return dropoffDetail(env, existing.id, { duplicate: true });
 
   // Validate every line before anything is written.
   const seen = new Set();
@@ -163,7 +172,13 @@ async function saveDropoff(body, env) {
        VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`
     ).bind(key, farmId, ln.cultivar, ln.type, ln.term, ln.intake, ln.intake, ln.price, ln.smallsPrice, ln.note)),
   ];
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch (e) {
+    if (!isKeyClash(e)) throw e;
+    const won = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
+    return dropoffDetail(env, won.id, { duplicate: true });
+  }
   const row = await env.DB.prepare('SELECT id FROM cl_dropoffs WHERE client_key = ?').bind(key).first();
   return dropoffDetail(env, row.id);
 }
@@ -199,10 +214,10 @@ async function setWeight(body, env) {
 }
 
 async function saveScreenRun(body, env) {
-  const lot = liveLot(await oneLot(env, body.lot_id));
   const key = clean(body.client_key) || crypto.randomUUID();
-  const dup = await env.DB.prepare('SELECT id FROM cl_screen_runs WHERE client_key = ?').bind(key).first();
-  if (dup) return ok({ lot, duplicate: true });
+  const dup = await env.DB.prepare('SELECT lot_id FROM cl_screen_runs WHERE client_key = ?').bind(key).first();
+  if (dup) return ok({ lot: await oneLot(env, dup.lot_id), duplicate: true });
+  const lot = liveLot(await oneLot(env, body.lot_id));
 
   if (lot.intake_lbs == null) throw bad('Weigh this lot before screening it');
   if (lot.closed_at) throw bad('This lot is closed');
@@ -225,14 +240,38 @@ async function saveScreenRun(body, env) {
     'INSERT INTO cl_screen_runs (lot_id, pulled_lbs, final_lbs, to_smalls_lbs, biomass_lbs, mold_lbs, diff_lbs, note, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(lot.id, run.pulled_lbs, run.final_lbs, run.to_smalls_lbs, run.biomass_lbs, run.mold_lbs, chk.diff, clean(body.note) || null, key)];
   if (body.finishes_lot) stmts.push(env.DB.prepare("UPDATE cl_lots SET closed_at = datetime('now') WHERE id = ?").bind(lot.id));
-  await env.DB.batch(stmts);
+  try {
+    await env.DB.batch(stmts);
+  } catch (e) {
+    if (!isKeyClash(e)) throw e;
+    return ok({ lot: await oneLot(env, lot.id), duplicate: true });
+  }
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+/**
+ * Close a lot whose runs already cover its intake (two partial runs, or a run voided
+ * and re-entered, with "finishes the lot" never ticked). Staff action, logged.
+ */
+async function closeLot(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  if (lot.closed_at) return ok({ lot, already: true });
+  const m = lot.money;
+  if (!(m.pulled_lbs > 0) || m.remainder_lbs > screenTolerance(m.intake_lbs)) {
+    throw bad(`${m.remainder_lbs} lb is still left to screen; screen it before closing the lot`);
+  }
+  await env.DB.batch([
+    env.DB.prepare("UPDATE cl_lots SET closed_at = datetime('now') WHERE id = ?").bind(lot.id),
+    history(env, 'cl_lots', lot.id, 'closeLot', { closed_at: null }, { remainder_lbs: m.remainder_lbs }, body.actor),
+  ]);
   return ok({ lot: await oneLot(env, lot.id) });
 }
 
 async function saveSold(body, env) {
-  const lot = liveLot(await oneLot(env, body.lot_id));
   const key = clean(body.client_key) || crypto.randomUUID();
-  if (await env.DB.prepare('SELECT id FROM cl_sold WHERE client_key = ?').bind(key).first()) return ok({ lot, duplicate: true });
+  const dup = await env.DB.prepare('SELECT lot_id FROM cl_sold WHERE client_key = ?').bind(key).first();
+  if (dup) return ok({ lot: await oneLot(env, dup.lot_id), duplicate: true });
+  const lot = liveLot(await oneLot(env, body.lot_id));
   if (lot.term !== 'sold') throw bad('Sold pounds are only tracked on consignment (owed as sold) lots');
   const lbs = posNum(body.lbs, 'Pounds sold');
   const kind = body.kind === 'smalls' ? 'smalls' : 'main';
@@ -240,8 +279,13 @@ async function saveSold(body, env) {
   const left = kind === 'smalls' ? round2(m.payable_smalls_lbs - m.sold_smalls_lbs) : round2(m.payable_main_lbs - m.sold_main_lbs);
   if (lbs > left + 0.005) throw bad(`Only ${left} lb is left on hand for this lot`);
   const day = /^\d{4}-\d{2}-\d{2}$/.test(body.sold_on || '') ? body.sold_on : pacificDay(new Date());
-  await env.DB.prepare('INSERT INTO cl_sold (lot_id, sold_on, lbs, kind, note, client_key) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(lot.id, day, lbs, kind, clean(body.note) || null, key).run();
+  try {
+    await env.DB.prepare('INSERT INTO cl_sold (lot_id, sold_on, lbs, kind, note, client_key) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(lot.id, day, lbs, kind, clean(body.note) || null, key).run();
+  } catch (e) {
+    if (!isKeyClash(e)) throw e;
+    return ok({ lot: await oneLot(env, lot.id), duplicate: true });
+  }
   return ok({ lot: await oneLot(env, lot.id) });
 }
 
@@ -252,25 +296,30 @@ async function farmTotalsFor(env, farmId) {
 }
 
 async function savePayment(body, env) {
-  const farmId = Number(body.farm_id);
-  if (!farmId || !(await env.DB.prepare('SELECT id FROM cl_farms WHERE id = ?').bind(farmId).first())) throw bad('Unknown farm');
   const key = clean(body.client_key) || crypto.randomUUID();
   let row = await env.DB.prepare('SELECT * FROM cl_payments WHERE client_key = ?').bind(key).first();
+  const duplicate = !!row;
   if (!row) {
+    const farmId = Number(body.farm_id);
+    if (!farmId || !(await env.DB.prepare('SELECT id FROM cl_farms WHERE id = ?').bind(farmId).first())) throw bad('Unknown farm');
     const amount = posNum(body.amount, 'Amount');
     const day = /^\d{4}-\d{2}-\d{2}$/.test(body.paid_on || '') ? body.paid_on : pacificDay(new Date());
-    await env.DB.prepare('INSERT INTO cl_payments (farm_id, paid_on, amount, method, reference, note, client_key) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(farmId, day, amount, clean(body.method) || null, clean(body.reference) || null, clean(body.note) || null, key).run();
+    try {
+      await env.DB.prepare('INSERT INTO cl_payments (farm_id, paid_on, amount, method, reference, note, client_key) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(farmId, day, amount, clean(body.method) || null, clean(body.reference) || null, clean(body.note) || null, key).run();
+    } catch (e) {
+      if (!isKeyClash(e)) throw e;
+    }
     row = await env.DB.prepare('SELECT * FROM cl_payments WHERE client_key = ?').bind(key).first();
   }
-  const { totals } = await farmTotalsFor(env, farmId);
-  return ok({ payment: row, totals });
+  const { totals } = await farmTotalsFor(env, row.farm_id);
+  return ok({ payment: row, totals, ...(duplicate ? { duplicate } : {}) });
 }
 
 const VOID_TABLES = { dropoff: 'cl_dropoffs', lot: 'cl_lots', run: 'cl_screen_runs', sold: 'cl_sold', payment: 'cl_payments' };
 
 async function voidRow(body, env) {
-  const tbl = VOID_TABLES[body.table];
+  const tbl = Object.hasOwn(VOID_TABLES, body.table) ? VOID_TABLES[body.table] : null;
   if (!tbl) throw bad('Unknown table');
   const reason = clean(body.reason);
   if (!reason) throw bad('A reason is required to void an entry');
@@ -283,6 +332,8 @@ async function voidRow(body, env) {
     history(env, tbl, id, 'void', row, { void_reason: reason }, body.actor),
   ];
   if (body.table === 'dropoff') {
+    const lots = (await env.DB.prepare('SELECT * FROM cl_lots WHERE dropoff_id = ? AND voided_at IS NULL').bind(id).all()).results;
+    for (const l of lots) stmts.push(history(env, 'cl_lots', l.id, 'void', l, { void_reason: reason, with_dropoff: id }, body.actor));
     stmts.push(env.DB.prepare("UPDATE cl_lots SET voided_at = datetime('now'), void_reason = ? WHERE dropoff_id = ? AND voided_at IS NULL").bind(reason, id));
   }
   if (body.table === 'run') {
@@ -359,6 +410,7 @@ export async function handleConsignD1(request, env, _ctx) {
     case 'dropoff': return dropoffDetail(env, Number(body.dropoff_id));
     case 'setWeight': return setWeight(body, env);
     case 'saveScreenRun': return saveScreenRun(body, env);
+    case 'closeLot': return closeLot(body, env);
     case 'saveSold': return saveSold(body, env);
     case 'savePayment': return savePayment(body, env);
     case 'voidRow': return voidRow(body, env);
