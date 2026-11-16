@@ -92,18 +92,20 @@ async function savePricePoint(body, env) {
 
 /** Load lots (with runs, sold, money) for a WHERE clause on cl_lots aliased l. */
 async function loadLots(env, where, args) {
-  const lots = (await env.DB.prepare(
+  // Skip .bind() when there is nothing to bind.
+  const q = (sql) => { const st = env.DB.prepare(sql); return args.length ? st.bind(...args) : st; };
+  const lots = (await q(
     `SELECT l.*, f.name AS farm_name, d.dropped_at FROM cl_lots l
      JOIN cl_farms f ON f.id = l.farm_id JOIN cl_dropoffs d ON d.id = l.dropoff_id
      WHERE ${where} ORDER BY l.id`
-  ).bind(...args).all()).results;
+  ).all()).results;
   if (!lots.length) return [];
-  const runs = (await env.DB.prepare(
+  const runs = (await q(
     `SELECT r.* FROM cl_screen_runs r JOIN cl_lots l ON l.id = r.lot_id WHERE ${where} ORDER BY r.id`
-  ).bind(...args).all()).results;
-  const sold = (await env.DB.prepare(
+  ).all()).results;
+  const sold = (await q(
     `SELECT s.* FROM cl_sold s JOIN cl_lots l ON l.id = s.lot_id WHERE ${where} ORDER BY s.id`
-  ).bind(...args).all()).results;
+  ).all()).results;
   return lots.map((lot) => {
     const r = runs.filter((x) => x.lot_id === lot.id);
     const s = sold.filter((x) => x.lot_id === lot.id);
@@ -307,7 +309,44 @@ async function setLotTerms(body, env) {
   return ok({ lot: await oneLot(env, lot.id) });
 }
 
-export async function handleConsignD1(request, env, ctx) {
+async function listFarms(env) {
+  const farms = (await env.DB.prepare('SELECT * FROM cl_farms ORDER BY active DESC, name').all()).results;
+  const lots = await loadLots(env, 'l.voided_at IS NULL', []);
+  const payments = (await env.DB.prepare('SELECT * FROM cl_payments').all()).results;
+  return ok(farms.map((f) => ({
+    ...f,
+    ...farmTotals(lots.filter((l) => l.farm_id === f.id).map((l) => l.money), payments.filter((p) => p.farm_id === f.id)),
+  })));
+}
+
+async function farmDetail(body, env) {
+  const farmId = Number(body.farm_id);
+  const farm = await env.DB.prepare('SELECT * FROM cl_farms WHERE id = ?').bind(farmId).first();
+  if (!farm) throw createError('NOT_FOUND', 'Farm not found');
+  const today = pacificDay(new Date());
+  // Current price per cultivar and type: newest effective row on or before today.
+  const price_points = (await env.DB.prepare(
+    `SELECT p.* FROM cl_price_points p WHERE p.farm_id = ? AND p.effective_from <= ?
+       AND p.id = (SELECT q.id FROM cl_price_points q WHERE q.farm_id = p.farm_id AND q.cultivar = p.cultivar AND q.type = p.type
+                   AND q.effective_from <= ? ORDER BY q.effective_from DESC, q.id DESC LIMIT 1)
+     ORDER BY p.cultivar, p.type DESC`
+  ).bind(farmId, today, today).all()).results;
+  const { lots, payments, totals } = await farmTotalsFor(env, farmId);
+  const dropoffs = (await env.DB.prepare('SELECT * FROM cl_dropoffs WHERE farm_id = ? AND voided_at IS NULL ORDER BY dropped_at DESC, id DESC').bind(farmId).all()).results
+    .map((d) => ({ ...d, lots: lots.filter((l) => l.dropoff_id === d.id) }));
+  return ok({ farm, price_points, dropoffs, payments: payments.filter((p) => !p.voided_at), totals });
+}
+
+async function openWork(env) {
+  const lots = await loadLots(env, 'l.voided_at IS NULL AND l.closed_at IS NULL', []);
+  return ok({
+    to_weigh: lots.filter((l) => l.money.status === 'dropped'),
+    to_screen: lots.filter((l) => l.money.status === 'weighed' || l.money.status === 'screening'),
+    needs_price: (await loadLots(env, 'l.voided_at IS NULL', [])).filter((l) => l.money.needs_price),
+  });
+}
+
+export async function handleConsignD1(request, env, _ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
   requireAuth(request, body, env, `consign-${action}`);
@@ -324,6 +363,9 @@ export async function handleConsignD1(request, env, ctx) {
     case 'savePayment': return savePayment(body, env);
     case 'voidRow': return voidRow(body, env);
     case 'setLotTerms': return setLotTerms(body, env);
+    case 'farms': return listFarms(env);
+    case 'farm': return farmDetail(body, env);
+    case 'open': return openWork(env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }

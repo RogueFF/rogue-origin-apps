@@ -297,3 +297,47 @@ test('setLotTerms is owner-only, changes term and price, and is logged', async (
   assert.equal(lot.price_per_lb, 11);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM cl_history WHERE action = 'setLotTerms'").get().n, 1);
 });
+
+test('farms lists every farm with its balance', async () => {
+  const { env } = freshConsignDb();
+  const { farm, tops } = await dropTwo(env);
+  await seedFarm(env, { name: 'Farm B' });
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const list = await call(env, 'farms');
+  assert.equal(list.length, 2);
+  const a = list.find((f) => f.id === farm.id);
+  assert.equal(a.owed, 1000 + 160);
+  assert.equal(a.estimate, true);
+  assert.equal(list.find((f) => f.name === 'Farm B').balance, 0);
+});
+
+test('farm returns current price points, dropoffs with lots, payments and totals', async () => {
+  const { env } = freshConsignDb();
+  const { farm } = await dropTwo(env);
+  await price(env, farm.id, 'Alpha', 'tops', 12);
+  const f = await call(env, 'farm', { farm_id: farm.id });
+  assert.equal(f.farm.name, 'Farm A');
+  assert.equal(f.price_points.length, 2);
+  assert.equal(f.price_points.find((p) => p.type === 'tops').price_per_lb, 12);
+  assert.equal(f.dropoffs.length, 1);
+  assert.equal(f.dropoffs[0].lots.length, 2);
+  assert.ok('balance' in f.totals);
+});
+
+test('open groups live lots by the work they need', async () => {
+  const { env } = freshConsignDb();
+  const farm = await seedFarm(env);
+  await price(env, farm.id, 'Alpha', 'tops', 10);
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [
+    { cultivar: 'Alpha', type: 'tops' },
+    { cultivar: 'Alpha', type: 'smalls', intake_lbs: 40 },
+    { cultivar: 'Beta', type: 'tops', intake_lbs: 10 },
+  ] });
+  const o = await call(env, 'open');
+  assert.deepEqual(o.to_weigh.map((l) => l.id), [d.lots[0].id]);
+  assert.deepEqual(o.to_screen.map((l) => l.id), [d.lots[1].id, d.lots[2].id]);
+  assert.deepEqual(o.needs_price.map((l) => l.id).sort(), [d.lots[1].id, d.lots[2].id].sort());
+  assert.equal(o.to_weigh[0].farm_name, 'Farm A');
+  await call(env, 'voidRow', { table: 'lot', id: d.lots[0].id, reason: 'x' });
+  assert.equal((await call(env, 'open')).to_weigh.length, 0);
+});
