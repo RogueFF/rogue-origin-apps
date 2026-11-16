@@ -102,10 +102,12 @@ async function load() {
   render();
 }
 
-$('langToggle').textContent = getLang() === 'es' ? 'EN' : 'ES';
+const langLabel = () => { $('langToggle').innerHTML = getLang() === 'es' ? '<b>ES</b> · EN' : 'ES · <b>EN</b>'; };
+langLabel();
 $('langToggle').addEventListener('click', () => {
   setLang(getLang() === 'es' ? 'en' : 'es');
-  $('langToggle').textContent = getLang() === 'es' ? 'EN' : 'ES';
+  try { localStorage.setItem('ro-lang', getLang()); } catch { /* private mode */ }
+  langLabel();
   render();
 });
 $('fsBtn').addEventListener('click', () => {

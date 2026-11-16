@@ -5,7 +5,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .cb-eyebrow { font-family: var(--font-mono); font-size: clamp(12px, 1.1vw, 20px); letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); }
 .cb-tools { display: flex; gap: 8px; }
 .cb-btn { font: 700 15px var(--font-ui); min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--bg-card); color: var(--text); }
-:fullscreen .cb-btn, .tv .cb-btn { display: none; }
+:fullscreen #fsBtn, .tv #fsBtn { display: none; }
+#langToggle b { color: var(--green); }
 
 .cb-main { display: grid; gap: clamp(12px, 1.4vw, 24px); padding: 4px clamp(16px, 3vw, 48px) 12px; grid-template-columns: 1fr; }
 @media (min-width: 1000px) { .cb-main { grid-template-columns: 1.55fr 1fr; align-items: start; } }
