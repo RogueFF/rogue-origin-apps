@@ -28,7 +28,7 @@
   --cs-tint: 22%;
 }
 .consign *, .consign *::before, .consign *::after { box-sizing: border-box; }
-.consign button, .consign input, .consign select, .consign textarea { font: inherit; color: inherit; }
+:where(.consign) :where(button, input, select, textarea) { font: inherit; color: inherit; }
 
 /* ---------- top bar ---------- */
 .cs-top {
@@ -204,9 +204,10 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(150%);
   max-width: calc(100vw - 32px); padding: 14px 20px; border-radius: var(--radius-md);
   background: var(--header-bg); color: var(--header-text); font-weight: 700; font-size: 18px;
-  box-shadow: var(--shadow-lg); transition: transform 0.2s ease; z-index: 50; pointer-events: none;
+  box-shadow: var(--shadow-lg); transition: transform 0.2s ease, opacity 0.2s ease; z-index: 50; pointer-events: none;
+  opacity: 0; visibility: hidden;
 }
-.cs-toast.show { transform: translateX(-50%) translateY(0); }
+.cs-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
 .cs-toast.warn { background: var(--st-dropped); color: #1a1a1a; }
 .cs-toast.err { background: var(--st-price); color: #fff; }
 
