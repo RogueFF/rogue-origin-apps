@@ -141,3 +141,99 @@ test('saveDropoff rejects an unknown farm and an empty line list', async () => {
   const farm = await seedFarm(env);
   await assert.rejects(handleConsignD1(post('saveDropoff', { farm_id: farm.id, lines: [] }), env, {}), /line/i);
 });
+
+async function dropTwo(env) {
+  const farm = await seedFarm(env);
+  await price(env, farm.id, 'Alpha', 'tops', 10);
+  await price(env, farm.id, 'Alpha', 'smalls', 4);
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'Alpha', type: 'tops' }, { cultivar: 'Alpha', type: 'smalls', intake_lbs: 40 }] });
+  return { farm, tops: d.lots[0], smalls: d.lots[1] };
+}
+const goodRun = { pulled_lbs: 100, final_lbs: 80, to_smalls_lbs: 10, biomass_lbs: 8, mold_lbs: 2, finishes_lot: true };
+
+test('setWeight fills a late weight and stamps weighed_at', async () => {
+  const { env } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  const { lot } = await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100, actor: 'T' });
+  assert.equal(lot.intake_lbs, 100);
+  assert.ok(lot.weighed_at);
+  assert.equal(lot.money.status, 'weighed');
+});
+
+test('a lot cannot be screened before it is weighed', async () => {
+  const { env } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await assert.rejects(handleConsignD1(post('saveScreenRun', { lot_id: tops.id, ...goodRun }), env, {}), /weigh/i);
+});
+
+test('a whole-lot run closes the lot and sets the money', async () => {
+  const { env } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const { lot } = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  assert.equal(lot.money.status, 'closed');
+  assert.equal(lot.money.owed, 840);
+  assert.equal(lot.runs[0].diff_lbs, 0);
+});
+
+test('outputs that do not add up are refused, and the message says by how much', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await assert.rejects(handleConsignD1(post('saveScreenRun', { lot_id: tops.id, ...goodRun, final_lbs: 70 }), env, {}), /10/);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_screen_runs').get().n, 0);
+});
+
+test('a small difference inside the tolerance is saved and recorded', async () => {
+  const { env } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const { lot } = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, final_lbs: 79.4 });
+  assert.equal(lot.runs[0].diff_lbs, 0.6);
+});
+
+test('split screening: two runs, the second closes the lot', async () => {
+  const { env } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  const a = await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 40, final_lbs: 30, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1, finishes_lot: false });
+  assert.equal(a.lot.money.status, 'screening');
+  assert.equal(a.lot.money.remainder_lbs, 60);
+  const b = await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1, finishes_lot: true });
+  assert.equal(b.lot.money.status, 'closed');
+  assert.equal(b.lot.money.owed, 80 * 10 + 10 * 4);
+});
+
+test('cannot pull more than is left, screen a closed lot, or turn smalls to smalls', async () => {
+  const { env } = freshConsignDb();
+  const { tops, smalls } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await assert.rejects(handleConsignD1(post('saveScreenRun', { lot_id: tops.id, ...goodRun, pulled_lbs: 150, final_lbs: 130 }), env, {}), /left|more than/i);
+  await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun });
+  await assert.rejects(handleConsignD1(post('saveScreenRun', { lot_id: tops.id, ...goodRun }), env, {}), /closed/i);
+  await assert.rejects(handleConsignD1(post('saveScreenRun', { lot_id: smalls.id, pulled_lbs: 40, final_lbs: 30, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1 }), env, {}), /smalls/i);
+});
+
+test('resending a run with the same client_key does not double it', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_screen_runs').get().n, 1);
+});
+
+test('setWeight correction is refused below what was already pulled, and is logged', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { tops } = await dropTwo(env);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
+  await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 40, final_lbs: 30, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1 });
+  await assert.rejects(handleConsignD1(post('setWeight', { lot_id: tops.id, intake_lbs: 20 }), env, {}), /pulled/i);
+  await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 90, actor: 'T' });
+  const h = sqlite.prepare("SELECT * FROM cl_history WHERE tbl = 'cl_lots' AND action = 'setWeight' ORDER BY id DESC").get();
+  assert.match(h.before_json, /100/);
+  assert.match(h.after_json, /90/);
+  assert.equal(h.actor, 'T');
+});
+
+export { dropTwo, goodRun };

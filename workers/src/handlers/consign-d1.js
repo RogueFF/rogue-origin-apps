@@ -166,6 +166,67 @@ async function saveDropoff(body, env) {
   return dropoffDetail(env, row.id);
 }
 
+const nonNeg = (v, label) => {
+  const n = v === '' || v == null ? 0 : Number(v);
+  if (!Number.isFinite(n) || n < 0) throw bad(`${label} cannot be negative`);
+  return n;
+};
+const history = (env, tbl, rowId, action, before, after, actor) => env.DB.prepare(
+  'INSERT INTO cl_history (tbl, row_id, action, before_json, after_json, actor) VALUES (?, ?, ?, ?, ?, ?)'
+).bind(tbl, rowId, action, JSON.stringify(before ?? null), JSON.stringify(after ?? null), clean(actor) || 'staff');
+
+async function oneLot(env, lotId) {
+  const [lot] = await loadLots(env, 'l.id = ?', [Number(lotId)]);
+  if (!lot) throw createError('NOT_FOUND', 'Lot not found');
+  return lot;
+}
+const liveLot = (lot) => { if (lot.voided_at) throw bad('This lot was voided'); return lot; };
+
+async function setWeight(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  const intake = posNum(body.intake_lbs, 'Weight');
+  if (lot.closed_at) throw bad('This lot is closed');
+  if (intake + screenTolerance(intake) < lot.money.pulled_lbs) {
+    throw bad(`Weight cannot be below the ${lot.money.pulled_lbs} lb already pulled for screening`);
+  }
+  await env.DB.batch([
+    env.DB.prepare("UPDATE cl_lots SET intake_lbs = ?, weighed_at = COALESCE(weighed_at, datetime('now')) WHERE id = ?").bind(intake, lot.id),
+    history(env, 'cl_lots', lot.id, 'setWeight', { intake_lbs: lot.intake_lbs }, { intake_lbs: intake }, body.actor),
+  ]);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+async function saveScreenRun(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  const key = clean(body.client_key) || crypto.randomUUID();
+  const dup = await env.DB.prepare('SELECT id FROM cl_screen_runs WHERE client_key = ?').bind(key).first();
+  if (dup) return ok({ lot, duplicate: true });
+
+  if (lot.intake_lbs == null) throw bad('Weigh this lot before screening it');
+  if (lot.closed_at) throw bad('This lot is closed');
+  const run = {
+    pulled_lbs: posNum(body.pulled_lbs, 'Pounds pulled'),
+    final_lbs: nonNeg(body.final_lbs, 'Final weight'),
+    to_smalls_lbs: nonNeg(body.to_smalls_lbs, 'Turned to smalls'),
+    biomass_lbs: nonNeg(body.biomass_lbs, 'Biomass'),
+    mold_lbs: nonNeg(body.mold_lbs, 'Mold'),
+  };
+  if (lot.type === 'smalls' && run.to_smalls_lbs > 0) throw bad('A smalls lot cannot turn into smalls');
+  const left = lot.money.remainder_lbs;
+  if (run.pulled_lbs > left + screenTolerance(lot.intake_lbs)) {
+    throw bad(`Only ${left} lb is left to screen, cannot pull more than that`);
+  }
+  const chk = checkRun(run, lot.type);
+  if (!chk.ok) throw bad(`Outputs are off by ${chk.diff} lb (allowed ${chk.tolerance} lb)`);
+
+  const stmts = [env.DB.prepare(
+    'INSERT INTO cl_screen_runs (lot_id, pulled_lbs, final_lbs, to_smalls_lbs, biomass_lbs, mold_lbs, diff_lbs, note, client_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(lot.id, run.pulled_lbs, run.final_lbs, run.to_smalls_lbs, run.biomass_lbs, run.mold_lbs, chk.diff, clean(body.note) || null, key)];
+  if (body.finishes_lot) stmts.push(env.DB.prepare("UPDATE cl_lots SET closed_at = datetime('now') WHERE id = ?").bind(lot.id));
+  await env.DB.batch(stmts);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
 export async function handleConsignD1(request, env, ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
@@ -177,6 +238,8 @@ export async function handleConsignD1(request, env, ctx) {
     case 'savePricePoint': return savePricePoint(body, env);
     case 'saveDropoff': return saveDropoff(body, env);
     case 'dropoff': return dropoffDetail(env, Number(body.dropoff_id));
+    case 'setWeight': return setWeight(body, env);
+    case 'saveScreenRun': return saveScreenRun(body, env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }
