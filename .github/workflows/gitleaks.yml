@@ -36,4 +36,4 @@ jobs:
           ./gitleaks version
 
       - name: Scan full history
-        run: ./gitleaks git --log-opts="--all" --redact --no-banner --exit-code 1 --config .gitleaks.toml .
+        run: ./gitleaks git --log-opts="--all" --redact --verbose --no-banner --exit-code 1 --config .gitleaks.toml .
