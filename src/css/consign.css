@@ -1,0 +1,218 @@
+/* Consignment lot ledger, staff page. Colours come from shared-base.css variables;
+   the step colours are defined once here, with a dark-theme override. */
+
+.consign {
+  --st-dropped: #b7791f;   /* amber: dropped off, waiting to be weighed */
+  --st-weighed: #2b6cb0;   /* blue: weighed, waiting on screening */
+  --st-screening: #6b46c1; /* violet: partly screened */
+  --st-closed: #2f855a;    /* green: closed */
+  --st-price: #c53030;     /* red: needs a price */
+  --st-voided: #718096;
+  --cs-tint: 14%;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui, 'Outfit', system-ui, sans-serif);
+  font-size: 18px;
+  line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+}
+[data-theme="dark"] .consign {
+  --st-dropped: #f6ad55;
+  --st-weighed: #63b3ed;
+  --st-screening: #b794f4;
+  --st-closed: #68d391;
+  --st-price: #fc8181;
+  --st-voided: #a0aec0;
+  --cs-tint: 22%;
+}
+.consign *, .consign *::before, .consign *::after { box-sizing: border-box; }
+.consign button, .consign input, .consign select, .consign textarea { font: inherit; color: inherit; }
+
+/* ---------- top bar ---------- */
+.cs-top {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--header-bg); color: var(--header-text);
+}
+.cs-title { flex: 1 1 auto; margin: 0; font-family: var(--font-display, serif); font-size: 24px; font-weight: 400; min-width: 0; }
+.cs-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cs-topbtn, .cs-held {
+  min-height: 44px; padding: 0 14px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.35); background: transparent; color: var(--header-text) !important;
+  cursor: pointer; font-size: 16px;
+}
+.cs-topbtn:focus-visible, .cs-btn:focus-visible, .cs-tap:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+body[data-owner="1"] #ownerBtn { background: var(--gold); color: #1a1a1a !important; border-color: var(--gold); }
+.cs-held { background: var(--st-dropped); border-color: var(--st-dropped); color: #1a1a1a !important; font-weight: 700; }
+
+/* ---------- layout ---------- */
+.cs-view { max-width: 1100px; margin: 0 auto; padding: 16px 16px 120px; outline: none; }
+.cs-h2 { font-family: var(--font-display, serif); font-weight: 400; font-size: 28px; margin: 8px 0 16px; }
+.cs-h3 { font-size: 20px; font-weight: 700; margin: 0; }
+.cs-muted { color: var(--text-secondary); }
+.cs-loading { padding: 24px 0; }
+.cs-stack { display: grid; gap: 16px; }
+.cs-grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+
+.cs-card {
+  background: var(--bg-card); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.cs-card.st { border-left: 8px solid var(--st); }
+.cs-cardhead {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin: -16px -16px 12px; padding: 12px 16px; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: color-mix(in srgb, var(--st, var(--border)) var(--cs-tint), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--st, var(--border)) 40%, transparent);
+}
+.cs-count { font-family: var(--font-mono, monospace); font-size: 22px; font-weight: 700; }
+.st-dropped { --st: var(--st-dropped); }
+.st-weighed { --st: var(--st-weighed); }
+.st-screening { --st: var(--st-screening); }
+.st-closed { --st: var(--st-closed); }
+.st-price { --st: var(--st-price); }
+.st-voided { --st: var(--st-voided); }
+
+/* ---------- buttons ---------- */
+.cs-btn {
+  min-height: 48px; padding: 10px 18px; border-radius: var(--radius-md);
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text);
+  cursor: pointer; font-size: 18px; font-weight: 600; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+}
+.cs-btn.primary { background: var(--ro-green, #2d3a2e); border-color: var(--ro-green, #2d3a2e); color: #fff; }
+[data-theme="dark"] .cs-btn.primary { background: var(--green, #668971); border-color: var(--green, #668971); color: #0f1210; }
+.cs-btn.danger { border-color: var(--st-price); color: var(--st-price); }
+.cs-btn.ghost { background: transparent; }
+.cs-btn.small { min-height: 44px; padding: 6px 12px; font-size: 16px; }
+.cs-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.cs-btn.big { min-height: 88px; font-size: 22px; border-radius: var(--radius-lg); width: 100%; }
+.cs-row-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
+.cs-row-btns > .cs-btn { flex: 1 1 160px; }
+.cs-actions { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); margin-bottom: 20px; }
+
+/* tappable row inside a card */
+.cs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cs-tap {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; width: 100%;
+  min-height: 56px; padding: 10px 12px; border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text);
+  text-decoration: none; text-align: left; cursor: pointer; font-size: 18px;
+}
+a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
+.cs-tap.static { cursor: default; }
+.cs-tap b { font-weight: 700; }
+.cs-tap .cs-right { margin-left: auto; font-family: var(--font-mono, monospace); font-weight: 700; }
+
+.cs-chip {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border-radius: 999px;
+  border: 2px solid var(--st, var(--border-strong));
+  background: color-mix(in srgb, var(--st, transparent) var(--cs-tint), transparent);
+  font-size: 15px; font-weight: 700; white-space: nowrap;
+}
+.cs-chip.est { --st: var(--st-dropped); font-weight: 600; }
+.cs-chip.noprice { --st: var(--st-price); }
+
+/* ---------- farm cards on home ---------- */
+.cs-farm { display: block; text-decoration: none; color: var(--text); }
+.cs-farm .cs-big { font-family: var(--font-mono, monospace); font-size: 34px; font-weight: 700; margin: 4px 0; }
+.cs-credit { color: var(--st-closed); }
+
+/* ---------- forms ---------- */
+.cs-field { display: grid; gap: 6px; margin: 12px 0; }
+.cs-label { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+.cs-input {
+  width: 100%; min-height: 48px; padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 2px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 18px;
+}
+.cs-input:focus { outline: none; border-color: var(--gold); }
+.cs-num { font-family: var(--font-mono, monospace); font-size: 24px; font-weight: 700; min-height: 60px; text-align: right; }
+.cs-check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.cs-check input { width: 26px; height: 26px; accent-color: var(--ro-green, #2d3a2e); }
+.cs-error { color: var(--st-price); font-weight: 600; margin: 8px 0; }
+.cs-errcard { border-color: var(--st-price); }
+
+/* ---------- numbered steps ---------- */
+.cs-step { position: relative; }
+.cs-stephead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.cs-stepnum {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--st, var(--ro-green, #2d3a2e)); color: #fff; font-weight: 700; font-size: 22px;
+}
+[data-theme="dark"] .cs-stepnum { color: #0f1210; }
+.cs-farmpick { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+
+/* dropoff grid row */
+.cs-crow { border: 2px solid var(--border-strong); border-radius: var(--radius-lg); padding: 12px; background: var(--bg); }
+.cs-crowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.cs-crowname { font-size: 22px; font-weight: 700; }
+.cs-types { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+.cs-type { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.cs-type.off { opacity: 0.7; }
+.cs-part { display: grid; gap: 6px; }
+.cs-part + .cs-part { border-top: 1px dashed var(--border-strong); padding-top: 8px; }
+.cs-price { font-size: 16px; color: var(--text-secondary); }
+.cs-termbtn {
+  min-height: 44px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 700;
+  border: 2px solid var(--border-strong); background: transparent; color: var(--text); text-align: center;
+}
+.cs-termbtn.sold { border-color: var(--st-screening); background: color-mix(in srgb, var(--st-screening) var(--cs-tint), transparent); }
+.cs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-chipbtn { min-height: 48px; padding: 6px 16px; border-radius: 999px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 18px; font-weight: 600; }
+.cs-chipbtn.on { border-color: var(--ro-green, #2d3a2e); background: color-mix(in srgb, var(--green, #668971) 25%, transparent); }
+.cs-other { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.cs-other .cs-input { flex: 1 1 200px; width: auto; }
+.cs-summary { width: 100%; border-collapse: collapse; font-size: 18px; }
+.cs-summary td { padding: 8px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.cs-summary td.n { text-align: right; font-family: var(--font-mono, monospace); font-weight: 700; white-space: nowrap; }
+
+/* ---------- screening ---------- */
+.cs-band { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cs-band > div { border-radius: var(--radius-md); padding: 12px; background: color-mix(in srgb, var(--st, var(--border)) var(--cs-tint), transparent); border: 2px solid var(--st, var(--border-strong)); }
+.cs-band .cs-big { font-family: var(--font-mono, monospace); font-size: 32px; font-weight: 700; }
+.cs-outs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.cs-checkbar { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); font-size: 20px; font-weight: 700; border: 2px solid var(--st); background: color-mix(in srgb, var(--st) var(--cs-tint), transparent); }
+.cs-checkbar.good { --st: var(--st-closed); }
+.cs-checkbar.bad { --st: var(--st-price); }
+.cs-after { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 16px; color: var(--text-secondary); }
+.cs-after b { color: var(--text); font-family: var(--font-mono, monospace); }
+
+/* ---------- farm page ---------- */
+.cs-banner { text-align: center; }
+.cs-banner .cs-big { font-family: var(--font-mono, monospace); font-size: 48px; font-weight: 700; line-height: 1.1; }
+.cs-lot { border-top: 1px solid var(--border); padding: 12px 0; display: grid; gap: 6px; }
+.cs-lot:first-of-type { border-top: 0; }
+.cs-lothead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cs-lotbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-prices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.cs-voidedrow { opacity: 0.55; text-decoration: line-through; }
+.cs-owner-only { display: none !important; }
+body[data-owner="1"] .cs-owner-only { display: revert !important; }
+
+/* ---------- dialog + toast ---------- */
+.cs-dialog { border: 0; border-radius: var(--radius-lg); padding: 0; width: min(560px, calc(100vw - 32px)); background: var(--bg-card); color: var(--text); box-shadow: var(--shadow-elevated); }
+[data-theme="dark"] .cs-dialog { background: var(--bg-dark, #0f1210); }
+.cs-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.cs-dialog-form { padding: 20px; }
+.cs-dialog h2 { margin: 0 0 8px; font-size: 22px; }
+.cs-toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(150%);
+  max-width: calc(100vw - 32px); padding: 14px 20px; border-radius: var(--radius-md);
+  background: var(--header-bg); color: var(--header-text); font-weight: 700; font-size: 18px;
+  box-shadow: var(--shadow-lg); transition: transform 0.2s ease; z-index: 50; pointer-events: none;
+}
+.cs-toast.show { transform: translateX(-50%) translateY(0); }
+.cs-toast.warn { background: var(--st-dropped); color: #1a1a1a; }
+.cs-toast.err { background: var(--st-price); color: #fff; }
+
+@media (max-width: 599px) {
+  .cs-title { font-size: 20px; flex-basis: 100%; order: -1; }
+  .cs-types { grid-template-columns: 1fr; }
+  .cs-band .cs-big { font-size: 26px; }
+  .cs-banner .cs-big { font-size: 38px; }
+}
