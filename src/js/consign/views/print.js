@@ -30,7 +30,8 @@ function qrSvg(text) {
 
 export function mount(root, { kind, farmId, dropoffId }) {
   const s = { html: null, titleKey: '', titleName: null, back: '#/', error: null, empty: false };
-  const photoHref = kind === 'screen' ? `#/photo/screen/${dropoffId}` : `#/photo/dropoff${farmId ? `/${farmId}` : ''}`;
+  let printedIds = '';
+  const photoHash = () => (kind === 'screen' ? `photo/screen/${dropoffId}${printedIds ? `/${printedIds}` : ''}` : `photo/dropoff${farmId ? `/${farmId}` : ''}`);
   const title = () => `${t(s.titleKey)}: ${s.titleName == null ? t('blankSheet') : s.titleName}`;
   const area = document.getElementById('printArea');
 
@@ -52,7 +53,7 @@ export function mount(root, { kind, farmId, dropoffId }) {
         <h2 class="cs-h3">${esc(title())}</h2>
         <p class="cs-muted">${esc(t('printHint'))}</p>
         <div class="cs-row-btns"><a class="cs-btn ghost" href="${s.back}">${esc(t('cancel'))}</a>
-          <a class="cs-btn" id="photoAfterPrint" href="${photoHref}">📷 ${esc(t('photoSheet'))}</a>
+          <a class="cs-btn" id="photoAfterPrint" href="#/${photoHash()}">📷 ${esc(t('photoSheet'))}</a>
           <button type="button" class="cs-btn primary big" id="printBtn">${esc(t('printBtn'))}</button></div>
       </section>
       <div class="sh-preview" id="sheetPreview" aria-label="${esc(title())}"><div class="sh-paper">${s.html}</div></div>
@@ -85,10 +86,12 @@ export function mount(root, { kind, farmId, dropoffId }) {
         s.titleKey = 'printScreenSheet'; s.titleName = d.dropoff.farm_name;
         const lots = d.lots.filter((l) => !l.voided_at);
         if (!screenableLots(lots).length) { s.empty = true; return render(); }
+        // The QR carries the printed lots, in order, so the reader numbers rows the same way.
+        printedIds = screenableLots(lots).map((l) => l.id).join('.');
         s.html = screenSheet({
           dropoff: { farm_name: d.dropoff.farm_name, date: when(d.dropoff.dropped_at, { time: false }), dropped_by: d.dropoff.dropped_by },
           lots,
-          qrSvg: qrSvg(photoUrl(`photo/screen/${dropoffId}`)),
+          qrSvg: qrSvg(photoUrl(photoHash())),
           code: sheetCode('screen', dropoffId),
         });
       }

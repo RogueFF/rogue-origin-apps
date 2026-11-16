@@ -197,7 +197,7 @@ test('rule 8: no model keys pass through', () => {
     rows: [{ cultivar: 'Alpha', tops: { value: 1, unsure: false, html: '<b>' }, smalls: {}, price: 99, lot_id: 5 }],
   };
   const r = normalizeSheetRead('dropoff', evil, CTX);
-  assert.deepEqual(Object.keys(r).sort(), ['date', 'dropped_by', 'farm_id', 'kind', 'note', 'rows', 'warnings']);
+  assert.deepEqual(Object.keys(r).sort(), ['date', 'dropped_by', 'farm_from', 'farm_id', 'kind', 'note', 'rows', 'warnings']);
   assert.deepEqual(Object.keys(r.rows[0]).sort(), ['cultivar', 'cultivar_known', 'note', 'smalls', 'tops']);
   assert.deepEqual(Object.keys(r.rows[0].tops).sort(), ['on', 'unsure', 'value']);
   const s = normalizeSheetRead('screen', { rows: [{ index: 1, pulled: box(1), lot_id: 999, extra: 1 }] }, SCTX);
@@ -209,4 +209,24 @@ test('an unknown kind is unreadable', () => {
   const r = normalizeSheetRead('payments', { rows: [{}] }, CTX);
   assert.deepEqual(r.warnings, ['unreadable']);
   assert.deepEqual(r.rows, []);
+});
+
+test('farm_from says where the farm came from: the printed code, the handwriting, or nowhere', () => {
+  assert.equal(normalizeSheetRead('dropoff', { farm: 'Farm B', code: 'DROP-F3', rows: [] }, CTX).farm_from, 'name');
+  assert.equal(normalizeSheetRead('dropoff', { farm: 'Farmm', code: 'DROP-F3', rows: [] }, CTX).farm_from, 'code');
+  assert.equal(normalizeSheetRead('dropoff', { farm: 'Farmm', rows: [] }, CTX).farm_from, null);
+  assert.equal(normalizeSheetRead('screen', { rows: [] }, SCTX).farm_from, null);
+});
+
+test('a screen row the model could not read at all comes back, every box unsure', () => {
+  const r = normalizeSheetRead('screen', { rows: [{ index: 1, pulled: box(null, { unsure: true }), final: box(null, { unsure: true }) }] }, SCTX);
+  assert.equal(r.rows.length, 1);
+  assert.deepEqual(r.rows[0].pulled, { value: null, unsure: true });
+});
+
+test('a printed lot that is no longer open takes no numbers', () => {
+  const lots = [{ ...LOTS[0], open: false }, LOTS[1]];
+  const r = normalizeSheetRead('screen', { rows: [{ index: 1, pulled: box(5) }, { index: 2, pulled: box(5) }] }, { ...SCTX, lots });
+  assert.deepEqual(r.rows.map((x) => x.lot_id), [12]);
+  assert.deepEqual(r.warnings, ['lot_changed']);
 });

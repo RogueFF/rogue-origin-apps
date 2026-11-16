@@ -126,7 +126,7 @@ test('readSheet refuses bad input before any fetch', async () => {
   const { env, sqlite, a, dropoff } = await seeded();
   await withFetch(() => reply({}), async (calls) => {
     await assert.rejects(handleConsignD1(post('readSheet', { kind: 'dropoff', image_b64: IMG, media_type: 'image/jpeg' }, { auth: false }), env, {}), /Password required/);
-    const bigB64 = 'A'.repeat(Math.ceil((4 * 1024 * 1024 + 4) / 3) * 4);
+    const bigB64 = 'A'.repeat(Math.ceil((3.75 * 1024 * 1024 + 4) / 3) * 4);
     await assert.rejects(handleConsignD1(post('readSheet', { kind: 'dropoff', image_b64: bigB64, media_type: 'image/jpeg' }), env, {}), /too large/i);
     await assert.rejects(handleConsignD1(post('readSheet', { kind: 'dropoff', image_b64: IMG, media_type: 'image/gif' }), env, {}), /JPEG/);
     await assert.rejects(handleConsignD1(post('readSheet', { kind: 'dropoff', image_b64: 'not base64!', media_type: 'image/jpeg' }), env, {}), /photo/i);
@@ -209,4 +209,46 @@ test('prompt builders are pure and list only what ctx gives them', () => {
   assert.match(s.user, /1\. Alpha \(smalls\), before 12\.5 lb/);
   assert.ok(!/Farm B|Gamma|Beta/.test(s.system + s.user));
   assert.equal(p1.schema.additionalProperties, false);
+});
+
+test('readSheet screen with the printed lot ids: numbered as printed, even after a lot is weighed or closed', async () => {
+  const { env, dropoff, lots } = await seeded();
+  const [alphaTops, alphaSmalls, beta] = lots;
+  // printed when only the two Alpha lots were open; Beta was weighed later, Alpha smalls closed
+  await call(env, 'setWeight', { lot_id: beta.id, intake_lbs: 30 });
+  await call(env, 'saveScreenRun', { lot_id: alphaSmalls.id, pulled_lbs: 40, final_lbs: 40, finishes_lot: true, client_key: 'r1' });
+  const model = { code: `SCREEN-D${dropoff.id}`, rows: [
+    { index: 1, cultivar: 'Alpha', type: 'tops', pulled: box(100), final: box(100), to_smalls: box(null), biomass: box(null), mold: box(null), finished: { value: true, unsure: false } },
+    { index: 2, cultivar: 'Alpha', type: 'smalls', pulled: box(40), final: box(40), to_smalls: box(null), biomass: box(null), mold: box(null), finished: { value: true, unsure: false } },
+  ] };
+  await withFetch(() => reply(model), async (calls) => {
+    const { read } = await call(env, 'readSheet', { kind: 'screen', image_b64: IMG, media_type: 'image/jpeg', dropoff_id: dropoff.id, lot_ids: [alphaTops.id, alphaSmalls.id] });
+    const text = calls[0].body.messages[0].content.find((c) => c.type === 'text').text;
+    assert.match(text, /1\. Alpha \(tops\)/);
+    assert.match(text, /2\. Alpha \(smalls\)/);
+    assert.ok(!text.includes('Beta'), 'a lot weighed after printing is not a printed row');
+    assert.deepEqual(read.rows.map((r) => r.lot_id), [alphaTops.id]);
+    assert.deepEqual(read.warnings, ['lot_changed']);
+  });
+});
+
+test('readSheet refuses printed lot ids that are not this dropoff\'s', async () => {
+  const { env, dropoff, a } = await seeded();
+  const { lots: other } = await call(env, 'saveDropoff', { farm_id: a.id, client_key: 'd2', lines: [{ cultivar: 'Beta', type: 'tops', intake_lbs: 5 }] });
+  await withFetch(() => reply({}), async (calls) => {
+    for (const ids of [[other[0].id], ['x'], Array.from({ length: 60 }, (_, i) => i + 1)]) {
+      await assert.rejects(handleConsignD1(post('readSheet', { kind: 'screen', image_b64: IMG, media_type: 'image/jpeg', dropoff_id: dropoff.id, lot_ids: ids }), env, {}), /sheet/i);
+    }
+    assert.equal(calls.length, 0);
+  });
+});
+
+test('readSheet dropoff says when the farm came from handwriting', async () => {
+  const { env, a } = await seeded();
+  const model = { code: null, farm: 'Farm A', date: null, dropped_by: null, note: null, rows: [] };
+  await withFetch(() => reply(model), async () => {
+    const { read } = await call(env, 'readSheet', { kind: 'dropoff', image_b64: IMG, media_type: 'image/jpeg' });
+    assert.equal(read.farm_id, a.id);
+    assert.equal(read.farm_from, 'name');
+  });
 });

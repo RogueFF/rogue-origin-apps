@@ -393,3 +393,69 @@ test.describe('Consignment photo of a sheet', () => {
     expect(fake.posts).toEqual([]);
   });
 });
+
+test.describe('Consignment photo: review findings', () => {
+  test('an abandoned review does not save when a later review saves (one run per lot)', async ({ page }) => {
+    const read = { ...SCREEN_READ, rows: [SCREEN_READ.rows[0], { ...SCREEN_READ.rows[1], biomass: v(8) }] };
+    const fake = makeFake({ lots: SCREEN_LOTS(), read });
+    await open(page, { hash: '#/photo/screen/5', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('#saveAllBtn')).toBeEnabled();
+    await page.goto(`${PAGE}#/`); // leave (the dirty prompt is accepted)
+    await page.goto(`${PAGE}#/photo/screen/5`);
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await page.locator('#saveAllBtn').click();
+    await expect(page.locator('#toast')).toHaveText('All saved');
+    expect(fake.posts.filter((p) => p.action === 'saveScreenRun').map((p) => p.body.lot_id)).toEqual([10, 13]);
+  });
+
+  test('an abandoned photo prefill is not saved by a later hand-entered dropoff', async ({ page }) => {
+    const fake = makeFake({ read: { ...DROP_READ, rows: [{ ...DROP_READ.rows[0], tops: { value: 52, unsure: false, on: true } }] } });
+    await open(page, { hash: '#/photo/dropoff/1', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('#saveBtn')).toBeEnabled();
+    await page.goto(`${PAGE}#/`);
+    await page.goto(`${PAGE}#/dropoff`);
+    await page.locator('[data-farm="1"]').click();
+    await page.getByRole('button', { name: '＋ Gamma' }).click();
+    await page.locator('[data-row="Gamma"] [data-type="tops"] input[data-lbs]').fill('7');
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    const saves = fake.posts.filter((p) => p.action === 'saveDropoff');
+    expect(saves).toHaveLength(1);
+    expect(saves[0].body.source).toBeUndefined();
+    expect(saves[0].body.lines.map((l) => l.cultivar)).toEqual(['Gamma']);
+  });
+
+  test('a farm read from handwriting is marked Check until confirmed', async ({ page }) => {
+    const fake = makeFake({ read: { ...DROP_READ, farm_from: 'name', rows: [{ ...DROP_READ.rows[0], tops: { value: 52, unsure: false, on: true } }] } });
+    await open(page, { hash: '#/photo/dropoff', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('#farmName')).toHaveText('Farm A');
+    await expect(page.locator('[data-okmark="farm"]')).toBeVisible();
+    await expect(page.locator('#saveBtn')).toBeDisabled();
+    await page.locator('[data-okmark="farm"]').click();
+    await expect(page.locator('#saveBtn')).toBeEnabled();
+  });
+
+  test('ticking a type off and on again does not clear an unsure weight', async ({ page }) => {
+    const fake = makeFake({ read: { ...DROP_READ, rows: [DROP_READ.rows[0]] } });
+    await open(page, { hash: '#/photo/dropoff/1', fake });
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    const box = page.locator('[data-row="Alpha"] [data-on$="|tops"]');
+    await box.uncheck();
+    await box.check();
+    await expect(page.locator('.cs-markword')).toHaveCount(1);
+    await expect(page.locator('#saveBtn')).toBeDisabled();
+  });
+
+  test('screening sheet opened from its QR numbers rows from the printed lots', async ({ page }) => {
+    const fake = makeFake({ lots: SCREEN_LOTS(), read: SCREEN_READ });
+    await open(page, { hash: '#/print/screen/5', fake });
+    await expect(page.locator('#photoAfterPrint')).toHaveAttribute('href', '#/photo/screen/5/10.11.13');
+    await page.goto(`${PAGE}#/photo/screen/5/10.11.13`);
+    await page.locator('#choosePhoto').setInputFiles(await makePhoto(page, 800, 600));
+    await expect(page.locator('[data-review]')).toHaveCount(3);
+    expect(fake.reads[0]).toMatchObject({ kind: 'screen', dropoff_id: 5, lot_ids: [10, 11, 13] });
+  });
+});

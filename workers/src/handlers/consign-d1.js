@@ -403,7 +403,8 @@ async function openWork(env) {
 /* ---------- readSheet: read a photo of a printed sheet. Never writes. ---------- */
 
 const SHEET_MEDIA = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const SHEET_MAX_BYTES = 4 * 1024 * 1024;
+// The API takes images up to 5 MB of base64; 3.75 MB decoded stays under that.
+const SHEET_MAX_BYTES = 3.75 * 1024 * 1024;
 const SHEET_MODEL = 'claude-sonnet-5-5';
 const SHEET_TIMEOUT_MS = 25000;
 // Models that take server-side refusal fallbacks (fallbacks: "default").
@@ -483,7 +484,7 @@ async function readSheet(body, env) {
   if (!SHEET_MEDIA.has(body.media_type)) throw bad('The photo must be a JPEG, PNG or WebP image');
   const image = typeof body.image_b64 === 'string' ? body.image_b64 : '';
   if (!image) throw bad('A photo is required');
-  if ((image.length * 3) / 4 > SHEET_MAX_BYTES) throw bad('The photo is too large (4 MB at most)');
+  if ((image.length * 3) / 4 > SHEET_MAX_BYTES) throw bad('The photo is too large');
   if (image.length % 4 !== 0 || !B64.test(image)) throw bad('The photo could not be read as an image');
 
   const farms = (await env.DB.prepare('SELECT id, name FROM cl_farms WHERE active = 1 ORDER BY name').all()).results;
@@ -503,12 +504,29 @@ async function readSheet(body, env) {
       'SELECT d.id, d.voided_at, f.id AS farm_id, f.name AS farm_name FROM cl_dropoffs d JOIN cl_farms f ON f.id = d.farm_id WHERE d.id = ?'
     ).bind(id).first() : null;
     if (!d || d.voided_at) throw bad('Unknown dropoff');
-    const lots = screenable(await loadLots(env, 'l.dropoff_id = ? AND l.voided_at IS NULL', [id]));
-    if (!lots.length) throw bad('Nothing on this dropoff is ready to screen');
+    const all = await loadLots(env, 'l.dropoff_id = ?', [id]);
+    const open = new Set(screenable(all.filter((l) => !l.voided_at)).map((l) => l.id));
+    let printed;
+    if (body.lot_ids != null) {
+      // The sheet's QR carries the lots it printed, in order: number the rows from those,
+      // so a lot weighed or closed since printing cannot shift the rows onto other lots.
+      const ids = Array.isArray(body.lot_ids) ? body.lot_ids : [];
+      const byId = new Map(all.map((l) => [l.id, l]));
+      if (!ids.length || ids.length > 50 || ids.some((x) => !Number.isInteger(x) || !byId.has(x)) || new Set(ids).size !== ids.length) {
+        throw bad('This sheet does not match this dropoff');
+      }
+      printed = ids.map((x) => byId.get(x));
+    } else {
+      printed = all.filter((l) => open.has(l.id));
+    }
+    if (!printed.some((l) => open.has(l.id))) throw bad('Nothing on this dropoff is ready to screen');
     ctx = {
       farms: [{ id: d.farm_id, name: d.farm_name }],
       cultivars: [],
-      lots: lots.map((l) => ({ id: l.id, cultivar: l.cultivar, type: l.type, intake_lbs: l.intake_lbs, remainder_lbs: l.money.remainder_lbs })),
+      lots: printed.map((l) => ({
+        id: l.id, cultivar: l.cultivar, type: l.type, term: l.term, intake_lbs: l.intake_lbs,
+        remainder_lbs: l.money.remainder_lbs, open: open.has(l.id),
+      })),
       dropoff_id: id,
     };
   }

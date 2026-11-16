@@ -16,11 +16,11 @@ import { go } from '../nav.js';
 const TYPES = ['tops', 'smalls'];
 let uidSeq = 0;
 
-export function mount(root, { prefill = null, farmId = null } = {}) {
+export function mount(root, { prefill = null, farmId = null, farmCheck = false } = {}) {
   const s = {
     farms: null, farm: null, detail: null, error: null, loadingFarm: false,
     rows: [], droppedBy: actor(), note: '', key: newKey(), saving: false, saveError: '', saved: false,
-    fromPhoto: !!prefill, pending: prefill,
+    fromPhoto: !!prefill, pending: prefill, farmMark: !!farmCheck,
   };
 
   const priceOf = (cultivar, type) => {
@@ -63,7 +63,8 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
     return lines;
   }
   /** Boxes still marked "Check", plus photo rows with no cultivar name yet. */
-  const marksLeft = () => s.rows.reduce((n, r) => n + (r.marks ? ['name', ...TYPES].filter((k) => r.marks[k]).length : 0), 0)
+  const liveMark = (r, k) => !!(r.marks && r.marks[k] && (k === 'name' || r.types[k].on));
+  const marksLeft = () => (s.farmMark ? 1 : 0) + s.rows.reduce((n, r) => n + ['name', ...TYPES].filter((k) => liveMark(r, k)).length, 0)
     + s.rows.filter((r) => !r.cultivar.trim() && !(r.marks && r.marks.name)).length;
 
   /** Put a sheet read into the form. Weights are text, exactly as read; nothing is saved here. */
@@ -91,7 +92,8 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
   function farmStep() {
     if (s.farm) {
       return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
-        <div class="cs-crowhead"><span class="cs-crowname" id="farmName">${esc(s.farm.name)}</span>
+        <div class="cs-crowhead${s.farmMark ? ' cs-marked' : ''}"><span class="cs-crowname" id="farmName">${esc(s.farm.name)}</span>
+        ${s.farmMark ? `<span class="cs-markline">${markTail('farm')}</span>` : ''}
         <button type="button" class="cs-btn small" id="changeFarm">${esc(t('change'))}</button></div>
         <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">🖨 ${esc(t('printFarmSheet'))}</a>
           ${s.fromPhoto ? '' : `<a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff/${s.farm.id}">📷 ${esc(t('fillFromPhoto'))}</a>`}</div></section>`;
@@ -110,7 +112,7 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
   function partHtml(r, ty, p, i, split) {
     const price = priceOf(r.cultivar, ty);
     const id = `${r.uid}-${ty}-${i}`;
-    const marked = i === 0 && r.marks && r.marks[ty];
+    const marked = i === 0 && liveMark(r, ty);
     return `<div class="cs-part${marked ? ' cs-marked' : ''}">
       <label class="cs-label" for="${id}">${esc(typeLabel(ty))} ${esc(t('lbs'))}${split ? ` · ${esc(termLabel(p.term))}` : ''}</label>
       <input id="${id}" class="cs-input cs-num${marked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-lbs="${r.uid}|${ty}|${i}" value="${esc(p.lbs)}" placeholder="${esc(r.types[ty].on ? t('notWeighedYet') : t('notBrought'))}">
@@ -212,7 +214,7 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
     const b = e.target.closest('button');
     if (!b || !root.contains(b)) return;
     if (b.dataset.farm) return pickFarm(Number(b.dataset.farm));
-    if (b.id === 'changeFarm') { s.farm = null; s.detail = null; return render(); }
+    if (b.id === 'changeFarm') { s.farm = null; s.detail = null; s.farmMark = false; return render(); }
     if (b.dataset.add) { addRow(b.dataset.add); render(); return focusLast(); }
     if (b.id === 'addOther') {
       const v = root.querySelector('#otherName').value;
@@ -238,6 +240,7 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
       }
       return render();
     }
+    if (b.dataset.okmark === 'farm') { s.farmMark = false; return render(); }
     if (b.dataset.okmark) {
       const [uid, key] = b.dataset.okmark.split('|');
       const r = findRow(uid);
@@ -300,7 +303,8 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
     const [uid, ty] = el.dataset.on.split('|');
     const r = findRow(uid);
     r.types[ty].on = el.checked;
-    if (r.marks) r.marks[ty] = false; // ticking or unticking the box is checking it
+    // Ticking never confirms a number. An unsure weight's mark only counts while its type is
+    // ticked (unticked, it is not saved); tick it again and the mark is back until edited or OK'd.
     render();
   });
 
@@ -322,6 +326,12 @@ export function mount(root, { prefill = null, farmId = null } = {}) {
     } catch (err) { s.error = err; s.farm = null; s.detail = null; }
     s.loadingFarm = false;
     if (s.pending && s.detail) { applyPrefill(s.pending); s.pending = null; }
+    // A changed farm has its own price list: photo rows whose name is not on it are checked again.
+    else if (s.detail) {
+      for (const r of s.rows) {
+        if (r.marks && r.cultivar.trim() && !pricedCultivars().some((c) => c.toLowerCase() === r.cultivar.trim().toLowerCase())) r.marks.name = true;
+      }
+    }
     // Rows added before a farm change take the new farm's default term.
     for (const r of s.rows) for (const ty of TYPES) if (r.types[ty].parts.length === 1) r.types[ty].parts[0].term = defaultTerm();
     render();

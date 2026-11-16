@@ -7,7 +7,7 @@
 import { call } from './api.js';
 
 export const MAX_EDGE = 2000;
-const MAX_BYTES = 4 * 1024 * 1024; // the worker's limit on the decoded image
+const MAX_BYTES = 3.75 * 1024 * 1024; // the worker's limit on the decoded image
 const READ_TIMEOUT_MS = 40000;    // the worker gives up on the model after 25 s
 
 function loadImage(file) {
@@ -55,12 +55,13 @@ export async function shrinkPhoto(file) {
 }
 
 /** Send one photo to the reader. Resolves the normalised read; rejects like api.call. */
-export async function readSheetPhoto(file, { kind, farmId, dropoffId }) {
+export async function readSheetPhoto(file, { kind, farmId, dropoffId, lotIds }) {
   let photo = await shrinkPhoto(file);
   const body = { kind, image_b64: photo.b64, media_type: photo.mediaType };
   photo = null;
   if (kind === 'dropoff' && farmId) body.farm_id = farmId;
   if (kind === 'screen') body.dropoff_id = dropoffId;
+  if (kind === 'screen' && Array.isArray(lotIds) && lotIds.length) body.lot_ids = lotIds;
   try {
     const { read } = await call('readSheet', body, { timeoutMs: READ_TIMEOUT_MS });
     return read;

@@ -16,7 +16,7 @@ import * as reviewView from './screen-review.js';
 
 const SERVER_FAIL = 'Could not read the sheet. Enter the numbers by hand.';
 
-export function mount(root, { kind, farmId, dropoffId }) {
+export function mount(root, { kind, farmId, dropoffId, lotIds }) {
   const s = { phase: kind === 'screen' ? 'loading' : 'pick', detail: null, error: null, message: '', previewUrl: null };
   let inner = null;
   let alive = true;
@@ -79,7 +79,7 @@ export function mount(root, { kind, farmId, dropoffId }) {
     render();
     let result = null;
     try {
-      result = await readSheetPhoto(file, { kind, farmId, dropoffId });
+      result = await readSheetPhoto(file, { kind, farmId, dropoffId, lotIds });
     } catch (err) {
       // The worker's one friendly failure is shown in the page language; anything else as the server said it.
       if (err.network) s.message = `${t('errOffline')} ${t('enterByHand')}.`;
@@ -99,7 +99,8 @@ export function mount(root, { kind, farmId, dropoffId }) {
   function openReview(result) {
     root.innerHTML = '';
     window.scrollTo(0, 0);
-    if (kind === 'dropoff') inner = dropoffView.mount(root, { prefill: result, farmId: result.farm_id || farmId || null });
+    // A farm read from handwriting (not from the route or the printed code) must be confirmed.
+    if (kind === 'dropoff') inner = dropoffView.mount(root, { prefill: result, farmId: farmId || result.farm_id || null, farmCheck: !farmId && result.farm_from === 'name' });
     else inner = reviewView.mount(root, { dropoffId, read: result, detail: s.detail });
   }
 

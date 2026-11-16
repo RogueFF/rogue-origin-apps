@@ -77,15 +77,18 @@ export function screenSheet({ dropoff, lots = [], qrSvg, code }) {
   const groups = chunk(rows, SCREEN_ROWS);
   const total = groups.length;
   let idx = 0;
+  // Two lots with the same cultivar and type (a dropoff/sold split) look alike: print the term.
+  const twin = (l) => rows.filter((x) => x.cultivar.toLowerCase() === l.cultivar.toLowerCase() && x.type === l.type).length > 1;
   return groups.map((group, p) => {
     const body = group.map((l) => {
       idx += 1;
       const smalls = l.type === 'smalls';
+      const term = twin(l) ? `<span class="sh-left">${l.term === 'sold' ? bi('sold', 'vendido') : bi('dropoff', 'entrega')}</span>` : '';
       const partly = l.money.status === 'screening';
       return `<tr class="sh-row" data-lot="${esc(l.id)}">
         <td class="sh-idx">${idx}</td>
         <td class="sh-name">${esc(l.cultivar)}</td>
-        <td class="sh-type">${smalls ? 'smalls' : 'tops'}</td>
+        <td class="sh-type">${smalls ? 'smalls' : 'tops'}${term}</td>
         <td class="sh-before">${lb(l.money.remainder_lbs)}${partly ? `<span class="sh-left">${bi('left to screen', 'queda')}</span>` : ''}</td>
         <td class="sh-box" data-box="pulled"></td>
         <td class="sh-box" data-box="final"></td>

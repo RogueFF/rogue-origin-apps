@@ -112,3 +112,15 @@ test('sheet codes', () => {
   assert.equal(sheetCode('dropoff', 3), 'DROP-F3');
   assert.equal(sheetCode('screen', 7), 'SCREEN-D7');
 });
+
+test('sheet B prints the term only on look-alike rows (same cultivar and type)', () => {
+  const h = screenSheet({ dropoff, lots: [
+    lot(1, 'Alpha', 'tops', 'weighed', 10, 10, { term: 'dropoff' }),
+    lot(2, 'Alpha', 'tops', 'weighed', 5, 5, { term: 'sold' }),
+    lot(3, 'Beta', 'tops', 'weighed', 5, 5, { term: 'sold' }),
+  ], qrSvg: QR, code: 'SCREEN-D7' });
+  const rows = h.split('<tr class="sh-row').slice(1);
+  assert.match(rows[0], /dropoff/);
+  assert.match(rows[1], />sold</);
+  assert.ok(!/>sold<|>dropoff</.test(rows[2]));
+});

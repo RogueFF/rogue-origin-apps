@@ -84,7 +84,9 @@ This is the DROPOFF sheet. Header boxes: Farm, Date, Dropped by. Then a table of
 
 /** Sheet B: screening numbers for the open lots of one dropoff, in printed order. */
 export function screenPrompt(ctx = {}) {
-  const lots = (ctx.lots || []).map((l, i) => `${i + 1}. ${l.cultivar} (${l.type}), before ${l.remainder_lbs} lb`);
+  const all = ctx.lots || [];
+  const twin = (l) => all.filter((x) => x.cultivar.toLowerCase() === l.cultivar.toLowerCase() && x.type === l.type).length > 1;
+  const lots = all.map((l, i) => `${i + 1}. ${l.cultivar} (${l.type}${twin(l) && l.term ? `, ${l.term === 'sold' ? 'sold' : 'dropoff'}` : ''}), before ${l.remainder_lbs} lb`);
   const farm = (ctx.farms || [])[0];
   const system = `${COMMON}
 

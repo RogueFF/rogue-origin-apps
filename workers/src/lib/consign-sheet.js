@@ -46,7 +46,7 @@ const boxWritten = (b) => {
 };
 
 const lower = (s) => String(s).trim().toLowerCase();
-const empty = (kind, warnings) => ({ kind, farm_id: null, dropped_by: '', note: '', date: null, rows: [], warnings });
+const empty = (kind, warnings) => ({ kind, farm_id: null, farm_from: null, dropped_by: '', note: '', date: null, rows: [], warnings });
 
 function sheetCode(raw) {
   const c = typeof raw.code === 'string' ? raw.code.trim().toUpperCase() : '';
@@ -81,18 +81,19 @@ function dropoffRows(raw, ctx) {
   return out;
 }
 
+/** { id, from }: from 'name' (handwriting, the person must confirm it) or 'code' (printed). */
 function farmFor(raw, ctx, code) {
   const farms = (ctx.farms || []).filter((f) => isObj(f));
   const name = cleanText(raw.farm, 120);
   if (name) {
     const hit = farms.find((f) => typeof f.name === 'string' && lower(f.name) === lower(name));
-    if (hit) return hit.id;
+    if (hit) return { id: hit.id, from: 'name' };
   }
   if (code && code.kind === 'dropoff' && code.farm != null) {
     const hit = farms.find((f) => Number(f.id) === code.farm);
-    if (hit) return hit.id;
+    if (hit) return { id: hit.id, from: 'code' };
   }
-  return null;
+  return { id: null, from: null };
 }
 
 const SCREEN_FIELDS = ['pulled', 'final', 'to_smalls', 'biomass', 'mold'];
@@ -117,6 +118,7 @@ function screenRows(raw, ctx, warn) {
     }
     if (!lot) { warn('unknown_row'); continue; }
     if (used.has(lot.id)) { warn('duplicate_row'); continue; }
+    if (lot.open === false) { warn('lot_changed'); continue; } // printed, but weighed-over, closed or voided since
 
     const row = { lot_id: lot.id };
     for (const f of SCREEN_FIELDS) row[f] = readBox(r[f], { zero: f !== 'pulled' });
@@ -125,7 +127,8 @@ function screenRows(raw, ctx, warn) {
     const finBool = typeof fin.value === 'boolean';
     row.finishes = { value: finBool ? fin.value : false, unsure: fin.unsure === true || (fin.value != null && !finBool) };
     const counts = (f) => !(f === 'to_smalls' && lot.type === 'smalls');
-    const anything = SCREEN_FIELDS.some((f) => counts(f) && boxWritten(r[f])) || row.finishes.value;
+    // An unreadable box counts: the lot must show up for the person, every box marked Check.
+    const anything = SCREEN_FIELDS.some((f) => counts(f) && (boxWritten(r[f]) || (isObj(r[f]) && r[f].unsure === true))) || row.finishes.value;
     if (!anything) continue;
     used.add(lot.id);
     out.push(row);
@@ -134,10 +137,10 @@ function screenRows(raw, ctx, warn) {
 }
 
 /**
- * normalizeSheetRead(kind, raw, ctx) -> { kind, farm_id, dropped_by, note, date, rows, warnings }
+ * normalizeSheetRead(kind, raw, ctx) -> { kind, farm_id, farm_from, dropped_by, note, date, rows, warnings }
  *   kind: 'dropoff' | 'screen'
  *   raw:  whatever JSON.parse gave back from the model (may be anything)
- *   ctx:  { farms: [{id, name}], cultivars: [string], lots: [{id, cultivar, type, intake_lbs, remainder_lbs}],
+ *   ctx:  { farms: [{id, name}], cultivars: [string], lots: [{id, cultivar, type, intake_lbs, remainder_lbs, open?}],
  *           dropoff_id?, farm_id? }  (dropoff_id / farm_id: the sheet the photo was opened for)
  */
 export function normalizeSheetRead(kind, raw, ctx) {
@@ -155,9 +158,11 @@ export function normalizeSheetRead(kind, raw, ctx) {
 
   const date = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date.trim()) ? raw.date.trim() : null;
   if (k === 'dropoff') {
+    const farm = farmFor(raw, c, code);
     return {
       kind: k,
-      farm_id: farmFor(raw, c, code),
+      farm_id: farm.id,
+      farm_from: farm.from,
       dropped_by: cleanText(raw.dropped_by),
       note: cleanText(raw.note),
       date,
@@ -166,5 +171,5 @@ export function normalizeSheetRead(kind, raw, ctx) {
     };
   }
   const rows = screenRows(raw, c, warn);
-  return { kind: k, farm_id: null, dropped_by: '', note: '', date, rows, warnings };
+  return { kind: k, farm_id: null, farm_from: null, dropped_by: '', note: '', date, rows, warnings };
 }
