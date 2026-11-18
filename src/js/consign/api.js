@@ -17,7 +17,7 @@ export const ownerPw = () => { try { return sessionStorage.getItem(OWNER_KEY) ||
 export const setOwnerPw = (v) => { try { if (v) sessionStorage.setItem(OWNER_KEY, v); else sessionStorage.removeItem(OWNER_KEY); } catch { /* private mode */ } };
 
 const TIMEOUT_MS = 20000;
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
 
 function networkError() {
   const err = new Error('network');

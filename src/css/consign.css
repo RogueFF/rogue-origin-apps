@@ -336,6 +336,18 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-paper { width: 8.5in; }
 .sh-paper .sh-page { width: 8.5in; height: 11in; padding: 0.4in; margin-bottom: 0.3in; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15)); }
 
+/* ---------- farm's page card (owner) ---------- */
+.cs-access .cs-access-line { margin: 8px 0 4px; font-size: 20px; }
+.cs-linkbox {
+  margin-top: 12px; padding: 12px; border-radius: var(--radius-md);
+  border: 2px solid var(--cs-green); background: color-mix(in srgb, var(--cs-mist) var(--cs-tint), transparent);
+}
+.cs-linkonce { margin: 0 0 4px; }
+.cs-linktext { font-family: var(--font-mono, monospace); font-size: 15px; }
+.cs-qrbox { width: min(220px, 100%); margin: 12px auto 0; background: #fff; padding: 10px; border-radius: var(--radius-sm); }
+.cs-qrbox svg { display: block; width: 100%; height: auto; }
+.cs-dlgmsg { margin: 8px 0 0; }
+
 #printArea { display: none; }
 @media print {
   @page { size: letter; margin: 0.4in; }

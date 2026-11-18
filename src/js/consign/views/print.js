@@ -16,7 +16,7 @@ const PAGE_PX = 816; // 8.5 in at 96 px per inch
 /** The QR goes back to this page's photo screen. Query strings (e.g. ?api=) are left off on purpose. */
 const photoUrl = (hash) => `${location.origin}${location.pathname}#/${hash}`;
 
-function qrSvg(text) {
+export function qrSvg(text) {
   try {
     if (typeof window.qrcode === 'function') {
       const q = window.qrcode(0, 'M');

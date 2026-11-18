@@ -34,13 +34,15 @@ function fieldHtml(f, i) {
 /**
  * A modal form. Resolves with {name: value} on OK, or null on Cancel.
  * Fields: {name, label, type: text|number|date|select|checkbox|textarea, value, options, required}.
+ * message: optional plain text under the title (a confirm with no fields).
  */
-export function dialog({ title, fields = [], okLabel, danger = false }) {
+export function dialog({ title, message = '', fields = [], okLabel, danger = false }) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'cs-dialog';
     dlg.innerHTML = `<form method="dialog" class="cs-dialog-form" novalidate>
       <h2>${esc(title)}</h2>
+      ${message ? `<p class="cs-dlgmsg">${esc(message)}</p>` : ''}
       ${fields.map(fieldHtml).join('')}
       <p class="cs-error" hidden></p>
       <div class="cs-row-btns">

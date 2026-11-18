@@ -44,6 +44,7 @@ const OPEN = [
   'kanban.html',              // Kanban (old page)
   'sop-manager.html',
   'mis-numeros.html',         // Mis números: one trimmer's own numbers; the personal QR card's token is the key, not the farm password (Koa 2026-11-16)
+  'consign-farm.html',        // A partner farm's own consignment page: its private link + PIN are the key, never the farm password (stage 4 plan)
   'crew-board.html',          // Crew board: top 5 + room vs goal + most improved for the barn TV and a QR page; names only the top 5 (Koa 2026-11-16)
 ];
 

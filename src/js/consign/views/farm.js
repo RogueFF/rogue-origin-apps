@@ -8,9 +8,11 @@ import { esc, lbs, money, num, when, day, typeLabel, termLabel, statusChip, toda
 import { errorCard, loading, toast, dialog } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { farmDialog, priceDialog, lotTermsDialog } from '../owner.js';
+import { accessCardHtml, onAccessClick } from './farm-access.js';
 
 export function mount(root, { farmId }) {
-  const s = { data: null, error: null };
+  // shown: a farm link just created. Memory only, shown once, gone when this view goes.
+  const s = { data: null, error: null, shown: null };
   const allLots = () => (s.data ? s.data.dropoffs.flatMap((d) => d.lots) : []);
 
   function banner() {
@@ -52,7 +54,7 @@ export function mount(root, { farmId }) {
         <span>${m.intake_lbs == null ? `<span class="cs-muted">${esc(t('notWeighedYet'))}</span>` : `${lbs(m.intake_lbs)} ${esc(t('lbs'))}`}</span>
         <span class="cs-muted">${esc(termLabel(l.term))}</span>
         ${m.needs_price ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : ''}${m.estimate && m.owed > 0 ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
-      ${after}${sold}${l.note ? `<div class="cs-muted">${esc(t('note'))}: ${esc(l.note)}</div>` : ''}
+      ${after}${sold}${l.note ? `<div class="cs-muted">${esc(t('note'))}: ${esc(l.note)}${Number(l.note_visible) === 1 ? ` <span class="cs-chip">${esc(t('farmSeesNote'))}</span>` : ''}</div>` : ''}
       <div class="cs-lotbtns">
         ${m.status === 'dropped' ? `<a class="cs-btn small" href="#/weigh/${d.id}/${l.id}">${esc(t('weigh'))}</a>` : ''}
         ${m.status === 'weighed' || m.status === 'screening' ? `<a class="cs-btn small" href="#/screen/${d.id}/${l.id}">${esc(t('screen'))}</a>` : ''}
@@ -89,12 +91,13 @@ export function mount(root, { farmId }) {
   function render() {
     if (s.error) return errorCard(root, s.error, load);
     if (!s.data) return loading(root);
-    root.innerHTML = `<div class="cs-stack">${banner()}${prices()}${dropoffs()}${payments()}</div>`;
+    root.innerHTML = `<div class="cs-stack">${banner()}${accessCardHtml(s.data.access, s.shown)}${prices()}${dropoffs()}${payments()}</div>`;
   }
 
   root.addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b || !s.data) return;
+    if (await onAccessClick(b, { farmId, setShown: (v) => { s.shown = v; }, reload: load, rerender: render })) return;
     if (b.id === 'editFarm') return farmDialog(s.data.farm);
     if (b.id === 'addPrice') return priceDialog(s.data.farm);
     if (b.dataset.terms) return lotTermsDialog(allLots().find((l) => l.id === Number(b.dataset.terms)));
@@ -141,5 +144,5 @@ export function mount(root, { farmId }) {
   const onReload = () => load();
   document.addEventListener('consign:reload', onReload);
   load();
-  return { rerender: render, unmount: () => document.removeEventListener('consign:reload', onReload) };
+  return { rerender: render, unmount: () => { s.shown = null; document.removeEventListener('consign:reload', onReload); } };
 }
