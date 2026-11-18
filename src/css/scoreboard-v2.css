@@ -4094,3 +4094,188 @@ html.tv-mode .cycle-bars-target-label { font-size: 11px; }
   transform: none !important;
   box-shadow: none !important;
 }
+
+/* ========================================
+   CREW TOP 5 — bottom strip, between the chart and the cycles
+   (Koa 2026-11-17). Five podium cards, lb/h big, grams small.
+   Toyota rule: only the best, never a red mark. Sizes follow the
+   strip's height (container units), so the wall TV and 4K scale.
+   ======================================== */
+.leaders-panel {
+  /* grows into the chart's room when the chart is hidden (toggle, or no hours yet) */
+  flex: 1 1 clamp(600px, 46%, 1500px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  container-type: size;
+}
+.leaders-panel[hidden] { display: none; }
+.bottom-strip:has(.leaders-panel:not([hidden])) .cycle-history { flex: 0 0 clamp(300px, 19%, 460px); }
+
+.leaders-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-width: 0;
+  white-space: nowrap;
+}
+.leaders-title {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+.leaders-day {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--cream-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.leaders-goal {
+  margin-left: auto;
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green);
+  padding: 2px 10px;
+  border: 1px solid rgba(95, 189, 132, 0.35);
+  border-radius: 100px;
+  background: var(--green-dim);
+}
+.leaders-goal[hidden] { display: none; }
+
+.leaders-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.ldr-card {
+  position: relative;
+  min-width: 0;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2cqh;
+  padding: 3cqh var(--sp-2);
+  text-align: center;
+  background: rgba(28, 34, 32, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 3px solid var(--ldr-medal, rgba(255, 255, 255, 0.12));
+  border-radius: var(--r-lg);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.ldr-card.r1 { --ldr-medal: var(--gold); background: linear-gradient(180deg, rgba(247, 204, 122, 0.12), rgba(28, 34, 32, 0.55) 60%); }
+.ldr-card.r2 { --ldr-medal: #c9ced6; }
+.ldr-card.r3 { --ldr-medal: #c98a5a; }
+.ldr-rank {
+  display: grid;
+  place-items: center;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 50%;
+  font-family: var(--font-hero);
+  font-size: 16px;
+  font-size: clamp(14px, 9cqh, 36px);
+  line-height: 1;
+  color: #141918;
+  background: var(--ldr-medal, rgba(242, 239, 232, 0.5));
+}
+.ldr-name {
+  max-width: 100%;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 17px;
+  font-size: clamp(14px, 9cqh, 36px);
+  line-height: 1.15;
+  color: var(--cream);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  /* two lines tall even for a short name, so the numbers line up across cards */
+  min-height: 2.3em;
+  align-content: center;
+}
+.ldr-val {
+  font-family: var(--font-hero);
+  font-weight: 400;
+  font-size: 56px;
+  font-size: clamp(30px, min(28cqh, 58cqi), 130px);
+  line-height: 0.95;
+  color: var(--cream);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.ldr-g {
+  white-space: nowrap;
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-size: clamp(11px, 6.5cqh, 24px);
+  color: var(--cream-muted);
+}
+.ldr-g em { font-style: normal; color: var(--green); margin-left: 6px; }
+.ldr-card.over .ldr-val { color: var(--green); }
+.ldr-card.r1 .ldr-val { color: var(--gold); text-shadow: 0 0 24px rgba(247, 204, 122, 0.25); }
+
+/* TV Mode draws the page at 0.65: lift the small labels so they read from the tables */
+html.tv-mode .leaders-title,
+html.tv-mode .leaders-day { font-size: 20px; }
+html.tv-mode .leaders-goal { font-size: 20px; padding: 3px 14px; }
+
+/* tablet/phone: the strip stacks, the panel becomes its own card row */
+@media (max-width: 1024px) {
+  .leaders-panel { flex: none; align-self: stretch; width: auto; height: auto; container-type: normal; }
+  .leaders-list { grid-template-columns: 1fr; gap: 6px; }
+  .ldr-card {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    padding: 8px var(--sp-3);
+    border-top-width: 1px;
+    border-left: 4px solid var(--ldr-medal, rgba(255, 255, 255, 0.12));
+    text-align: left;
+  }
+  .ldr-rank { font-size: 18px; flex: none; }
+  .ldr-name { flex: 1; font-size: 17px; -webkit-line-clamp: 1; min-height: 0; }
+  .ldr-val { font-size: 34px; }
+  .ldr-g { font-size: 11px; min-width: 5.5em; text-align: right; }
+}
+
+/* TV rotation overlay: the crew board for 30 s. TV Mode zooms the page;
+   leaders.js sets the overlay's zoom to undo it (whatever the page zoom is),
+   so the board draws at its own TV size. */
+.leaders-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  background: #0a0c0b;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s var(--ease-out), visibility 0s linear 0.6s;
+}
+.leaders-overlay.on { opacity: 1; visibility: visible; transition: opacity 0.6s var(--ease-out); }
+.ldr-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;   /* a tap lands on the scoreboard and brings it back */
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaders-overlay, .leaders-overlay.on { transition: none; }
+}

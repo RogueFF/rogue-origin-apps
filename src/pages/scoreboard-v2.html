@@ -53,6 +53,8 @@
 {
   "imports": {
     "../js/scoreboard-v2/i18n-labels.js": "../js/scoreboard-v2/i18n-labels.js?h=9d0ef791",
+    "../js/scoreboard-v2/leaders-logic.js": "../js/scoreboard-v2/leaders-logic.js?h=61c9b1ee",
+    "../js/scoreboard-v2/leaders.js": "../js/scoreboard-v2/leaders.js?h=f67a1c5f",
     "../js/shared/i18n.js": "../js/shared/i18n.js?h=f305b6e9"
   }
 }
@@ -75,13 +77,14 @@
   <script defer src="../js/scoreboard-v2/events.js?h=38300ba6"></script>
   <script defer src="../js/scoreboard-v2/fab-menu.js?h=318ac0be"></script>
   <script defer src="../js/scoreboard-v2/main.js?h=d91d0566"></script>
+  <script type="module" src="../js/scoreboard-v2/leaders.js?h=f67a1c5f"></script>
 
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?h=a6a362e4" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=a6a362e4"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?h=c7f371ce" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=c7f371ce"></noscript>
 
   <!-- SVG Noise Filter Definition -->
   <style>
@@ -624,6 +627,16 @@
         </div>
       </div>
 
+      <!-- Middle: Crew Top 5 (last workday, from the crew board; hidden when it can't load) -->
+      <section class="leaders-panel" id="leadersPanel" aria-labelledby="leadersTitle" hidden>
+        <div class="leaders-head">
+          <span class="leaders-title" id="leadersTitle">Top 5</span>
+          <span class="leaders-day" id="leadersDay"></span>
+          <span class="leaders-goal" id="leadersGoal" hidden></span>
+        </div>
+        <ol class="leaders-list" id="leadersList"></ol>
+      </section>
+
       <!-- Right: Cycle History -->
       <div class="cycle-history" id="cycleHistory">
         <div class="cycle-history-header">
@@ -841,5 +854,8 @@
 
   <!-- Crew Change Toast -->
   <div id="crewToast" class="crew-toast"></div>
+
+  <!-- TV rotation: the crew board shows here for 30 s every 10 min (TV Mode only) -->
+  <div id="leadersOverlay" class="leaders-overlay" aria-hidden="true"></div>
 </body>
 </html>
