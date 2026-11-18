@@ -286,6 +286,7 @@ test.describe('farm page: content', () => {
   test('largest: credit balance, sold card last, needs-price, after numbers, eight payments', async ({ page }) => {
     await openFarm(page, { fake: makeFake({ data: large(), lang: 'es' }) });
     await enterPin(page, PIN);
+    await expect(page.locator('#stand')).toBeVisible(); // the cards draw after the PIN reply lands
     const ids = await page.locator('.cf-stack > section').evaluateAll((els) => els.map((e) => e.id));
     expect(ids).toEqual(['stand', 'prices', 'dropoffs', 'payments', 'sold']);
     await expect(page.locator('#standLabel')).toHaveText('Crédito a favor de Rogue Origin');
