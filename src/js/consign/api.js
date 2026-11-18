@@ -18,7 +18,8 @@ export const setOwnerPw = (v) => { try { if (v) sessionStorage.setItem(OWNER_KEY
 
 const TIMEOUT_MS = 20000;
 // Same list as the worker (workers/src/handlers/consign-d1.js), plus voiding a payment.
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment',
+  'editPricePoint', 'deletePricePoint', 'editDropoff', 'editLot', 'editScreenRun', 'editSold', 'editPayment']);
 const ownerOnly = (action, body) => OWNER_ACTIONS.has(action) || (action === 'voidRow' && !!body && body.table === 'payment');
 
 function networkError() {

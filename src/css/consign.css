@@ -237,6 +237,17 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-lotbtns { display: flex; flex-wrap: wrap; gap: 8px; }
 .cs-prices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
 .cs-voidedrow { opacity: 0.55; text-decoration: line-through; }
+/* owner edits: Edit sits on the thing itself, next to Void */
+.cs-pricecard { flex-direction: column; align-items: stretch; }
+.cs-pricerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-height: 44px; }
+.cs-pricerow b { font-family: var(--font-mono, monospace); }
+.cs-headbtns { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.cs-tap .cs-headbtns.cs-right, .cs-tap .cs-btn.cs-edit.cs-right { font-family: inherit; font-weight: 600; }
+.cs-entries { margin-top: 4px; }
+.cs-entry { min-height: 48px; padding: 6px 10px; font-size: 16px; border-color: var(--cs-mist); }
+.cs-entryhead { display: inline-flex; gap: 8px; align-items: baseline; }
+.cs-btn.cs-edit { border-color: var(--cs-teal); }
+.cs-dlgextra { margin-right: auto; }
 .cs-owner-only { display: none !important; }
 body[data-owner="1"] .cs-owner-only { display: revert !important; }
 

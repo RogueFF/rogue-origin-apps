@@ -276,6 +276,32 @@ test('every action is either owner only or has a staff view, so a new action can
   for (const a of cases) assert.ok(owners.includes(a) || STAFF_VIEW_ACTIONS.includes(a), `${a} has no staff view and is not owner only`);
   assert.ok(owners.includes('savePayment'));
   assert.throws(() => staffView('someNewAction', { anything: 1 }), /staff view/i);
+  // The owner edits: routed, owner only, and with no staff view (a staff reply could only fail closed).
+  for (const a of ['editPricePoint', 'deletePricePoint', 'editDropoff', 'editLot', 'editScreenRun', 'editSold', 'editPayment']) {
+    assert.ok(cases.includes(a), `${a} is routed`);
+    assert.ok(owners.includes(a), `${a} is owner only`);
+    assert.ok(!STAFF_VIEW_ACTIONS.includes(a), `${a} has no staff view`);
+  }
+  // The page's copy of the owner list (api.js) names the same actions, so a refused owner password is seen as one.
+  const page = readFileSync(new URL('../src/js/consign/api.js', import.meta.url), 'utf8');
+  const pageOwners = [...page.match(/const OWNER_ACTIONS = new Set\(\[([^\]]*)\]\)/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  assert.deepEqual([...pageOwners].sort(), [...owners].sort());
+});
+
+test('the owner edits are refused for staff, and a staff caller gets no money back from the refusal', async () => {
+  const { env, sqlite, farm } = await world();
+  const d = await staff(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: lineSet });
+  const pp = sqlite.prepare('SELECT id FROM cl_price_points WHERE farm_id = ? LIMIT 1').get(farm.id).id;
+  const pay = sqlite.prepare('SELECT id FROM cl_payments WHERE farm_id = ?').get(farm.id).id;
+  for (const [action, body] of [['editPricePoint', { id: pp, price_per_lb: 1 }], ['deletePricePoint', { id: pp }],
+    ['editDropoff', { dropoff_id: d.dropoff.id, note: 'x' }], ['editLot', { lot_id: d.lots[0].id, note: 'x' }],
+    ['editScreenRun', { run_id: 1, note: 'x' }], ['editSold', { sold_id: 1, lbs: 1 }], ['editPayment', { payment_id: pay, amount: 1 }]]) {
+    const e = await handleConsignD1(post(action, body), env, {}).then(() => null, (x) => x);
+    assert.ok(e, `${action} refused`);
+    assert.match(e.message, /owner/i);
+    assertNoMoney({ message: e.message, code: e.code }, `${action} refusal`);
+  }
+  assert.ok(sqlite.prepare('SELECT price_per_lb FROM cl_price_points WHERE id = ?').get(pp).price_per_lb > 1);
 });
 
 

@@ -35,8 +35,9 @@ function fieldHtml(f, i) {
  * A modal form. Resolves with {name: value} on OK, or null on Cancel.
  * Fields: {name, label, type: text|number|date|select|checkbox|textarea, value, options, required}.
  * message: optional plain text under the title (a confirm with no fields).
+ * extra: optional {label, value}: a red button on the left (Delete) that resolves with `value`.
  */
-export function dialog({ title, message = '', fields = [], okLabel, danger = false }) {
+export function dialog({ title, message = '', fields = [], okLabel, danger = false, extra = null }) {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog');
     dlg.className = 'cs-dialog';
@@ -46,6 +47,7 @@ export function dialog({ title, message = '', fields = [], okLabel, danger = fal
       ${fields.map(fieldHtml).join('')}
       <p class="cs-error" hidden></p>
       <div class="cs-row-btns">
+        ${extra ? `<button type="button" class="cs-btn danger cs-dlgextra" data-act="extra">${esc(extra.label)}</button>` : ''}
         <button type="button" class="cs-btn ghost" data-act="cancel">${esc(t('cancel'))}</button>
         <button type="submit" class="cs-btn ${danger ? 'danger' : 'primary'}" data-act="ok">${esc(okLabel || t('ok'))}</button>
       </div>
@@ -54,6 +56,7 @@ export function dialog({ title, message = '', fields = [], okLabel, danger = fal
     const form = dlg.querySelector('form');
     const done = (v) => { dlg.close(); dlg.remove(); resolve(v); };
     dlg.querySelector('[data-act="cancel"]').addEventListener('click', () => done(null));
+    if (extra) dlg.querySelector('[data-act="extra"]').addEventListener('click', () => done(extra.value));
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
     form.addEventListener('submit', (e) => {
       e.preventDefault();
