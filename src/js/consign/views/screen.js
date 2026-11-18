@@ -8,6 +8,8 @@ import { esc, lbs, num, when, typeLabel, termLabel, statusChip, runCheck, checkB
 import { errorCard, loading, toast, dialog } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { go } from '../nav.js';
+import { isOwner } from '../owner.js';
+import { editRunDialog } from './farm-edit.js';
 
 export function mount(root, { dropoffId, lotId }) {
   const s = {
@@ -31,7 +33,7 @@ export function mount(root, { dropoffId, lotId }) {
       ${runs.map((r) => `<li class="cs-tap static${r.voided_at ? ' cs-voidedrow' : ''}">
         <span>${esc(when(r.run_at))}</span>
         <span class="cs-after">${esc(t('pulled'))} <b>${lbs(r.pulled_lbs)}</b> · ${esc(t(l.type === 'smalls' ? 'finalSmalls' : 'finalTops'))} <b>${lbs(r.final_lbs)}</b>${l.type === 'tops' ? ` · ${esc(t('toSmalls'))} <b>${lbs(r.to_smalls_lbs)}</b>` : ''} · ${esc(t('biomass'))} <b>${lbs(r.biomass_lbs)}</b> · ${esc(t('mold'))} <b>${lbs(r.mold_lbs)}</b></span>
-        ${r.voided_at ? `<span class="cs-chip st-voided">${esc(t('voided'))}</span>` : `<button type="button" class="cs-btn small danger cs-right" data-voidrun="${r.id}">${esc(t('void'))}</button>`}
+        ${r.voided_at ? `<span class="cs-chip st-voided">${esc(t('voided'))}</span>` : `<span class="cs-headbtns cs-right">${isOwner() ? `<button type="button" class="cs-btn small cs-edit" data-edit="run|${l.id}|${r.id}">✎ ${esc(t('edit'))}</button>` : ''}<button type="button" class="cs-btn small danger" data-voidrun="${r.id}">${esc(t('void'))}</button></span>`}
       </li>`).join('')}</ul></section>`;
   }
 
@@ -130,6 +132,13 @@ export function mount(root, { dropoffId, lotId }) {
         s.saveError = err.network ? t('errOffline') : err.message;
       }
       s.saving = false; render();
+      return;
+    }
+    if (b.dataset.edit && isOwner()) {
+      const l = lot();
+      const r = l && l.runs.find((x) => x.id === Number(b.dataset.edit.split('|')[2]));
+      // Owner edit (farm-edit.js): the server re-checks it; read the lot again after a save.
+      if (r && await editRunDialog(l, r)) { s.touched = false; load(); }
       return;
     }
     if (b.dataset.voidrun) {

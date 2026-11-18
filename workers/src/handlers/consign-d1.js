@@ -14,7 +14,7 @@ import { getConfig } from '../lib/production-utils.js';
 import { newToken, tokenHash, lockState, MAX_LOCKOUTS } from '../lib/consign-access.js';
 import { staffView } from '../lib/consign-staff-view.js';
 
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment', 'editPricePoint', 'deletePricePoint', 'editDropoff', 'editLot', 'editScreenRun', 'editSold', 'editPayment']);
 
 /** Is this the owner? Never throws. False when the secret is unset: never falls open. */
 export function isOwner(body, env) {
@@ -27,7 +27,7 @@ function requireOwner(body, env) {
   if (!isOwner(body, env)) throw createError('UNAUTHORIZED', 'Owner password required');
 }
 
-/** An owner-only call: the actions above, plus voiding a payment. */
+/** An owner-only call: the actions above (the edits among them), plus voiding a payment. */
 const ownerOnly = (action, body) => OWNER_ACTIONS.has(action) || (action === 'voidRow' && body.table === 'payment');
 
 // Handlers return their reply's data; handleConsignD1 sends it, through the staff view for non-owners.
@@ -53,6 +53,26 @@ const posNum = (v, label) => {
   if (!Number.isFinite(n) || n <= 0) throw bad(`${label} must be a positive number`);
   return n;
 };
+/** A loss box (turned to smalls, biomass, mold, a run's final): empty is 0. */
+const zeroOrMore = (v, label) => {
+  const n = v === '' || v == null ? 0 : strictNum(v);
+  if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${label} must be a number, 0 or more`);
+  return n;
+};
+/** A typed YYYY-MM-DD that is a real calendar day, else null. */
+const realDay = (v) => {
+  const d = String(v);
+  const ms = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(`${d}T00:00:00Z`) : NaN;
+  return Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== d ? null : d;
+};
+/** A dropoff date (catch-up entry): a real day, not in the future, not more than a year back. */
+function dropoffDay(v, realToday) {
+  const d = realDay(v);
+  if (!d) throw bad('Dropoff date must be a real date, YYYY-MM-DD');
+  if (d > realToday) throw bad('Dropoff date cannot be in the future');
+  if (Date.parse(`${d}T00:00:00Z`) < Date.parse(`${realToday}T00:00:00Z`) - 366 * 86400000) throw bad('Dropoff date cannot be more than a year back');
+  return d;
+}
 
 async function saveFarm(body, env) {
   const name = clean(body.name);
@@ -164,11 +184,7 @@ const reqNonNeg = (v, label) => {
  */
 function finalRun(fin, type, intake, at) {
   if (fin === null || typeof fin !== 'object' || Array.isArray(fin)) throw bad(`${at}: final must be a set of weights`);
-  const loss = (v, label) => {
-    const n = v === '' || v == null ? 0 : strictNum(v);
-    if (!Number.isFinite(n) || n < 0 || n > MAX_LINE_LBS) throw bad(`${at}: ${label} must be a number, 0 or more`);
-    return n;
-  };
+  const loss = (v, label) => zeroOrMore(v, `${at}: ${label}`);
   const run = {
     final_lbs: reqNonNeg(fin.final_lbs, `${at}: final weight`),
     to_smalls_lbs: loss(fin.to_smalls_lbs, 'turned to smalls'),
@@ -227,11 +243,7 @@ async function saveDropoff(body, env) {
   let droppedAt = null;
   let today = realToday;
   if (body.dropped_on != null && body.dropped_on !== '') {
-    const d = String(body.dropped_on);
-    const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(`${d}T00:00:00Z`) : NaN;
-    if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== d) throw bad('Dropoff date must be a real date, YYYY-MM-DD');
-    if (d > realToday) throw bad('Dropoff date cannot be in the future');
-    if (t < Date.parse(`${realToday}T00:00:00Z`) - 366 * 86400000) throw bad('Dropoff date cannot be more than a year back');
+    const d = dropoffDay(body.dropped_on, realToday);
     if (d !== realToday) { droppedAt = `${d} 20:00:00`; today = d; }
   }
   for (const ln of lines) {
@@ -453,6 +465,256 @@ async function setLotTerms(body, env) {
     history(env, 'cl_lots', lot.id, 'setLotTerms', before, next, body.actor || 'owner'),
   ]);
   return ok({ lot: await oneLot(env, lot.id) });
+}
+
+/* ---------- owner edits: change a saved row in place, logged before and after ---------- */
+
+/** Left out of an edit (undefined): the field keeps its value. */
+const given = (body, k) => body[k] !== undefined;
+/** A text field in an edit: '' or null clears it. */
+const textOrNull = (v) => clean(v) || null;
+const pickKeys = (row, keys) => Object.fromEntries(keys.map((k) => [k, row[k] ?? null]));
+/** The fields that changed, as { before, after }; null when nothing did. */
+function changes(cur, next) {
+  const before = {};
+  const after = {};
+  for (const k of Object.keys(next)) if (cur[k] !== next[k]) { before[k] = cur[k]; after[k] = next[k]; }
+  return Object.keys(after).length ? { before, after } : null;
+}
+const editActor = (body) => body.actor || 'owner';
+const SOLD_SLACK = 0.005;
+
+/**
+ * Would a lot still hold together with these runs and sold entries? The rules a fresh entry
+ * meets: the runs never pull more than the intake (within the screening tolerance), and sold
+ * pounds never exceed what the lot has to sell.
+ */
+function checkLot(lot, runs, sold) {
+  const m = lotMoney(lot, runs, sold);
+  const intake = lot.intake_lbs == null ? null : Number(lot.intake_lbs);
+  if (intake != null && m.pulled_lbs > intake + screenTolerance(intake)) {
+    throw bad(`The screening runs would pull ${m.pulled_lbs} lb, more than the ${intake} lb dropped off. Lower the pounds pulled first`);
+  }
+  if (m.sold_main_lbs > m.payable_main_lbs + SOLD_SLACK || m.sold_smalls_lbs > m.payable_smalls_lbs + SOLD_SLACK) {
+    const [s, p] = m.sold_main_lbs > m.payable_main_lbs + SOLD_SLACK ? [m.sold_main_lbs, m.payable_main_lbs] : [m.sold_smalls_lbs, m.payable_smalls_lbs];
+    throw bad(`This would leave ${p} lb to sell, but ${s} lb is already sold. Lower or void the sold entries first`);
+  }
+}
+
+async function editPricePoint(body, env) {
+  const row = await env.DB.prepare('SELECT * FROM cl_price_points WHERE id = ?').bind(Number(body.id)).first();
+  if (!row) throw createError('NOT_FOUND', 'Price point not found');
+  const cur = pickKeys(row, ['cultivar', 'type', 'price_per_lb', 'effective_from']);
+  const next = { ...cur };
+  if (given(body, 'cultivar')) { next.cultivar = clean(body.cultivar); if (!next.cultivar) throw bad('Cultivar is required'); }
+  if (given(body, 'type')) { if (!TYPES.has(body.type)) throw bad('type must be tops or smalls'); next.type = body.type; }
+  if (given(body, 'price_per_lb')) next.price_per_lb = posNum(body.price_per_lb, 'Price per lb');
+  if (given(body, 'effective_from')) {
+    next.effective_from = realDay(body.effective_from);
+    if (!next.effective_from) throw bad('Start date must be a real date, YYYY-MM-DD');
+  }
+  const ch = changes(cur, next);
+  if (!ch) return ok({ price_point: row, lots_updated: 0 });
+  const actor = editActor(body);
+  const stmts = [
+    env.DB.prepare('UPDATE cl_price_points SET cultivar = ?, type = ?, price_per_lb = ?, effective_from = ? WHERE id = ?')
+      .bind(next.cultivar, next.type, next.price_per_lb, next.effective_from, row.id),
+    history(env, 'cl_price_points', row.id, 'editPricePoint', ch.before, ch.after, actor),
+  ];
+  // Lots that carry the OLD price of this point (matched on its old cultivar and type) follow
+  // the new price. A lot whose price was set by hand to something else is left alone.
+  let lotsUpdated = 0;
+  if (body.update_lots === true && next.price_per_lb !== cur.price_per_lb) {
+    const follow = async (col, type) => {
+      const ids = (await env.DB.prepare(
+        `SELECT id FROM cl_lots WHERE farm_id = ? AND cultivar = ? COLLATE NOCASE AND type = ? AND voided_at IS NULL AND ${col} = ?`
+      ).bind(row.farm_id, cur.cultivar, type, cur.price_per_lb).all()).results.map((r) => r.id);
+      for (const id of ids) {
+        stmts.push(
+          env.DB.prepare(`UPDATE cl_lots SET ${col} = ? WHERE id = ? AND ${col} = ?`).bind(next.price_per_lb, id, cur.price_per_lb),
+          history(env, 'cl_lots', id, 'editPricePoint', { [col]: cur.price_per_lb }, { [col]: next.price_per_lb, price_point_id: row.id }, actor),
+        );
+      }
+      lotsUpdated += ids.length;
+    };
+    await follow('price_per_lb', cur.type);
+    // A smalls price is also the price of what a tops lot turned into smalls.
+    if (cur.type === 'smalls') await follow('smalls_price_per_lb', 'tops');
+  }
+  await env.DB.batch(stmts);
+  const price_point = await env.DB.prepare('SELECT * FROM cl_price_points WHERE id = ?').bind(row.id).first();
+  return ok({ price_point, lots_updated: lotsUpdated });
+}
+
+/** Remove a price point. History keeps the whole row. Lots keep the price they have. */
+async function deletePricePoint(body, env) {
+  const row = await env.DB.prepare('SELECT * FROM cl_price_points WHERE id = ?').bind(Number(body.id)).first();
+  if (!row) throw createError('NOT_FOUND', 'Price point not found');
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM cl_price_points WHERE id = ?').bind(row.id),
+    history(env, 'cl_price_points', row.id, 'deletePricePoint', row, null, editActor(body)),
+  ]);
+  return ok({ ok: true });
+}
+
+/** Date, received by, note. The farm never changes here, and the lots are not re-priced. */
+async function editDropoff(body, env) {
+  const d = await env.DB.prepare('SELECT * FROM cl_dropoffs WHERE id = ?').bind(Number(body.dropoff_id)).first();
+  if (!d) throw createError('NOT_FOUND', 'Dropoff not found');
+  if (d.voided_at) throw bad('This dropoff was voided');
+  if (given(body, 'farm_id') && Number(body.farm_id) !== d.farm_id) {
+    throw bad('A dropoff cannot move to another farm. Void it and enter it again under the right farm');
+  }
+  const cur = pickKeys(d, ['dropped_at', 'dropped_by', 'note']);
+  const next = { ...cur };
+  if (given(body, 'dropped_on')) {
+    const day = dropoffDay(body.dropped_on, pacificDay(new Date()));
+    // Same day as now (on the Pacific calendar): the time it was saved stays.
+    const was = pacificDay(new Date(`${String(d.dropped_at).replace(' ', 'T')}Z`));
+    if (day !== was) next.dropped_at = `${day} 20:00:00`;
+  }
+  if (given(body, 'dropped_by')) next.dropped_by = textOrNull(body.dropped_by);
+  if (given(body, 'note')) next.note = textOrNull(body.note);
+  const ch = changes(cur, next);
+  if (ch) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE cl_dropoffs SET dropped_at = ?, dropped_by = ?, note = ? WHERE id = ?').bind(next.dropped_at, next.dropped_by, next.note, d.id),
+      history(env, 'cl_dropoffs', d.id, 'editDropoff', ch.before, ch.after, editActor(body)),
+    ]);
+  }
+  return dropoffDetail(env, d.id);
+}
+
+/** Cultivar, type, weight, note. Term and prices stay in setLotTerms. */
+async function editLot(body, env) {
+  const lot = liveLot(await oneLot(env, body.lot_id));
+  const cur = pickKeys(lot, ['cultivar', 'type', 'intake_lbs', 'note']);
+  const next = { ...cur };
+  if (given(body, 'cultivar')) { next.cultivar = clean(body.cultivar); if (!next.cultivar) throw bad('Cultivar is required'); }
+  if (given(body, 'type')) { if (!TYPES.has(body.type)) throw bad('type must be tops or smalls'); next.type = body.type; }
+  if (given(body, 'intake_lbs')) {
+    next.intake_lbs = posNum(body.intake_lbs, 'Weight');
+    if (next.intake_lbs > MAX_LINE_LBS) throw bad(`Weight must be ${MAX_LINE_LBS} lb or less`);
+  }
+  if (given(body, 'note')) next.note = textOrNull(body.note);
+  const ch = changes(cur, next);
+  if (!ch) return ok({ lot });
+
+  if (next.type !== cur.type && (lot.runs.some((r) => !r.voided_at) || lot.sold.some((s) => !s.voided_at))) {
+    throw bad('The type can only change before the lot is screened or sold. Void its screening runs and sold entries first, or void the lot and enter it again');
+  }
+  if (next.intake_lbs !== cur.intake_lbs) {
+    if (lot.closed_at) throw bad('This lot is closed, so its screening runs set its weight. Edit the screening run instead');
+    if (next.intake_lbs + screenTolerance(next.intake_lbs) < lot.money.pulled_lbs) {
+      throw bad(`Weight cannot be below the ${lot.money.pulled_lbs} lb already pulled for screening`);
+    }
+  }
+  if (next.cultivar.toLowerCase() !== cur.cultivar.toLowerCase() || next.type !== cur.type) {
+    const clash = await env.DB.prepare(
+      'SELECT id FROM cl_lots WHERE dropoff_id = ? AND id != ? AND voided_at IS NULL AND cultivar = ? COLLATE NOCASE AND type = ? AND term = ?'
+    ).bind(lot.dropoff_id, lot.id, next.cultivar, next.type, lot.term).first();
+    if (clash) throw bad(`This dropoff already has a ${next.cultivar} ${next.type} lot. Edit that one instead`);
+  }
+  checkLot({ ...lot, ...next }, lot.runs, lot.sold);
+  // A new cultivar or type keeps the lot's price; the price is edited on its own.
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE cl_lots SET cultivar = ?, type = ?, intake_lbs = ?, note = ?, weighed_at = CASE WHEN ? IS NULL THEN weighed_at ELSE COALESCE(weighed_at, datetime('now')) END WHERE id = ?"
+    ).bind(next.cultivar, next.type, next.intake_lbs, next.note, next.intake_lbs, lot.id),
+    history(env, 'cl_lots', lot.id, 'editLot', ch.before, ch.after, editActor(body)),
+  ]);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+const RUN_LOSSES = [['final_lbs', 'Final weight'], ['to_smalls_lbs', 'Turned to smalls'], ['biomass_lbs', 'Biomass'], ['mold_lbs', 'Mold']];
+
+/** A screening run's pounds and note. Never changes the lot's intake. */
+async function editScreenRun(body, env) {
+  const row = await env.DB.prepare('SELECT * FROM cl_screen_runs WHERE id = ?').bind(Number(body.run_id)).first();
+  if (!row) throw createError('NOT_FOUND', 'Screening run not found');
+  if (row.voided_at) throw bad('This screening run was voided');
+  const lot = liveLot(await oneLot(env, row.lot_id));
+  const cur = pickKeys(row, ['pulled_lbs', 'final_lbs', 'to_smalls_lbs', 'biomass_lbs', 'mold_lbs', 'diff_lbs', 'note']);
+  const next = { ...cur };
+  if (given(body, 'pulled_lbs')) next.pulled_lbs = posNum(body.pulled_lbs, 'Pounds pulled');
+  for (const [k, label] of RUN_LOSSES) if (given(body, k)) next[k] = zeroOrMore(body[k], label);
+  if (given(body, 'note')) next.note = textOrNull(body.note);
+  if (lot.type === 'smalls' && next.to_smalls_lbs > 0) throw bad('A smalls lot cannot turn into smalls');
+  const chk = checkRun(next, lot.type);
+  if (!chk.ok) throw bad(`Outputs are off by ${chk.diff} lb (allowed ${chk.tolerance} lb)`);
+  next.diff_lbs = chk.diff;
+  const ch = changes(cur, next);
+  if (!ch) return ok({ lot });
+
+  const intake = Number(lot.intake_lbs);
+  const others = round2(lot.runs.filter((r) => !r.voided_at && r.id !== row.id).reduce((a, r) => a + Number(r.pulled_lbs), 0));
+  const room = round2(intake - others);
+  if (next.pulled_lbs > room + screenTolerance(intake)) throw bad(`Only ${room} lb is left to screen for this run, cannot pull more than that`);
+  // A closed lot's runs cover its intake (closeLot's rule). Pulling less would close the lot
+  // on pounds nobody screened.
+  const left = round2(room - next.pulled_lbs);
+  if (lot.closed_at && next.pulled_lbs < cur.pulled_lbs && left > screenTolerance(intake)) {
+    throw bad(`This lot is closed; pulling ${next.pulled_lbs} lb would leave ${left} lb unscreened. Void this run and enter it again instead`);
+  }
+  checkLot(lot, lot.runs.map((r) => (r.id === row.id ? { ...r, ...next } : r)), lot.sold);
+  await env.DB.batch([
+    env.DB.prepare('UPDATE cl_screen_runs SET pulled_lbs = ?, final_lbs = ?, to_smalls_lbs = ?, biomass_lbs = ?, mold_lbs = ?, diff_lbs = ?, note = ? WHERE id = ?')
+      .bind(next.pulled_lbs, next.final_lbs, next.to_smalls_lbs, next.biomass_lbs, next.mold_lbs, next.diff_lbs, next.note, row.id),
+    history(env, 'cl_screen_runs', row.id, 'editScreenRun', ch.before, ch.after, editActor(body)),
+  ]);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+async function editSold(body, env) {
+  const row = await env.DB.prepare('SELECT * FROM cl_sold WHERE id = ?').bind(Number(body.sold_id)).first();
+  if (!row) throw createError('NOT_FOUND', 'Sold entry not found');
+  if (row.voided_at) throw bad('This sold entry was voided');
+  const lot = liveLot(await oneLot(env, row.lot_id));
+  const cur = pickKeys(row, ['lbs', 'sold_on', 'note']);
+  const next = { ...cur };
+  if (given(body, 'lbs')) next.lbs = posNum(body.lbs, 'Pounds sold');
+  if (given(body, 'sold_on')) {
+    next.sold_on = realDay(body.sold_on);
+    if (!next.sold_on) throw bad('Sold date must be a real date, YYYY-MM-DD');
+  }
+  if (given(body, 'note')) next.note = textOrNull(body.note);
+  const ch = changes(cur, next);
+  if (!ch) return ok({ lot });
+  // Same cap as saveSold, with this entry's own pounds back on hand.
+  const m = lot.money;
+  const left = row.kind === 'smalls' ? m.payable_smalls_lbs - m.sold_smalls_lbs : m.payable_main_lbs - m.sold_main_lbs;
+  const room = round2(left + Number(row.lbs));
+  if (next.lbs > room + SOLD_SLACK) throw bad(`Only ${room} lb is left on hand for this lot`);
+  await env.DB.batch([
+    env.DB.prepare('UPDATE cl_sold SET lbs = ?, sold_on = ?, note = ? WHERE id = ?').bind(next.lbs, next.sold_on, next.note, row.id),
+    history(env, 'cl_sold', row.id, 'editSold', ch.before, ch.after, editActor(body)),
+  ]);
+  return ok({ lot: await oneLot(env, lot.id) });
+}
+
+async function editPayment(body, env) {
+  const row = await env.DB.prepare('SELECT * FROM cl_payments WHERE id = ?').bind(Number(body.payment_id)).first();
+  if (!row) throw createError('NOT_FOUND', 'Payment not found');
+  if (row.voided_at) throw bad('This payment was voided');
+  const cur = pickKeys(row, ['amount', 'paid_on', 'method', 'reference', 'note']);
+  const next = { ...cur };
+  if (given(body, 'amount')) next.amount = posNum(body.amount, 'Amount');
+  if (given(body, 'paid_on')) {
+    next.paid_on = realDay(body.paid_on);
+    if (!next.paid_on) throw bad('Payment date must be a real date, YYYY-MM-DD');
+  }
+  for (const k of ['method', 'reference', 'note']) if (given(body, k)) next[k] = textOrNull(body[k]);
+  const ch = changes(cur, next);
+  if (ch) {
+    await env.DB.batch([
+      env.DB.prepare('UPDATE cl_payments SET amount = ?, paid_on = ?, method = ?, reference = ?, note = ? WHERE id = ?')
+        .bind(next.amount, next.paid_on, next.method, next.reference, next.note, row.id),
+      history(env, 'cl_payments', row.id, 'editPayment', ch.before, ch.after, editActor(body)),
+    ]);
+  }
+  const payment = await env.DB.prepare('SELECT * FROM cl_payments WHERE id = ?').bind(row.id).first();
+  const { totals } = await farmTotalsFor(env, row.farm_id);
+  return ok({ payment, totals });
 }
 
 async function listFarms(env) {
@@ -714,6 +976,13 @@ function route(action, body, env) {
     case 'readSheet': return readSheet(body, env);
     case 'issueFarmAccess': return issueFarmAccess(body, env);
     case 'revokeFarmAccess': return revokeFarmAccess(body, env);
+    case 'editPricePoint': return editPricePoint(body, env);
+    case 'deletePricePoint': return deletePricePoint(body, env);
+    case 'editDropoff': return editDropoff(body, env);
+    case 'editLot': return editLot(body, env);
+    case 'editScreenRun': return editScreenRun(body, env);
+    case 'editSold': return editSold(body, env);
+    case 'editPayment': return editPayment(body, env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }
