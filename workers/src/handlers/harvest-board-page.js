@@ -1283,6 +1283,7 @@ export const BOARD_PAGE = `<!doctype html>
   --amber:#946d1c; --amber-soft:#fbefcf;
   --leaf:#4f6f5a;  --leaf-soft:#e2efe6;
   --rust:#b3403a;  --rust-soft:#f7e0de;
+  --day:#a8501a; --day-soft:#fde6d2; --night:#4b4a8f; --night-soft:#e6e5f6; --any:#27716f; --any-soft:#dcefee;
   --st-untested:#a9ada9; --st-to-schedule:#e9b949; --st-scheduled:#5b93b8; --st-cleared:#668971;
   --st-harvesting:#e9b949; --st-drying:#946d1c; --st-supersacked:#4f6f5a; --st-failed:#b3403a;
   --shadow:0 1px 2px rgba(60,80,66,.08), 0 6px 18px -10px rgba(60,80,66,.25);
@@ -1316,6 +1317,15 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
 .card { border-radius:12px; background:#fff; box-shadow:var(--shadow); }
 .season { background:#fff; }
 .cultivar { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; color:var(--ink); }
+/* Best-time chip: when the flower smokes best, from the tasting notes. Its
+   own three hues and a glyph, so it is never read as a COA chip. */
+.when { display:inline-flex; align-self:flex-start; width:fit-content; align-items:center; gap:.3rem; margin-top:.35rem; padding:.2rem .6rem;
+  border-radius:999px; font-family:"Karla", sans-serif; font-size:.78rem; font-weight:700;
+  line-height:1.2; white-space:nowrap; }
+.when.day     { color:var(--day);   background:var(--day-soft); }
+.when.night   { color:var(--night); background:var(--night-soft); }
+.when.anytime { color:var(--any);   background:var(--any-soft); }
+.drawer .when { margin:0 0 .5rem; font-size:.9rem; padding:.3rem .8rem; }
 .drawer .head h2 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; }
 .gate-card { border-radius:16px; }
 .gate-card h1 { font-family:"Quicksand", sans-serif !important; color:var(--sage-deep); }
@@ -1428,6 +1438,25 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
   }
 
   var THC_LIMIT = 0.3;   // ODA total-THC line, percent (pre-harvest only)
+
+  // When the flower smokes best, from the cultivar tasting notes. One of
+  // three per card, or none until the cultivar has been tasted.
+  var WHEN = {
+    day:     { name: "Daytime",   glyph: "☀" },
+    night:   { name: "Nighttime", glyph: "☾" },
+    anytime: { name: "Anytime",   glyph: "◐" }
+  };
+  function whenChip(card) {
+    var w = WHEN[card.use_time];
+    if (!w) { return null; }
+    var chip = el("span", "when " + card.use_time);
+    var g = el("span", null, w.glyph);
+    g.setAttribute("aria-hidden", "true");
+    chip.appendChild(g);
+    chip.appendChild(document.createTextNode(w.name));
+    chip.title = "Best time, from the tasting notes: " + w.name;
+    return chip;
+  }
 
   var cards = [];       // cultivar rows from D1, by name
   var cardBy = {};      // slug -> card
@@ -1834,6 +1863,8 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
     if (st.lots.length > 1) { top.appendChild(el("span", "zcount", st.lots.length + " zones")); }
     node.appendChild(top);
     node.appendChild(el("div", "cultivar", card.cultivar));
+    var when = whenChip(card);
+    if (when) { node.appendChild(when); }
 
     var coas = el("div", "coas");
     coas.appendChild(coaChip("Pre COA", st.pre > 0,
@@ -2335,6 +2366,26 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
       stageSec.appendChild(go);
     }
     body.appendChild(stageSec);
+
+    // Best time: set from the tasting notes, changed here if they change.
+    var whenSec = section("Best time");
+    var whenNow = whenChip(card);
+    if (whenNow) { whenSec.appendChild(whenNow); }
+    var ws = document.createElement("select");
+    [["", "Not tasted yet"], ["day", "Daytime"], ["night", "Nighttime"], ["anytime", "Anytime"]]
+      .forEach(function (pair) {
+        var o = document.createElement("option");
+        o.value = pair[0];
+        o.textContent = pair[1];
+        ws.appendChild(o);
+      });
+    ws.value = WHEN[card.use_time] ? card.use_time : "";
+    ws.setAttribute("aria-label", "Best time");
+    var wsWrap = el("span", "sel");
+    wsWrap.appendChild(bindField(ws, "use_time", key));
+    whenSec.appendChild(group("Daytime, nighttime or anytime", wsWrap,
+      "From the tasting notes. The chip on the card follows this."));
+    body.appendChild(whenSec);
 
     // Post-harvest: one dried-flower potency COA for the cultivar.
     var postSec = section("Post-harvest COA");
