@@ -27,10 +27,10 @@ const { handleProductionD1 } = await import(url('workers/src/handlers/production
 const migration = (f) => readFileSync(join(REPO, 'workers/migrations', f), 'utf8')
   .split(/\r?\n/).map((l) => l.replace(/--.*$/, '')).join('\n');
 const run = (sqlite, sql) => { for (const st of sql.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); } };
-function freshDb({ skip68 = false } = {}) {
+function freshDb({ skipCrewHours = false } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   run(sqlite, migration('0065-crew-numbers.sql'));
-  if (!skip68) run(sqlite, migration('0068-crew-hours.sql'));
+  if (!skipCrewHours) run(sqlite, migration('0069-crew-hours.sql'));
   const DB = {
     async batch(stmts) { const out = []; for (const s of stmts) out.push(await s.run()); return out; },
     prepare(q) {
@@ -182,11 +182,11 @@ test('bad input is refused', async () => {
 });
 
 test('the migration backfills hours already loaded from the sheets', async () => {
-  const { sqlite, env } = freshDb({ skip68: true });
+  const { sqlite, env } = freshDb({ skipCrewHours: true });
   sqlite.prepare("INSERT INTO crew_people (name, token) VALUES ('Ana', 'tok_aaaaaaaaaaaaaaaaaaaa')").run();
   sqlite.prepare(`INSERT INTO crew_days (work_date, person_id, cell, hours_json, tops_g, work_min, full_day)
     VALUES ('2026-11-13', 1, '5', '[{"slot":"7–8","g":300,"min":60},{"slot":"3–4 SL","g":100,"min":60},{"slot":"4–4:30","g":0,"min":0}]', 400, 120, 0)`).run();
-  run(sqlite, migration('0068-crew-hours.sql'));
+  run(sqlite, migration('0069-crew-hours.sql'));
   const rows = sqlite.prepare('SELECT slot, src, cell, g, min FROM crew_hours ORDER BY slot').all();
   assert.deepEqual(rows.map((r) => [r.slot, r.src, r.cell, r.g, r.min]), [['3-4', 'sheet', '5', 100, 60], ['7-8', 'sheet', '5', 300, 60]]);
   assert.equal(sqlite.prepare('SELECT sheet_full_day FROM crew_days').get().sheet_full_day, 0);
