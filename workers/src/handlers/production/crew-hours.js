@@ -27,6 +27,7 @@ import { successResponse, errorResponse } from '../../lib/response.js';
 import { requireAuth } from '../../lib/auth.js';
 import { newToken } from './crew-numbers.js';
 import { ALL_TIME_SLOTS } from '../../lib/production-helpers.js';
+import { fillSlot } from './cell-fill.js';
 
 const G_PER_LB = 453.59237;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -114,17 +115,17 @@ export async function recomputeDay(db, date) {
   }
 
   // A sheet load sets the day's meta (goal and room rate from the hourly log) and
-  // that stands. A typed-only day gets its room rate from the typed hours and the
-  // last goal set before it.
+  // that stands. A typed-only day gets its room rate from the typed hours; its goal
+  // is worked out on read (lib/cell-goal.js), so nothing is copied forward here.
+  // A goal set on the Cell hourly log (crewGoalSet) is kept: COALESCE.
   const meta = await db.prepare('SELECT note FROM crew_day_meta WHERE work_date = ?').bind(date).first();
   if (!meta || String(meta.note || '').startsWith('typed')) {
-    const prev = await db.prepare('SELECT target_lb_hr FROM crew_day_meta WHERE work_date < ? AND target_lb_hr IS NOT NULL ORDER BY work_date DESC LIMIT 1').bind(date).first();
     const room = allMin > 0 ? Math.round(allG / G_PER_LB / (allMin / 60) * 1000) / 1000 : null;
     stmts.push(db.prepare(
-      `INSERT INTO crew_day_meta (work_date, target_lb_hr, room_lb_hr, note) VALUES (?, ?, ?, 'typed: room rate of the typed hours')
+      `INSERT INTO crew_day_meta (work_date, target_lb_hr, room_lb_hr, note) VALUES (?, NULL, ?, 'typed: room rate of the typed hours')
        ON CONFLICT(work_date) DO UPDATE SET room_lb_hr = excluded.room_lb_hr,
          target_lb_hr = COALESCE(crew_day_meta.target_lb_hr, excluded.target_lb_hr)`
-    ).bind(date, prev?.target_lb_hr ?? null, room));
+    ).bind(date, room));
   }
   if (stmts.length) await db.batch(stmts);
 }
@@ -193,6 +194,8 @@ export async function crewHourSave(body, env, request) {
   }
   for (const st of touched) await deriveCellTops(env.DB, date, slot, st);
   await recomputeDay(env.DB, date);
+  // Hourly entry, if the day's fill switch is on (lib/cell-fill.js).
+  if (touched.size) await fillSlot(env, date, slot);
   return successResponse({ success: true, date, personId, slot });
 }
 

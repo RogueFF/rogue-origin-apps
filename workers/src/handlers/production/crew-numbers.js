@@ -14,6 +14,7 @@
  * person's name or numbers. No money anywhere.
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
+import { dayGoal } from '../../lib/cell-goal.js';
 import { requireAuth } from '../../lib/auth.js';
 import { recomputeDay, slotKey } from './crew-hours.js';
 
@@ -86,7 +87,7 @@ export async function getMyNumbers(params, env) {
       fullDay: !!d.full_day,
       rank: d.full_day ? (ranks.get(person.id) ?? null) : null,
       of,
-      target: meta?.target_lb_hr ?? null,
+      target: (await dayGoal(env.DB, d.work_date))?.lbHr ?? null,
       roomRate: meta?.room_lb_hr ?? null,
       hourly: parseHours(d.hours_json).map((h) => ({
         slot: String(h.slot ?? ''),
