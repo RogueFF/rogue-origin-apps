@@ -26,6 +26,7 @@ const GATED = [
   'complaints.html',
   'consignment.html',         // its old login overlay now defers to the gate
   'consign.html',             // Consignment lot ledger (staff app); has its own language toggle
+  'crew-hourly.html',         // Horas por persona: leads type each person's hour; writes need the farm password
 ];
 // Left open to the public on purpose.
 const OPEN = [

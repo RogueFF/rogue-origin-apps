@@ -29,7 +29,7 @@ const { rankDay } = await import(url('workers/src/handlers/production/crew-numbe
 
 function freshDb() {
   const sqlite = new DatabaseSync(':memory:');
-  const sql = readFileSync(join(REPO, 'workers/migrations/0065-crew-numbers.sql'), 'utf8')
+  const sql = ['0065-crew-numbers.sql', '0069-crew-hours.sql'].map((f) => readFileSync(join(REPO, 'workers/migrations', f), 'utf8')).join(';' + String.fromCharCode(10))
     .split(/\r?\n/).map((l) => l.replace(/--.*$/, '')).join('\n');
   for (const st of sql.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); }
   const DB = {
