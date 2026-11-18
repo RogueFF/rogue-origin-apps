@@ -41,17 +41,45 @@ export const LABELS = {
 export const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (_, k) => (k in v ? v[k] : `{${k}}`));
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Today's date on the farm (Pacific), YYYY-MM-DD. */
+export function pacificToday(ms = Date.now()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+}
+
+/**
+ * Which day the panel shows (Koa 2026-11-18: "show top 5 leaderboard on bottom
+ * (based off of yesterdays numbers)"): the latest workday BEFORE today with a
+ * ranking. Typed hours land in crew_hours during the shift, so the API's own
+ * `day` can flip to today mid-shift; the board never shows a half day.
+ * Returns { day, ranked, room } or null.
+ */
+export function pickDay(resp, today) {
+  if (!resp || resp.success === false) return null;
+  const by = resp.byDay && typeof resp.byDay === 'object' ? resp.byDay : null;
+  if (by) {
+    const days = Object.keys(by).filter((d) => ISO_DAY.test(d) && d < today && Array.isArray(by[d]?.ranked) && by[d].ranked.length).sort();
+    const d = days[days.length - 1];
+    return d ? { day: d, ranked: by[d].ranked, room: by[d].room || null } : null;
+  }
+  // an older reply without byDay: only its own last workday, and only if it isn't today
+  if (Array.isArray(resp.top) && ISO_DAY.test(resp.day || '') && resp.day < today) return { day: resp.day, ranked: resp.top, room: resp.room || null };
+  return null;
+}
+
 /**
  * The crewBoard reply → what the panel draws, or null to hide the panel
- * (failed call, success:false, no ranked day). Rows are capped at TOP and kept
- * in the API's order (rank 1 first).
+ * (failed call, success:false, no ranked workday before today). Rows are
+ * capped at TOP and kept in the API's order (rank 1 first).
  */
-export function panelModel(resp) {
-  if (!resp || resp.success === false || !Array.isArray(resp.top)) return null;
-  const goalLb = num(resp.room?.goal?.lbHr);
-  const goalG = num(resp.room?.goal?.gph);
+export function panelModel(resp, today = pacificToday()) {
+  const pick = pickDay(resp, today);
+  if (!pick) return null;
+  const goalLb = num(pick.room?.goal?.lbHr);
+  const goalG = num(pick.room?.goal?.gph);
   const goal = goalLb !== null && goalLb > 0 ? { lbHr: goalLb, lb: goalLb.toFixed(2), gph: goalG !== null ? Math.round(goalG) : null } : null;
-  const rows = resp.top
+  const rows = pick.ranked
     .filter((p) => p && typeof p.name === 'string' && p.name.trim() && num(p.lbHr) !== null)
     .slice(0, TOP)
     .map((p, i) => ({
@@ -62,8 +90,7 @@ export function panelModel(resp) {
       overGoal: goal ? p.lbHr >= goal.lbHr : false,
     }));
   if (!rows.length) return null;
-  const day = typeof resp.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(resp.day) ? resp.day : null;
-  return { day, goal, rows };
+  return { day: pick.day, goal, rows };
 }
 
 /** "Mon, Nov 17" / "lun, 17 nov" for the panel title (the data's own day, never "yesterday"). */
@@ -95,9 +122,13 @@ export function localApi(param) {
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/api$/.test(param || '') ? param : null;
 }
 
-/** The crew board's last-workday TV view, in the scoreboard's language. */
-export function crewBoardUrl(lang, api) {
+/**
+ * The crew board's TV view of one workday, in the scoreboard's language. With
+ * `day` it shows the same day as the Top 5 panel (never today's half day).
+ */
+export function crewBoardUrl(lang, api, day) {
   const q = new URLSearchParams({ tv: '1', view: 'day', lang: lang === 'en' ? 'en' : 'es' });
+  if (ISO_DAY.test(day || '')) q.set('day', day);
   const local = localApi(api);
   if (local) q.set('api', local);
   return `crew-board.html?${q.toString()}`;

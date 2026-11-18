@@ -19,12 +19,14 @@ import { dirname, join } from 'node:path';
 
 import {
   TOP, REFRESH_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, PRELOAD_MS, READY_TIMEOUT_MS, IDLE_AFTER_INPUT_MS,
-  MIN_ROTATE_WIDTH, LABELS, panelModel, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from '../src/js/scoreboard-v2/leaders-logic.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const P = (rank, name, gph, lbHr) => ({ rank, name, gph, lbHr });
 // the live reply's shape on 2026-11-17 (crew-board.js boardFrom)
+// these older-shape replies (no byDay) are read as of the morning after
+const TODAY = '2026-11-18';
 const LIVE = {
   success: true,
   day: '2026-11-17',
@@ -35,7 +37,7 @@ const LIVE = {
 };
 
 test('the panel draws the live top 5 in order with the goal', () => {
-  const m = panelModel(LIVE);
+  const m = panelModel(LIVE, TODAY);
   assert.equal(m.day, '2026-11-17');
   assert.deepEqual(m.goal, { lbHr: 0.53, lb: '0.53', gph: 240 });
   assert.deepEqual(m.rows.map((r) => r.name), ['Ariel', 'Alberto (Junior)', 'José Luis', 'Gandiva (Yair)', 'Antonio']);
@@ -45,34 +47,34 @@ test('the panel draws the live top 5 in order with the goal', () => {
 
 test('never more than 5, even if the API sends more', () => {
   const more = { ...LIVE, top: [...LIVE.top, P(6, 'Eduardo', 254, 0.56), P(7, 'Leobardo', 233, 0.51)] };
-  const m = panelModel(more);
+  const m = panelModel(more, TODAY);
   assert.equal(TOP, 5);
   assert.equal(m.rows.length, 5);
   assert.ok(!m.rows.some((r) => r.name === 'Eduardo' || r.name === 'Leobardo'));
 });
 
 test('lb shows 2 decimals and grams whole numbers', () => {
-  const m = panelModel({ ...LIVE, top: [P(1, 'A', 372.6, 0.8), P(2, 'B', 100, 0.2049)] });
+  const m = panelModel({ ...LIVE, top: [P(1, 'A', 372.6, 0.8), P(2, 'B', 100, 0.2049)] }, TODAY);
   assert.equal(m.rows[0].lb, '0.80');
   assert.equal(m.rows[0].gph, 373);
   assert.equal(m.rows[1].lb, '0.20');
 });
 
 test('fewer than 5 ranked shows just those', () => {
-  const m = panelModel({ ...LIVE, top: LIVE.top.slice(0, 3) });
+  const m = panelModel({ ...LIVE, top: LIVE.top.slice(0, 3) }, TODAY);
   assert.equal(m.rows.length, 3);
 });
 
 test('no goal: no goal chip and nobody marked', () => {
   for (const room of [null, undefined, { goal: null }, { goal: { gph: null, lbHr: null } }, { goal: { lbHr: 0, gph: 0 } }]) {
-    const m = panelModel({ ...LIVE, room });
+    const m = panelModel({ ...LIVE, room }, TODAY);
     assert.equal(m.goal, null);
     assert.ok(m.rows.every((r) => r.overGoal === false));
   }
 });
 
 test('Toyota rule: below the goal is never marked, only over it', () => {
-  const m = panelModel({ ...LIVE, room: { goal: { gph: 270, lbHr: 0.6 } } });
+  const m = panelModel({ ...LIVE, room: { goal: { gph: 270, lbHr: 0.6 } } }, TODAY);
   assert.deepEqual(m.rows.map((r) => r.overGoal), [true, true, true, false, false]);
   for (const r of m.rows) assert.deepEqual(Object.keys(r).sort(), ['gph', 'lb', 'name', 'overGoal', 'rank']);
 });
@@ -81,7 +83,7 @@ test('a failed, empty or malformed reply hides the panel', () => {
   for (const bad of [null, undefined, {}, { success: false, top: LIVE.top }, { success: true, top: [] },
     { success: true, day: null, top: [], room: null, days: [] }, { success: true, top: 'x' },
     { success: true, top: [{ name: '', lbHr: 0.5 }, { name: 'X' }, null] }]) {
-    assert.equal(panelModel(bad), null, JSON.stringify(bad));
+    assert.equal(panelModel(bad, TODAY), null, JSON.stringify(bad));
   }
 });
 
@@ -90,7 +92,7 @@ test('the date comes from the data, never "yesterday"', () => {
   assert.match(fmtDay('2026-11-17', 'es'), /mar.*17.*nov/i);
   assert.equal(fmtDay(null, 'en'), '');
   assert.equal(fmtDay('nope', 'en'), '');
-  assert.equal(panelModel({ ...LIVE, day: 'garbage' }).day, null);
+  assert.equal(panelModel({ ...LIVE, day: 'garbage' }, TODAY), null);   // no real day: nothing to show
   for (const l of Object.values(LABELS)) assert.ok(!/yesterday|ayer/i.test(JSON.stringify(l)));
 });
 
@@ -157,4 +159,51 @@ test('the scoreboard page carries the panel, the overlay and the module', () => 
   const js = readFileSync(join(REPO, 'src/js/scoreboard-v2/leaders.js'), 'utf8');
   assert.match(js, /action=crewBoard/);
   assert.ok(!/method:\s*'POST'/i.test(js));
+});
+
+// Koa 2026-11-18: "show top 5 leaderboard on bottom (based off of yesterdays
+// numbers)". Typed hours land during the shift, so the API's own `day` can be
+// today; the panel always shows the latest workday BEFORE today.
+const R = (names) => names.map((n, i) => P(i + 1, n, 400 - i * 20, Math.round((400 - i * 20) / 453.59237 * 100) / 100));
+const BY_DAY = {
+  success: true,
+  day: '2026-11-18',          // today's half day, already ranked mid-shift
+  top: R(['Half', 'Day', 'Today', 'Not', 'Shown']),
+  room: { date: '2026-11-18', goal: { gph: 300, lbHr: 0.66 } },
+  byDay: {
+    '2026-11-13': { ranked: R(['Old', 'Day']), room: { goal: { gph: 230, lbHr: 0.51 } } },
+    '2026-11-17': { ranked: R(['Ariel', 'Alberto (Junior)', 'José Luis', 'Gandiva (Yair)', 'Antonio', 'Eduardo']), room: { goal: { gph: 240, lbHr: 0.53 } } },
+    '2026-11-18': { ranked: R(['Half', 'Day', 'Today', 'Not', 'Shown']), room: { goal: { gph: 300, lbHr: 0.66 } } },
+  },
+};
+
+test("the Top 5 is the last workday before today, never today's half day", () => {
+  const m = panelModel(BY_DAY, '2026-11-18');
+  assert.equal(m.day, '2026-11-17');
+  assert.deepEqual(m.rows.map((r) => r.name), ['Ariel', 'Alberto (Junior)', 'José Luis', 'Gandiva (Yair)', 'Antonio']);
+  assert.deepEqual(m.goal, { lbHr: 0.53, lb: '0.53', gph: 240 });   // that day's goal, not today's
+  // the morning after a weekend: Friday's numbers on Monday
+  assert.equal(panelModel(BY_DAY, '2026-11-16').day, '2026-11-13');
+  // the next day, the 18th becomes "yesterday"
+  assert.equal(panelModel(BY_DAY, '2026-11-19').day, '2026-11-18');
+});
+
+test('no workday before today: no panel (and so no rotation)', () => {
+  assert.equal(panelModel(BY_DAY, '2026-11-13'), null);
+  assert.equal(panelModel({ success: true, day: '2026-11-18', top: R(['A']), byDay: { '2026-11-18': { ranked: R(['A']) } } }, '2026-11-18'), null);
+  // a day with no ranked rows is skipped, not shown empty
+  const gap = { success: true, byDay: { '2026-11-14': { ranked: R(['Fri']) }, '2026-11-17': { ranked: [] } } };
+  assert.equal(pickDay(gap, '2026-11-18').day, '2026-11-14');
+  // an older reply without byDay: its own day only when it isn't today
+  assert.equal(panelModel(LIVE, '2026-11-17'), null);
+});
+
+test("the farm's today is the Pacific date", () => {
+  assert.equal(pacificToday(Date.parse('2026-11-19T07:30:00Z')), '2026-11-18');   // 11:30 PM Pacific
+  assert.equal(pacificToday(Date.parse('2026-11-19T08:30:00Z')), '2026-11-19');   // 12:30 AM Pacific
+});
+
+test('the rotating crew board shows the same day as the panel', () => {
+  assert.equal(crewBoardUrl('en', null, '2026-11-17'), 'crew-board.html?tv=1&view=day&lang=en&day=2026-11-17');
+  assert.equal(crewBoardUrl('es', null, 'nope'), 'crew-board.html?tv=1&view=day&lang=es');
 });

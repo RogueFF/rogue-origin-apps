@@ -11,7 +11,7 @@
 import { registerLabels, getLang, t } from '../shared/i18n.js';
 import {
   LABELS, REFRESH_MS, FETCH_TIMEOUT_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, ROTATE_RETRY_MS,
-  PRELOAD_MS, READY_TIMEOUT_MS, panelModel, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  PRELOAD_MS, READY_TIMEOUT_MS, panelModel, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from './leaders-logic.js';
 
 registerLabels(LABELS);
@@ -23,10 +23,13 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 let model = null;
+let lastReply = null;   // kept so the day re-picks at midnight without a new fetch
 let lastInput = 0;
 
 // ---------- panel ----------
 function render() {
+  // the latest workday BEFORE today (Koa 2026-11-18: "based off of yesterdays numbers")
+  model = lastReply ? panelModel(lastReply, pacificToday()) : null;
   const panel = $('leadersPanel');
   if (!panel) return;
   if (!model) { panel.hidden = true; return; }
@@ -53,9 +56,9 @@ async function load() {
     const res = await fetch(`${API}/production?action=crewBoard`, { cache: 'no-store', referrerPolicy: 'no-referrer', signal: ctl?.signal });
     if (timer) clearTimeout(timer);
     if (!res.ok) throw new Error(String(res.status));
-    model = panelModel(await res.json());
+    lastReply = await res.json();
   } catch {
-    model = null;           // hide the panel; the rotation skips too
+    lastReply = null;       // hide the panel; the rotation skips too
   }
   render();
 }
@@ -128,7 +131,7 @@ function tick() {
     frameEl.className = 'ldr-frame';
     frameEl.title = t('ldrBoard');
     frameEl.setAttribute('tabindex', '-1');
-    frameEl.src = crewBoardUrl(getLang(), params.get('api'));
+    frameEl.src = crewBoardUrl(getLang(), params.get('api'), model?.day);
     ov.appendChild(frameEl);
     phase = 'loading';
     phaseAt = now;
