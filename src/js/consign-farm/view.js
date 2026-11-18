@@ -27,12 +27,14 @@ function stand(v) {
 }
 
 function prices(v) {
+  // One row per cultivar, matched without case (as the server picks prices).
   const by = new Map();
   for (const p of v.price_points) {
-    if (!by.has(p.cultivar)) by.set(p.cultivar, {});
-    by.get(p.cultivar)[p.type] = p.price_per_lb;
+    const k = p.cultivar.toLowerCase();
+    if (!by.has(k)) by.set(k, { name: p.cultivar, pr: {} });
+    by.get(k).pr[p.type] = p.price_per_lb;
   }
-  const rows = [...by.entries()].map(([c, pr]) => `<li class="cf-price">
+  const rows = [...by.values()].map(({ name: c, pr }) => `<li class="cf-price">
       <b class="cf-name">${esc(c)}</b>
       <span class="cf-pp">${['tops', 'smalls'].filter((ty) => pr[ty] != null).map((ty) => `<span>${esc(typeLabel(ty))} <b>${money(pr[ty])}</b> ${esc(t('perLb'))}</span>`).join('')}</span>
     </li>`).join('');
@@ -106,9 +108,10 @@ function soldCard(v) {
   </section>`;
 }
 
-export function pageHtml(v) {
+export function pageHtml(v, notice = '') {
   return `<div class="cf-stack">
     <h1 class="cf-farm" id="farmName">${esc(v.farm.name)}</h1>
+    ${notice ? `<p class="cf-msg err" id="pageMsg" role="alert">${esc(notice)}</p>` : ''}
     ${stand(v)}${prices(v)}${dropoffs(v)}${payments(v)}${soldCard(v)}
     <p class="cf-muted cf-foot">${esc(t('footer'))}</p>
     <div class="cf-btns">

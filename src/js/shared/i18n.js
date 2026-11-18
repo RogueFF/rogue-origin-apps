@@ -12,6 +12,11 @@ let labels = { en: {}, es: {} };
 let currentLang = null;
 
 function readStored() {
+  // Storage can throw (blocked cookies, some in-app browsers): fall back to English, never a blank page.
+  try { return readStoredUnsafe(); } catch { return null; }
+}
+
+function readStoredUnsafe() {
   const v = localStorage.getItem(KEY);
   if (v === 'en' || v === 'es') return v;
   for (const k of LEGACY_KEYS) {
@@ -44,7 +49,7 @@ export function getLang() {
 export function setLang(lang) {
   const next = lang === 'es' ? 'es' : 'en';
   currentLang = next;
-  localStorage.setItem(KEY, next);
+  try { localStorage.setItem(KEY, next); } catch { /* storage blocked: the language still switches */ }
   document.documentElement.setAttribute('lang', next);
   applyDOM();
   document.dispatchEvent(new CustomEvent('ro:langchange', { detail: { lang: next } }));

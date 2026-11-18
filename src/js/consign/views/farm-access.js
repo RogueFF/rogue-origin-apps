@@ -75,7 +75,10 @@ export async function onAccessClick(b, ctx) {
       const { token } = await ownerCall('issueFarmAccess', { farm_id: ctx.farmId });
       ctx.setShown(token);
       ctx.reload();
-    } catch (err) { showErr(err); }
+    } catch (err) {
+      // No answer: the link may have been made and lost. Making another is always safe.
+      if (err.network) { toast(t('linkMaybeLost'), 'err'); ctx.reload(); } else showErr(err);
+    }
     return true;
   }
   if (b.id === 'turnOffLink') {

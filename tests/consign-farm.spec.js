@@ -213,6 +213,52 @@ test.describe('farm page: access', () => {
     await expect(page.locator('#pinForm')).toContainText('Enter your PIN');
   });
 
+  test('storage blocked (throws): the page still works', async ({ page }) => {
+    await page.addInitScript(() => {
+      const boom = () => { throw new DOMException('blocked', 'SecurityError'); };
+      Object.defineProperty(window, 'localStorage', { get: boom, configurable: true });
+    });
+    const fake = makeFake();
+    await isolate(page.context(), fake);
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto(`${FARM_PAGE}#k=${LINK}`);
+    await enterPin(page, PIN);
+    await expect(page.locator('#farmName')).toHaveText('Farm A');
+    await page.locator('#langToggle').click();
+    await expect(page.locator('#standLabel')).toHaveText('Le debemos');
+  });
+
+  test('a wrong-PIN message follows a language switch; html lang follows too', async ({ page }) => {
+    await openFarm(page, { fake: makeFake({ lang: 'es' }), lang: 'es' });
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await enterPin(page, '0000');
+    await expect(page.locator('#msg')).toContainText('Le quedan 4 intentos');
+    await page.locator('#langToggle').click();
+    await expect(page.locator('#msg')).toHaveText('Wrong PIN. 4 tries left before the page locks for 15 minutes.');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  });
+
+  test('refresh with no signal keeps the page and says so', async ({ page }) => {
+    await openFarm(page);
+    await enterPin(page, PIN);
+    await expect(page.locator('#farmName')).toBeVisible();
+    await page.context().unroute(/\/api\/consign-farm\?/);
+    await page.context().route(/\/api\/consign-farm\?/, (route) => route.abort('internetdisconnected'));
+    await page.locator('#refreshBtn').click();
+    await expect(page.locator('#pageMsg')).toHaveText('No connection. Check your signal and try again.');
+    await expect(page.locator('#farmName')).toHaveText('Farm A');
+  });
+
+  test('no signal on Open keeps the typed PIN', async ({ page }) => {
+    await openFarm(page);
+    await expect(page.locator('#pinForm')).toBeVisible();
+    await page.context().unroute(/\/api\/consign-farm\?/);
+    await page.context().route(/\/api\/consign-farm\?/, (route) => route.abort('internetdisconnected'));
+    await enterPin(page, PIN);
+    await expect(page.locator('#msg')).toHaveText('No connection. Check your signal and try again.');
+    await expect(page.locator('#pin1')).toHaveValue(PIN);
+  });
+
   test('close page forgets the PIN and asks again', async ({ page }) => {
     const { fake } = await openFarm(page);
     await enterPin(page, PIN);

@@ -213,6 +213,7 @@ export const LABELS = {
     hideLink: 'Done, hide the link',
     showNoteToFarm: 'Show this note to the farm',
     farmSeesNote: 'Farm sees this note',
+    linkMaybeLost: 'No signal. If a link was made it is lost; press New link to make another.',
   },
   es: {
     title: 'Consignación',
@@ -421,6 +422,7 @@ export const LABELS = {
     hideLink: 'Listo, ocultar el enlace',
     showNoteToFarm: 'Mostrar esta nota a la granja',
     farmSeesNote: 'La granja ve esta nota',
+    linkMaybeLost: 'Sin señal. Si se creó un enlace, se perdió; toque Enlace nuevo para crear otro.',
   },
 };
 

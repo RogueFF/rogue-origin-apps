@@ -22,7 +22,8 @@ const readLink = () => {
 let LINK = readLink();
 
 const root = document.getElementById('view');
-const s = { screen: 'loading', data: null, msg: '', msgKind: '', minutes: 0, busy: false, langPicked: false };
+// msg is a label key (+ vars), translated at render, so a language switch moves it too.
+const s = { screen: 'loading', data: null, msg: '', msgVars: null, msgKind: '', pageMsg: '', minutes: 0, busy: false, langPicked: false };
 let pin = null; // memory only
 
 const $ = (id) => document.getElementById(id);
@@ -31,9 +32,10 @@ function langLabel() {
   $('langToggle').innerHTML = getLang() === 'es' ? '<b>ES</b> · EN' : 'ES · <b>EN</b>';
 }
 
+const msgText = () => (s.msgVars ? tf(s.msg, s.msgVars) : t(s.msg));
 function msgHtml() {
   if (!s.msg) return '<p class="cf-msg" id="msg" role="alert" hidden></p>';
-  return `<p class="cf-msg ${s.msgKind}" id="msg" role="alert">${esc(s.msg)}</p>`;
+  return `<p class="cf-msg ${s.msgKind}" id="msg" role="alert">${esc(msgText())}</p>`;
 }
 
 const pinInput = (id, label) => `<label class="cf-field" for="${id}"><span class="cf-label">${esc(label)}</span>
@@ -50,7 +52,7 @@ function render() {
       html = `<section class="cf-card cf-gate is-bad" id="badLink"><h2 class="cf-h2">${esc(t('notActive'))}</h2><p>${esc(t('notActiveHelp'))}</p></section>`;
       break;
     case 'neterr':
-      html = `<section class="cf-card cf-gate" id="netErr"><p>${esc(s.msg || t('noSignal'))}</p>
+      html = `<section class="cf-card cf-gate" id="netErr"><p>${esc(s.msg ? msgText() : t('noSignal'))}</p>
         <div class="cf-btns"><button type="button" class="cf-btn primary" id="retryBtn">${esc(t('tryAgain'))}</button></div></section>`;
       break;
     case 'setpin':
@@ -82,7 +84,7 @@ function render() {
       </section>`;
       break;
     case 'page':
-      html = pageHtml(s.data);
+      html = pageHtml(s.data, s.pageMsg ? t(s.pageMsg) : '');
       break;
     default:
       html = '';
@@ -92,24 +94,24 @@ function render() {
   if (first) first.focus();
 }
 
-function setMsg(msg, kind = 'err') { s.msg = msg; s.msgKind = kind; }
+function setMsg(key, kind = 'err', vars = null) { s.msg = key; s.msgKind = kind; s.msgVars = vars; }
 
 /** Turn a refusal into the right screen. */
 function onError(err, screenIfWrong) {
   s.busy = false;
-  if (err.network) { setMsg(t('noSignal')); s.screen = screenIfWrong || 'neterr'; return render(); }
+  if (err.network) { setMsg('noSignal'); s.screen = screenIfWrong || 'neterr'; return render(); }
   if (err.code === 'UNAUTHORIZED') { pin = null; s.screen = 'bad'; return render(); }
   if (err.code === 'RATE_LIMITED') { pin = null; s.screen = 'locked'; s.minutes = Number(err.details.minutes_left) || 15; return render(); }
   if (err.code === 'VALIDATION_ERROR' && err.details && err.details.tries_left != null) {
     pin = null;
     const n = Number(err.details.tries_left);
-    setMsg(n === 1 ? t('wrongPinOne') : tf('wrongPin', { n }));
+    setMsg(n === 1 ? 'wrongPinOne' : 'wrongPin', 'err', { n });
     s.screen = 'pin';
     return render();
   }
   if (err.code === 'VALIDATION_ERROR' && err.details && err.details.needs_pin) { setMsg(''); s.screen = 'setpin'; return render(); }
-  if (err.code === 'VALIDATION_ERROR' && /already set/i.test(err.message)) { setMsg(t('pinAlreadySet'), 'info'); s.screen = 'pin'; return render(); }
-  setMsg(t('errGeneric'));
+  if (err.code === 'VALIDATION_ERROR' && /already set/i.test(err.message)) { setMsg('pinAlreadySet', 'info'); s.screen = 'pin'; return render(); }
+  setMsg('errGeneric');
   s.screen = screenIfWrong || 'neterr';
   return render();
 }
@@ -118,6 +120,7 @@ function showPage(data) {
   s.data = data;
   s.busy = false;
   setMsg('');
+  s.pageMsg = '';
   if (!s.langPicked && data.farm.lang && data.farm.lang !== getLang()) setLang(data.farm.lang);
   s.screen = 'page';
   render();
@@ -138,6 +141,11 @@ async function start() {
 }
 
 const fourDigits = (v) => /^[0-9]{4}$/.test(v);
+/** No signal: keep what was typed, so a retry is one tap. A refused PIN is cleared. */
+function keepTyped(err, vals) {
+  if (!err.network) return;
+  ['pin1', 'pin2'].forEach((id, i) => { if ($(id) && vals[i] != null) $(id).value = vals[i]; });
+}
 
 root.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -145,18 +153,18 @@ root.addEventListener('submit', async (e) => {
   const p1 = ($('pin1') && $('pin1').value.trim()) || '';
   if (e.target.id === 'setPinForm') {
     const p2 = ($('pin2') && $('pin2').value.trim()) || '';
-    if (!fourDigits(p1)) { setMsg(t('pinFour')); return render(); }
-    if (p1 !== p2) { setMsg(t('pinMismatch')); return render(); }
+    if (!fourDigits(p1)) { setMsg('pinFour'); return render(); }
+    if (p1 !== p2) { setMsg('pinMismatch'); return render(); }
     s.busy = true;
     render();
-    try { const v = await farmCall('setPin', { token: LINK, pin: p1 }); pin = p1; showPage(v); } catch (err) { onError(err, 'setpin'); }
+    try { const v = await farmCall('setPin', { token: LINK, pin: p1 }); pin = p1; showPage(v); } catch (err) { onError(err, 'setpin'); keepTyped(err, [p1, p2]); }
     return;
   }
   if (e.target.id === 'pinForm') {
-    if (!fourDigits(p1)) { setMsg(t('pinFour')); return render(); }
+    if (!fourDigits(p1)) { setMsg('pinFour'); return render(); }
     s.busy = true;
     render();
-    try { const v = await farmCall('view', { token: LINK, pin: p1 }); pin = p1; showPage(v); } catch (err) { onError(err, 'pin'); }
+    try { const v = await farmCall('view', { token: LINK, pin: p1 }); pin = p1; showPage(v); } catch (err) { onError(err, 'pin'); keepTyped(err, [p1]); }
   }
 });
 
@@ -168,7 +176,13 @@ root.addEventListener('click', async (e) => {
   if (b.id === 'refreshBtn') {
     if (!pin) return start();
     b.disabled = true;
-    try { showPage(await farmCall('view', { token: LINK, pin })); } catch (err) { onError(err, 'pin'); }
+    try {
+      showPage(await farmCall('view', { token: LINK, pin }));
+    } catch (err) {
+      // No signal: stay on the page with what it already shows.
+      if (err.network) { s.pageMsg = 'noSignal'; render(); return; }
+      onError(err, 'pin');
+    }
   }
 });
 
@@ -193,4 +207,5 @@ document.addEventListener('ro:langchange', () => {
 window.addEventListener('hashchange', () => { const next = readLink(); if (next !== LINK) { LINK = next; pin = null; s.data = null; start(); } });
 
 langLabel();
+document.documentElement.setAttribute('lang', getLang());
 start();
