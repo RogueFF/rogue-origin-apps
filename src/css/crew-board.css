@@ -118,3 +118,5 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .cb-foot { padding: 4px clamp(16px, 3vw, 48px) 24px; color: var(--text-muted); font-size: clamp(12px, 1.05vw, 19px); display: grid; gap: 2px; }
 .cb-foot p { margin: 0; }
 @media (max-width: 420px) { .cb-row { grid-template-columns: 40px 1fr auto; } .cb-name { font-size: 22px; } }
+/* small phones: long names wrap to a second line instead of being cut off */
+@media (max-width: 359px) { .cb-name, .cb-sname { white-space: normal; overflow-wrap: anywhere; } .cb-sname small { white-space: nowrap; } .cb-name { font-size: 20px; } }
