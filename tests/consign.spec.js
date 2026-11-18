@@ -164,6 +164,18 @@ test.describe('Consignment lot ledger', () => {
     expect(blocked).toEqual([]);
   });
 
+  test('a past dropoff date is sent as dropped_on; left empty it is not sent', async ({ page }) => {
+    const { fake } = await open(page, { hash: '#/dropoff' });
+    await page.locator('[data-farm="1"]').click();
+    await page.locator('#cultPick').selectOption('Alpha');
+    await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('10');
+    await expect(page.locator('#droppedOn')).toHaveValue('');
+    await page.locator('#droppedOn').fill('2026-11-04');
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    expect(fake.posts.find((p) => p.action === 'saveDropoff').body.dropped_on).toBe('2026-11-04');
+  });
+
   test('ten cultivars with both types and a split (ES, 375 wide)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     const fake = makeFake();

@@ -221,7 +221,19 @@ async function saveDropoff(body, env) {
     return { cultivar, type: ln.type, term, intake, run, note: clean(ln.note) || null };
   });
 
-  const today = pacificDay(new Date());
+  // Optional past date (a catch-up entry). Not in the future, not more than a year back.
+  // The lot's price is the price point in force on that day. Stored at noon Pacific (20:00 UTC).
+  const realToday = pacificDay(new Date());
+  let droppedAt = null;
+  let today = realToday;
+  if (body.dropped_on != null && body.dropped_on !== '') {
+    const d = String(body.dropped_on);
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(`${d}T00:00:00Z`) : NaN;
+    if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== d) throw bad('Dropoff date must be a real date, YYYY-MM-DD');
+    if (d > realToday) throw bad('Dropoff date cannot be in the future');
+    if (t < Date.parse(`${realToday}T00:00:00Z`) - 366 * 86400000) throw bad('Dropoff date cannot be more than a year back');
+    if (d !== realToday) { droppedAt = `${d} 20:00:00`; today = d; }
+  }
   for (const ln of lines) {
     ln.price = await priceFor(env, farmId, ln.cultivar, ln.type, today);
     ln.smallsPrice = ln.type === 'tops' ? await priceFor(env, farmId, ln.cultivar, 'smalls', today) : null;
@@ -229,8 +241,8 @@ async function saveDropoff(body, env) {
 
   const source = ['paper', 'telegram'].includes(body.source) ? body.source : 'app';
   const stmts = [
-    env.DB.prepare('INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key) VALUES (?, ?, ?, ?, ?)')
-      .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key),
+    env.DB.prepare("INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key, dropped_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))")
+      .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key, droppedAt),
     ...lines.map((ln) => env.DB.prepare(
       `INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term, intake_lbs, weighed_at, price_per_lb, smalls_price_per_lb, note)
        VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`

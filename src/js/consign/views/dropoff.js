@@ -69,7 +69,7 @@ let uidSeq = 0;
 export function mount(root, { prefill = null, farmId = null, farmCheck = false } = {}) {
   const s = {
     farms: null, farm: null, detail: null, error: null, loadingFarm: false,
-    rows: [], droppedBy: actor(), note: '', key: newKey(), saving: false, saveError: '', saved: false,
+    rows: [], droppedBy: actor(), droppedOn: '', note: '', key: newKey(), saving: false, saveError: '', saved: false,
     fromPhoto: !!prefill, pending: prefill, farmMark: !!farmCheck,
   };
 
@@ -297,6 +297,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   function notesStep() {
     return `<section class="cs-card cs-step">${stepHead(3, 'stepNotes')}
       <label class="cs-field"><span class="cs-label">${esc(t('droppedBy'))}</span><input class="cs-input" id="droppedBy" value="${esc(s.droppedBy)}" autocomplete="name"></label>
+      <label class="cs-field"><span class="cs-label">${esc(t('droppedOn'))}</span><input class="cs-input" id="droppedOn" type="date" max="${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })}" value="${esc(s.droppedOn)}"></label>
       <label class="cs-field"><span class="cs-label">${esc(t('dropoffNote'))}</span><textarea class="cs-input" id="dropNote" rows="2">${esc(s.note)}</textarea></label>
     </section>`;
   }
@@ -469,6 +470,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
       clearMarkInPlace(el, r, 'name');
     } else if (el.dataset.rownote) findRow(el.dataset.rownote).note = el.value;
     else if (el.id === 'droppedBy') s.droppedBy = el.value;
+    else if (el.id === 'droppedOn') s.droppedOn = el.value;
     else if (el.id === 'dropNote') s.note = el.value;
     else return;
     s.saveError = '';
@@ -531,6 +533,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     root.querySelector('#saveBtn').textContent = t('saving');
     // farm_name is ignored by the server; it lets a held entry say whose it was.
     const body = { farm_id: s.farm.id, farm_name: s.farm.name, dropped_by: s.droppedBy.trim(), note: s.note.trim(), client_key: s.key, lines };
+    if (s.droppedOn) body.dropped_on = s.droppedOn;
     if (s.fromPhoto) body.source = 'paper';
     try {
       const res = await submit('saveDropoff', body);
