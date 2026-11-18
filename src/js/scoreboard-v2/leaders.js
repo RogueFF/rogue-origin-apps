@@ -11,7 +11,7 @@
 import { registerLabels, getLang, t } from '../shared/i18n.js';
 import {
   LABELS, REFRESH_MS, FETCH_TIMEOUT_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, ROTATE_RETRY_MS,
-  PRELOAD_MS, READY_TIMEOUT_MS, panelModel, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  PRELOAD_MS, READY_TIMEOUT_MS, nextRotationAt, panelModel, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from './leaders-logic.js';
 
 registerLabels(LABELS);
@@ -152,7 +152,9 @@ function tick() {
   if (phase === 'showing') {
     // back early if the scoreboard has something to say (a bag, a modal) or the board broke
     if (now - phaseAt >= ROTATE_SHOW_MS || isBusy() || document.hidden || !boardReady(frameEl)) {
-      skip(ROTATE_EVERY_MS);
+      const startedAt = phaseAt;
+      dropFrame();
+      nextAt = nextRotationAt(startedAt);   // 10 min start to start
     }
   }
 }
