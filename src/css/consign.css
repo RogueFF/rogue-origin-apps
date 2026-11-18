@@ -210,6 +210,7 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .cs-chipbtn { min-height: 48px; padding: 6px 16px; border-radius: 999px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 18px; font-weight: 600; }
 .cs-chipbtn.on { border-color: var(--cs-green); background: color-mix(in srgb, var(--cs-green) 14%, transparent); }
+.cs-select { min-height: 64px; font-size: 22px; font-weight: 600; cursor: pointer; }
 .cs-other { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .cs-other .cs-input { flex: 1 1 200px; width: auto; }
 .cs-summary { width: 100%; border-collapse: collapse; font-size: 18px; }

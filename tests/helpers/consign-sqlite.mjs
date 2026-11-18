@@ -7,7 +7,8 @@ try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* skip in tes
 export const sqliteOk = !!DatabaseSync;
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MIGRATIONS = ['workers/migrations/0066-consign-lots.sql', 'workers/migrations/0067-consign-farm-access.sql'];
+const MIGRATIONS = ['workers/migrations/0066-consign-lots.sql', 'workers/migrations/0067-consign-farm-access.sql',
+  'workers/migrations/0068-consign-farm-access-lockouts.sql'];
 
 export function freshConsignDb() {
   const sqlite = new DatabaseSync(':memory:');

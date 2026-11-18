@@ -56,14 +56,14 @@ async function seedTwo(env) {
   await owner(env, 'setLotTerms', { lot_id: smalls.id, note_visible: true });
   const dv = await staff(env, 'saveDropoff', { farm_id: a.id, client_key: 'ka2', lines: [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 5 }] });
   await staff(env, 'voidRow', { table: 'dropoff', id: dv.dropoff.id, reason: 'VOID-REASON' });
-  await staff(env, 'savePayment', { farm_id: a.id, amount: 300, method: 'check', reference: '1001', note: 'PAY-NOTE', paid_on: '2026-11-10', client_key: 'pa1' });
-  const pv = await staff(env, 'savePayment', { farm_id: a.id, amount: 77, method: 'cash', note: 'PAY-NOTE', paid_on: '2026-11-11', client_key: 'pa2' });
-  await staff(env, 'voidRow', { table: 'payment', id: pv.payment.id, reason: 'VOID-REASON' });
+  await owner(env, 'savePayment', { farm_id: a.id, amount: 300, method: 'check', reference: '1001', note: 'PAY-NOTE', paid_on: '2026-11-10', client_key: 'pa1' });
+  const pv = await owner(env, 'savePayment', { farm_id: a.id, amount: 77, method: 'cash', note: 'PAY-NOTE', paid_on: '2026-11-11', client_key: 'pa2' });
+  await owner(env, 'voidRow', { table: 'payment', id: pv.payment.id, reason: 'VOID-REASON' });
 
   const db = await staff(env, 'saveDropoff', { farm_id: b.id, dropped_by: 'STAFF-B', note: 'B-NOTE', client_key: 'kb1',
     lines: [{ cultivar: 'Beta', type: 'tops', intake_lbs: 50, note: 'B-LOT-NOTE' }] });
   await owner(env, 'setLotTerms', { lot_id: db.lots[0].id, note_visible: true });
-  await staff(env, 'savePayment', { farm_id: b.id, amount: 999, method: 'ach', reference: 'B-REF', paid_on: '2026-11-12', client_key: 'pb1' });
+  await owner(env, 'savePayment', { farm_id: b.id, amount: 999, method: 'ach', reference: 'B-REF', paid_on: '2026-11-12', client_key: 'pb1' });
 
   const { token: ta } = await owner(env, 'issueFarmAccess', { farm_id: a.id });
   const { token: tb } = await owner(env, 'issueFarmAccess', { farm_id: b.id });
@@ -111,7 +111,7 @@ test('totals equal the staff farm action for the same data', async () => {
   const { env } = freshConsignDb();
   const { a, ta } = await seedTwo(env);
   const v = await farm(env, 'setPin', { token: ta, pin: '1234' });
-  const s = await staff(env, 'farm', { farm_id: a.id });
+  const s = await owner(env, 'farm', { farm_id: a.id });
   for (const k of ['balance', 'owed', 'paid', 'estimate']) assert.equal(v.totals[k], s.totals[k], k);
   assert.equal(v.totals.owed, 840 + 160);
   assert.equal(v.totals.last_payment_on, '2026-11-10');
@@ -175,6 +175,67 @@ test('a correct PIN resets the count', async () => {
   for (let i = 0; i < 4; i++) await refused(env, 'view', { token: ta, pin: '0000' }, now);
   await farm(env, 'view', { token: ta, pin: '1234' }, now);
   assert.deepEqual((await refused(env, 'view', { token: ta, pin: '0000' }, now)).details, { tries_left: 4 });
+});
+
+test('three lockouts in a row turn the link off: 15 guesses in all, then even the right PIN is dead', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { a, ta, tb } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  await farm(env, 'setPin', { token: tb, pin: '1234' }, now);
+  for (let round = 1; round <= 3; round++) {
+    for (let i = 1; i <= 4; i++) assert.equal((await refused(env, 'view', { token: ta, pin: '0000' }, now)).code, 'VALIDATION_ERROR');
+    const fifth = await refused(env, 'view', { token: ta, pin: '0000' }, now);
+    if (round < 3) {
+      assert.equal(fifth.code, 'RATE_LIMITED');
+      now.add(16);
+    } else {
+      assert.equal(fifth.code, 'UNAUTHORIZED', 'the 15th wrong PIN turns the link off');
+    }
+  }
+  now.add(60);
+  assert.equal((await refused(env, 'view', { token: ta, pin: '1234' }, now)).code, 'UNAUTHORIZED');
+  assert.equal((await refused(env, 'status', { token: ta }, now)).code, 'UNAUTHORIZED');
+  const row = sqlite.prepare('SELECT lockouts, revoked_at FROM cl_farm_access WHERE farm_id = ?').get(a.id);
+  assert.equal(row.lockouts, 3);
+  assert.ok(row.revoked_at);
+  // The other farm's link is untouched, and the staff page says why this one is off.
+  assert.equal((await farm(env, 'view', { token: tb, pin: '1234' }, now)).farm.name, 'Farm B');
+  const acc = (await owner(env, 'farm', { farm_id: a.id })).access;
+  assert.equal(acc.active, false);
+  assert.equal(acc.auto_off, true);
+  // A new link starts clean.
+  const { token: t2 } = await owner(env, 'issueFarmAccess', { farm_id: a.id });
+  await farm(env, 'setPin', { token: t2, pin: '4321' }, now);
+  assert.equal((await owner(env, 'farm', { farm_id: a.id })).access.auto_off, false);
+});
+
+test('a correct PIN between lockouts clears the lockout count', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { ta } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  for (let round = 0; round < 2; round++) {
+    for (let i = 0; i < 5; i++) await refused(env, 'view', { token: ta, pin: '0000' }, now);
+    now.add(16);
+  }
+  assert.equal(sqlite.prepare('SELECT lockouts FROM cl_farm_access WHERE pin_hash IS NOT NULL').get().lockouts, 2);
+  await farm(env, 'view', { token: ta, pin: '1234' }, now);
+  assert.equal(sqlite.prepare('SELECT lockouts FROM cl_farm_access WHERE pin_hash IS NOT NULL').get().lockouts, 0);
+  for (let i = 0; i < 5; i++) await refused(env, 'view', { token: ta, pin: '0000' }, now);
+  now.add(16);
+  assert.equal((await farm(env, 'view', { token: ta, pin: '1234' }, now)).farm.name, 'Farm A', 'still on: only one lockout since the good PIN');
+});
+
+test('parallel wrong PINs count one lockout, not many', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { ta } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  await Promise.all(Array.from({ length: 20 }, () => refused(env, 'view', { token: ta, pin: '0000' }, now)));
+  const row = sqlite.prepare('SELECT lockouts, revoked_at FROM cl_farm_access WHERE pin_hash IS NOT NULL').get();
+  assert.equal(row.lockouts, 1);
+  assert.equal(row.revoked_at, null);
 });
 
 test('setPin only once; a second setPin is refused and the PIN is unchanged', async () => {
@@ -273,7 +334,8 @@ test('voided lots, runs and sold entries are absent; a sold lot shows on hand an
   const run = await staff(env, 'saveScreenRun', { lot_id: sm.id, pulled_lbs: 20, final_lbs: 20, client_key: 'rb1' });
   await staff(env, 'saveSold', { lot_id: sm.id, lbs: 5, client_key: 'sb1', note: 'SOLD-NOTE' });
   const s2 = await staff(env, 'saveSold', { lot_id: sm.id, lbs: 3, client_key: 'sb2', note: 'SOLD-NOTE' });
-  const soldId = s2.lot.sold.find((x) => x.client_key === 'sb2').id;
+  // Staff replies carry no client keys: the newest sold entry is sb2.
+  const soldId = s2.lot.sold[s2.lot.sold.length - 1].id;
   await staff(env, 'voidRow', { table: 'sold', id: soldId, reason: 'VOID-REASON' });
   const v = await farm(env, 'setPin', { token: tb, pin: '1234' });
   const lots = v.dropoffs.flatMap((x) => x.lots);
@@ -334,15 +396,15 @@ test('issueFarmAccess returns the link once; only its hash is stored; history ha
 test('staff farm read carries the link state, never a hash', async () => {
   const { env, sqlite } = freshConsignDb();
   const { farm: c } = await owner(env, 'saveFarm', { name: 'Farm C' });
-  assert.equal((await staff(env, 'farm', { farm_id: c.id })).access, null);
+  assert.equal((await owner(env, 'farm', { farm_id: c.id })).access, null);
   const { token: t } = await owner(env, 'issueFarmAccess', { farm_id: c.id });
-  let acc = (await staff(env, 'farm', { farm_id: c.id })).access;
-  assert.deepEqual(Object.keys(acc).sort(), ['active', 'issued_at', 'last_seen_at', 'locked', 'pin_set']);
+  let acc = (await owner(env, 'farm', { farm_id: c.id })).access;
+  assert.deepEqual(Object.keys(acc).sort(), ['active', 'auto_off', 'issued_at', 'last_seen_at', 'locked', 'pin_set']);
   assert.equal(acc.active, true);
   assert.equal(acc.pin_set, false);
   assert.equal(acc.last_seen_at, null);
   await farm(env, 'setPin', { token: t, pin: '1234' }, () => new Date());
-  const reply = await staff(env, 'farm', { farm_id: c.id });
+  const reply = await owner(env, 'farm', { farm_id: c.id });
   acc = reply.access;
   assert.equal(acc.pin_set, true);
   assert.ok(acc.last_seen_at);
@@ -350,7 +412,7 @@ test('staff farm read carries the link state, never a hash', async () => {
   const s = JSON.stringify(reply);
   assert.ok(!s.includes(row.token_hash) && !s.includes(row.pin_hash) && !s.includes(t));
   for (let i = 0; i < 5; i++) await refused(env, 'view', { token: t, pin: '0000' }, () => new Date());
-  assert.equal((await staff(env, 'farm', { farm_id: c.id })).access.locked, true);
+  assert.equal((await owner(env, 'farm', { farm_id: c.id })).access.locked, true);
   const off = await owner(env, 'revokeFarmAccess', { farm_id: c.id });
   assert.equal(off.revoked, 1);
   assert.equal(off.access.active, false);

@@ -59,6 +59,16 @@ function makeFake({ open, farms } = {}) {
   return state;
 }
 
+// What the worker does for a caller without the owner password (lib/consign-staff-view.js),
+// roughly: money keys and payments gone. The owner password the fake takes is OWNER_PW.
+const OWNER_PW = 'owner-test';
+const MONEY_KEYS = new Set(['price_per_lb', 'smalls_price_per_lb', 'owed', 'value', 'balance', 'paid', 'credit', 'amount', 'estimate', 'payments', 'totals', 'payment', 'access']);
+const staffShape = (v) => {
+  if (Array.isArray(v)) return v.map(staffShape);
+  if (!v || typeof v !== 'object') return v;
+  return Object.fromEntries(Object.entries(v).filter(([k]) => !MONEY_KEYS.has(k)).map(([k, x]) => [k, staffShape(x)]));
+};
+
 async function isolate(context, fake) {
   const blocked = [];
   // Order matters: the guard first, so the fakes registered after it take priority.
@@ -69,6 +79,10 @@ async function isolate(context, fake) {
     const req = route.request();
     const action = new URL(req.url()).searchParams.get('action');
     const body = JSON.parse(req.postData() || '{}');
+    const owner = body.owner_password === OWNER_PW;
+    if ((action === 'savePayment' || (action === 'voidRow' && body.table === 'payment')) && !owner) {
+      return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Owner password required', code: 'UNAUTHORIZED' }) });
+    }
     if (action.startsWith('save') || action === 'setWeight') {
       fake.posts.push({ action, body });
       if (fake.offline) return route.abort('internetdisconnected');
@@ -78,7 +92,9 @@ async function isolate(context, fake) {
     else if (fake.readsOffline) return route.abort('internetdisconnected');
     const data = fake.answer(action, body);
     if (data == null) { blocked.push(req.url()); return route.abort(); }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
+    // fake.oldWorker: a worker from before the money lock, which sends money to anyone.
+    const reply = fake.oldWorker ? { success: true, data } : { success: true, data: owner ? data : staffShape(data), owner };
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
   });
   return blocked;
 }
@@ -102,12 +118,37 @@ async function open(page, { lang = 'en', hash = '#/', fake = makeFake() } = {}) 
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
 test.describe('Consignment lot ledger', () => {
+  test('cultivar dropdown: pick a known one, or choose New cultivar and type it', async ({ page }) => {
+    await open(page, { hash: '#/dropoff' });
+    await page.locator('[data-farm="1"]').click();
+    const pick = page.locator('#cultPick');
+    await expect(page.locator('#otherName')).toHaveCount(0);
+    await pick.selectOption('Alpha');
+    await expect(page.locator('[data-row="Alpha"]')).toBeVisible();
+    // A cultivar already on the form leaves the list.
+    await expect(pick.locator('option[value="Alpha"]')).toHaveCount(0);
+    await pick.selectOption('__new');
+    await page.locator('#otherName').fill('Zeta New');
+    await page.locator('#addOther').click();
+    await expect(page.locator('[data-row="Zeta New"]')).toBeVisible();
+    // Back to the plain dropdown, with no typing box left open.
+    await expect(page.locator('#otherName')).toHaveCount(0);
+    await expect(pick).toHaveValue('');
+    await page.setViewportSize({ width: 375, height: 800 });
+    expect(await noHorizontalScroll(page)).toBe(true);
+    if (process.env.CS_SHOT_DIR) {
+      await pick.selectOption('__new');
+      await page.locator('#rows').evaluate((el) => { el.style.display = 'none'; });
+      await page.locator('#cultPick').locator('xpath=ancestor::section').screenshot({ path: `${process.env.CS_SHOT_DIR}/cultivar-dropdown-new.png` });
+    }
+  });
+
   test('one-line dropoff (EN): Saved shows only after the server answers', async ({ page }) => {
     const fake = makeFake();
     fake.delay = 300;
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Alpha' }).click();
+    await page.locator('#cultPick').selectOption('Alpha');
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('42.5');
     await expect(page.locator('[data-row="Alpha"] [data-on$="|tops"]')).toBeChecked();
     await expect(page.locator('#summary')).toContainText('42.5');
@@ -123,12 +164,24 @@ test.describe('Consignment lot ledger', () => {
     expect(blocked).toEqual([]);
   });
 
+  test('a past dropoff date is sent as dropped_on; left empty it is not sent', async ({ page }) => {
+    const { fake } = await open(page, { hash: '#/dropoff' });
+    await page.locator('[data-farm="1"]').click();
+    await page.locator('#cultPick').selectOption('Alpha');
+    await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('10');
+    await expect(page.locator('#droppedOn')).toHaveValue('');
+    await page.locator('#droppedOn').fill('2026-11-04');
+    await page.locator('#saveBtn').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    expect(fake.posts.find((p) => p.action === 'saveDropoff').body.dropped_on).toBe('2026-11-04');
+  });
+
   test('ten cultivars with both types and a split (ES, 375 wide)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     const fake = makeFake();
     const { blocked } = await open(page, { lang: 'es', hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
-    for (const c of CULTIVARS) await page.getByRole('button', { name: `＋ ${c}` }).click();
+    for (const c of CULTIVARS) await page.locator('#cultPick').selectOption(c);
     for (const [i, c] of CULTIVARS.entries()) {
       await page.locator(`[data-row="${c}"] [data-type="tops"] input[data-lbs]`).fill(String(10 + i));
       await page.locator(`[data-row="${c}"] [data-type="smalls"] input[data-lbs]`).fill(String(2 + i));
@@ -173,7 +226,7 @@ test.describe('Consignment lot ledger', () => {
     fake.offline = true;
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Beta' }).click();
+    await page.locator('#cultPick').selectOption('Beta');
     await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').fill('12');
     await page.locator('#saveBtn').click();
     await expect(page.locator('#toast')).toContainText('No signal');
@@ -193,7 +246,7 @@ test.describe('Consignment lot ledger', () => {
     const fake = makeFake();
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Alpha' }).click();
+    await page.locator('#cultPick').selectOption('Alpha');
     await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').first().fill('30');
     await page.locator('#saveBtn').click();
@@ -207,7 +260,7 @@ test.describe('Consignment lot ledger', () => {
     fake.offline = true;
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Gamma' }).click();
+    await page.locator('#cultPick').selectOption('Gamma');
     await page.locator('[data-row="Gamma"] [data-type="smalls"] input[data-lbs]').fill('7.5');
     fake.readsOffline = true;
     await page.locator('#saveBtn').click();
@@ -225,21 +278,28 @@ test.describe('Consignment lot ledger', () => {
     expect(blocked).toEqual([]);
   });
 
-  test('staff cannot edit prices; owner mode shows the price controls', async ({ page }) => {
+  test('staff cannot edit or see prices; owner mode shows the prices and the price controls', async ({ page }) => {
     const { blocked } = await open(page, { hash: '#/dropoff' });
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Alpha' }).click();
-    await expect(page.locator('.cs-price').first()).toContainText('$10.00');
+    await page.locator('#cultPick').selectOption('Alpha');
+    await expect(page.locator('[data-row="Alpha"]')).toBeVisible();
+    await expect(page.locator('.cs-price')).toHaveCount(0);
     await expect(page.locator('input[name*="price"], [data-price-input]')).toHaveCount(0);
     await page.goto(`${PAGE}#/farm/1`);
-    await expect(page.locator('#balance')).toHaveText('$500.00');
-    await expect(page.locator('#addPrice')).toBeHidden();
+    await expect(page.locator('[data-lot="10"]')).toBeVisible();
+    await expect(page.locator('#balance')).toHaveCount(0);
+    await expect(page.locator('#addPrice')).toHaveCount(0);
     await expect(page.locator('[data-terms]').first()).toBeHidden();
     await expect(page.locator('#view input')).toHaveCount(0);
     await page.locator('#ownerBtn').click();
-    await page.locator('dialog input[name="pw"]').fill('owner-test');
+    await page.locator('dialog input[name="pw"]').fill(OWNER_PW);
     await page.locator('dialog [data-act="ok"]').click();
+    await expect(page.locator('#balance')).toHaveText('$500.00');
     await expect(page.locator('#addPrice')).toBeVisible();
+    await page.goto(`${PAGE}#/dropoff`);
+    await page.locator('[data-farm="1"]').click();
+    await page.locator('#cultPick').selectOption('Alpha');
+    await expect(page.locator('.cs-price').first()).toContainText('$10.00');
     expect(blocked).toEqual([]);
   });
 
@@ -284,10 +344,10 @@ test.describe('Consignment lot ledger', () => {
 
         await page.goto(`${PAGE}#/dropoff`);
         await page.locator('[data-farm="1"]').click();
-        await page.getByRole('button', { name: '＋ Alpha' }).click();
+        await page.locator('#cultPick').selectOption('Alpha');
         await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('100');
         await page.locator('[data-row="Alpha"] [data-on$="|smalls"]').check();
-        await page.getByRole('button', { name: '＋ Beta' }).click();
+        await page.locator('#cultPick').selectOption('Beta');
         await page.locator('[data-row="Beta"] [data-type="tops"] [data-split]').click();
         await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').first().fill('30');
         await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').nth(1).fill('70');

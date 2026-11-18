@@ -1,10 +1,14 @@
-/** Record a payment: pick the farm (if not given), see the balance, enter the payment. */
+/**
+ * Record a payment: pick the farm (if not given), see the balance, enter the payment.
+ * Owner mode only: main.js never routes staff here, and this draws nothing outside owner mode.
+ */
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
 import { esc, money, num, todayLocal } from '../format.js';
 import { errorCard, loading, toast } from '../ui.js';
 import { submit } from '../save.js';
 import { go } from '../nav.js';
+import { isOwner } from '../owner.js';
 
 const METHODS = ['check', 'cash', 'transfer'];
 
@@ -17,6 +21,7 @@ export function mount(root, { farmId }) {
   const farm = () => s.farms && s.farms.find((f) => f.id === s.farmId);
 
   function render() {
+    if (!isOwner()) { root.innerHTML = ''; return; }
     if (s.error) return errorCard(root, s.error, load);
     if (!s.farms) return loading(root);
     const f = farm();
@@ -29,12 +34,13 @@ export function mount(root, { farmId }) {
     }
     const credit = f.balance < 0;
     const can = num(s.amount) > 0 && !s.saving;
+    const hasBalance = typeof f.balance === 'number' && Number.isFinite(f.balance);
     root.innerHTML = `<h2 class="cs-h2">${esc(t('recordPayment'))}</h2><div class="cs-stack">
       <section class="cs-card cs-banner st ${credit ? 'st-closed' : 'st-weighed'}">
         <h3 class="cs-h3">${esc(f.name)}</h3>
-        <div class="cs-muted">${esc(t(credit ? 'creditToUs' : 'owed'))}</div>
+        ${hasBalance ? `<div class="cs-muted">${esc(t(credit ? 'creditToUs' : 'owed'))}</div>
         <div class="cs-big${credit ? ' cs-credit' : ''}">${money(f.balance)}</div>
-        ${f.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}
+        ${f.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}` : ''}
       </section>
       <section class="cs-card">
         <label class="cs-field"><span class="cs-label">${esc(t('amount'))}</span><input id="amount" class="cs-input cs-num" inputmode="decimal" autocomplete="off" value="${esc(s.amount)}"></label>

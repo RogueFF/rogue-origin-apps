@@ -1,7 +1,12 @@
 /**
  * Owner mode. The owner password is asked for once, kept in sessionStorage only
  * (api.js), never rendered, and cleared the moment the server refuses it.
- * Owner actions: add/edit farm, add price point, change a lot's term or price.
+ * Owner actions: add/edit farm, add price point, change a lot's term or price, record or
+ * void a payment. Only owner mode sees money: the server sends none without the password
+ * (workers/src/lib/consign-staff-view.js) and the views draw none outside owner mode.
+ *
+ * A change of mode fires consign:mode; main.js redraws the view at once (money on screen
+ * goes) and reloads it (owner mode fetches the money).
  */
 import { t } from '../shared/i18n.js';
 import { call, ownerPw, setOwnerPw } from './api.js';
@@ -11,23 +16,29 @@ import { todayLocal, num } from './format.js';
 export const isOwner = () => document.body.dataset.owner === '1';
 
 function setMode(on) {
+  const was = isOwner();
   if (on) document.body.dataset.owner = '1';
   else delete document.body.dataset.owner;
   const btn = document.getElementById('ownerBtn');
   btn.dataset.i18n = on ? 'ownerOn' : 'owner';
   btn.textContent = t(btn.dataset.i18n);
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (was !== on) document.dispatchEvent(new CustomEvent('consign:mode'));
 }
 
-/** An owner action. On a refused owner password, owner mode is switched off and the caller told. */
-export async function ownerCall(action, body) {
-  try {
-    return await call(action, body);
-  } catch (err) {
-    if (err.owner) { setOwnerPw(''); setMode(false); toast(t('ownerWrong'), 'err'); }
-    throw err;
-  }
+/** The server did not take the owner password (api.js): owner mode goes off, once. */
+function refused() {
+  setOwnerPw('');
+  if (!isOwner()) return;
+  setMode(false);
+  toast(t('ownerWrong'), 'err');
 }
+
+/**
+ * An owner action. On a refused owner password, api.js fires consign:ownerrefused
+ * (owner mode off, the person told) before this rejects.
+ */
+export const ownerCall = (action, body) => call(action, body);
 
 const reload = () => document.dispatchEvent(new CustomEvent('consign:reload'));
 const termOptions = () => [{ value: 'dropoff', label: t('termDropoff') }, { value: 'sold', label: t('termSold') }];
@@ -107,6 +118,7 @@ export function initOwner() {
     setOwnerPw(v.pw);
     setMode(true);
   });
+  document.addEventListener('consign:ownerrefused', refused);
   document.addEventListener('consign:addfarm', () => { farmDialog(); });
   document.addEventListener('ro:langchange', () => setMode(isOwner()));
 }
