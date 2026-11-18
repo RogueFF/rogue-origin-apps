@@ -1317,15 +1317,18 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
 .card { border-radius:12px; background:#fff; box-shadow:var(--shadow); }
 .season { background:#fff; }
 .cultivar { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; color:var(--ink); }
-/* Best-time chip: when the flower smokes best, from the tasting notes. Its
-   own three hues and a glyph, so it is never read as a COA chip. */
-.when { display:inline-flex; align-self:flex-start; width:fit-content; align-items:center; gap:.3rem; margin-top:.35rem; padding:.2rem .6rem;
+/* Best-time chips: when the flower smokes best. One chip per time, so a
+   pair ("Daytime / Anytime") is two chips. Their own three hues and a glyph,
+   so they are never read as COA chips. */
+.whens { display:flex; flex-wrap:wrap; gap:.3rem; margin-top:.35rem; }
+.when { display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .6rem;
   border-radius:999px; font-family:"Karla", sans-serif; font-size:.78rem; font-weight:700;
   line-height:1.2; white-space:nowrap; }
 .when.day     { color:var(--day);   background:var(--day-soft); }
 .when.night   { color:var(--night); background:var(--night-soft); }
 .when.anytime { color:var(--any);   background:var(--any-soft); }
-.drawer .when { margin:0 0 .5rem; font-size:.9rem; padding:.3rem .8rem; }
+.drawer .whens { margin:0 0 .5rem; }
+.drawer .when { font-size:.9rem; padding:.3rem .8rem; }
 .drawer .head h2 { font-family:"Quicksand", sans-serif; font-weight:700; letter-spacing:0; }
 .gate-card { border-radius:16px; }
 .gate-card h1 { font-family:"Quicksand", sans-serif !important; color:var(--sage-deep); }
@@ -1439,23 +1442,36 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
 
   var THC_LIMIT = 0.3;   // ODA total-THC line, percent (pre-harvest only)
 
-  // When the flower smokes best, from the cultivar tasting notes. One of
-  // three per card, or none until the cultivar has been tasted.
+  // When the flower smokes best: Koa's call, from the cultivar tasting notes.
+  // A card carries one time or a pair ("Daytime / Anytime"); none until the
+  // cultivar has been tasted. Each time is its own chip, so a pair reads as
+  // two chips side by side.
   var WHEN = {
-    day:     { name: "Daytime",   glyph: "☀" },
-    night:   { name: "Nighttime", glyph: "☾" },
-    anytime: { name: "Anytime",   glyph: "◐" }
+    day:     { name: "Daytime",   glyph: "\\u2600" },
+    night:   { name: "Nighttime", glyph: "\\u263E" },
+    anytime: { name: "Anytime",   glyph: "\\u25D0" }
   };
+  var WHEN_SETS = {
+    day: ["day"], night: ["night"], anytime: ["anytime"],
+    day_anytime: ["day", "anytime"], night_anytime: ["night", "anytime"]
+  };
+  function whenLabel(value) {
+    return (WHEN_SETS[value] || []).map(function (k) { return WHEN[k].name; }).join(" / ");
+  }
   function whenChip(card) {
-    var w = WHEN[card.use_time];
-    if (!w) { return null; }
-    var chip = el("span", "when " + card.use_time);
-    var g = el("span", null, w.glyph);
-    g.setAttribute("aria-hidden", "true");
-    chip.appendChild(g);
-    chip.appendChild(document.createTextNode(w.name));
-    chip.title = "Best time, from the tasting notes: " + w.name;
-    return chip;
+    var parts = WHEN_SETS[card.use_time];
+    if (!parts) { return null; }
+    var wrap = el("div", "whens");
+    wrap.title = "Best time: " + whenLabel(card.use_time);
+    parts.forEach(function (k) {
+      var chip = el("span", "when " + k);
+      var g = el("span", null, WHEN[k].glyph);
+      g.setAttribute("aria-hidden", "true");
+      chip.appendChild(g);
+      chip.appendChild(document.createTextNode(WHEN[k].name));
+      wrap.appendChild(chip);
+    });
+    return wrap;
   }
 
   var cards = [];       // cultivar rows from D1, by name
@@ -2367,24 +2383,25 @@ button.act.primary:hover, a.act.primary:hover { background:var(--sage-deep); bor
     }
     body.appendChild(stageSec);
 
-    // Best time: set from the tasting notes, changed here if they change.
+    // Best time: Koa's call per cultivar, changed here when it changes.
     var whenSec = section("Best time");
     var whenNow = whenChip(card);
     if (whenNow) { whenSec.appendChild(whenNow); }
     var ws = document.createElement("select");
-    [["", "Not tasted yet"], ["day", "Daytime"], ["night", "Nighttime"], ["anytime", "Anytime"]]
+    [["", "Not set yet"], ["day", "Daytime"], ["day_anytime", "Daytime / Anytime"],
+     ["night", "Nighttime"], ["night_anytime", "Nighttime / Anytime"], ["anytime", "Anytime"]]
       .forEach(function (pair) {
         var o = document.createElement("option");
         o.value = pair[0];
         o.textContent = pair[1];
         ws.appendChild(o);
       });
-    ws.value = WHEN[card.use_time] ? card.use_time : "";
+    ws.value = WHEN_SETS[card.use_time] ? card.use_time : "";
     ws.setAttribute("aria-label", "Best time");
     var wsWrap = el("span", "sel");
     wsWrap.appendChild(bindField(ws, "use_time", key));
     whenSec.appendChild(group("Daytime, nighttime or anytime", wsWrap,
-      "From the tasting notes. The chip on the card follows this."));
+      "The chips on the card follow this."));
     body.appendChild(whenSec);
 
     // Post-harvest: one dried-flower potency COA for the cultivar.

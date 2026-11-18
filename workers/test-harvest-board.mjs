@@ -266,7 +266,7 @@ await check('the lab drop-off date is stored, validated and clearable', async ()
   eq(c.cultivar.post_sent, null, 'cleared');
 });
 
-await check('the best-time chip takes day, night or anytime and nothing else', async () => {
+await check('the best-time chip takes day, night, anytime or a pair with anytime, nothing else', async () => {
   eq((await body(await call('board'))).cultivars[0].use_time, null, 'unset by default');
   const before = (await body(await call('board'))).cultivars.find((c) => c.cultivar_slug === 'lemon').stage;
   const d = (await body(await call('board_set', { cultivar: 'lemon', use_time: 'Day' })));
@@ -276,6 +276,9 @@ await check('the best-time chip takes day, night or anytime and nothing else', a
   await expectThrow(() => call('board_set', { cultivar: 'lemon', use_time: 'evening' }), 'Unknown use_time');
   eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'night' }))).cultivar.use_time, 'night', 'night');
   eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'anytime' }))).cultivar.use_time, 'anytime', 'anytime');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'day_anytime' }))).cultivar.use_time, 'day_anytime', 'day pair');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'Night / Anytime' }))).cultivar.use_time, 'night_anytime', 'night pair, as typed');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', use_time: 'day_night' }), 'Unknown use_time');
   eq((await body(await call('board_set', { cultivar: 'lemon', use_time: '' }))).cultivar.use_time, null, 'cleared');
 });
 

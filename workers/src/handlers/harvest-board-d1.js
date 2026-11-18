@@ -50,9 +50,9 @@ const STAGE_ORDER = [
 const CULTIVAR_STAGE_ORDER = ['not_sent', 'sent', 'photos_done', 'on_website'];
 const CULTIVAR_STAGES = new Set(CULTIVAR_STAGE_ORDER);
 
-// When the flower smokes best, from the cultivar tasting notes: the chip on
-// the card. NULL until the cultivar has been tasted.
-const USE_TIMES = ['day', 'night', 'anytime'];
+// When the flower smokes best: the chips on the card. One time, or a time
+// paired with anytime. NULL until the cultivar has been tasted.
+const USE_TIMES = ['day', 'day_anytime', 'night', 'night_anytime', 'anytime'];
 
 const SELECT_CULTIVAR = `
   SELECT cultivar_slug, cultivar, stage, post_sent, post_date, post_thc, post_cbd, url,
@@ -322,7 +322,7 @@ async function setCultivar(db, body, actor) {
   }
   if (has('use_time')) {
     const w = body.use_time === null || body.use_time === ''
-      ? null : String(body.use_time).trim().toLowerCase();
+      ? null : String(body.use_time).trim().toLowerCase().replace(/[\s/+-]+/g, '_');
     if (w !== null && !USE_TIMES.includes(w)) {
       throw createError('VALIDATION_ERROR',
         `Unknown use_time "${w}". Use one of: ${USE_TIMES.join(', ')} (or null to clear)`);
