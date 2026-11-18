@@ -32,6 +32,7 @@ import { eodWindows } from '../../lib/cell-eod.js';
 import { pacificParts } from '../../lib/pacific.js';
 import { completeJob } from './order-flow.js';
 import { fillSlot, fillStatus } from './cell-fill.js';
+import { getCellGoal } from './scoreboard.js';
 
 const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
@@ -225,6 +226,7 @@ async function getCellHourly(params, env) {
     auto: await autoRows(env, date, (roster.results || []).map(r => r.station_id)),
     // The Hourly entry fill: its switch, and each hour's row against the cells (lib/cell-fill.js).
     fill: await fillStatus(env, date),
+    goal: await getCellGoal(env, date),
   });
 }
 

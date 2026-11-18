@@ -28,6 +28,7 @@ import { migrateFromSheets, checkSheet } from './migrate.js';
 import { getMyNumbers, crewLoadDay, crewPeople } from './crew-numbers.js';
 import { crewHourDay, crewHourSave, crewPersonAdd } from './crew-hours.js';
 import { cellFillSet } from './cell-fill.js';
+import { crewGoalSet } from './crew-goal.js';
 import { getCrewBoard } from './crew-board.js';
 
 async function test(env) {
@@ -131,6 +132,8 @@ export async function handleProductionD1(request, env, ctx) {
         return await crewPeople(body, env, request);
       case 'crewHourDay':
         return await crewHourDay(body, env, request);
+      case 'crewGoalSet':
+        return await crewGoalSet(body, env, request);
       case 'cellFillSet':
         return await cellFillSet(body, env, request);
       case 'crewHourSave':

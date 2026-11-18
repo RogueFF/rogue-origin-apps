@@ -52,6 +52,10 @@ registerLabels({
     pickCover: '{n} left. Who took over?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
     onCell: 'on {c}', peopleFail: "Couldn't load the crew list. Unlock the page or check the connection.", loadingPeople: 'Loading the crew…',
     searchName: 'Type a name', close: 'Close',
+    goalTitle: 'Crew goal today (lb per hour)', goalSave: 'Set goal', goalNone: 'No goal yet: type one and tap Set goal.',
+    goalDefault: '{c} break-even rate (the default). Type another and tap Set goal to change it; clear it to go back.',
+    goalCarried: 'Carried from {d}. Type one and tap Set goal to change it.', goalSet: 'Set here for today. Clear it and tap Set goal to go back to the default.',
+    goalSheet: "From this day's loaded sheets: that goal stands.",
     fillLabel: 'Fill Hourly entry from the cells this day (test)', fillFilled: 'Hourly entry filled from the cells: {lb} lb, {n} trimmers',
     fillHand: 'Hourly entry was typed by hand: {lb} lb (cells: {c} lb). The hand row stays.', fillHandOnly: 'Hourly entry was typed by hand: {lb} lb.',
     fillMixed: 'cultivars this hour: {list}', fillConfirmOn: 'Fill Hourly entry from the cells for this day? Hours typed by hand stay as they are.',
@@ -91,6 +95,10 @@ registerLabels({
     pickCover: '{n} se fue. ¿Quién lo cubrió?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
     onCell: 'en {c}', peopleFail: 'No cargó la lista del equipo. Desbloquee la página o revise la conexión.', loadingPeople: 'Cargando el equipo…',
     searchName: 'Escriba un nombre', close: 'Cerrar',
+    goalTitle: 'Meta del equipo hoy (lb por hora)', goalSave: 'Poner meta', goalNone: 'Sin meta todavía: escriba una y toque Poner meta.',
+    goalDefault: 'Punto de equilibrio de {c} (la meta normal). Escriba otra y toque Poner meta; bórrela para volver.',
+    goalCarried: 'Traída del {d}. Escriba una y toque Poner meta para cambiarla.', goalSet: 'Puesta aquí para hoy. Bórrela y toque Poner meta para volver a la normal.',
+    goalSheet: 'De las hojas cargadas de este día: esa meta se queda.',
     fillLabel: 'Llenar la entrada por hora con las celdas este día (prueba)', fillFilled: 'Entrada por hora llenada con las celdas: {lb} lb, {n} trimmers',
     fillHand: 'La entrada por hora se escribió a mano: {lb} lb (celdas: {c} lb). Se queda la de mano.', fillHandOnly: 'La entrada por hora se escribió a mano: {lb} lb.',
     fillMixed: 'variedades esta hora: {list}', fillConfirmOn: '¿Llenar la entrada por hora con las celdas este día? Las horas escritas a mano se quedan igual.',
@@ -151,7 +159,7 @@ const el = {
   guide: $('guide'), guideStart: $('guideStart'), guideBar: $('guideBar'), guideCount: $('guideCount'), guideStep: $('guideStep'),
   guideSkip: $('guideSkip'), guideRest: $('guideRest'), guideNext: $('guideNext'), guideDone: $('guideDone'), guideExit: $('guideExit'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), 
-  gridTitle: $('gridTitle'), fillOn: $('fillOn'), fillState: $('fillState'), quality: $('quality'), stopBanner: $('stopBanner'),
+  gridTitle: $('gridTitle'), fillOn: $('fillOn'), fillState: $('fillState'), goalInput: $('goalInput'), goalSave: $('goalSave'), goalState: $('goalState'), quality: $('quality'), stopBanner: $('stopBanner'),
   cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -442,9 +450,22 @@ function renderRoom() {
   fillCultivars(el.roomCultivar, r.cultivar || '', false);
   if (document.activeElement !== el.roomSmalls) el.roomSmalls.value = r.smalls ?? '';
   renderFill();
+  renderGoal();
 }
 // The Hourly entry fill (Koa 2026-11-18): a per-day switch, off unless turned on,
 // and this hour's Hourly entry row against what the cells add up to.
+// The day's crew goal (lib/cell-goal.js): the one the TV, crew board and Mis
+// números grade on. Set here with the farm password; a loaded sheet's goal stands.
+function renderGoal() {
+  const g = state.goal;
+  if (document.activeElement !== el.goalInput) el.goalInput.value = g ? g.lbHr.toFixed(2) : '';
+  const sheet = g?.source === 'sheet';
+  el.goalInput.disabled = sheet; el.goalSave.disabled = sheet;
+  el.goalState.textContent = !g ? t('goalNone')
+    : g.source === 'default' ? tf('goalDefault', { c: g.cultivar })
+    : g.source === 'carried' ? tf('goalCarried', { d: g.date.slice(5).replace('-', '/') })
+    : t(sheet ? 'goalSheet' : 'goalSet');
+}
 function renderFill() {
   const f = state.fill || { on: false, slots: [] };
   el.fillOn.checked = !!f.on;
@@ -574,6 +595,7 @@ async function load() {
   state.slots = d.slots; state.roster = d.roster;
   state.auto = new Map((d.auto || []).map(a => [rowKey(a.slot, a.stationId), a]));
   state.fill = d.fill || { on: false, slots: [] };
+  state.goal = d.goal || null;
   for (const r of d.rows) {
     const key = rowKey(r.slot, r.stationId);
     const local = state.rows.get(key) || {};
@@ -1017,6 +1039,17 @@ el.prev.addEventListener('click', () => { openCell((state.cellIdx - 1 + cells().
 el.next.addEventListener('click', () => { openCell((state.cellIdx + 1) % cells().length); renderCell(true); renderGrid(); });
 el.cellCultivar.addEventListener('change', () => { setCellField('cultivar', el.cellCultivar.value || roomCultivar() || null); renderCell(); });
 
+el.goalSave.addEventListener('click', async () => {
+  const v = el.goalInput.value.trim();
+  el.goalSave.disabled = true;
+  try {
+    const r = await api('POST', 'crewGoalSet', { date: DATE, lbHr: v === '' ? null : Number(v) });
+    state.goal = (r.data || r).goal || null;
+    el.goalInput.blur(); renderGoal();
+  } catch { el.goalState.textContent = `✕ ${t('notSaved')}`; }
+  finally { el.goalSave.disabled = state.goal?.source === 'sheet'; }
+});
+el.goalInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') el.goalSave.click(); });
 el.fillOn.addEventListener('change', async () => {
   const on = el.fillOn.checked;
   if (!window.confirm(t(on ? 'fillConfirmOn' : 'fillConfirmOff'))) { el.fillOn.checked = !on; return; }

@@ -189,3 +189,8 @@ body.guided .guide-start { display: none; }
 .fill-toggle input { width: 24px; height: 24px; accent-color: var(--green); }
 .fill-state:empty { display: none; }
 .fill-state.differ { color: var(--warning, var(--gold)); font-weight: 600; }
+/* The day's crew goal (lib/cell-goal.js), set with the farm password. */
+.goal-row { display: grid; gap: 6px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.goal-line { display: flex; gap: 8px; align-items: center; }
+.goal-line input { width: 7.5em; font: 600 22px var(--font-mono, var(--font-ui)); }
+.goal-line input:disabled { opacity: .7; }

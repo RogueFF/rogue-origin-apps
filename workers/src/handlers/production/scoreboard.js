@@ -23,20 +23,16 @@ import {
 import { laborSplit, CELL_MODE_FROM } from '../../lib/labor-split.js';
 import { MP_BY_CULTIVAR } from '../../lib/cultivar-parts.js';
 import { FILL_SOURCE as CELL_FILL_SOURCE } from '../../lib/cell-fill.js';
+import { dayGoal } from '../../lib/cell-goal.js';
 
 /**
- * The crew goal for a day: lb of tops per person-hour (crew_day_meta, migration
- * 0065). A sheet load sets it; a typed-only day carries the last goal set before
- * it, so the latest goal on or before the day is the day's goal. { lbHr, date }
- * or null when no goal was ever set.
+ * The crew goal for a day (lib/cell-goal.js: the sheet's, else the one set on the
+ * Cell hourly log, else the break-even rate for the day's cultivar, else the last
+ * goal before the day). { lbHr, date, source } or null.
  */
 export async function getCellGoal(env, date) {
   try {
-    const rows = await query(env.DB,
-      'SELECT work_date, target_lb_hr FROM crew_day_meta WHERE work_date <= ? AND target_lb_hr > 0 ORDER BY work_date DESC LIMIT 1',
-      [date]);
-    const r = rows && rows[0];
-    return r ? { lbHr: Number(r.target_lb_hr), date: r.work_date } : null;
+    return await dayGoal(env.DB, date);
   } catch {
     return null;   // before 0065: no crew goals yet
   }
@@ -192,7 +188,7 @@ async function getScoreboardData(env, date = null) {
   result.targetRate = targetRate;
   // 'cells' = lb of tops per person-hour against the crew goal; 'line' = per trimmer
   result.targetBasis = activeIsCells ? 'cells' : 'line';
-  result.cellGoal = cellGoal;   // { lbHr, date } or null
+  result.cellGoal = cellGoal;   // { lbHr, date, source } or null
 
   // Flag whether we're using strain-specific data (vs no basis)
   result.usingStrainRate = !!activeStrain && strainTargetRates.has(activeStrain);
