@@ -1,4 +1,4 @@
--- 0071 harvest_cultivars.use_time — the best-time chips on the cultivar board.
+-- 0073 harvest_cultivars.use_time — the best-time chips on the cultivar board.
 --
 -- When the flower smokes best: one time (day | night | anytime) or a time
 -- paired with anytime (day_anytime | night_anytime). NULL until it is set.
