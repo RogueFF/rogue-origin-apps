@@ -4,7 +4,8 @@
  * key the scale rollup will write later with source = 'scale'.
  *
  *   GET  ?action=cellHourly&date=YYYY-MM-DD   roster, the day's rows, room smalls, slots, quality batches
- *   POST ?action=setCellHourly   { date, slot, stationId, tops?, notes?, cultivar?, quality? }
+ *   POST ?action=setCellHourly   { date, slot, stationId, notes?, cultivar?, quality? }
+ *                                (tops_lbs is derived from the people on the cell: crew-hours.js deriveCellTops)
  *   POST ?action=setCellQuality  { date, stationId, batch, qTrim?, qStems?, qMold?, qInsects?,
  *                                  checkedBy?, notes?, cultivar? }   (each check 1-4 or null; migration 0051)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
@@ -30,7 +31,6 @@ import { eodWindows } from '../../lib/cell-eod.js';
 import { pacificParts } from '../../lib/pacific.js';
 import { completeJob } from './order-flow.js';
 
-const MAX_TOPS_LBS = 50;      // a cell-hour is a few lb; this only stops nonsense
 const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
 const MAX_LABEL = 40;
@@ -235,10 +235,10 @@ async function setCellHourly(body, env) {
 
   const cols = [];
   const vals = [];
+  // One number per cell-hour (Koa 2026-11-18): tops are typed per person
+  // (crewHourSave) and the cell's total is derived from them, never typed here.
   if (has(body, 'tops')) {
-    const t = cleanLbs(body.tops, MAX_TOPS_LBS);
-    if (!t.ok) return errorResponse(`tops must be 0-${MAX_TOPS_LBS} lb`, 'VALIDATION_ERROR', 400);
-    cols.push('tops_lbs'); vals.push(t.value);
+    return errorResponse('Tops are typed for the person on the cell (crewHourSave); the cell total follows', 'VALIDATION_ERROR', 400);
   }
   if (has(body, 'quality')) {
     const q = body.quality === null || body.quality === '' ? null : String(body.quality);

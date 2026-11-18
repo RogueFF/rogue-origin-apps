@@ -30,7 +30,8 @@ const run = (sqlite, sql) => { for (const st of sql.split(';')) { const t = st.t
 function freshDb({ skipCrewHours = false } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   run(sqlite, migration('0065-crew-numbers.sql'));
-  if (!skipCrewHours) run(sqlite, migration('0069-crew-hours.sql'));
+  run(sqlite, migration('0050-cell-hourly.sql'));
+  if (!skipCrewHours) { run(sqlite, migration('0069-crew-hours.sql')); run(sqlite, migration('0070-crew-hours-station.sql')); }
   const DB = {
     async batch(stmts) { const out = []; for (const s of stmts) out.push(await s.run()); return out; },
     prepare(q) {
@@ -187,10 +188,60 @@ test('the migration backfills hours already loaded from the sheets', async () =>
   sqlite.prepare(`INSERT INTO crew_days (work_date, person_id, cell, hours_json, tops_g, work_min, full_day)
     VALUES ('2026-11-13', 1, '5', '[{"slot":"7–8","g":300,"min":60},{"slot":"3–4 SL","g":100,"min":60},{"slot":"4–4:30","g":0,"min":0}]', 400, 120, 0)`).run();
   run(sqlite, migration('0069-crew-hours.sql'));
+  run(sqlite, migration('0070-crew-hours-station.sql'));
   const rows = sqlite.prepare('SELECT slot, src, cell, g, min FROM crew_hours ORDER BY slot').all();
   assert.deepEqual(rows.map((r) => [r.slot, r.src, r.cell, r.g, r.min]), [['3-4', 'sheet', '5', 100, 60], ['7-8', 'sheet', '5', 300, 60]]);
   assert.equal(sqlite.prepare('SELECT sheet_full_day FROM crew_days').get().sheet_full_day, 0);
   // a typed save on that date keeps the sheet's numbers for the other hours
   await post(env, 'crewHourSave', { password: 'pw', date: '2026-11-13', personId: 1, slot: '8-9', cell: '5', lb: 0.5, min: 60 });
   assert.equal(dayRow(sqlite, 1, '2026-11-13').work_min, 180);
+});
+
+// ---- inside the cell hourly log (Koa 2026-11-18): people per cell, one number per cell-hour ----
+const cellTops = (sqlite, station, slot = '7:00 AM – 8:00 AM') =>
+  sqlite.prepare('SELECT tops_lbs FROM cell_hourly WHERE production_date = ? AND time_slot = ? AND station_id = ?').get(DATE, slot, station)?.tops_lbs ?? null;
+
+test('a person typed on a cell: the log slot name works, the cell total is derived, the cell number shows', async () => {
+  const { env, sqlite } = freshDb();
+  const a = await addPerson(env, 'Ana');
+  const r = await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: a, slot: '7:00 AM – 8:00 AM', stationId: 'table5', lb: 0.6, min: 60 });
+  assert.equal(r.status, 200);
+  assert.equal(cellTops(sqlite, 'table5'), 0.6);
+  const d = await json(post(env, 'crewHourDay', { password: 'pw', date: DATE }));
+  const h = d.hours.find((x) => x.personId === a);
+  assert.deepEqual([h.slot, h.stationId, h.cell, h.seq], ['7-8', 'table5', '5', 1]);
+  assert.equal(d.slots[0].long, '7:00 AM – 8:00 AM');
+  assert.equal(dayRow(sqlite, a).cell, '5');
+});
+
+test('a cover: two people on one cell-hour add up to the cell total; the cover is seq 2', async () => {
+  const { env, sqlite } = freshDb();
+  const a = await addPerson(env, 'Ana'), b = await addPerson(env, 'Beto');
+  await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: a, slot: '7-8', stationId: 'table5', lb: 0.2, min: 20, seq: 1 });
+  await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: b, slot: '7-8', stationId: 'table5', lb: 0.35, min: 40, seq: 2 });
+  assert.equal(cellTops(sqlite, 'table5'), 0.55);
+  const d = await json(post(env, 'crewHourDay', { password: 'pw', date: DATE }));
+  assert.equal(d.hours.find((x) => x.personId === b).seq, 2);
+});
+
+test('moving a person to another cell takes them off the old one for that hour', async () => {
+  const { env, sqlite } = freshDb();
+  const a = await addPerson(env, 'Ana');
+  await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: a, slot: '7-8', stationId: 'table5', lb: 0.6, min: 60 });
+  await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: a, slot: '7-8', stationId: 'table6', lb: 0.6, min: 60 });
+  assert.equal(cellTops(sqlite, 'table5'), null, 'old cell emptied');
+  assert.equal(cellTops(sqlite, 'table6'), 0.6);
+  await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: a, slot: '7-8', clear: true });
+  assert.equal(cellTops(sqlite, 'table6'), null, 'clearing the person clears the cell total');
+});
+
+test('the cell log no longer takes typed tops (one number), but its notes and cultivar still save', async () => {
+  const { env, sqlite } = freshDb();
+  const t = await post(env, 'setCellHourly', { date: DATE, slot: '7:00 AM – 8:00 AM', stationId: 'table5', tops: 1.2 });
+  assert.equal(t.status, 400);
+  const n = await post(env, 'setCellHourly', { date: DATE, slot: '7:00 AM – 8:00 AM', stationId: 'table5', notes: 'ok', cultivar: 'Sour Lifter' });
+  assert.equal(n.status, 200);
+  assert.equal(sqlite.prepare('SELECT notes FROM cell_hourly').get().notes, 'ok');
+  const bad = await post(env, 'crewHourSave', { password: 'pw', date: DATE, personId: await addPerson(env, 'Ana'), slot: '7-8', stationId: 'table99', lb: 0.3, min: 60 });
+  assert.equal(bad.status, 400, 'unknown cell');
 });

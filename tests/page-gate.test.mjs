@@ -26,7 +26,7 @@ const GATED = [
   'complaints.html',
   'consignment.html',         // its old login overlay now defers to the gate
   'consign.html',             // Consignment lot ledger (staff app); has its own language toggle
-  'crew-hourly.html',         // Horas por persona: leads type each person's hour; writes need the farm password
+  'cell-hourly.html',         // Cell hourly log: people on each cell, tops per person; writes need the farm password (Koa 2026-11-18)
 ];
 // Left open to the public on purpose.
 const OPEN = [
@@ -35,7 +35,7 @@ const OPEN = [
   'scoreboard-v3.html',       // Scoreboard sibling
   'scale-display.html',
   'cell.html',                // Cell table screen (pilot), a floor screen like scale-display
-  'cell-hourly.html',         // Cell hourly log (manual entry until every table has a scale)
+  'crew-hourly.html',         // Retired: forwards to cell-hourly.html, no data of its own
   'cells.html',               // Cells board: every cell's screen + ready-for-pickup, for bagging and the office
   'rawout.html',              // Raw hand-out: the water spider types raw out / back per cell at the WIP bench
   'bagtag.html',              // Bag/tag order queue: order #, cultivar, bag size only (no buyer fields); open on purpose (Koa 2026-11-10: "Keep it open")

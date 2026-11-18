@@ -26,6 +26,7 @@
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { requireAuth } from '../../lib/auth.js';
 import { newToken } from './crew-numbers.js';
+import { ALL_TIME_SLOTS } from '../../lib/production-helpers.js';
 
 const G_PER_LB = 453.59237;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -37,6 +38,12 @@ const SLOT_KEYS = SLOTS.map(([s]) => s);
 const FULL_SLOTS = SLOT_KEYS.slice(0, 9);          // 7-8 .. 3-4
 const SLACK_MIN = 5;
 const order = (s) => { const i = SLOT_KEYS.indexOf(s); return i < 0 ? 99 : i; };
+// The cell hourly log's slots ('7:00 AM – 8:00 AM') line up one to one with these keys.
+const normLong = (s) => String(s || '').replace(/[-–—]/g, '-').replace(/\s+/g, ' ').trim();
+const LONG_TO_KEY = new Map(ALL_TIME_SLOTS.map((s, i) => [normLong(s), SLOT_KEYS[i]]));
+export const KEY_TO_LONG = new Map(ALL_TIME_SLOTS.map((s, i) => [SLOT_KEYS[i], s]));
+const keyOf = (s) => LONG_TO_KEY.get(normLong(s)) || slotKey(s);
+const cellNumber = (label, stationId) => (String(label || '').match(/\d+/) || String(stationId || '').match(/\d+/) || [null])[0];
 
 /** '7–8' -> '7-8', '3–4 SL' -> '3-4'. */
 export function slotKey(s) {
@@ -127,20 +134,20 @@ export async function crewHourDay(body, env, request) {
   const date = String(body.date || '');
   if (!DATE_RE.test(date)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
   const people = (await env.DB.prepare('SELECT id, name FROM crew_people WHERE active = 1 ORDER BY name').all()).results || [];
-  const rows = (await env.DB.prepare('SELECT person_id, slot, src, cell, g, min FROM crew_hours WHERE work_date = ?').bind(date).all()).results || [];
+  const rows = (await env.DB.prepare('SELECT person_id, slot, src, cell, g, min, station_id, seq FROM crew_hours WHERE work_date = ?').bind(date).all()).results || [];
   const names = new Map(people.map((p) => [p.id, p.name]));
   const eff = effectiveHours(rows);
   const hours = [];
   for (const [id, p] of eff) {
     for (const r of p.values()) {
-      hours.push({ personId: id, name: names.get(id) ?? null, slot: r.slot, cell: r.cell || null,
+      hours.push({ personId: id, name: names.get(id) ?? null, slot: r.slot, cell: r.cell || null, stationId: r.station_id || null, seq: r.seq || 1,
         g: r1(Number(r.g) || 0), lb: Math.round((Number(r.g) || 0) / G_PER_LB * 100) / 100, min: Number(r.min) || 0, src: r.src });
     }
   }
   const days = (await env.DB.prepare('SELECT person_id, full_day FROM crew_days WHERE work_date = ?').bind(date).all()).results || [];
   return successResponse({
     success: true, date,
-    slots: SLOTS.map(([slot, min]) => ({ slot, min })),
+    slots: SLOTS.map(([slot, min]) => ({ slot, min, long: KEY_TO_LONG.get(slot) })),
     people: people.map((p) => ({ id: p.id, name: p.name })),
     hours,
     fullDay: Object.fromEntries(days.map((d) => [d.person_id, !!d.full_day])),
@@ -152,11 +159,14 @@ export async function crewHourSave(body, env, request) {
   const date = String(body.date || '');
   if (!DATE_RE.test(date)) return errorResponse('date must be YYYY-MM-DD', 'VALIDATION_ERROR', 400);
   const personId = Number(body.personId);
-  const slot = slotKey(body.slot);
+  const slot = keyOf(body.slot);
   if (!SLOT_KEYS.includes(slot)) return errorResponse('Unknown hour', 'VALIDATION_ERROR', 400);
   const person = Number.isInteger(personId) ? await env.DB.prepare('SELECT id FROM crew_people WHERE id = ? AND active = 1').bind(personId).first() : null;
   if (!person) return errorResponse('Unknown person', 'VALIDATION_ERROR', 400);
 
+  // The cell the person's typed row was on before this save: its log total changes too.
+  const before = await env.DB.prepare("SELECT station_id FROM crew_hours WHERE work_date = ? AND person_id = ? AND slot = ? AND src = 'typed'").bind(date, personId, slot).first();
+  const touched = new Set(before?.station_id ? [before.station_id] : []);
   if (body.clear === true) {
     await env.DB.prepare("DELETE FROM crew_hours WHERE work_date = ? AND person_id = ? AND slot = ? AND src = 'typed'").bind(date, personId, slot).run();
   } else {
@@ -164,14 +174,44 @@ export async function crewHourSave(body, env, request) {
     const min = Number(body.min);
     if (!Number.isFinite(lb) || lb < 0 || lb > 11) return errorResponse('Tops must be 0 to 11 lb', 'VALIDATION_ERROR', 400);
     if (!Number.isFinite(min) || min < 0 || min > 120) return errorResponse('Minutes must be 0 to 120', 'VALIDATION_ERROR', 400);
-    const cell = cleanText(body.cell, 10);
+    // A cell from the log comes as its station; the cell number is kept for display.
+    let cell = cleanText(body.cell, 10);
+    let stationId = null;
+    if (body.stationId !== undefined && body.stationId !== null && body.stationId !== '') {
+      const st = await env.DB.prepare('SELECT station_id, label FROM cell_roster WHERE station_id = ?').bind(String(body.stationId)).first();
+      if (!st) return errorResponse('Unknown cell', 'VALIDATION_ERROR', 400);
+      stationId = st.station_id;
+      cell = cellNumber(st.label, st.station_id);
+      touched.add(stationId);
+    }
+    const seq = Number(body.seq) === 2 ? 2 : 1;
     await env.DB.prepare(
-      `INSERT INTO crew_hours (work_date, person_id, slot, src, cell, g, min, updated_at) VALUES (?, ?, ?, 'typed', ?, ?, ?, datetime('now'))
-       ON CONFLICT(work_date, person_id, slot, src) DO UPDATE SET cell = excluded.cell, g = excluded.g, min = excluded.min, updated_at = excluded.updated_at`
-    ).bind(date, personId, slot, cell, r1(lb * G_PER_LB), Math.round(min)).run();
+      `INSERT INTO crew_hours (work_date, person_id, slot, src, cell, g, min, station_id, seq, updated_at) VALUES (?, ?, ?, 'typed', ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(work_date, person_id, slot, src) DO UPDATE SET cell = excluded.cell, g = excluded.g, min = excluded.min,
+         station_id = excluded.station_id, seq = excluded.seq, updated_at = excluded.updated_at`
+    ).bind(date, personId, slot, cell, r1(lb * G_PER_LB), Math.round(min), stationId, seq).run();
   }
+  for (const st of touched) await deriveCellTops(env.DB, date, slot, st);
   await recomputeDay(env.DB, date);
   return successResponse({ success: true, date, personId, slot });
+}
+
+/**
+ * One number per cell-hour: the cell hourly log's tops is the sum of the typed
+ * people-hours at that station (Koa 2026-11-18). Nobody types it directly; with
+ * no typed person it is empty, and the cell's scale value (if any) shows instead.
+ */
+export async function deriveCellTops(db, date, slot, stationId) {
+  const long = KEY_TO_LONG.get(slot);
+  if (!long || !stationId) return;
+  const sum = await db.prepare(
+    "SELECT COUNT(*) AS n, SUM(g) AS g FROM crew_hours WHERE work_date = ? AND slot = ? AND station_id = ? AND src = 'typed'"
+  ).bind(date, slot, stationId).first();
+  const tops = sum?.n ? Math.round((Number(sum.g) || 0) / G_PER_LB * 100) / 100 : null;
+  await db.prepare(
+    `INSERT INTO cell_hourly (production_date, time_slot, station_id, tops_lbs, source, updated_at) VALUES (?, ?, ?, ?, 'manual', datetime('now'))
+     ON CONFLICT (production_date, time_slot, station_id) DO UPDATE SET tops_lbs = excluded.tops_lbs, updated_at = datetime('now')`
+  ).bind(date, long, stationId, tops).run();
 }
 
 export async function crewPersonAdd(body, env, request) {
