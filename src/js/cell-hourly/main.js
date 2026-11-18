@@ -52,7 +52,7 @@ registerLabels({
     waiting: 'not entered yet', removePerson: 'Take off this hour', pickAssign: 'Who is on {c}?', pickReplace: 'Change {n} for…',
     pickCover: '{n} left. Who took over?', pickAdd: 'Who else is on {c}?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
     onCell: 'on {c}', peopleFail: "Couldn't load the crew list. Unlock the page or check the connection.", loadingPeople: 'Loading the crew…',
-    searchName: 'Type a name', close: 'Close',
+    searchName: 'Type a name', close: 'Close', leftEarly: 'Left early and nobody took over? Minutes worked', done: 'Done',
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -76,7 +76,7 @@ registerLabels({
     waiting: 'falta anotar', removePerson: 'Quitar de esta hora', pickAssign: '¿Quién está en {c}?', pickReplace: 'Cambiar a {n} por…',
     pickCover: '{n} se fue. ¿Quién lo cubrió?', pickAdd: '¿Quién más está en {c}?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
     onCell: 'en {c}', peopleFail: 'No cargó la lista del equipo. Desbloquee la página o revise la conexión.', loadingPeople: 'Cargando el equipo…',
-    searchName: 'Escriba un nombre', close: 'Cerrar',
+    searchName: 'Escriba un nombre', close: 'Cerrar', leftEarly: '¿Se fue antes y nadie lo cubrió? Minutos que trabajó', done: 'Listo',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -118,7 +118,7 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   people: $('people'), picker: $('picker'), pickTitle: $('pickTitle'), pickClose: $('pickClose'), pickLeft: $('pickLeft'),
-  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
+  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'), pickShort: $('pickShort'), pickShortMin: $('pickShortMin'), pickShortOk: $('pickShortOk'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), qOverall: $('qOverall'), stopAlert: $('stopAlert'), checkedBy: $('checkedBy'),
   batchTitle: $('batchTitle'), batchHistory: $('batchHistory'), nextBatch: $('nextBatchBtn'), gridTitle: $('gridTitle'),
   tabWeights: $('tabWeights'), tabQuality: $('tabQuality'),
@@ -596,6 +596,9 @@ function renderPeople(c) {
   if (!crew.ok) { el.people.innerHTML = `<div class="muted">${esc(t(crew.err ? 'peopleFail' : 'loadingPeople'))}</div>`; return; }
   const list = shownPeople(c.stationId);
   const sm = slotMin();
+  // Minutes stay out of sight in the normal case (Koa 2026-11-18: "I don't want this
+  // popping up unless absolutely necessary"): only a split hour shows them.
+  const split = list.length > 1 || list.some(p => p.min != null && Number(p.min) !== sm);
   el.people.innerHTML = list.map(p => `
     <div class="person${p.saved ? '' : ' waiting'}" data-pid="${p.personId}" data-seq="${p.seq || 1}">
       <div class="person-top">
@@ -603,9 +606,11 @@ function renderPeople(c) {
         <span class="muted small">${p.saved ? '' : esc(t(p.carried ? 'carried' : 'waiting'))}</span>
         <button type="button" class="pdel" data-act="remove" title="${esc(t('removePerson'))}" aria-label="${esc(t('removePerson'))}">✕</button>
       </div>
-      <div class="person-in">
+      <div class="person-in${split ? '' : ' solo'}">
         <span class="tops-wrap"><input class="p-lb" type="number" min="0" step="0.01" inputmode="decimal" enterkeyhint="next" placeholder="0.00" value="${esc(p.lb === '' || p.lb == null ? '' : p.lb)}"><span class="unit">lb</span></span>
-        <label class="p-minw"><input class="p-min" type="number" min="0" max="120" inputmode="numeric" value="${esc(p.min ?? sm)}"><span class="muted small">min</span></label>
+        ${split
+    ? `<label class="p-minw"><input class="p-min" type="number" min="0" max="120" inputmode="numeric" value="${esc(p.min ?? sm)}"><span class="muted small">min</span></label>`
+    : `<input class="p-min" type="hidden" value="${esc(p.min ?? sm)}">`}
       </div>
       <div class="muted small p-g">${gText(p.lb)}</div>
     </div>`).join('')
@@ -723,6 +728,8 @@ function openPicker(mode, personId = null) {
   const n = personId != null ? nameOf(personId) : '';
   el.pickTitle.textContent = tf({ assign: 'pickAssign', add: 'pickAdd', replace: 'pickReplace', cover: 'pickCover' }[mode], { c: c.label, n });
   el.pickLeftWrap.hidden = mode !== 'cover';
+  el.pickShort.hidden = mode !== 'replace';
+  if (mode === 'replace') el.pickShortMin.value = String(crew.ph.get(pkey(personId, state.slot))?.min ?? slotMin());
   if (mode === 'cover') { el.pickLeftLabel.textContent = tf('leftAfter', { n: firstName(personId) }); el.pickLeft.value = String(defaultLeft()); }
   el.pickSearch.value = '';
   renderPick();
@@ -766,6 +773,17 @@ function choose(id) {
   refreshCell();
   focusPerson(focusId);
 }
+// Left early and nobody took over: only the minutes change (in the name's menu, out of the way).
+el.pickShortOk.addEventListener('click', () => {
+  const c = cell(); const id = pick.personId;
+  const min = Math.max(0, Math.min(120, Math.round(Number(el.pickShortMin.value) || 0)));
+  const saved = crew.ph.get(pkey(id, state.slot));
+  if (saved) savePerson(c.stationId, id, { lb: saved.lb, min, seq: saved.seq });
+  else setDrafts(c.stationId, shownPeople(c.stationId).filter(p => !p.saved).map(p => ({ ...p, carried: false, ...(p.personId === id ? { min } : {}) })));
+  closePicker();
+  refreshCell();
+  focusPerson(id);
+});
 el.pickSearch.addEventListener('input', renderPick);
 el.pickClose.addEventListener('click', closePicker);
 el.pickList.addEventListener('click', async e => {

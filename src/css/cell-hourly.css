@@ -134,3 +134,8 @@ body[data-view="weights"] .q-only { display: none; }
 .jump small.who { font: 600 12px var(--font-ui); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jump small.who.carried { color: var(--text-secondary); font-style: italic; }
 @media (max-width: 359px) { .person-in { grid-template-columns: minmax(0, 1fr) 76px; } .person-in .tops-wrap input { font-size: 28px; } }
+.person-in.solo { grid-template-columns: minmax(0, 1fr); }
+.pick-short { display: grid; gap: 6px; border-top: 1px dashed var(--border-strong); padding-top: 10px; }
+.pick-short[hidden] { display: none; }
+.pick-short-row { display: flex; gap: 8px; align-items: center; }
+.pick-short-row input { width: 96px; font: 600 20px var(--font-mono); text-align: center; color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; min-height: 44px; }
