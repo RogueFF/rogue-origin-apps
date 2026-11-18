@@ -33,6 +33,7 @@ const OPEN = [
   'hourly-entry.html',        // Floor Manager
   'scoreboard-v2.html',       // Scoreboard
   'scoreboard-v3.html',       // Scoreboard sibling
+  'scoreboard-cells.html',    // Cells scoreboard for the barn TV: cell tops + andon flags + top 5 only, no buyer or cost data (Koa 2026-11-18)
   'scale-display.html',
   'cell.html',                // Cell table screen (pilot), a floor screen like scale-display
   'crew-hourly.html',         // Retired: forwards to cell-hourly.html, no data of its own

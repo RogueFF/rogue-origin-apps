@@ -1,0 +1,112 @@
+/* ========================================
+   CELLS SCOREBOARD (Koa 2026-11-18). Loads after scoreboard-v2.css and
+   reuses its look: header, hero, End of day card, bottom strip, Top 5.
+   Adds the cell cards (left), what needs a hand (right), the hour chart
+   and rounds (bottom). Red is only an andon, never low output.
+   ======================================== */
+
+.cl-home {
+  position: fixed; top: 12px; left: 12px; z-index: 9999; width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(26, 26, 26, .8); display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.cl-home svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cells-board .strain-display { padding-left: 44px; }
+/* language switch: bottom-right corner, where the line board keeps its menu */
+.cl-lang {
+  position: fixed; right: 16px; bottom: 16px; z-index: 9000; padding: 8px 14px; border-radius: 100px; cursor: pointer;
+  font: 600 14px var(--font-data); color: var(--cream-muted);
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--border-subtle);
+}
+.cl-lang b { color: var(--gold); }
+.cl-stale { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--yellow); margin-left: 10px; }
+.cl-stale[hidden] { display: none; }
+.daily-projection[hidden] { display: none; }
+
+/* LEFT: cells */
+.cells-panel {
+  position: absolute; top: var(--sp-5); left: var(--sp-6); width: 470px; z-index: 20;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  max-height: calc(100% - var(--bottom-height) - var(--sp-6)); overflow: hidden;
+}
+.panel-k { font: 700 15px var(--font-ui); text-transform: uppercase; letter-spacing: .12em; color: var(--gold); display: flex; justify-content: space-between; align-items: baseline; }
+.panel-k small { font: 500 14px var(--font-ui); color: var(--cream-muted); letter-spacing: .08em; }
+.cell-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.cell {
+  position: relative; min-width: 0;
+  background: rgba(28, 34, 32, .55); border: 1px solid rgba(255, 255, 255, .06);
+  border-left: 5px solid var(--lane, rgba(255, 255, 255, .18)); border-radius: var(--r-lg);
+  padding: 10px 12px 10px 14px; box-shadow: 0 2px 12px rgba(0, 0, 0, .3);
+}
+.cell.on   { --lane: var(--green); }
+.cell.idle { --lane: rgba(242, 239, 232, .25); opacity: .7; }
+.cell.help { --lane: var(--red); background: linear-gradient(90deg, rgba(217, 116, 101, .18), rgba(28, 34, 32, .55) 70%); }
+.cell-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.cell-no { font: 400 34px/1 var(--font-hero); color: var(--cream); }
+.cell-cv { font: 600 14px var(--font-ui); color: var(--cream-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; gap: 6px; }
+.cell-lb { font: 400 30px/1 var(--font-hero); color: var(--cream); white-space: nowrap; }
+.cell-lb i { font: 500 13px var(--font-data); font-style: normal; color: var(--cream-muted); margin-left: 3px; }
+.cell-rd { font: 500 14px var(--font-data); color: var(--cream-muted); white-space: nowrap; }
+.cell-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .07); margin-top: 8px; overflow: hidden; }
+.cell-bar b { display: block; height: 100%; border-radius: 3px; background: rgba(242, 239, 232, .35); }
+.cell-bar.over b { background: var(--green); }
+.cell-flag { margin-top: 6px; font: 700 13px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--red); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell.idle .cell-flag { color: var(--cream-muted); }
+.cells-empty { grid-column: 1 / -1; padding: 18px; font: 600 16px var(--font-ui); color: var(--cream-muted); border: 1px dashed var(--border-subtle); border-radius: var(--r-lg); text-align: center; }
+/* more cells: three across, then compact */
+.cell-grid[data-count="some"] { grid-template-columns: repeat(3, 1fr); }
+.cell-grid[data-count="some"] .cell-no { font-size: 28px; }
+.cell-grid[data-count="some"] .cell-lb { font-size: 26px; }
+.cell-grid[data-count="many"] { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cell-grid[data-count="many"] .cell { padding: 6px 8px 6px 10px; }
+.cell-grid[data-count="many"] .cell-no { font-size: 24px; }
+.cell-grid[data-count="many"] .cell-cv,
+.cell-grid[data-count="many"] .cell-rd { display: none; }
+.cell-grid[data-count="many"] .cell-lb { font-size: 24px; }
+.cell-grid[data-count="many"] .cell-bar { margin-top: 4px; }
+.cell-grid[data-count="many"] .cell-flag { font-size: 12px; margin-top: 2px; }
+
+/* RIGHT: pickups + quality */
+.side-panel { position: absolute; top: var(--sp-5); right: var(--sp-6); width: 380px; z-index: 20; display: flex; flex-direction: column; gap: var(--sp-3); }
+.card { background: rgba(28, 34, 32, .55); border: 1px solid rgba(255, 255, 255, .06); border-radius: var(--r-lg); padding: 14px 16px; box-shadow: 0 2px 12px rgba(0, 0, 0, .3); }
+.card .k { font: 700 14px var(--font-ui); text-transform: uppercase; letter-spacing: .12em; color: var(--cream-muted); }
+.pick { display: flex; align-items: center; gap: 14px; }
+.pick b { font: 400 64px/1 var(--font-hero); color: var(--gold); min-width: .6em; text-align: center; }
+.pick b.zero { color: var(--cream-whisper); }
+.pick div { font: 600 16px var(--font-ui); color: var(--cream-soft); line-height: 1.35; min-width: 0; }
+.pick small { display: block; font: 500 14px var(--font-data); color: var(--cream-muted); }
+.qual-row { display: flex; gap: var(--sp-6); margin-top: 6px; }
+.qual-row b { font: 400 48px/1 var(--font-hero); color: var(--green); margin-right: 6px; }
+.qual-row .redo b { color: var(--cream); }
+.qual-row span { font: 600 15px var(--font-ui); color: var(--cream-muted); text-transform: uppercase; letter-spacing: .08em; }
+.qual-card.stop { border-color: var(--red); background: linear-gradient(180deg, rgba(217, 116, 101, .22), rgba(28, 34, 32, .55) 70%); }
+.qual-stop { margin-top: 8px; font: 700 16px var(--font-ui); color: var(--red); text-transform: uppercase; letter-spacing: .06em; }
+.qual-stop[hidden] { display: none; }
+.goal-note { font: 500 14px var(--font-data); color: var(--cream-muted); padding: 0 4px; }
+
+/* BOTTOM: chart + rounds */
+.cell-chart { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 8px; }
+.cc-bars { position: relative; flex: 1; display: flex; align-items: flex-end; gap: 12px; padding: 18px 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.cc-goal { position: absolute; left: 0; right: 0; border-top: 2px dashed rgba(228, 170, 79, .5); }
+.cc-bar { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; font: 600 14px var(--font-data); color: var(--cream-soft); max-width: 90px; }
+.cc-bar i { display: block; width: 70%; border-radius: 4px 4px 0 0; background: #8a8578; }
+.cc-bar.over i { background: #668971; }
+.cc-bar.live i { opacity: .55; }
+.cc-labels { display: flex; gap: 12px; padding: 6px 6px 0; font: 500 14px var(--font-data); color: var(--cream-muted); }
+.cc-labels span { flex: 1; text-align: center; max-width: 90px; }
+.rounds-panel { flex: 0 0 340px; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 12px; }
+.rounds-stats { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+.rounds-stats b { display: block; font: 400 46px/1 var(--font-hero); color: var(--cream); }
+.rounds-stats span { font: 600 13px var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--cream-muted); }
+
+/* tablet/phone: everything stacks in one scrolling column */
+@media (max-width: 1024px) {
+  .cells-panel, .side-panel { position: relative; top: auto; left: auto; right: auto; width: 100%; max-width: 560px; max-height: none; flex: none; overflow: visible; }
+  .rounds-panel { flex: none; }
+  .cell-chart { min-height: 200px; }
+}
+@media (max-width: 640px) {
+  .cell-grid, .cell-grid[data-count] { grid-template-columns: 1fr 1fr; }
+  .cells-board .time-display .date { display: none; }
+}
