@@ -189,6 +189,12 @@ function shownPeople(station, long = state.slot) {
   }
   return list.sort((a, b) => (a.seq || 1) - (b.seq || 1));
 }
+// The cells in use this hour: someone is on them (saved, picked, or carried over),
+// or they have tops. Not every cell runs every day (Koa 2026-11-18: "today we had
+// something like 11"), so counts and Enter only go through these.
+function usedCells(long = state.slot) {
+  return cells().filter(c => shownPeople(c.stationId, long).length || eff(c.stationId, long) != null);
+}
 // What counts: typed (the people's tops) wins; otherwise the scale's.
 function eff(station = cell()?.stationId, slot = state.slot) {
   const typed = typedTops(station, slot);
@@ -410,8 +416,9 @@ function renderHours() {
   state.slots.forEach((s, i) => {
     const b = document.createElement('button');
     const done = cells().filter(c => eff(c.stationId, s.slot) != null).length;
+    const used = usedCells(s.slot).length;
     b.className = 'hour-chip' + (s.slot === state.slot ? ' on' : '') + (i === nowIdx ? ' now' : '');
-    b.innerHTML = `<span>${s.slot.replace(/:00/g, '').replace(' – ', '–')}</span><small>${done}/${cells().length}</small>`;
+    b.innerHTML = `<span>${s.slot.replace(/:00/g, '').replace(' – ', '–')}</span><small>${done}/${used}</small>`;
     b.addEventListener('click', () => { state.slot = s.slot; renderAll(); });
     el.hours.appendChild(b);
   });
@@ -494,6 +501,7 @@ function renderGrid() {
   let done = 0;
   const quality = state.view === 'quality';
   let checked = 0;
+  const usedIds = new Set(usedCells().map(c => c.stationId));
   list.forEach((c, i) => {
     // Weights view: green once tops are in. Quality view: the cell's latest
     // fully scored batch, green = pass, red = redo.
@@ -503,7 +511,7 @@ function renderGrid() {
     const has = quality ? last?.quality === 'pass' : eff(c.stationId) != null;
     if (has) done++;
     const b = document.createElement('button');
-    b.className = 'jump' + (has ? ' done' : '') + (quality && last?.quality === 'fail' ? ' failq' : '')
+    b.className = 'jump' + (has ? ' done' : '') + (quality && last?.quality === 'fail' ? ' failq' : '') + (!quality && !usedIds.has(c.stationId) ? ' empty' : '')
       + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '') + (hasScale(c.stationId) ? ' scale' : '');
     b.innerHTML = `<b>${c.stationId.replace(/^table/, '')}</b>`;
     b.appendChild(document.createTextNode(c.label));
@@ -517,7 +525,7 @@ function renderGrid() {
     el.grid.appendChild(b);
   });
   el.gridTitle.textContent = t(quality ? 'jumpToday' : 'jump');
-  el.doneCount.textContent = quality ? tf('batchesChecked', { n: checked }) : `${done}/${list.length} ${t('entered')}`;
+  el.doneCount.textContent = quality ? tf('batchesChecked', { n: checked }) : `${done}/${usedIds.size} ${t('entered')}`;
   renderHours();
 }
 function renderAll() { renderRoom(); renderCell(true); renderGrid(); renderBag(); }
@@ -665,7 +673,20 @@ function commitPerson(pEl) {
 }
 // Enter on the last person's tops: save and go to the next cell, keypad still up.
 function nextCellFocused() {
-  openCell((state.cellIdx + 1) % cells().length);
+  // First hour with people (placing them): walk every cell. After that: the next
+  // cell with someone on it, then back to the first one still missing tops.
+  const list = cells(); const used = new Set(usedCells().map(c => c.stationId));
+  const h = state.slots.findIndex(s => s.slot === state.slot);
+  const placing = h <= 0 || !usedCells(state.slots[h - 1].slot).length;
+  const after = list.findIndex((c, k) => k > state.cellIdx && used.has(c.stationId));
+  let next;
+  if (placing) next = (state.cellIdx + 1) % list.length;
+  else if (after >= 0) next = after;
+  else {
+    const open = list.findIndex(c => used.has(c.stationId) && eff(c.stationId) == null);
+    next = open >= 0 ? open : Math.max(0, list.findIndex(c => used.has(c.stationId)));
+  }
+  openCell(next);
   refreshCell();
   focusPerson();
 }
