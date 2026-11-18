@@ -12,7 +12,8 @@ const call = async (env, action, body) => {
   const res = await handleConsignD1(post(action, body), env, {});
   return (await res.json()).data;
 };
-const totals = async (env, farmId) => (await call(env, 'farm', { farm_id: farmId })).totals;
+// Totals are money: only the owner gets them (staff money lock).
+const totals = async (env, farmId) => (await call(env, 'farm', { farm_id: farmId, ...OWNER })).totals;
 
 async function setup(env, { term = 'dropoff', prices = true } = {}) {
   const { farm } = await call(env, 'saveFarm', { name: 'Farm A', default_term: term, ...OWNER });
@@ -33,7 +34,7 @@ test('paid on dropoff, screened lower: the credit owed to us carries forward', a
   assert.equal(t.owed, 1000);
   assert.equal(t.estimate, true);
 
-  await call(env, 'savePayment', { farm_id: farm.id, amount: 1000, method: 'check', client_key: 'p1' });
+  await call(env, 'savePayment', { farm_id: farm.id, amount: 1000, method: 'check', client_key: 'p1', ...OWNER });
   t = await totals(env, farm.id);
   assert.equal(t.balance, 0);
 
@@ -89,7 +90,7 @@ test('price change mid-season applies to later dropoffs only', async () => {
   const d1 = await drop(env, farm.id, [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 10 }]);
   await call(env, 'savePricePoint', { farm_id: farm.id, cultivar: 'Alpha', type: 'tops', price_per_lb: 12, ...OWNER });
   const d2 = await drop(env, farm.id, [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 10 }]);
-  const f = await call(env, 'farm', { farm_id: farm.id });
+  const f = await call(env, 'farm', { farm_id: farm.id, ...OWNER });
   const lot = (id) => f.dropoffs.flatMap((x) => x.lots).find((l) => l.id === id);
   assert.equal(lot(d1.lots[0].id).money.owed, 100);
   assert.equal(lot(d2.lots[0].id).money.owed, 120);
@@ -128,11 +129,11 @@ test('voids correct the balance: a voided payment and a voided lot drop out', as
   const { env } = freshConsignDb();
   const farm = await setup(env);
   const d = await drop(env, farm.id, [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 100 }, { cultivar: 'Alpha', type: 'smalls', intake_lbs: 10 }]);
-  const { payment } = await call(env, 'savePayment', { farm_id: farm.id, amount: 500, client_key: 'p1' });
+  const { payment } = await call(env, 'savePayment', { farm_id: farm.id, amount: 500, client_key: 'p1', ...OWNER });
   let t = await totals(env, farm.id);
   assert.equal(t.owed, 1040);
   assert.equal(t.paid, 500);
-  await call(env, 'voidRow', { table: 'payment', id: payment.id, reason: 'wrong farm' });
+  await call(env, 'voidRow', { table: 'payment', id: payment.id, reason: 'wrong farm', ...OWNER });
   t = await totals(env, farm.id);
   assert.equal(t.paid, 0);
   await call(env, 'voidRow', { table: 'lot', id: d.lots[1].id, reason: 'entered twice' });
