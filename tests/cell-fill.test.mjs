@@ -88,6 +88,34 @@ test('mapping: no room cultivar takes the cell cultivar with most tops; an empty
   assert.equal(row.effective_trimmers_line1, 1);
   assert.equal(cellHourToProductionRow({ slotMinutes: 60, people: [], cells: [], room: {} }), null);
   assert.equal(cellHourToProductionRow({ slotMinutes: 60, people: [{ personId: 1, stationId: 'table1', min: 0 }], cells: [{ stationId: 'table1', tops: null }] }), null);
+  assert.equal(cellHourToProductionRow({ slotMinutes: 60, people: [], cells: [], room: { smalls: 3 } }), null, 'pounds with no crew never fill');
+});
+
+test('room smalls with no cell typed fill nothing; the hour fills once a cell is typed', async () => {
+  const { env, sqlite } = freshDb();
+  const a = await addPerson(env, 'Ana');
+  await fillOn(env);
+  await post(env, 'setRoomSmalls', { date: DATE, slot: H1, smalls: 3 });
+  assert.equal(prodRow(sqlite), undefined);
+  await typeTops(env, a, 'table1', 0.6);
+  const r = prodRow(sqlite);
+  assert.deepEqual([r.trimmers_line1, r.tops_lbs1, r.smalls_lbs1], [1, 0.6, 3]);
+});
+
+test('a hand row that lands after the read is still left alone (one-statement upsert)', async () => {
+  const { env, sqlite } = freshDb();
+  const { fillHour } = await import(url('workers/src/lib/cell-fill.js'));
+  const a = await addPerson(env, 'Ana');
+  await typeTops(env, a, 'table1', 0.6);
+  await fillOn(env);
+  sqlite.prepare("UPDATE monthly_production SET fill_source = NULL, trimmers_line1 = 9, tops_lbs1 = 4 WHERE production_date = ?").run(DATE);
+  // The hand save races the fill: the fill's read still sees no row (stubbed here),
+  // so only the upsert's WHERE stands between it and the hand numbers.
+  const raced = { ...env.DB, prepare: (q) => (/SELECT id, fill_source/.test(q)
+    ? { bind: () => ({ first: async () => null }) } : env.DB.prepare(q)) };
+  const res = await fillHour(raced, DATE, H1, '7-8', 60, { force: true });
+  assert.equal(res.state, 'hand');
+  assert.deepEqual([prodRow(sqlite).trimmers_line1, prodRow(sqlite).tops_lbs1], [9, 4]);
 });
 
 test('switch off (the default): cell saves never write Hourly entry', async () => {

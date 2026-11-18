@@ -45,7 +45,9 @@ export function cellHourToProductionRow({ slotMinutes, people = [], cells = [], 
   const tops = r1(cells.reduce((a, c) => a + (Number(c.tops) || 0), 0));
   const smalls = r1(room?.smalls);
   const inUse = new Set(worked.map((p) => p.stationId));
-  if (!worked.length && !(tops > 0) && !(smalls > 0)) return null;
+  // No cell in use = no crew: never fill pounds without crew (Hourly entry refuses
+  // that too, and the board divides by trimmers). The hour fills once a cell is typed.
+  if (!inUse.size) return null;
 
   const personMin = worked.reduce((a, p) => a + Number(p.min), 0);
   const effective = slotMinutes > 0 ? r1(personMin / slotMinutes) : inUse.size;
@@ -76,10 +78,11 @@ export function cellHourToProductionRow({ slotMinutes, people = [], cells = [], 
 }
 
 /** A row typed on Hourly entry that carries anything. */
+const HAND_KEYS = ['trimmers_line1', 'buckers_line1', 'tzero_line1', 'trimmers_line2', 'buckers_line2', 'tzero_line2',
+  'tops_lbs1', 'smalls_lbs1', 'tops_lbs2', 'smalls_lbs2'];
 export function isHandRow(r) {
   if (!r || r.fill_source === FILL_SOURCE) return false;
-  return ['trimmers_line1', 'buckers_line1', 'tzero_line1', 'trimmers_line2', 'buckers_line2', 'tzero_line2',
-    'tops_lbs1', 'smalls_lbs1', 'tops_lbs2', 'smalls_lbs2'].some((k) => (Number(r[k]) || 0) > 0);
+  return HAND_KEYS.some((k) => (Number(r[k]) || 0) > 0);
 }
 
 // The tables may not exist yet (migration not applied): that reads as "off".
@@ -140,14 +143,15 @@ export async function fillHour(db, date, longSlot, slotKey, slotMinutes, { force
     }
     return { state: 'none' };
   }
+  // One statement: two tablets saving the same hour never hit the unique key, and a
+  // hand row that landed since the read above is still left alone (the WHERE).
   const vals = COLS.map((c) => row[c]);
-  if (existing) {
-    await db.prepare(`UPDATE monthly_production SET ${COLS.map((c) => `${c} = ?`).join(', ')}, fill_source = ? WHERE id = ?`)
-      .bind(...vals, FILL_SOURCE, existing.id).run();
-  } else {
-    await db.prepare(`INSERT INTO monthly_production (production_date, time_slot, ${COLS.join(', ')}, qc, fill_source)
-      VALUES (?, ?, ${COLS.map(() => '?').join(', ')}, '', ?)`).bind(date, longSlot, ...vals, FILL_SOURCE).run();
-  }
+  const r = await db.prepare(`INSERT INTO monthly_production (production_date, time_slot, ${COLS.join(', ')}, qc, fill_source)
+    VALUES (?, ?, ${COLS.map(() => '?').join(', ')}, '', ?)
+    ON CONFLICT(production_date, time_slot) DO UPDATE SET ${COLS.map((c) => `${c} = excluded.${c}`).join(', ')}, fill_source = excluded.fill_source
+    WHERE monthly_production.fill_source = '${FILL_SOURCE}' OR (${HAND_KEYS.map((k) => `COALESCE(monthly_production.${k}, 0) <= 0`).join(' AND ')})`)
+    .bind(date, longSlot, ...vals, FILL_SOURCE).run();
+  if (!r?.meta?.changes) return { state: 'hand' };
   return { state: 'filled', row };
 }
 

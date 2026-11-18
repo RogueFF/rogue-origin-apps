@@ -21,7 +21,8 @@
  *
  * Saves are field by field: only the keys present in the body are written, so
  * two people on two tablets never overwrite each other's other fields.
- * Nothing here touches monthly_production.
+ * Nothing here writes monthly_production itself; with a day's fill switch on, saves
+ * call fillSlot (cell-fill.js), which fills that hour's Hourly entry row.
  */
 
 import { successResponse, errorResponse } from '../../lib/response.js';
