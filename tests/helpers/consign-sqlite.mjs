@@ -7,13 +7,15 @@ try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* skip in tes
 export const sqliteOk = !!DatabaseSync;
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MIGRATION = 'workers/migrations/0066-consign-lots.sql';
+const MIGRATIONS = ['workers/migrations/0066-consign-lots.sql', 'workers/migrations/0067-consign-farm-access.sql'];
 
 export function freshConsignDb() {
   const sqlite = new DatabaseSync(':memory:');
-  const sql = readFileSync(join(REPO, MIGRATION), 'utf8')
-    .split(/\r?\n/).map((l) => l.replace(/--.*$/, '')).join('\n');
-  for (const st of sql.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); }
+  for (const file of MIGRATIONS) {
+    const sql = readFileSync(join(REPO, file), 'utf8')
+      .split(/\r?\n/).map((l) => l.replace(/--.*$/, '')).join('\n');
+    for (const st of sql.split(';')) { const t = st.trim(); if (t) sqlite.exec(t); }
+  }
 
   const runSync = (q, args) => {
     const r = sqlite.prepare(q).run(...args);
