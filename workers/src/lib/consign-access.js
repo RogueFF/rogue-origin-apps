@@ -9,6 +9,8 @@
 
 export const MAX_TRIES = 5;
 export const LOCK_MINUTES = 15;
+/** Locks in a row, with no correct PIN in between, before the link is turned off. */
+export const MAX_LOCKOUTS = 3;
 
 const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');

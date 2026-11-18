@@ -177,6 +177,67 @@ test('a correct PIN resets the count', async () => {
   assert.deepEqual((await refused(env, 'view', { token: ta, pin: '0000' }, now)).details, { tries_left: 4 });
 });
 
+test('three lockouts in a row turn the link off: 15 guesses in all, then even the right PIN is dead', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { a, ta, tb } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  await farm(env, 'setPin', { token: tb, pin: '1234' }, now);
+  for (let round = 1; round <= 3; round++) {
+    for (let i = 1; i <= 4; i++) assert.equal((await refused(env, 'view', { token: ta, pin: '0000' }, now)).code, 'VALIDATION_ERROR');
+    const fifth = await refused(env, 'view', { token: ta, pin: '0000' }, now);
+    if (round < 3) {
+      assert.equal(fifth.code, 'RATE_LIMITED');
+      now.add(16);
+    } else {
+      assert.equal(fifth.code, 'UNAUTHORIZED', 'the 15th wrong PIN turns the link off');
+    }
+  }
+  now.add(60);
+  assert.equal((await refused(env, 'view', { token: ta, pin: '1234' }, now)).code, 'UNAUTHORIZED');
+  assert.equal((await refused(env, 'status', { token: ta }, now)).code, 'UNAUTHORIZED');
+  const row = sqlite.prepare('SELECT lockouts, revoked_at FROM cl_farm_access WHERE farm_id = ?').get(a.id);
+  assert.equal(row.lockouts, 3);
+  assert.ok(row.revoked_at);
+  // The other farm's link is untouched, and the staff page says why this one is off.
+  assert.equal((await farm(env, 'view', { token: tb, pin: '1234' }, now)).farm.name, 'Farm B');
+  const acc = (await staff(env, 'farm', { farm_id: a.id })).access;
+  assert.equal(acc.active, false);
+  assert.equal(acc.auto_off, true);
+  // A new link starts clean.
+  const { token: t2 } = await owner(env, 'issueFarmAccess', { farm_id: a.id });
+  await farm(env, 'setPin', { token: t2, pin: '4321' }, now);
+  assert.equal((await staff(env, 'farm', { farm_id: a.id })).access.auto_off, false);
+});
+
+test('a correct PIN between lockouts clears the lockout count', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { ta } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  for (let round = 0; round < 2; round++) {
+    for (let i = 0; i < 5; i++) await refused(env, 'view', { token: ta, pin: '0000' }, now);
+    now.add(16);
+  }
+  assert.equal(sqlite.prepare('SELECT lockouts FROM cl_farm_access WHERE pin_hash IS NOT NULL').get().lockouts, 2);
+  await farm(env, 'view', { token: ta, pin: '1234' }, now);
+  assert.equal(sqlite.prepare('SELECT lockouts FROM cl_farm_access WHERE pin_hash IS NOT NULL').get().lockouts, 0);
+  for (let i = 0; i < 5; i++) await refused(env, 'view', { token: ta, pin: '0000' }, now);
+  now.add(16);
+  assert.equal((await farm(env, 'view', { token: ta, pin: '1234' }, now)).farm.name, 'Farm A', 'still on: only one lockout since the good PIN');
+});
+
+test('parallel wrong PINs count one lockout, not many', async () => {
+  const { env, sqlite } = freshConsignDb();
+  const { ta } = await seedTwo(env);
+  const now = clock();
+  await farm(env, 'setPin', { token: ta, pin: '1234' }, now);
+  await Promise.all(Array.from({ length: 20 }, () => refused(env, 'view', { token: ta, pin: '0000' }, now)));
+  const row = sqlite.prepare('SELECT lockouts, revoked_at FROM cl_farm_access WHERE pin_hash IS NOT NULL').get();
+  assert.equal(row.lockouts, 1);
+  assert.equal(row.revoked_at, null);
+});
+
 test('setPin only once; a second setPin is refused and the PIN is unchanged', async () => {
   const { env } = freshConsignDb();
   const { ta } = await seedTwo(env);
@@ -337,7 +398,7 @@ test('staff farm read carries the link state, never a hash', async () => {
   assert.equal((await staff(env, 'farm', { farm_id: c.id })).access, null);
   const { token: t } = await owner(env, 'issueFarmAccess', { farm_id: c.id });
   let acc = (await staff(env, 'farm', { farm_id: c.id })).access;
-  assert.deepEqual(Object.keys(acc).sort(), ['active', 'issued_at', 'last_seen_at', 'locked', 'pin_set']);
+  assert.deepEqual(Object.keys(acc).sort(), ['active', 'auto_off', 'issued_at', 'last_seen_at', 'locked', 'pin_set']);
   assert.equal(acc.active, true);
   assert.equal(acc.pin_set, false);
   assert.equal(acc.last_seen_at, null);

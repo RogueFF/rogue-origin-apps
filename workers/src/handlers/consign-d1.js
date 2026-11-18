@@ -11,7 +11,7 @@ import { checkRun, lotMoney, farmTotals, screenTolerance, round2 } from '../lib/
 import { normalizeSheetRead } from '../lib/consign-sheet.js';
 import { dropoffPrompt, screenPrompt } from '../lib/consign-sheet-prompt.js';
 import { getConfig } from '../lib/production-utils.js';
-import { newToken, tokenHash, lockState } from '../lib/consign-access.js';
+import { newToken, tokenHash, lockState, MAX_LOCKOUTS } from '../lib/consign-access.js';
 
 const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
 
@@ -469,7 +469,7 @@ async function farmDetail(body, env) {
 /** State of the farm's newest link, for the staff page. Named columns only: never a hash. */
 async function accessState(env, farmId) {
   const row = await env.DB.prepare(
-    `SELECT issued_at, last_seen_at, locked_until, revoked_at, CASE WHEN pin_hash IS NULL THEN 0 ELSE 1 END AS pin_set
+    `SELECT issued_at, last_seen_at, locked_until, revoked_at, lockouts, CASE WHEN pin_hash IS NULL THEN 0 ELSE 1 END AS pin_set
      FROM cl_farm_access WHERE farm_id = ? ORDER BY id DESC LIMIT 1`
   ).bind(farmId).first();
   if (!row) return null;
@@ -479,6 +479,8 @@ async function accessState(env, farmId) {
     issued_at: row.issued_at,
     last_seen_at: row.last_seen_at || null,
     locked: !row.revoked_at && lockState(row, new Date()).locked,
+    // Turned off by the cap on wrong PINs, not by the owner.
+    auto_off: !!row.revoked_at && Number(row.lockouts) >= MAX_LOCKOUTS,
   };
 }
 
