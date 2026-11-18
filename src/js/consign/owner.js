@@ -92,6 +92,7 @@ export async function lotTermsDialog(lot) {
       { name: 'term', label: t('term'), type: 'select', value: lot.term, options: termOptions() },
       { name: 'price_per_lb', label: `${t('pricePerLb')} ($)`, type: 'number', value: lot.price_per_lb ?? '' },
       ...(lot.type === 'tops' ? [{ name: 'smalls_price_per_lb', label: `${t('smallsPrice')} ($)`, type: 'number', value: lot.smalls_price_per_lb ?? '' }] : []),
+      { name: 'absorb_loss', label: t('absorbLoss'), type: 'checkbox', value: Number(lot.absorb_loss) === 1 },
       // Only a lot with a note has something to show the farm.
       ...(lot.note ? [{ name: 'note_visible', label: `${t('showNoteToFarm')}: “${lot.note}”`, type: 'checkbox', value: Number(lot.note_visible) === 1 }] : []),
     ],
@@ -102,6 +103,7 @@ export async function lotTermsDialog(lot) {
   if (v.price_per_lb !== '') body.price_per_lb = num(v.price_per_lb);
   if (v.smalls_price_per_lb) body.smalls_price_per_lb = num(v.smalls_price_per_lb);
   if (lot.note) body.note_visible = !!v.note_visible;
+  body.absorb_loss = v.term === 'dropoff' && !!v.absorb_loss;
   try {
     await ownerCall('setLotTerms', body);
     toast(t('saved'));

@@ -235,6 +235,9 @@ async function addProduction(body, env) {
         'UPDATE monthly_production SET change_at = ?, change_cultivar = ?, change_tops_lbs = ?, change_share = ? WHERE id = ?',
         [change.at, change.cultivar, change.tops, change.share, existing.id]);
     }
+    // A hand save takes over an hour the cell log filled: from now on the fill
+    // leaves it alone (lib/cell-fill.js). Before migration 0071 there is no column.
+    try { await execute(env.DB, 'UPDATE monthly_production SET fill_source = NULL WHERE id = ?', [existing.id]); } catch { /* no fill_source yet */ }
 
     await incrementDataVersion(env);
 

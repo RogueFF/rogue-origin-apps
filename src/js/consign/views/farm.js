@@ -75,6 +75,7 @@ export function mount(root, { farmId }) {
       <div class="cs-lothead">${statusChip(m.status)}<b>${esc(l.cultivar)} ${esc(typeLabel(l.type))}</b>
         <span>${m.intake_lbs == null ? `<span class="cs-muted">${esc(t('notWeighedYet'))}</span>` : `${lbs(m.intake_lbs)} ${esc(t('lbs'))}`}</span>
         <span class="cs-muted">${esc(termLabel(l.term))}</span>
+        ${showMoney() && l.term === 'dropoff' && m.pulled_lbs > 0 ? `<span class="cs-chip">${esc(t(Number(l.absorb_loss) === 1 ? 'paidOnDropoffLbs' : 'paidOnFinalLbs'))}</span>` : ''}
         ${m.needs_price ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : ''}${showMoney() && m.estimate && m.owed > 0 ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
       ${after}${sold}${l.note ? `<div class="cs-muted">${esc(t('note'))}: ${esc(l.note)}${Number(l.note_visible) === 1 ? ` <span class="cs-chip">${esc(t('farmSeesNote'))}</span>` : ''}</div>` : ''}
       <div class="cs-lotbtns">
