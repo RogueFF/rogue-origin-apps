@@ -48,11 +48,11 @@ registerLabels({
     finalVal: 'final', typedOverride: 'Typed (overrides the scale)', overrideNote: 'Manual override: the typed value counts.',
     differ: 'Typed and scale differ by {pct}%', partsTyped: '{n} typed', partsScale: '{n} from scale',
     tareFlag: "The scale's TARE was pressed mid-job this hour: check it", searchCultivar: 'Type to search',
-    whoHere: 'Who is on this cell?', cover: 'Someone took over', addPersonHere: '+ Another person', carried: 'same as last hour',
+    whoHere: 'Who is on this cell?', cover: 'Someone took over', carried: 'same as last hour',
     waiting: 'not entered yet', removePerson: 'Take off this hour', pickAssign: 'Who is on {c}?', pickReplace: 'Change {n} for…',
-    pickCover: '{n} left. Who took over?', pickAdd: 'Who else is on {c}?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
+    pickCover: '{n} left. Who took over?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
     onCell: 'on {c}', peopleFail: "Couldn't load the crew list. Unlock the page or check the connection.", loadingPeople: 'Loading the crew…',
-    searchName: 'Type a name', close: 'Close', leftEarly: 'Left early and nobody took over? Minutes worked', done: 'Done',
+    searchName: 'Type a name', close: 'Close',
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -72,11 +72,11 @@ registerLabels({
     finalVal: 'final', typedOverride: 'Escrito (reemplaza a la báscula)', overrideNote: 'Reemplazo manual: cuenta el valor escrito.',
     differ: 'Lo escrito y la báscula difieren {pct}%', partsTyped: '{n} escritas', partsScale: '{n} de báscula',
     tareFlag: 'Se presionó TARA en la báscula a mitad del trabajo esta hora: revíselo', searchCultivar: 'Escriba para buscar',
-    whoHere: '¿Quién está en esta celda?', cover: 'Alguien lo cubrió', addPersonHere: '+ Otra persona', carried: 'igual que la hora pasada',
+    whoHere: '¿Quién está en esta celda?', cover: 'Alguien lo cubrió', carried: 'igual que la hora pasada',
     waiting: 'falta anotar', removePerson: 'Quitar de esta hora', pickAssign: '¿Quién está en {c}?', pickReplace: 'Cambiar a {n} por…',
-    pickCover: '{n} se fue. ¿Quién lo cubrió?', pickAdd: '¿Quién más está en {c}?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
+    pickCover: '{n} se fue. ¿Quién lo cubrió?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
     onCell: 'en {c}', peopleFail: 'No cargó la lista del equipo. Desbloquee la página o revise la conexión.', loadingPeople: 'Cargando el equipo…',
-    searchName: 'Escriba un nombre', close: 'Cerrar', leftEarly: '¿Se fue antes y nadie lo cubrió? Minutos que trabajó', done: 'Listo',
+    searchName: 'Escriba un nombre', close: 'Cerrar',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -118,7 +118,7 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   people: $('people'), picker: $('picker'), pickTitle: $('pickTitle'), pickClose: $('pickClose'), pickLeft: $('pickLeft'),
-  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'), pickShort: $('pickShort'), pickShortMin: $('pickShortMin'), pickShortOk: $('pickShortOk'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
+  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), qOverall: $('qOverall'), stopAlert: $('stopAlert'), checkedBy: $('checkedBy'),
   batchTitle: $('batchTitle'), batchHistory: $('batchHistory'), nextBatch: $('nextBatchBtn'), gridTitle: $('gridTitle'),
   tabWeights: $('tabWeights'), tabQuality: $('tabQuality'),
@@ -615,7 +615,8 @@ function renderPeople(c) {
       <div class="muted small p-g">${gText(p.lb)}</div>
     </div>`).join('')
     + (list.length
-      ? `<div class="person-acts"><button type="button" class="btn ghost" data-act="cover">${esc(t('cover'))}</button><button type="button" class="btn ghost" data-act="add">${esc(t('addPersonHere'))}</button></div>`
+      // One person per cell (Koa 2026-11-18): the only change in an hour is someone taking over.
+      ? (list.length < 2 ? `<div class="person-acts"><button type="button" class="btn ghost" data-act="cover">${esc(t('cover'))}</button></div>` : '')
       : `<button type="button" class="btn primary who-btn" data-act="assign">${esc(t('whoHere'))}</button>`);
 }
 function stampCultivar(station, long) {
@@ -708,7 +709,6 @@ el.people.addEventListener('click', e => {
     refreshCell();
   } else if (act === 'replace') openPicker('replace', id);
   else if (act === 'cover') { const list = shownPeople(c.stationId); openPicker('cover', list[list.length - 1]?.personId); }
-  else if (act === 'add') openPicker('add');
   else if (act === 'assign') openPicker('assign');
 });
 
@@ -726,10 +726,9 @@ function openPicker(mode, personId = null) {
   const c = cell(); if (!c || !crew.ok) return;
   pick.mode = mode; pick.personId = personId;
   const n = personId != null ? nameOf(personId) : '';
-  el.pickTitle.textContent = tf({ assign: 'pickAssign', add: 'pickAdd', replace: 'pickReplace', cover: 'pickCover' }[mode], { c: c.label, n });
+  el.pickTitle.textContent = tf({ assign: 'pickAssign', replace: 'pickReplace', cover: 'pickCover' }[mode], { c: c.label, n });
   el.pickLeftWrap.hidden = mode !== 'cover';
-  el.pickShort.hidden = mode !== 'replace';
-  if (mode === 'replace') el.pickShortMin.value = String(crew.ph.get(pkey(personId, state.slot))?.min ?? slotMin());
+
   if (mode === 'cover') { el.pickLeftLabel.textContent = tf('leftAfter', { n: firstName(personId) }); el.pickLeft.value = String(defaultLeft()); }
   el.pickSearch.value = '';
   renderPick();
@@ -755,8 +754,8 @@ function choose(id) {
   const unsaved = list.filter(p => !p.saved).map(p => ({ ...p, carried: false }));
   crew.dismissed.delete(rowKey(state.slot, c.stationId));
   let focusId = id;
-  if (mode === 'assign' || mode === 'add') {
-    setDrafts(c.stationId, [...unsaved, { personId: id, lb: '', min: sm, seq: mode === 'add' ? 2 : 1 }]);
+  if (mode === 'assign') {
+    setDrafts(c.stationId, [...unsaved, { personId: id, lb: '', min: sm, seq: 1 }]);
   } else if (mode === 'replace' && old) {
     // The whole hour goes to the person picked; typed tops move with it.
     if (old.saved) { clearPerson(c.stationId, old.personId); savePerson(c.stationId, id, { lb: old.lb, min: old.min, seq: old.seq || 1 }); setDrafts(c.stationId, unsaved); }
@@ -773,17 +772,6 @@ function choose(id) {
   refreshCell();
   focusPerson(focusId);
 }
-// Left early and nobody took over: only the minutes change (in the name's menu, out of the way).
-el.pickShortOk.addEventListener('click', () => {
-  const c = cell(); const id = pick.personId;
-  const min = Math.max(0, Math.min(120, Math.round(Number(el.pickShortMin.value) || 0)));
-  const saved = crew.ph.get(pkey(id, state.slot));
-  if (saved) savePerson(c.stationId, id, { lb: saved.lb, min, seq: saved.seq });
-  else setDrafts(c.stationId, shownPeople(c.stationId).filter(p => !p.saved).map(p => ({ ...p, carried: false, ...(p.personId === id ? { min } : {}) })));
-  closePicker();
-  refreshCell();
-  focusPerson(id);
-});
 el.pickSearch.addEventListener('input', renderPick);
 el.pickClose.addEventListener('click', closePicker);
 el.pickList.addEventListener('click', async e => {
