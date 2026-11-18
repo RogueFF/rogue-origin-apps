@@ -1,13 +1,13 @@
 /**
- * Crew leaderboard (barn TV + QR page), Koa 2026-11-16: name only the top 5,
- * show the room against the goal and a "most improved" slot, never shame the
- * bottom. Top 5 = the previous workday only (Koa 2026-11-16).
+ * Crew leaderboard (barn TV + QR page), Koa 2026-11-16: top 5 of the previous
+ * workday, the room against the goal and a "most improved" slot. Koa 2026-11-17:
+ * show all names, with an overall view and a day-by-day view.
  *
- *   · ranking is that one workday's rate; part days never count
+ *   · a day's ranking is that day's rate; part days are listed, never ranked
  *   · anyone with a full day that day is ranked, even their first day
+ *   · overall = pooled full days (all grams / all minutes)
  *   · most improved = biggest rise first full day → that workday, outside the top 5
- *   · the response never names rank 6+ (except the most-improved slot) and
- *     never carries a card token
+ *   · the response never carries a card token
  *
  * Run with `node --test`.
  */
@@ -89,14 +89,44 @@ test('most improved: biggest first → latest rise, outside the top 5', async ()
   assert.equal(b.mostImproved.rise.gph, 140);
 });
 
-test('the response names only the top 5 + most improved, and carries no token', async () => {
+test('day by day: everyone with a full day is ranked; part days are listed, not ranked', async () => {
+  const { env } = freshDb();
+  await post(env, 'crewLoadDay', day('2026-11-12', D1, 0.5, 0.4));
+  await post(env, 'crewLoadDay', day('2026-11-13', D2, 0.51, 0.45));
+  const b = await (await get(env, 'action=crewBoard')).json();
+  assert.deepEqual(Object.keys(b.byDay), ['2026-11-12', '2026-11-13']);
+  const d12 = b.byDay['2026-11-12'], d13 = b.byDay['2026-11-13'];
+  assert.deepEqual(d12.ranked.map((p) => p.name), ['Solo', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']);
+  assert.deepEqual(d13.ranked.map((p) => p.rank), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(d13.ranked.at(-1).name, 'P8');
+  assert.deepEqual(d13.part.map((p) => [p.name, p.gph]), [['Part', 950]]);
+  assert.ok(!d13.ranked.some((p) => p.name === 'Part'), 'a part day is never ranked');
+  assert.equal(d12.room.goal.lbHr, 0.5);
+  assert.equal(d13.room.rate.lbHr, 0.45);
+});
+
+test('overall: full days pooled per person (all grams / all minutes), with the day count', async () => {
+  const { env } = freshDb();
+  await post(env, 'crewLoadDay', day('2026-11-12', D1));
+  await post(env, 'crewLoadDay', day('2026-11-13', D2));
+  const b = await (await get(env, 'action=crewBoard')).json();
+  const o = b.overall.ranked;
+  assert.equal(o[0].name, 'Solo');
+  assert.equal(o[0].days, 1);
+  const p8 = o.find((p) => p.name === 'P8');
+  assert.equal(p8.gph, 170, 'P8: (100 + 240) g over 2 hours');
+  assert.equal(p8.days, 2);
+  assert.deepEqual(o.map((p) => p.rank), o.map((_, i) => i + 1));
+  assert.deepEqual(b.overall.partOnly, ['Part']);
+});
+
+test('the response names everyone but never carries a card token', async () => {
   const { env, sqlite } = freshDb();
   await post(env, 'crewLoadDay', day('2026-11-12', D1));
   await post(env, 'crewLoadDay', day('2026-11-13', D2));
   const raw = await (await get(env, 'action=crewBoard')).text();
-  for (const hidden of ['P6', 'P7', 'Solo', 'Part']) assert.ok(!raw.includes(`"${hidden}"`), `${hidden} leaked`);
+  for (const name of ['P6', 'P7', 'Solo', 'Part']) assert.ok(raw.includes(`"${name}"`), `${name} missing`);
   for (const { token } of sqlite.prepare('SELECT token FROM crew_people').all()) assert.ok(!raw.includes(token), 'a card token leaked');
-  assert.ok(!/"rank":\s*[6-9]/.test(raw));
   assert.ok(!raw.includes('$'));
 });
 
