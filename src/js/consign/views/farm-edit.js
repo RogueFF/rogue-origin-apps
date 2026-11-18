@@ -122,6 +122,7 @@ export async function editLotDialog(lot) {
   await save('editLot', { lot_id: lot.id }, body);
 }
 
+/** Resolves with the server's reply after a save, else null. */
 export async function editRunDialog(lot, run) {
   const nums = ['pulled_lbs', 'final_lbs', 'to_smalls_lbs', 'biomass_lbs', 'mold_lbs'];
   const v = await dialog({
@@ -136,8 +137,8 @@ export async function editRunDialog(lot, run) {
     ],
     okLabel: t('save'),
   });
-  if (!v) return;
-  await save('editScreenRun', { run_id: run.id }, changed(v, run, nums));
+  if (!v) return null;
+  return save('editScreenRun', { run_id: run.id }, changed(v, run, nums));
 }
 
 export async function editSoldDialog(lot, sold) {

@@ -35,9 +35,10 @@ function makeFake() {
     ],
     payments: [{ id: 9, farm_id: 1, paid_on: '2026-11-15', amount: 300, method: 'check', reference: 'R1', note: 'first', voided_at: null }],
     lotPrice: 10,
+    run: { ...RUN },
   };
   const lots = () => [
-    lot(10, 'Alpha', 'tops', { price_per_lb: s.lotPrice, runs: [RUN], money: money0({ status: 'screening', pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 8, biomass_lbs: 2, remainder_lbs: 40 }) }),
+    lot(10, 'Alpha', 'tops', { price_per_lb: s.lotPrice, runs: [s.run], money: money0({ status: 'screening', pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 8, biomass_lbs: 2, remainder_lbs: 40 }) }),
     lot(11, 'Beta with a long cultivar name', 'tops', { term: 'sold', note: 'wet', sold: [SOLD], money: money0({ on_hand_lbs: 95, sold_main_lbs: 5 }) }),
   ];
   s.answer = (action, body) => {
@@ -57,6 +58,11 @@ function makeFake() {
         Object.assign(p, Object.fromEntries(['cultivar', 'type', 'price_per_lb', 'effective_from'].filter((k) => k in body).map((k) => [k, body[k]])));
         if (body.update_lots) s.lotPrice = p.price_per_lb;
         return { price_point: p, lots_updated: body.update_lots ? 1 : 0 };
+      }
+      case 'dropoff': return { dropoff: { id: 5, farm_id: 1, farm_name: 'Farm A', dropped_at: '2026-11-14 17:30:00' }, lots: lots() };
+      case 'editScreenRun': {
+        Object.assign(s.run, Object.fromEntries(['pulled_lbs', 'final_lbs', 'to_smalls_lbs', 'biomass_lbs', 'mold_lbs', 'note'].filter((k) => k in body).map((k) => [k, body[k]])));
+        return { lot: lots()[0] };
       }
       case 'deletePricePoint': s.prices = s.prices.filter((x) => x.id !== body.id); return { ok: true };
       case 'editPayment': {
@@ -215,6 +221,24 @@ test.describe('Consignment owner edits', () => {
     expect(blocked).toEqual([]);
   });
 
+  test('screening screen: owner Edit beside the run Void; a save reads the lot again', async ({ page }) => {
+    const { fake, blocked } = await open(page, { owner: true });
+    await page.goto(`${PAGE}#/screen/5/10`);
+    await expect(page.locator('[data-edit="run|10|70"] + [data-voidrun="70"]')).toHaveCount(1);
+    const reads = () => fake.posts.filter((p) => p.action === 'dropoff').length;
+    const before = reads();
+    await page.locator('[data-edit="run|10|70"]').click();
+    const dlg = page.locator('dialog.cs-dialog');
+    await dlg.locator('input[name="final_lbs"]').fill('48');
+    await dlg.locator('input[name="biomass_lbs"]').fill('4');
+    await dlg.locator('[data-act="ok"]').click();
+    await expect(page.locator('#toast')).toHaveText('Saved');
+    const { owner_password: _pw, actor: _a, ...sent } = edits(fake, 'editScreenRun')[0].body;
+    expect(sent).toEqual({ run_id: 70, final_lbs: 48, biomass_lbs: 4 });
+    await expect.poll(reads).toBeGreaterThan(before);
+    expect(blocked).toEqual([]);
+  });
+
   test('staff mode has no Edit controls anywhere', async ({ page }) => {
     for (const width of [375, 1024]) {
       await page.setViewportSize({ width, height: 900 });
@@ -223,8 +247,13 @@ test.describe('Consignment owner edits', () => {
       await expect(page.locator('.cs-edit, .cs-entries')).toHaveCount(0);
       await expect(page.locator('[data-terms]').first()).toBeHidden();
       expect(await noHorizontalScroll(page)).toBe(true);
+      await page.goto(`${PAGE}#/screen/5/10`);
+      await expect(page.locator('[data-voidrun="70"]')).toBeVisible();
+      await expect(page.locator('[data-edit]')).toHaveCount(0);
+      expect(await noHorizontalScroll(page)).toBe(true);
       expect(fake.posts.some((p) => OWNER_ONLY.test(p.action))).toBe(false);
       expect(blocked).toEqual([]);
+      await page.goto('about:blank');
       await page.context().unrouteAll({ behavior: 'ignoreErrors' });
     }
   });
