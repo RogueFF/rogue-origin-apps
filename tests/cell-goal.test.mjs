@@ -71,7 +71,8 @@ async function typedDay(env, sqlite, cultivar) {
 }
 /** The goal as the TV, the crew board and Mis números each see it. */
 async function goalsSeen(env, sqlite) {
-  const token = sqlite.prepare('SELECT token FROM crew_people LIMIT 1').get().token;
+  // Ana's own token: a bare LIMIT 1 can read the token index and hand back anyone's.
+  const token = sqlite.prepare("SELECT token FROM crew_people WHERE name = 'Ana'").get().token;
   const board = await get(env, 'action=crewBoard');
   const mine = await get(env, `action=myNumbers&t=${token}`);
   const cell = await get(env, `action=cellHourly&date=${DATE}`);
