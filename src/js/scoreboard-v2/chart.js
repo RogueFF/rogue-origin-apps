@@ -82,10 +82,12 @@
       });
 
       const rates = hourlyRates.map(h => parseFloat(h.rate.toFixed(2)));
-      const targets = hourlyRates.map(h => parseFloat(h.target.toFixed(2)));
+      // an ungraded hour (no strain logged all day) has target 0: no target line, neutral bar
+      const targets = hourlyRates.map(h => (h.target > 0 ? parseFloat(h.target.toFixed(2)) : null));
 
       // Color bars based on performance - using brand colors
       const barColors = hourlyRates.map(h => {
+        if (!(h.target > 0)) return '#8a8578';   // ungraded: muted, never red
         const pct = (h.rate / h.target) * 100;
         if (pct >= 105) return '#668971';  // Brand green
         if (pct >= 90) return '#e4aa4f';   // Brand gold
@@ -151,7 +153,7 @@
               anchor: 'end',
               align: 'top',
               color: 'rgba(255,255,255,0.85)',
-              font: { size: 11, weight: '600', family: 'JetBrains Mono, monospace' },
+              font: { size: 14, weight: '600', family: 'JetBrains Mono, monospace' },
               formatter: function(value) {
                 return value.toFixed(2);
               }
@@ -233,11 +235,11 @@
           scales: {
             x: {
               grid: { display: false },
-              ticks: { color: 'rgba(255,255,255,0.8)', font: { size: 11 } }
+              ticks: { color: 'rgba(255,255,255,0.8)', font: { size: 14 } }
             },
             y: {
               grid: { color: 'rgba(255,255,255,0.1)' },
-              ticks: { color: 'rgba(255,255,255,0.8)', font: { size: 11 } },
+              ticks: { color: 'rgba(255,255,255,0.8)', font: { size: 14 } },
               beginAtZero: true
             }
           }

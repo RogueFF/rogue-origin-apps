@@ -903,7 +903,19 @@
     API.logBag(
       { size: size },
       function(result) {
-        if (result && result.success) {
+        if (result && result.success && result.duplicate) {
+          // The worker refused a second bag of this size within 90 s: nothing
+          // was written, so leave the timer and the cycle history alone.
+          btn.classList.remove('loading');
+          btn.classList.add('success');
+          if (btnText) btnText.textContent = (State && State.currentLang === 'es') ? '✓ Ya registrada' : '✓ Already logged';
+          setTimeout(function() {
+            delete btn.dataset.busy;
+            btn.disabled = false;
+            btn.classList.remove('success');
+            if (btnText) btnText.textContent = originalText;
+          }, 2000);
+        } else if (result && result.success) {
           console.debug('Manual bag logged:', result);
 
           // Show success state

@@ -322,6 +322,13 @@ async function getBagTimerData(env, date = null) {
 
 // ===== ACTION HANDLERS =====
 
+// A second Bag Complete of the same size this soon after the last one is a
+// double tap, not a bag (review 2026-10-13, L5-11). No real bag is filled in
+// 90 seconds.
+const DUPLICATE_BAG_WINDOW_MS = 90 * 1000;
+
+const bagSizeOf = (bagType) => (/10\s*lb/.test(String(bagType || '').toLowerCase()) ? '10lb' : '5kg');
+
 async function logBag(body, env) {
   // Normalize size: accept "5kg", "5 kg", "5 kg.", "10lb", "10 lb", etc.
   const rawSize = (body.size || '5kg').toString().toLowerCase();
@@ -331,10 +338,37 @@ async function logBag(body, env) {
   const bagWeightKg = is10lb ? 4.5359 : 5.0;
 
   const now = new Date();
+
+  // Duplicate guard: production_tracking is the table the bag timer counts.
+  // Read recent rows and compare times in JS (older sheets-migration rows may
+  // not be ISO strings, so no string comparison in SQL).
+  const recent = await query(env.DB, `
+    SELECT timestamp, bag_type FROM production_tracking
+    ORDER BY id DESC
+    LIMIT 10
+  `);
+  const twin = (recent || []).find((r) => {
+    const t = new Date(r.timestamp).getTime();
+    if (isNaN(t)) return false;
+    const age = now.getTime() - t;
+    return age >= 0 && age < DUPLICATE_BAG_WINDOW_MS && bagSizeOf(r.bag_type) === normalizedSize;
+  });
+  if (twin) {
+    // Nothing is written. The reply carries the existing bag's time, so the
+    // client keeps its timer where the first tap put it.
+    return successResponse({
+      success: true,
+      duplicate: true,
+      timestamp: new Date(twin.timestamp).toISOString(),
+      size: normalizedSize,
+    });
+  }
+
   const sku = is10lb ? 'MANUAL-10LB-BAG' : 'MANUAL-5KG-BAG';
   const flowRunId = `MANUAL-${normalizedSize.toUpperCase()}-${now.toISOString()}`;
 
-  // Write to inventory_adjustments (where bag timer reads from)
+  // Write to inventory_adjustments (the Shopify-style ledger; the bag timer
+  // does not read it, it counts production_tracking below)
   await insert(env.DB, 'inventory_adjustments', {
     timestamp: now.toISOString(),
     size: normalizedSize,
@@ -343,7 +377,7 @@ async function logBag(body, env) {
     flow_run_id: flowRunId,
   });
 
-  // Also write to production_tracking for legacy tracking
+  // production_tracking is what getBagTimerData counts as a bag
   await insert(env.DB, 'production_tracking', {
     timestamp: now.toISOString(),
     bag_type: sizeDisplay,
@@ -353,7 +387,7 @@ async function logBag(body, env) {
 
   await incrementDataVersion(env);
 
-  return successResponse({ timestamp: now.toISOString(), size: normalizedSize });
+  return successResponse({ success: true, duplicate: false, timestamp: now.toISOString(), size: normalizedSize });
 }
 
 async function logPause(body, env) {
@@ -369,7 +403,7 @@ async function logPause(body, env) {
 
   await incrementDataVersion(env);
 
-  return successResponse({ pauseId, timestamp: now.toISOString(), reason });
+  return successResponse({ success: true, pauseId, timestamp: now.toISOString(), reason });
 }
 
 async function logResume(body, env) {
@@ -398,7 +432,7 @@ async function logResume(body, env) {
     await incrementDataVersion(env);
   }
 
-  return successResponse({ pauseId, resumeTime: now.toISOString(), durationMinutes: durationMin });
+  return successResponse({ success: true, pauseId, resumeTime: now.toISOString(), durationMinutes: durationMin });
 }
 
 async function debugBags(env) {
