@@ -2,7 +2,7 @@
  * Crew Top 5 on the barn scoreboard (Koa 2026-11-17: "both"):
  *   · an always-on panel with the last workday's top 5 by tops lb per hour
  *     (lb big, grams small, as on the crew board) and the goal
- *   · on the TV only, every ROTATE_EVERY_MS the full crew board covers the
+ *   · on the TV only, every ROTATE_EVERY_MS (start to start) the full crew board covers the
  *     scoreboard for ROTATE_SHOW_MS, then the scoreboard comes back
  * Toyota rule: celebrate the best, never show the bottom. Only the top 5 is
  * drawn here, and nobody is ever marked red.
@@ -13,8 +13,9 @@
 export const TOP = 5;
 export const REFRESH_MS = 5 * 60 * 1000;          // re-read the crew board every 5 min
 export const FETCH_TIMEOUT_MS = 10 * 1000;
-export const ROTATE_EVERY_MS = 10 * 60 * 1000;    // the TV swaps to the crew board every 10 min…
-export const ROTATE_SHOW_MS = 30 * 1000;          // …for 30 s, then back
+// Koa 2026-11-18: "every 10 minutes for 2 minutes at a time" (was 30 s)
+export const ROTATE_EVERY_MS = 10 * 60 * 1000;    // the crew board comes up every 10 min, start to start…
+export const ROTATE_SHOW_MS = 2 * 60 * 1000;      // …for 2 min, then the scoreboard is back
 export const ROTATE_RETRY_MS = 60 * 1000;         // a skipped turn tries again a minute later
 export const PRELOAD_MS = 15 * 1000;              // the board loads hidden this long before it shows
 export const READY_TIMEOUT_MS = 12 * 1000;        // not ready by then: skip this turn, never show an error
@@ -115,6 +116,15 @@ export function shouldRotate(f) {
   if (!f.hasLeaders) return false;
   if (typeof f.sinceInputMs === 'number' && f.sinceInputMs < IDLE_AFTER_INPUT_MS) return false;
   return true;
+}
+
+/**
+ * When the next show starts after one that started at `showStartedAt`: 10 min
+ * start to start, so the crew board comes up on the same beat however long it
+ * shows (counting from the end would drift to every 12 min with a 2 min show).
+ */
+export function nextRotationAt(showStartedAt) {
+  return showStartedAt + ROTATE_EVERY_MS;
 }
 
 /** A local API root for previews (?api=http://localhost:PORT/api), else null. */

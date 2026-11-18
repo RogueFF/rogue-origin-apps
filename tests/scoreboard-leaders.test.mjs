@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-  TOP, REFRESH_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, PRELOAD_MS, READY_TIMEOUT_MS, IDLE_AFTER_INPUT_MS,
+  TOP, REFRESH_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, PRELOAD_MS, READY_TIMEOUT_MS, IDLE_AFTER_INPUT_MS, nextRotationAt,
   MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from '../src/js/scoreboard-v2/leaders-logic.js';
 
@@ -96,9 +96,13 @@ test('the date comes from the data, never "yesterday"', () => {
   for (const l of Object.values(LABELS)) assert.ok(!/yesterday|ayer/i.test(JSON.stringify(l)));
 });
 
-test('timings: every 10 min for 30 s, constants hang together', () => {
+test('timings: every 10 min start to start, for 2 min; constants hang together', () => {
   assert.equal(ROTATE_EVERY_MS, 10 * 60 * 1000);
-  assert.equal(ROTATE_SHOW_MS, 30 * 1000);
+  assert.equal(ROTATE_SHOW_MS, 2 * 60 * 1000);           // Koa 2026-11-18: "every 10 minutes for 2 minutes at a time"
+  // start to start: a show that began at 10:00 means the next one begins at 10:10, not 10:12
+  const t0 = Date.parse('2026-11-18T18:00:00Z');
+  assert.equal(nextRotationAt(t0), t0 + 10 * 60 * 1000);
+  assert.ok(nextRotationAt(t0) - (t0 + ROTATE_SHOW_MS) >= 8 * 60 * 1000);   // the scoreboard gets 8 of every 10 min
   assert.equal(REFRESH_MS, 5 * 60 * 1000);
   assert.ok(PRELOAD_MS < ROTATE_EVERY_MS - ROTATE_SHOW_MS);
   assert.ok(READY_TIMEOUT_MS < PRELOAD_MS + ROTATE_SHOW_MS);
