@@ -80,7 +80,7 @@ const noHorizontalScroll = (page) => page.evaluate(() => document.documentElemen
 
 async function startAlpha(page) {
   await page.locator('[data-farm="1"]').click();
-  await page.getByRole('button', { name: '＋ Alpha' }).click();
+  await page.locator('#cultPick').selectOption('Alpha');
 }
 const savedLines = (fake) => fake.posts.filter((p) => p.action === 'saveDropoff').at(-1).body.lines;
 

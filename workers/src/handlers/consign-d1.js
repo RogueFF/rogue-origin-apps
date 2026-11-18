@@ -12,19 +12,26 @@ import { normalizeSheetRead } from '../lib/consign-sheet.js';
 import { dropoffPrompt, screenPrompt } from '../lib/consign-sheet-prompt.js';
 import { getConfig } from '../lib/production-utils.js';
 import { newToken, tokenHash, lockState, MAX_LOCKOUTS } from '../lib/consign-access.js';
+import { staffView } from '../lib/consign-staff-view.js';
 
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment']);
 
-function requireOwner(body, env) {
-  const secret = env.CONSIGN_OWNER_PASSWORD;
-  const given = typeof body.owner_password === 'string' ? body.owner_password : '';
-  // Refuse when the secret is unset. Never fall open.
-  if (!secret || !given || !constantTimeEqual(given, secret)) {
-    throw createError('UNAUTHORIZED', 'Owner password required');
-  }
+/** Is this the owner? Never throws. False when the secret is unset: never falls open. */
+export function isOwner(body, env) {
+  const secret = env && env.CONSIGN_OWNER_PASSWORD;
+  const given = body && typeof body.owner_password === 'string' ? body.owner_password : '';
+  return !!secret && typeof secret === 'string' && !!given && constantTimeEqual(given, secret);
 }
 
-const ok = (data) => successResponse({ success: true, data });
+function requireOwner(body, env) {
+  if (!isOwner(body, env)) throw createError('UNAUTHORIZED', 'Owner password required');
+}
+
+/** An owner-only call: the actions above, plus voiding a payment. */
+const ownerOnly = (action, body) => OWNER_ACTIONS.has(action) || (action === 'voidRow' && body.table === 'payment');
+
+// Handlers return their reply's data; handleConsignD1 sends it, through the staff view for non-owners.
+const ok = (data) => data;
 const bad = (msg) => createError('VALIDATION_ERROR', msg);
 
 const TERMS = new Set(['dropoff', 'sold']);
@@ -214,7 +221,19 @@ async function saveDropoff(body, env) {
     return { cultivar, type: ln.type, term, intake, run, note: clean(ln.note) || null };
   });
 
-  const today = pacificDay(new Date());
+  // Optional past date (a catch-up entry). Not in the future, not more than a year back.
+  // The lot's price is the price point in force on that day. Stored at noon Pacific (20:00 UTC).
+  const realToday = pacificDay(new Date());
+  let droppedAt = null;
+  let today = realToday;
+  if (body.dropped_on != null && body.dropped_on !== '') {
+    const d = String(body.dropped_on);
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(`${d}T00:00:00Z`) : NaN;
+    if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== d) throw bad('Dropoff date must be a real date, YYYY-MM-DD');
+    if (d > realToday) throw bad('Dropoff date cannot be in the future');
+    if (t < Date.parse(`${realToday}T00:00:00Z`) - 366 * 86400000) throw bad('Dropoff date cannot be more than a year back');
+    if (d !== realToday) { droppedAt = `${d} 20:00:00`; today = d; }
+  }
   for (const ln of lines) {
     ln.price = await priceFor(env, farmId, ln.cultivar, ln.type, today);
     ln.smallsPrice = ln.type === 'tops' ? await priceFor(env, farmId, ln.cultivar, 'smalls', today) : null;
@@ -222,8 +241,8 @@ async function saveDropoff(body, env) {
 
   const source = ['paper', 'telegram'].includes(body.source) ? body.source : 'app';
   const stmts = [
-    env.DB.prepare('INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key) VALUES (?, ?, ?, ?, ?)')
-      .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key),
+    env.DB.prepare("INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key, dropped_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))")
+      .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key, droppedAt),
     ...lines.map((ln) => env.DB.prepare(
       `INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term, intake_lbs, weighed_at, price_per_lb, smalls_price_per_lb, note)
        VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`
@@ -668,8 +687,15 @@ export async function handleConsignD1(request, env, _ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
   requireAuth(request, body, env, `consign-${action}`);
-  if (OWNER_ACTIONS.has(action)) requireOwner(body, env);
+  if (ownerOnly(action, body)) requireOwner(body, env);
+  // A wrong owner password on anything else is a staff call, not an error: a stale password
+  // in the page never blocks staff work. The envelope's `owner` tells the page which it got.
+  const owner = isOwner(body, env);
+  const data = await route(action, body, env);
+  return successResponse({ success: true, data: owner ? data : staffView(action, data), owner });
+}
 
+function route(action, body, env) {
   switch (action) {
     case 'saveFarm': return saveFarm(body, env);
     case 'savePricePoint': return savePricePoint(body, env);

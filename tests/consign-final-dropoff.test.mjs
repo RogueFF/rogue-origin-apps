@@ -19,7 +19,8 @@ async function setup(env) {
   }
   return farm;
 }
-const drop = (env, farm, lines, key = 'k1') => call(env, 'saveDropoff', { farm_id: farm.id, client_key: key, lines });
+// As owner: these tests read what each lot is owed, which staff replies never carry (staff money lock).
+const drop = (env, farm, lines, key = 'k1') => call(env, 'saveDropoff', { farm_id: farm.id, client_key: key, lines, ...OWNER });
 
 test('final equal to intake: lot saved weighed, screened and closed, owed at the lot price', async () => {
   const { env, sqlite } = freshConsignDb();
@@ -240,7 +241,7 @@ test('open work never lists a lot finished at dropoff; the farm page shows its a
   const ids = new Set(d.lots.map((l) => l.id));
   assert.equal(o.to_weigh.filter((l) => ids.has(l.id)).length, 0);
   assert.equal(o.to_screen.filter((l) => ids.has(l.id)).length, 0);
-  const f = await call(env, 'farm', { farm_id: farm.id });
+  const f = await call(env, 'farm', { farm_id: farm.id, ...OWNER });
   const lots = f.dropoffs[0].lots;
   assert.equal(lots[0].money.final_lbs, 80);
   assert.equal(lots[0].money.to_smalls_lbs, 10);
@@ -263,8 +264,8 @@ test('scenario: paid on dropoff for the weight, finished at dropoff lower: a cre
   const farm = await setup(env);
   await drop(env, farm, [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 100, final: { final_lbs: 85, to_smalls_lbs: 5, biomass_lbs: 7, mold_lbs: 3 } }]);
   // The farm was paid for the 100 lb it brought, at the tops price.
-  await call(env, 'savePayment', { farm_id: farm.id, amount: 1000, method: 'check', client_key: 'p1' });
-  const t = (await call(env, 'farm', { farm_id: farm.id })).totals;
+  await call(env, 'savePayment', { farm_id: farm.id, amount: 1000, method: 'check', client_key: 'p1', ...OWNER });
+  const t = (await call(env, 'farm', { farm_id: farm.id, ...OWNER })).totals;
   assert.equal(t.owed, 85 * 10 + 5 * 4);
   assert.equal(t.estimate, false);
   assert.equal(t.balance, -130);

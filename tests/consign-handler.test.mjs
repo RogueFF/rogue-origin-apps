@@ -80,7 +80,7 @@ test('saveDropoff writes one dropoff and a lot per line, copying prices', async 
   const farm = await seedFarm(env);
   await price(env, farm.id, 'Alpha', 'tops', 10);
   await price(env, farm.id, 'Alpha', 'smalls', 4);
-  const d = await call(env, 'saveDropoff', { farm_id: farm.id, dropped_by: 'T', lines: lines2, client_key: 'k1' });
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, dropped_by: 'T', lines: lines2, client_key: 'k1', ...OWNER });
   assert.equal(d.lots.length, 3);
   const [aTops, aSmalls, bTops] = d.lots;
   assert.equal(aTops.price_per_lb, 10);
@@ -101,9 +101,9 @@ test('a later price change does not touch an existing lot', async () => {
   await price(env, farm.id, 'Alpha', 'tops', 10, { effective_from: '2026-01-01' });
   const d = await call(env, 'saveDropoff', { farm_id: farm.id, lines: [lines2[0]], client_key: 'k1' });
   await price(env, farm.id, 'Alpha', 'tops', 12);
-  const again = await call(env, 'dropoff', { dropoff_id: d.dropoff.id });
+  const again = await call(env, 'dropoff', { dropoff_id: d.dropoff.id, ...OWNER });
   assert.equal(again.lots[0].price_per_lb, 10);
-  const d2 = await call(env, 'saveDropoff', { farm_id: farm.id, lines: [lines2[0]], client_key: 'k2' });
+  const d2 = await call(env, 'saveDropoff', { farm_id: farm.id, lines: [lines2[0]], client_key: 'k2', ...OWNER });
   assert.equal(d2.lots[0].price_per_lb, 12);
 });
 
@@ -170,7 +170,7 @@ test('a whole-lot run closes the lot and sets the money', async () => {
   const { env } = freshConsignDb();
   const { tops } = await dropTwo(env);
   await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
-  const { lot } = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1' });
+  const { lot } = await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun, client_key: 'r1', ...OWNER });
   assert.equal(lot.money.status, 'closed');
   assert.equal(lot.money.owed, 840);
   assert.equal(lot.runs[0].diff_lbs, 0);
@@ -199,7 +199,7 @@ test('split screening: two runs, the second closes the lot', async () => {
   const a = await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 40, final_lbs: 30, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1, finishes_lot: false });
   assert.equal(a.lot.money.status, 'screening');
   assert.equal(a.lot.money.remainder_lbs, 60);
-  const b = await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1, finishes_lot: true });
+  const b = await call(env, 'saveScreenRun', { lot_id: tops.id, pulled_lbs: 60, final_lbs: 50, to_smalls_lbs: 5, biomass_lbs: 4, mold_lbs: 1, finishes_lot: true, ...OWNER });
   assert.equal(b.lot.money.status, 'closed');
   assert.equal(b.lot.money.owed, 80 * 10 + 10 * 4);
 });
@@ -246,7 +246,7 @@ test('sold pounds only on sold-term lots, never above what is payable', async ()
   const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'Alpha', type: 'tops', intake_lbs: 100 }, { cultivar: 'Alpha', type: 'smalls', term: 'dropoff', intake_lbs: 10 }] });
   const [tops, smalls] = d.lots;
   await call(env, 'saveScreenRun', { lot_id: tops.id, ...goodRun });
-  const a = await call(env, 'saveSold', { lot_id: tops.id, lbs: 20, kind: 'main', client_key: 's1' });
+  const a = await call(env, 'saveSold', { lot_id: tops.id, lbs: 20, kind: 'main', client_key: 's1', ...OWNER });
   assert.equal(a.lot.money.owed, 200);
   assert.equal(a.lot.money.on_hand_lbs, 70);
   await assert.rejects(handleConsignD1(post('saveSold', { lot_id: tops.id, lbs: 61, kind: 'main' }), env, {}), /on hand|left/i);
@@ -258,11 +258,11 @@ test('payment is saved once per client_key and returns farm totals', async () =>
   const { env } = freshConsignDb();
   const { farm, tops } = await dropTwo(env);
   await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
-  const p = await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1' });
+  const p = await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1', ...OWNER });
   assert.equal(p.totals.owed, 1160);
   assert.equal(p.totals.balance, 0);
-  await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1' });
-  const f = await call(env, 'farm', { farm_id: farm.id });
+  await call(env, 'savePayment', { farm_id: farm.id, amount: 1160, method: 'check', reference: '1001', client_key: 'p1', ...OWNER });
+  const f = await call(env, 'farm', { farm_id: farm.id, ...OWNER });
   assert.equal(f.payments.length, 1);
 });
 
@@ -303,7 +303,7 @@ test('farms lists every farm with its balance', async () => {
   const { farm, tops } = await dropTwo(env);
   await seedFarm(env, { name: 'Farm B' });
   await call(env, 'setWeight', { lot_id: tops.id, intake_lbs: 100 });
-  const list = await call(env, 'farms');
+  const list = await call(env, 'farms', OWNER);
   assert.equal(list.length, 2);
   const a = list.find((f) => f.id === farm.id);
   assert.equal(a.owed, 1000 + 160);
@@ -315,7 +315,7 @@ test('farm returns current price points, dropoffs with lots, payments and totals
   const { env } = freshConsignDb();
   const { farm } = await dropTwo(env);
   await price(env, farm.id, 'Alpha', 'tops', 12);
-  const f = await call(env, 'farm', { farm_id: farm.id });
+  const f = await call(env, 'farm', { farm_id: farm.id, ...OWNER });
   assert.equal(f.farm.name, 'Farm A');
   assert.equal(f.price_points.length, 2);
   assert.equal(f.price_points.find((p) => p.type === 'tops').price_per_lb, 12);
@@ -351,7 +351,7 @@ test('two concurrent sends with one client_key save once and both succeed', asyn
   const [a, b] = await Promise.all([call(env, 'saveDropoff', body), call(env, 'saveDropoff', body)]);
   assert.equal(a.dropoff.id, b.dropoff.id);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_dropoffs').get().n, 1);
-  const p = { farm_id: farm.id, amount: 5, client_key: 'pay' };
+  const p = { farm_id: farm.id, amount: 5, client_key: 'pay', ...OWNER };
   await Promise.all([call(env, 'savePayment', p), call(env, 'savePayment', p)]);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM cl_payments').get().n, 1);
 });
@@ -385,7 +385,7 @@ test('price lookup ignores case, so a typed cultivar still gets its price', asyn
   const { env } = freshConsignDb();
   const farm = await seedFarm(env);
   await price(env, farm.id, 'Alpha', 'tops', 10);
-  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'alpha', type: 'tops', intake_lbs: 1 }, { cultivar: 'beta', type: 'tops', intake_lbs: 1 }] });
+  const d = await call(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: [{ cultivar: 'alpha', type: 'tops', intake_lbs: 1 }, { cultivar: 'beta', type: 'tops', intake_lbs: 1 }], ...OWNER });
   assert.equal(d.lots[0].price_per_lb, 10);
   const p = await price(env, farm.id, 'Beta', 'tops', 7, { apply_to_unpriced: true });
   assert.equal(p.lots_priced, 1);

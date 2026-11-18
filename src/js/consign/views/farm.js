@@ -1,13 +1,15 @@
 /**
- * Farm page: balance banner, price points (locked for staff), dropoffs with each
- * lot's step, payments. Owner mode adds farm edit, price points and lot terms.
+ * Farm page: banner, dropoffs with each lot's step. Owner mode adds the money (balance,
+ * paid to date, price points, the Estimate tag, payments, Record payment), farm edit,
+ * the farm's page link, price points and lot terms. Staff replies carry no money, and
+ * this page draws none outside owner mode, whatever came back.
  */
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
 import { esc, lbs, money, num, when, day, typeLabel, termLabel, statusChip, todayLocal } from '../format.js';
 import { errorCard, loading, toast, dialog } from '../ui.js';
 import { submit, actor } from '../save.js';
-import { farmDialog, priceDialog, lotTermsDialog } from '../owner.js';
+import { farmDialog, priceDialog, lotTermsDialog, isOwner } from '../owner.js';
 import { accessCardHtml, onAccessClick } from './farm-access.js';
 
 export function mount(root, { farmId }) {
@@ -15,7 +17,21 @@ export function mount(root, { farmId }) {
   const s = { data: null, error: null, shown: null };
   const allLots = () => (s.data ? s.data.dropoffs.flatMap((d) => d.lots) : []);
 
+  /** Money on this page: owner mode, and a reply that carries it. */
+  const showMoney = () => isOwner() && !!s.data.totals && typeof s.data.totals.balance === 'number';
+
   function banner() {
+    if (!showMoney()) {
+      const noPrice = allLots().some((l) => l.money && l.money.needs_price);
+      return `<section class="cs-card cs-banner st st-weighed">
+        <h2 class="cs-h2" style="margin:0">${esc(s.data.farm.name)}</h2>
+        ${noPrice ? `<div class="cs-chips" style="justify-content:center"><span class="cs-chip noprice">${esc(t('needsPrice'))}</span></div>` : ''}
+        <div class="cs-row-btns" style="justify-content:center">
+          <a class="cs-btn primary" href="#/dropoff">＋ ${esc(t('newDropoff'))}</a>
+          <button type="button" class="cs-btn cs-owner-only" id="editFarm">${esc(t('editFarm'))}</button>
+        </div>
+      </section>`;
+    }
     const tt = s.data.totals;
     const credit = tt.balance < 0;
     return `<section class="cs-card cs-banner st ${credit ? 'st-closed' : 'st-weighed'}">
@@ -32,6 +48,7 @@ export function mount(root, { farmId }) {
   }
 
   function prices() {
+    if (!showMoney()) return '';
     const by = {};
     for (const p of s.data.price_points) (by[p.cultivar] ||= {})[p.type] = p;
     const names = Object.keys(by).sort((a, b) => a.localeCompare(b));
@@ -53,7 +70,7 @@ export function mount(root, { farmId }) {
       <div class="cs-lothead">${statusChip(m.status)}<b>${esc(l.cultivar)} ${esc(typeLabel(l.type))}</b>
         <span>${m.intake_lbs == null ? `<span class="cs-muted">${esc(t('notWeighedYet'))}</span>` : `${lbs(m.intake_lbs)} ${esc(t('lbs'))}`}</span>
         <span class="cs-muted">${esc(termLabel(l.term))}</span>
-        ${m.needs_price ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : ''}${m.estimate && m.owed > 0 ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
+        ${m.needs_price ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : ''}${showMoney() && m.estimate && m.owed > 0 ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
       ${after}${sold}${l.note ? `<div class="cs-muted">${esc(t('note'))}: ${esc(l.note)}${Number(l.note_visible) === 1 ? ` <span class="cs-chip">${esc(t('farmSeesNote'))}</span>` : ''}</div>` : ''}
       <div class="cs-lotbtns">
         ${m.status === 'dropped' ? `<a class="cs-btn small" href="#/weigh/${d.id}/${l.id}">${esc(t('weigh'))}</a>` : ''}
@@ -79,6 +96,7 @@ export function mount(root, { farmId }) {
   }
 
   function payments() {
+    if (!showMoney() || !Array.isArray(s.data.payments)) return '';
     const ps = s.data.payments;
     return `<section class="cs-card"><h3 class="cs-h3">${esc(t('payments'))}</h3>
       ${ps.length ? `<ul class="cs-list" style="margin-top:8px">${ps.map((p) => `<li class="cs-tap static">
@@ -91,7 +109,7 @@ export function mount(root, { farmId }) {
   function render() {
     if (s.error) return errorCard(root, s.error, load);
     if (!s.data) return loading(root);
-    root.innerHTML = `<div class="cs-stack">${banner()}${accessCardHtml(s.data.access, s.shown)}${prices()}${dropoffs()}${payments()}</div>`;
+    root.innerHTML = `<div class="cs-stack">${banner()}${isOwner() && 'access' in s.data ? accessCardHtml(s.data.access, s.shown) : ''}${prices()}${dropoffs()}${payments()}</div>`;
   }
 
   root.addEventListener('click', async (e) => {
