@@ -369,3 +369,29 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
   #printArea .sh-page { break-after: page; page-break-after: always; }
   #printArea .sh-page:last-child { break-after: auto; page-break-after: auto; }
 }
+
+/* ---------- lighter look (Koa 2026-11-18: "use the lighter colors") ----------
+   Light theme only. The mist and sage carry the page; deep teal is kept for text,
+   the Owner-on state and the one main action per screen. */
+html:not([data-theme="dark"]) .consign {
+  --bg: #f4f8f6;
+  --border: #e2ebe7;
+  --cs-line: #cfdcd7;
+  --header-bg: #dcebe6;
+  --header-text: #1d4a42;
+  --cs-tint: 18%;
+}
+html:not([data-theme="dark"]) .consign .cs-top { border-bottom: 1px solid var(--cs-mist); }
+html:not([data-theme="dark"]) .consign .cs-topbtn { border-color: color-mix(in srgb, var(--header-text) 35%, transparent); background: rgba(255, 255, 255, 0.55); }
+html:not([data-theme="dark"]) .consign[data-owner="1"] #ownerBtn { background: var(--cs-green); border-color: var(--cs-green); color: #fff !important; }
+html:not([data-theme="dark"]) .consign .cs-held { background: var(--cs-green); border-color: var(--cs-green); color: #fff !important; }
+html:not([data-theme="dark"]) .consign .cs-card { border-color: var(--border); box-shadow: none; }
+html:not([data-theme="dark"]) .consign .cs-card.st { border-left: 6px solid var(--st); }
+html:not([data-theme="dark"]) .consign .cs-btn { border-width: 1.5px; }
+/* Main buttons: a mist fill with deep teal words, not a dark block. */
+html:not([data-theme="dark"]) .consign .cs-btn.primary { background: #cfe5df; border-color: var(--cs-teal); color: #173f38; }
+/* The one big action on Home keeps the strong fill so it is found first. */
+html:not([data-theme="dark"]) .consign .cs-btn.primary.big { background: var(--cs-teal); border-color: var(--cs-teal); color: #fff; }
+html:not([data-theme="dark"]) .consign .cs-btn.danger { background: transparent; border-color: color-mix(in srgb, var(--st-price) 45%, transparent); }
+/* Edit is everywhere in owner mode: keep it quiet. */
+html:not([data-theme="dark"]) .consign .cs-btn.cs-edit { border-color: transparent; background: color-mix(in srgb, var(--cs-mist) 28%, transparent); color: #1d4a42; }
