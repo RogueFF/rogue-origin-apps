@@ -8,7 +8,8 @@
  * its own goal (mock-up of 11/17). Now:
  *   · a cell hour is graded per person against the crew goal (crew_day_meta)
  *   · a line hour keeps the strain target; a mixed day grades each hour on its own
- *   · a typed day carries the last goal set; no goal ever = the cell hour is ungraded
+ *   · a typed day with no goal takes its cultivar's break-even rate (lib/cell-goal.js);
+ *     a cultivar with none carries the last goal set; no goal ever = ungraded
  *   · the line's strain target leaves cell hours out of its running average
  *
  * Run with `node --test`.
@@ -84,7 +85,7 @@ test('a cell hour is graded per person against the crew goal, not the line targe
   const s = await board(env, DAY);
   assert.equal(s.targetBasis, 'cells');
   near(s.targetRate, 0.53, 'shown target');
-  assert.deepEqual(s.cellGoal, { lbHr: 0.53, date: DAY });
+  assert.deepEqual(s.cellGoal, { lbHr: 0.53, source: 'sheet', date: DAY });
   near(s.lastHourTarget, 18 * 0.53 * 1, 'last hour target');
   near(s.todayTarget, 2 * 18 * 0.53, 'today target');
   assert.ok(s.todayPercentage > 95 && s.todayPercentage < 105, `on pace, not ~45%: ${s.todayPercentage}`);
@@ -119,20 +120,27 @@ test('a mixed day grades each hour on its own basis', { skip: !DatabaseSync }, a
   assert.equal(s.targetBasis, 'cells');     // the latest hour is a cell hour
 });
 
-test('a typed day carries the last goal set; no goal ever leaves cell hours ungraded', { skip: !DatabaseSync }, async () => {
+test('a typed day with no goal: its cultivar\'s break-even rate, else the last goal set', { skip: !DatabaseSync }, async () => {
   const { sqlite, env } = freshDb();
   seedLineHistory(sqlite);
   goal(sqlite, '2026-11-13', 0.51);
   goal(sqlite, '2026-11-16', 0.77);
   goal(sqlite, '2026-11-20', 0.9);          // a later day never counts
-  assert.deepEqual(await getCellGoal(env, DAY), { lbHr: 0.77, date: '2026-11-16' });
-  row(sqlite, SLOTS[0], { tops: 9, people: 18 });
-  const s = await board(env, DAY);
-  near(s.targetRate, 0.77, 'carried goal');
+  goal(sqlite, DAY, 0.77, 'typed: room rate of the typed hours');   // copied forward by older code: ignored
+  row(sqlite, SLOTS[0], { tops: 9, people: 18 });   // Sour Lifter
+  assert.deepEqual(await getCellGoal(env, DAY), { lbHr: 0.48, source: 'default', date: DAY, cultivar: 'Sour Lifter' });
+  near((await board(env, DAY)).targetRate, 0.48, 'Sour Lifter break-even');
+
+  const other = freshDb();
+  seedLineHistory(other.sqlite);
+  goal(other.sqlite, '2026-11-16', 0.77);
+  row(other.sqlite, SLOTS[0], { tops: 9, people: 18, strain: 'Cherry Wine' });
+  assert.deepEqual(await getCellGoal(other.env, DAY), { lbHr: 0.77, source: 'carried', date: '2026-11-16' });
+  near((await board(other.env, DAY)).targetRate, 0.77, 'carried goal');
 
   const fresh = freshDb();
   seedLineHistory(fresh.sqlite);
-  row(fresh.sqlite, SLOTS[0], { tops: 9, people: 18 });
+  row(fresh.sqlite, SLOTS[0], { tops: 9, people: 18, strain: 'Cherry Wine' });
   const u = await board(fresh.env, DAY);
   assert.equal(u.graded, false);            // no fair target: no verdict, never the line target
   assert.equal(u.todayTarget, 0);

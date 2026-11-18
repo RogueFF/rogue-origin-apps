@@ -16,6 +16,7 @@
  * not counting that day's top 5. The response never carries a card token.
  */
 import { successResponse } from '../../lib/response.js';
+import { dayGoal } from '../../lib/cell-goal.js';
 
 const G_PER_LB = 453.59237;
 export const MIN_DAYS = 2;
@@ -120,5 +121,7 @@ export async function getCrewBoard(params, env) {
   const metas = (await env.DB.prepare(
     'SELECT work_date, target_lb_hr, room_lb_hr FROM crew_day_meta ORDER BY work_date'
   ).all()).results || [];
+  // the goal shown is the day goal (lib/cell-goal.js), the same one the TV grades on
+  for (const m of metas) m.target_lb_hr = (await dayGoal(env.DB, m.work_date))?.lbHr ?? null;
   return successResponse(boardFrom(rows, metas));
 }
