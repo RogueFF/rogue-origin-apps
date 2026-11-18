@@ -242,10 +242,15 @@ function calculateDailyProjection(todayRows, lastCompletedHourIndex, currentHour
     const multiplier = getTimeSlotMultiplier(slot, timeSlotMultipliers);
     const workedRow = workedSlots[normalizedSlot];
 
+    // A logged hour is goaled at its own strain's rate when the caller set
+    // row.targetRate (the scoreboard does, so dailyGoal's logged part equals
+    // todayTarget); otherwise, and for hours not logged yet, at targetRate.
+    const rowRate = workedRow && Number.isFinite(workedRow.targetRate) ? workedRow.targetRate : targetRate;
+
     if (workedRow && workedRow.tops > 0 && workedRow.trimmers > 0) {
-      dailyGoal += workedRow.trimmers * targetRate * multiplier;
+      dailyGoal += workedRow.trimmers * rowRate * multiplier;
     } else if (workedRow && workedRow.trimmers > 0 && workedRow.tops === 0) {
-      dailyGoal += workedRow.trimmers * targetRate * multiplier;
+      dailyGoal += workedRow.trimmers * rowRate * multiplier;
       projectedFromRemaining += workedRow.trimmers * currentRate * multiplier;
     } else {
       dailyGoal += lastKnownTrimmers * targetRate * multiplier;

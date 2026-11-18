@@ -68,11 +68,16 @@ async function getScoreboardData(env, date = null) {
     bestDelta: 0,
     streak: 0,
     hourlyRates: [],
+    // false = no hour today has a strain, so there is no target to grade
+    // against: every target, percentage, delta, best and streak is 0, each
+    // hourlyRates[].target included. Pounds, hours and projectedTotal (from the
+    // actual pace) are still real. Also false on a day with no rows at all.
+    graded: false,
   };
 
   const todayRows = await query(env.DB, `
     SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1,
-           effective_trimmers_line1, qc
+           effective_trimmers_line1, qc, change_cultivar
     FROM monthly_production
     WHERE production_date = ?
   `, [today]);
@@ -97,6 +102,25 @@ async function getScoreboardData(env, date = null) {
   }
   const rows = rawRows.filter(row => bestByEndHour.get(getEndHour(row.timeSlot)) === row);
 
+  // One grading basis (review 2026-10-13, L2-01): an hour logged without a
+  // strain is graded as the strain the crew was on, never a 0.85 guess. Blank
+  // hours carry the previous hour's strain (the strain it changed to, if that
+  // hour had a mid-hour change); leading blank hours take the day's first
+  // strain. A day with no strain at all stays ungraded (graded: false) rather
+  // than borrowing yesterday's strain, which may not be today's.
+  const isBlank = (s) => !s || String(s).trim() === '';
+  const changeToBySlot = new Map(todayRows.map(r => [r.time_slot || '', r.change_cultivar]));
+  const firstStrain = rows.find(r => !isBlank(r.strain))?.strain || '';
+  let carried = firstStrain;
+  for (const row of rows) {
+    if (isBlank(row.strain)) row.strain = carried;
+    else carried = row.strain;
+    const changeTo = changeToBySlot.get(row.timeSlot);
+    if (!isBlank(changeTo)) carried = changeTo;
+  }
+  const graded = !isBlank(firstStrain);
+  result.graded = graded;
+
   const { lastCompletedHourIndex, currentHourIndex } = findHourIndices(rows);
 
   let activeStrain = '';
@@ -116,20 +140,24 @@ async function getScoreboardData(env, date = null) {
     strainTargetRates.set(strain, rate);
   }
 
-  // Helper to get target rate for a given strain
-  const getTargetRateForStrain = (strain) => {
-    if (!strain || strain.trim() === '') {
-      return 0.85; // Default baseline for rows without strain
-    }
-    return strainTargetRates.get(strain) || 0.85;
-  };
+  // After the carry-forward every row has a strain unless the day is
+  // ungraded, so a blank strain means "no target" (0), never a fallback.
+  // (getEffectiveTargetRate itself still returns its 0.85 baseline for a
+  // strain with no history at all.)
+  const getTargetRateForStrain = (strain) => (isBlank(strain) ? 0 : (strainTargetRates.get(strain) ?? 0));
 
-  // Active strain's target rate (for display)
+  // Each row carries its own target, so the hour badge, todayTarget, best,
+  // streak and the day projection (calculateDailyProjection reads
+  // row.targetRate) are all on one basis.
+  for (const row of rows) row.targetRate = getTargetRateForStrain(row.strain);
+
+  // Active strain's target rate (for display; also the rate for hours not
+  // logged yet in the projection)
   const targetRate = getTargetRateForStrain(activeStrain);
   result.targetRate = targetRate;
-  
-  // Flag whether we're using strain-specific data (vs baseline default)
-  result.usingStrainRate = activeStrain && strainTargetRates.has(activeStrain);
+
+  // Flag whether we're using strain-specific data (vs no basis)
+  result.usingStrainRate = !!activeStrain && strainTargetRates.has(activeStrain);
 
   let totalLbs = 0;
   let hoursWorked = 0;
@@ -146,7 +174,7 @@ async function getScoreboardData(env, date = null) {
 
   if (lastCompletedHourIndex >= 0) {
     const lastRow = rows[lastCompletedHourIndex];
-    const lastRowTargetRate = getTargetRateForStrain(lastRow.strain);
+    const lastRowTargetRate = lastRow.targetRate;
     result.lastHourLbs = lastRow.tops;
     result.lastHourSmalls = lastRow.smalls;
     result.lastHourTrimmers = lastRow.rawTrimmers;
@@ -159,7 +187,7 @@ async function getScoreboardData(env, date = null) {
 
   if (currentHourIndex >= 0) {
     const currentRow = rows[currentHourIndex];
-    const currentRowTargetRate = getTargetRateForStrain(currentRow.strain);
+    const currentRowTargetRate = currentRow.targetRate;
     result.currentHourTrimmers = currentRow.rawTrimmers;
     result.currentHourEffectiveTrimmers = currentRow.trimmers;
     result.currentHourBuckers = currentRow.buckers || 0;
@@ -178,39 +206,41 @@ async function getScoreboardData(env, date = null) {
   const hourlyRates = [];
   let bestPct = 0;
   let bestDelta = null;
-  let streak = 0;
   let currentStreak = 0;
 
   for (let i = 0; i <= lastCompletedHourIndex && i < rows.length; i++) {
     const row = rows[i];
     if (row.trimmers > 0 && row.tops > 0) {
-      // Use strain-specific target rate for this hour
-      const rowTargetRate = getTargetRateForStrain(row.strain);
-      const hourTarget = row.trimmers * rowTargetRate * row.multiplier;
-      totalTarget += hourTarget;
+      // This hour's own strain target (the same one the projection uses)
+      const rowTargetRate = row.targetRate;
 
-      const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
-      const delta = row.tops - hourTarget;
-      hourlyPercentages.push(pct);
-      hourlyDeltas.push(delta);
-      if (pct > bestPct) {
-        bestPct = pct;
-        bestDelta = delta;
-      }
+      if (graded) {
+        const hourTarget = row.trimmers * rowTargetRate * row.multiplier;
+        totalTarget += hourTarget;
+        const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
+        const delta = row.tops - hourTarget;
+        hourlyPercentages.push(pct);
+        hourlyDeltas.push(delta);
+        if (pct > bestPct) {
+          bestPct = pct;
+          bestDelta = delta;
+        }
 
-      if (pct >= 90) {
-        currentStreak++;
-        streak = currentStreak;
-      } else {
-        currentStreak = 0;
+        if (pct >= 90) {
+          currentStreak++;
+        } else {
+          currentStreak = 0;
+        }
       }
 
       const rate = (row.tops / row.trimmers) / row.multiplier;
       hourlyRates.push({
         timeSlot: row.timeSlot,
         rate,
-        target: rowTargetRate, // Use row-specific target rate
-        strain: row.strain || '', // Include strain for tooltip display
+        // row's own strain target; 0 when ungraded (a number, not null:
+        // scoreboard-v2 chart.js calls h.target.toFixed)
+        target: graded ? rowTargetRate : 0,
+        strain: row.strain || '', // strain for the tooltip (carried forward when the hour was logged blank)
         trimmers: row.rawTrimmers,
         effectiveTrimmers: row.trimmers,
         buckers: row.buckers,
@@ -233,9 +263,13 @@ async function getScoreboardData(env, date = null) {
     : 0;
   result.bestPercentage = bestPct;
   result.bestDelta = bestDelta !== null ? bestDelta : 0;
-  result.streak = streak;
+  // The current run of hours at 90%+ ending at the latest hour: a miss on the
+  // latest hour resets it to 0 (it used to keep the day's longest run).
+  result.streak = currentStreak;
 
-  const projection = calculateDailyProjection(rows, lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs, timeSlotMultipliers);
+  // rows carry row.targetRate, so logged hours in dailyGoal use the same
+  // per-hour targets as todayTarget; hours not logged yet use targetRate.
+  const projection = calculateDailyProjection(rows,lastCompletedHourIndex, currentHourIndex, targetRate, totalLbs, timeSlotMultipliers);
   result.projectedTotal = projection.projectedTotal;
   result.dailyGoal = projection.dailyGoal;
 
@@ -491,12 +525,14 @@ async function dashboard(params, env) {
 
   const current = isViewingToday ? {
     strain: scoreboardData.strain || '',
+    graded: !!scoreboardData.graded,
     todayPercentage: scoreboardData.todayPercentage || 0,
     todayTarget: scoreboardData.todayTarget || 0,
     projectedTotal: scoreboardData.projectedTotal || 0,
     effectiveHours: scoreboardData.effectiveHours || 0,
   } : {
     strain: '',
+    graded: false,
     todayPercentage: 0,
     todayTarget: 0,
     projectedTotal: 0,
