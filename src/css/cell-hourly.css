@@ -162,6 +162,7 @@ body.guided:not(.guide-review) .card.room { display: none; }
 body.guided .guide-start { display: none; }
 /* Quality on the cell card (Koa 2026-11-18): one tap OK, or one check 1-4. */
 .quality-box { display: grid; gap: 8px; }
+.quality-box[hidden] { display: none; }
 .q-ok { width: 100%; min-height: 56px; font: 700 20px var(--font-ui); background: var(--bg-card); border: 2px solid var(--green); color: var(--green); }
 .q-ok.on { background: var(--green); color: #fff; }
 .q-ok.redo { background: var(--danger); border-color: var(--danger); color: #fff; }
@@ -191,6 +192,7 @@ body.guided .guide-start { display: none; }
 .fill-state.differ { color: var(--warning, var(--gold)); font-weight: 600; }
 /* The day's crew goal (lib/cell-goal.js), set with the farm password. */
 .goal-row { display: grid; gap: 6px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.goal-row[hidden] { display: none; }
 .goal-line { display: flex; gap: 8px; align-items: center; }
 .goal-line input { width: 7.5em; font: 600 22px var(--font-mono, var(--font-ui)); }
 .goal-line input:disabled { opacity: .7; }

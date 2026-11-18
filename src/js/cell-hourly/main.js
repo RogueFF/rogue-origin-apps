@@ -27,6 +27,12 @@ const BAG_NET_LB = 5090.72 / 453.59237; // 5 kg bag, net fill standard (fill-wei
 const CONFIRM_OVER_LB = 5;              // a cell-hour is a few lb; more is probably grams typed as lb
 const REFRESH_MS = 30000;
 const RETRY_MS = 10000;
+// Kept simple for now (Koa 2026-11-18: "take out Quality Check, and Goal. Need it
+// very simple for now and easy to use"). Flip either back on to bring it back; the
+// Worker side is untouched (the TV, crew board and Mis números still grade on the
+// day's goal, the cultivar break-even by default).
+const SHOW_QUALITY = false;
+const SHOW_GOAL = false;
 
 registerLabels({
   en: {
@@ -159,7 +165,7 @@ const el = {
   guide: $('guide'), guideStart: $('guideStart'), guideBar: $('guideBar'), guideCount: $('guideCount'), guideStep: $('guideStep'),
   guideSkip: $('guideSkip'), guideRest: $('guideRest'), guideNext: $('guideNext'), guideDone: $('guideDone'), guideExit: $('guideExit'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), 
-  gridTitle: $('gridTitle'), fillOn: $('fillOn'), fillState: $('fillState'), goalInput: $('goalInput'), goalSave: $('goalSave'), goalState: $('goalState'), quality: $('quality'), stopBanner: $('stopBanner'),
+  gridTitle: $('gridTitle'), fillOn: $('fillOn'), fillState: $('fillState'), goalInput: $('goalInput'), goalSave: $('goalSave'), goalState: $('goalState'), goalRow: $('goalRow'), quality: $('quality'), stopBanner: $('stopBanner'),
   cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -317,6 +323,8 @@ const batchKey = (station, n) => `${station}|${n}`;
 const hourBatch = (long = state.slot) => HOUR_BATCH_BASE + 1 + Math.max(0, state.slots.findIndex(s => s.slot === long));
 const batchesFor = station => [...state.batches.values()].filter(b => b.stationId === station);
 const qOf = (station, long = state.slot) => state.batches.get(batchKey(station, hourBatch(long))) || null;
+// Tops in, no quality check yet, not skipped: Guided walks to Quality OK (only with quality on).
+const wantsQuality = (station) => SHOW_QUALITY && eff(station) != null && !qOf(station) && !guided.qSkip.has(station);
 const qScope = station => `q|${station}|${hourBatch()}`;
 let qPickOpen = null;   // the one check open for a 1-4 pick ('note' = the note box)
 function openCell(i) { state.cellIdx = i; qPickOpen = null; }
@@ -359,6 +367,8 @@ const roomCultivar = (slot = state.slot) => state.room.get(slot)?.cultivar || ''
 // four checks as chips (tap one for its 1-4 pick), and a note. A 1 or 2 anywhere
 // = Redo; a 1 on mold or insects = STOP for the whole page. Never required.
 function renderQuality(c) {
+  el.quality.hidden = !SHOW_QUALITY;
+  if (!SHOW_QUALITY) { el.quality.innerHTML = ''; el.stopBanner.hidden = true; return; }
   const q = qOf(c.stationId);
   const checks = q?.checks || {};
   const o = q ? overall(checks) : null;
@@ -457,6 +467,8 @@ function renderRoom() {
 // The day's crew goal (lib/cell-goal.js): the one the TV, crew board and Mis
 // números grade on. Set here with the farm password; a loaded sheet's goal stands.
 function renderGoal() {
+  el.goalRow.hidden = !SHOW_GOAL;
+  if (!SHOW_GOAL) return;
   const g = state.goal;
   if (document.activeElement !== el.goalInput) el.goalInput.value = g ? g.lbHr.toFixed(2) : '';
   const sheet = g?.source === 'sheet';
@@ -545,11 +557,11 @@ function renderGrid() {
     // (a filled red tile = a STOP today).
     const has = eff(c.stationId) != null;
     if (has) done++;
-    const day = batchesFor(c.stationId);
+    const day = SHOW_QUALITY ? batchesFor(c.stationId) : [];
     const fails = day.filter(x => overall(x.checks) === 'fail').length;
     const stop = day.some(x => stopFor(x.checks));
     const b = document.createElement('button');
-    b.className = 'jump' + (has ? ' done' : '') + (qOf(c.stationId)?.quality === 'fail' ? ' failq' : '') + (stop ? ' stopq' : '')
+    b.className = 'jump' + (has ? ' done' : '') + (SHOW_QUALITY && qOf(c.stationId)?.quality === 'fail' ? ' failq' : '') + (stop ? ' stopq' : '')
       + (!usedIds.has(c.stationId) ? ' empty' : '')
       + (i === state.cellIdx ? ' current' : '') + (c.lane === 'retail' ? ' retail' : '') + (hasScale(c.stationId) ? ' scale' : '');
     b.innerHTML = `<b>${c.stationId.replace(/^table/, '')}</b>`;
@@ -718,7 +730,7 @@ function nextCellFocused() {
   if (guided.on) {
     // After tops, the cell's quality (not required: Next skips it).
     const here = cell();
-    if (here && eff(here.stationId) != null && !qOf(here.stationId) && !guided.qSkip.has(here.stationId)) {
+    if (here && wantsQuality(here.stationId)) {
       refreshCell(); el.quality.querySelector('.q-ok')?.focus(); return;
     }
     const j = guidedNext();
@@ -928,9 +940,9 @@ function guidedReview() {
       }
     }
   }
-  const noQ = guidedTargets().filter(c => !guided.skipped.has(c.stationId) && eff(c.stationId) != null && !qOf(c.stationId));
+  const noQ = SHOW_QUALITY ? guidedTargets().filter(c => !guided.skipped.has(c.stationId) && eff(c.stationId) != null && !qOf(c.stationId)) : [];
   if (noQ.length) items.push({ station: noQ[0].stationId, text: tf('gNoQuality', { list: noQ.map(c => c.label).join(', ') }) });
-  for (const c of guidedTargets()) if (qOf(c.stationId)?.quality === 'fail') items.push({ station: c.stationId, text: tf('gRedoQ', { c: c.label }) });
+  if (SHOW_QUALITY) for (const c of guidedTargets()) if (qOf(c.stationId)?.quality === 'fail') items.push({ station: c.stationId, text: tf('gRedoQ', { c: c.label }) });
   if (!roomCultivar()) items.push({ room: true, text: t('gNoCultivar') });
   return items;
 }
@@ -941,7 +953,7 @@ function guidedHighlight(onTodo) {
   if (!guided.on || !onTodo) {
     // Tops in, quality not yet: the ring moves to Quality OK.
     const c = cell();
-    if (guided.on && c && eff(c.stationId) != null && !qOf(c.stationId) && !guided.qSkip.has(c.stationId)) {
+    if (guided.on && c && wantsQuality(c.stationId)) {
       const ok = el.quality.querySelector('.q-ok'); if (ok) ok.classList.add('g-focus');
     }
     return;
@@ -972,7 +984,7 @@ function renderGuided() {
   el.guideCount.textContent = tf('gCount', { d: done, n: targets.length, h: hourName });
   // The cell on screen still waiting for its quality comes before the hour's check.
   const here = cell();
-  const hereNeedsQ = here && eff(here.stationId) != null && !qOf(here.stationId) && !guided.qSkip.has(here.stationId);
+  const hereNeedsQ = here && wantsQuality(here.stationId);
   if (!todo.length && !hereNeedsQ) {
     const items = guidedReview();
     el.guideStep.innerHTML = `<b>${esc(tf('gReviewTitle', { h: hourName }))}</b>`
@@ -992,7 +1004,7 @@ function renderGuided() {
   const onTodo = todo.some(x => x.stationId === c?.stationId);
   const who = c ? shownPeople(c.stationId) : [];
   let text;
-  const needsQ = c && eff(c.stationId) != null && !qOf(c.stationId) && !guided.qSkip.has(c.stationId);
+  const needsQ = c && wantsQuality(c.stationId);
   if (!onTodo && needsQ) text = tf('gQuality', { c: c.label });
   else if (!onTodo) text = t('gGoNext');
   else if (!who.length) text = tf('gWho', { c: c.label });
