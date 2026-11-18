@@ -160,3 +160,26 @@ body[data-view="quality"] .guide { display: none; }
 @media (prefers-reduced-motion: reduce) { .g-focus { animation: none; } }
 body.guided:not(.guide-review) .card.room { display: none; }
 body.guided .guide-start { display: none; }
+/* Quality on the cell card (Koa 2026-11-18): one tap OK, or one check 1-4. */
+.quality-box { display: grid; gap: 8px; }
+.q-ok { width: 100%; min-height: 56px; font: 700 20px var(--font-ui); background: var(--bg-card); border: 2px solid var(--green); color: var(--green); }
+.q-ok.on { background: var(--green); color: #fff; }
+.q-ok.redo { background: var(--danger); border-color: var(--danger); color: #fff; }
+.q-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.q-chip { min-height: 40px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg); font: 600 15px var(--font-ui); color: var(--text); cursor: pointer; }
+.q-chip b { font-family: var(--font-mono); margin-left: 4px; }
+.q-chip.ok { border-color: var(--green); background: var(--green-dim); }
+.q-chip.redo { border-color: var(--danger); background: var(--danger-dim); color: var(--danger); }
+.q-chip.open { box-shadow: 0 0 0 3px var(--gold); }
+.q-pick { display: grid; gap: 6px; }
+.q-score { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 8px; text-align: left; min-height: 48px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 500 15px var(--font-ui); cursor: pointer; }
+.q-score b { font: 700 22px var(--font-mono); text-align: center; }
+.q-score.on.ok { background: var(--success); border-color: var(--success); color: #fff; }
+.q-score.on.redo { background: var(--danger); border-color: var(--danger); color: #fff; }
+.q-redo { color: var(--danger); font-weight: 700; }
+.q-note { font: 400 16px var(--font-ui); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 10px; min-height: 44px; width: 100%; box-sizing: border-box; }
+.page-stop { position: sticky; top: 0; z-index: 30; }
+.page-stop[hidden] { display: none; }
+.jump.stopq { background: var(--danger); border-color: var(--danger); color: #fff; }
+.jump small.qfail { color: var(--danger); font: 700 12px var(--font-mono); }
+.jump.stopq small.qfail { color: #fff; }
