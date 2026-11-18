@@ -12,19 +12,26 @@ import { normalizeSheetRead } from '../lib/consign-sheet.js';
 import { dropoffPrompt, screenPrompt } from '../lib/consign-sheet-prompt.js';
 import { getConfig } from '../lib/production-utils.js';
 import { newToken, tokenHash, lockState, MAX_LOCKOUTS } from '../lib/consign-access.js';
+import { staffView } from '../lib/consign-staff-view.js';
 
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment']);
 
-function requireOwner(body, env) {
-  const secret = env.CONSIGN_OWNER_PASSWORD;
-  const given = typeof body.owner_password === 'string' ? body.owner_password : '';
-  // Refuse when the secret is unset. Never fall open.
-  if (!secret || !given || !constantTimeEqual(given, secret)) {
-    throw createError('UNAUTHORIZED', 'Owner password required');
-  }
+/** Is this the owner? Never throws. False when the secret is unset: never falls open. */
+export function isOwner(body, env) {
+  const secret = env && env.CONSIGN_OWNER_PASSWORD;
+  const given = body && typeof body.owner_password === 'string' ? body.owner_password : '';
+  return !!secret && typeof secret === 'string' && !!given && constantTimeEqual(given, secret);
 }
 
-const ok = (data) => successResponse({ success: true, data });
+function requireOwner(body, env) {
+  if (!isOwner(body, env)) throw createError('UNAUTHORIZED', 'Owner password required');
+}
+
+/** An owner-only call: the actions above, plus voiding a payment. */
+const ownerOnly = (action, body) => OWNER_ACTIONS.has(action) || (action === 'voidRow' && body.table === 'payment');
+
+// Handlers return their reply's data; handleConsignD1 sends it, through the staff view for non-owners.
+const ok = (data) => data;
 const bad = (msg) => createError('VALIDATION_ERROR', msg);
 
 const TERMS = new Set(['dropoff', 'sold']);
@@ -668,8 +675,15 @@ export async function handleConsignD1(request, env, _ctx) {
   const body = request.method === 'POST' ? await parseBody(request) : {};
   const action = getAction(request, body);
   requireAuth(request, body, env, `consign-${action}`);
-  if (OWNER_ACTIONS.has(action)) requireOwner(body, env);
+  if (ownerOnly(action, body)) requireOwner(body, env);
+  // A wrong owner password on anything else is a staff call, not an error: a stale password
+  // in the page never blocks staff work. The envelope's `owner` tells the page which it got.
+  const owner = isOwner(body, env);
+  const data = await route(action, body, env);
+  return successResponse({ success: true, data: owner ? data : staffView(action, data), owner });
+}
 
+function route(action, body, env) {
   switch (action) {
     case 'saveFarm': return saveFarm(body, env);
     case 'savePricePoint': return savePricePoint(body, env);

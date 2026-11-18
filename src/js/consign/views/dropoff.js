@@ -1,6 +1,7 @@
 /**
  * New dropoff, in four numbered steps: farm, cultivars and pounds, names and notes, check and save.
- * Staff record pounds only: prices show locked, and no money totals appear here.
+ * Staff record pounds only: no price and no money appear here. Owner mode shows each line's
+ * locked price. A cultivar and type with no price point shows "No price" in both modes.
  *
  * Prefill (stage 2): views/photo.js mounts this with { prefill: read } after a sheet photo is
  * read. Every box the reader was unsure of, and every cultivar it could not match, is marked
@@ -16,6 +17,7 @@ import { call, newKey } from '../api.js';
 import { esc, lbs, money, num, tf, termLabel, typeLabel, runCheck, checkBarHtml } from '../format.js';
 import { errorCard, loading, toast } from '../ui.js';
 import { submit, actor, setActor } from '../save.js';
+import { isOwner } from '../owner.js';
 import { go } from '../nav.js';
 
 const TYPES = ['tops', 'smalls'];
@@ -71,9 +73,17 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     fromPhoto: !!prefill, pending: prefill, farmMark: !!farmCheck,
   };
 
+  const pointOf = (cultivar, type) => (s.detail?.price_points || []).find((p) => p.cultivar.toLowerCase() === cultivar.toLowerCase() && p.type === type);
+  /** The locked price, owner mode only (a staff price point has cultivar and type, no price). */
   const priceOf = (cultivar, type) => {
-    const pp = (s.detail?.price_points || []).find((p) => p.cultivar.toLowerCase() === cultivar.toLowerCase() && p.type === type);
-    return pp ? pp.price_per_lb : null;
+    const pp = pointOf(cultivar, type);
+    return isOwner() && pp && typeof pp.price_per_lb === 'number' ? pp.price_per_lb : null;
+  };
+  /** Price text for a line: the price (owner), "No price" (no price point), or nothing (staff, priced). */
+  const priceText = (cultivar, type) => {
+    if (!pointOf(cultivar, type)) return { none: true };
+    const p = priceOf(cultivar, type);
+    return p == null ? null : { price: p };
   };
   const pricedCultivars = () => [...new Set((s.detail?.price_points || []).map((p) => p.cultivar))].sort((a, b) => a.localeCompare(b));
   const findRow = (uid) => s.rows.find((r) => r.uid === uid);
@@ -214,7 +224,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   const finalxHtml = (r, ty, p, i) => `<div class="cs-finalx" data-finalx="${r.uid}|${ty}|${i}" data-mode="${finalMode(p)}">${finalxInner(r, ty, p, i)}</div>`;
 
   function partHtml(r, ty, p, i, split) {
-    const price = priceOf(r.cultivar, ty);
+    const price = priceText(r.cultivar, ty);
     const id = `${r.uid}-${ty}-${i}`;
     const marked = i === 0 && liveMark(r, ty);
     const finMarked = i === 0 && liveMark(r, `${ty}_final`);
@@ -228,7 +238,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
         ${finMarked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}_final`)}</div>` : ''}
       </div>
       ${finalxHtml(r, ty, p, i)}
-      <div class="cs-price">${price == null ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : `${esc(t('price'))}: ${money(price)} ${esc(t('perLb'))}`}</div>
+      ${price == null ? '' : `<div class="cs-price">${price.none ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : `${esc(t('price'))}: ${money(price.price)} ${esc(t('perLb'))}`}</div>`}
       ${split ? '' : `<button type="button" class="cs-termbtn ${p.term}" data-term="${r.uid}|${ty}|${i}">${esc(termLabel(p.term))}</button>`}
     </div>`;
   }
@@ -282,7 +292,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     if (!lines.length) return `<p class="cs-muted">${esc(t('needOneLine'))}</p>`;
     return `<p class="cs-muted">${esc(t('confirmDropoff'))}</p>
       <table class="cs-summary"><tbody>${lines.map((l) => {
-        const price = priceOf(l.cultivar, l.type);
+        const price = priceText(l.cultivar, l.type);
         const f = l.final;
         let weight;
         let done = '';
@@ -293,7 +303,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
         } else {
           weight = l.intake_lbs == null ? `<span class="cs-muted">${esc(t('notWeighedYet'))}</span>` : `${lbs(l.intake_lbs)} ${esc(t('lbs'))}`;
         }
-        return `<tr${f ? ' data-finished="1"' : ''}><td><b>${esc(l.cultivar)}</b> ${esc(typeLabel(l.type))}<br><span class="cs-muted">${esc(termLabel(l.term))} · ${price == null ? esc(t('noPrice')) : `${money(price)} ${esc(t('perLb'))}`}</span>${done}</td>
+        return `<tr${f ? ' data-finished="1"' : ''}><td><b>${esc(l.cultivar)}</b> ${esc(typeLabel(l.type))}<br><span class="cs-muted">${esc(termLabel(l.term))}${price == null ? '' : ` · ${price.none ? esc(t('noPrice')) : `${money(price.price)} ${esc(t('perLb'))}`}`}</span>${done}</td>
           <td class="n">${weight}</td></tr>`;
       }).join('')}</tbody></table>`;
   }
@@ -523,9 +533,21 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     render();
   }
 
+  // Owner mode on: fetch the farm again for its prices. Off: main.js has redrawn without them.
+  async function onMode() {
+    if (!s.farm || s.loadingFarm) return;
+    const id = s.farm.id;
+    try {
+      const d = await call('farm', { farm_id: id });
+      if (s.farm && s.farm.id === id) { s.detail = d; render(); }
+    } catch { /* keep the form as it is; prices show on the next farm pick */ }
+  }
+  document.addEventListener('consign:mode', onMode);
+
   load();
   return {
     rerender: render,
     dirty: () => !s.saved && (s.fromPhoto || s.rows.length > 0 || !!s.note.trim()),
+    unmount: () => document.removeEventListener('consign:mode', onMode),
   };
 }

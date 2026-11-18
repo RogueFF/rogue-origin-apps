@@ -59,6 +59,16 @@ function makeFake({ open, farms } = {}) {
   return state;
 }
 
+// What the worker does for a caller without the owner password (lib/consign-staff-view.js),
+// roughly: money keys and payments gone. The owner password the fake takes is OWNER_PW.
+const OWNER_PW = 'owner-test';
+const MONEY_KEYS = new Set(['price_per_lb', 'smalls_price_per_lb', 'owed', 'value', 'balance', 'paid', 'credit', 'amount', 'estimate', 'payments', 'totals', 'payment', 'access']);
+const staffShape = (v) => {
+  if (Array.isArray(v)) return v.map(staffShape);
+  if (!v || typeof v !== 'object') return v;
+  return Object.fromEntries(Object.entries(v).filter(([k]) => !MONEY_KEYS.has(k)).map(([k, x]) => [k, staffShape(x)]));
+};
+
 async function isolate(context, fake) {
   const blocked = [];
   // Order matters: the guard first, so the fakes registered after it take priority.
@@ -69,6 +79,10 @@ async function isolate(context, fake) {
     const req = route.request();
     const action = new URL(req.url()).searchParams.get('action');
     const body = JSON.parse(req.postData() || '{}');
+    const owner = body.owner_password === OWNER_PW;
+    if ((action === 'savePayment' || (action === 'voidRow' && body.table === 'payment')) && !owner) {
+      return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Owner password required', code: 'UNAUTHORIZED' }) });
+    }
     if (action.startsWith('save') || action === 'setWeight') {
       fake.posts.push({ action, body });
       if (fake.offline) return route.abort('internetdisconnected');
@@ -78,7 +92,9 @@ async function isolate(context, fake) {
     else if (fake.readsOffline) return route.abort('internetdisconnected');
     const data = fake.answer(action, body);
     if (data == null) { blocked.push(req.url()); return route.abort(); }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
+    // fake.oldWorker: a worker from before the money lock, which sends money to anyone.
+    const reply = fake.oldWorker ? { success: true, data } : { success: true, data: owner ? data : staffShape(data), owner };
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reply) });
   });
   return blocked;
 }
@@ -225,21 +241,28 @@ test.describe('Consignment lot ledger', () => {
     expect(blocked).toEqual([]);
   });
 
-  test('staff cannot edit prices; owner mode shows the price controls', async ({ page }) => {
+  test('staff cannot edit or see prices; owner mode shows the prices and the price controls', async ({ page }) => {
     const { blocked } = await open(page, { hash: '#/dropoff' });
     await page.locator('[data-farm="1"]').click();
     await page.getByRole('button', { name: '＋ Alpha' }).click();
-    await expect(page.locator('.cs-price').first()).toContainText('$10.00');
+    await expect(page.locator('[data-row="Alpha"]')).toBeVisible();
+    await expect(page.locator('.cs-price')).toHaveCount(0);
     await expect(page.locator('input[name*="price"], [data-price-input]')).toHaveCount(0);
     await page.goto(`${PAGE}#/farm/1`);
-    await expect(page.locator('#balance')).toHaveText('$500.00');
-    await expect(page.locator('#addPrice')).toBeHidden();
+    await expect(page.locator('[data-lot="10"]')).toBeVisible();
+    await expect(page.locator('#balance')).toHaveCount(0);
+    await expect(page.locator('#addPrice')).toHaveCount(0);
     await expect(page.locator('[data-terms]').first()).toBeHidden();
     await expect(page.locator('#view input')).toHaveCount(0);
     await page.locator('#ownerBtn').click();
-    await page.locator('dialog input[name="pw"]').fill('owner-test');
+    await page.locator('dialog input[name="pw"]').fill(OWNER_PW);
     await page.locator('dialog [data-act="ok"]').click();
+    await expect(page.locator('#balance')).toHaveText('$500.00');
     await expect(page.locator('#addPrice')).toBeVisible();
+    await page.goto(`${PAGE}#/dropoff`);
+    await page.locator('[data-farm="1"]').click();
+    await page.getByRole('button', { name: '＋ Alpha' }).click();
+    await expect(page.locator('.cs-price').first()).toContainText('$10.00');
     expect(blocked).toEqual([]);
   });
 
