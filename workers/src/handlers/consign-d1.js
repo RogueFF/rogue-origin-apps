@@ -11,8 +11,9 @@ import { checkRun, lotMoney, farmTotals, screenTolerance, round2 } from '../lib/
 import { normalizeSheetRead } from '../lib/consign-sheet.js';
 import { dropoffPrompt, screenPrompt } from '../lib/consign-sheet-prompt.js';
 import { getConfig } from '../lib/production-utils.js';
+import { newToken, tokenHash, lockState } from '../lib/consign-access.js';
 
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms']);
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
 
 function requireOwner(body, env) {
   const secret = env.CONSIGN_OWNER_PASSWORD;
@@ -422,12 +423,14 @@ async function setLotTerms(body, env) {
     term: body.term == null ? lot.term : body.term,
     price_per_lb: body.price_per_lb == null ? lot.price_per_lb : posNum(body.price_per_lb, 'Price per lb'),
     smalls_price_per_lb: body.smalls_price_per_lb == null ? lot.smalls_price_per_lb : posNum(body.smalls_price_per_lb, 'Smalls price per lb'),
+    // Shows the lot's note on the farm's own page. Off by default.
+    note_visible: body.note_visible == null ? (Number(lot.note_visible) === 1 ? 1 : 0) : (body.note_visible === true || body.note_visible === 1 ? 1 : 0),
   };
   if (!TERMS.has(next.term)) throw bad('term must be dropoff or sold');
   if (next.term === 'dropoff' && lot.sold.some((s) => !s.voided_at)) throw bad('Void the sold entries before changing this lot to owed on dropoff');
-  const before = { term: lot.term, price_per_lb: lot.price_per_lb, smalls_price_per_lb: lot.smalls_price_per_lb };
+  const before = { term: lot.term, price_per_lb: lot.price_per_lb, smalls_price_per_lb: lot.smalls_price_per_lb, note_visible: Number(lot.note_visible) === 1 ? 1 : 0 };
   await env.DB.batch([
-    env.DB.prepare('UPDATE cl_lots SET term = ?, price_per_lb = ?, smalls_price_per_lb = ? WHERE id = ?').bind(next.term, next.price_per_lb, next.smalls_price_per_lb, lot.id),
+    env.DB.prepare('UPDATE cl_lots SET term = ?, price_per_lb = ?, smalls_price_per_lb = ?, note_visible = ? WHERE id = ?').bind(next.term, next.price_per_lb, next.smalls_price_per_lb, next.note_visible, lot.id),
     history(env, 'cl_lots', lot.id, 'setLotTerms', before, next, body.actor || 'owner'),
   ]);
   return ok({ lot: await oneLot(env, lot.id) });
@@ -458,7 +461,53 @@ async function farmDetail(body, env) {
   const { lots, payments, totals } = await farmTotalsFor(env, farmId);
   const dropoffs = (await env.DB.prepare('SELECT * FROM cl_dropoffs WHERE farm_id = ? AND voided_at IS NULL ORDER BY dropped_at DESC, id DESC').bind(farmId).all()).results
     .map((d) => ({ ...d, lots: lots.filter((l) => l.dropoff_id === d.id) }));
-  return ok({ farm, price_points, dropoffs, payments: payments.filter((p) => !p.voided_at), totals });
+  return ok({ farm, price_points, dropoffs, payments: payments.filter((p) => !p.voided_at), totals, access: await accessState(env, farmId) });
+}
+
+/* ---------- the farm's own page: link + PIN (stage 4). Owner only. ---------- */
+
+/** State of the farm's newest link, for the staff page. Named columns only: never a hash. */
+async function accessState(env, farmId) {
+  const row = await env.DB.prepare(
+    `SELECT issued_at, last_seen_at, locked_until, revoked_at, CASE WHEN pin_hash IS NULL THEN 0 ELSE 1 END AS pin_set
+     FROM cl_farm_access WHERE farm_id = ? ORDER BY id DESC LIMIT 1`
+  ).bind(farmId).first();
+  if (!row) return null;
+  return {
+    active: !row.revoked_at,
+    pin_set: row.pin_set === 1,
+    issued_at: row.issued_at,
+    last_seen_at: row.last_seen_at || null,
+    locked: !row.revoked_at && lockState(row, new Date()).locked,
+  };
+}
+
+/**
+ * A new private link for a farm. Every earlier link of the farm stops working in the same
+ * batch (its PIN goes with it). The link is returned once and never stored: only its hash.
+ * The history row records that a link was issued, with no link and no hash.
+ */
+async function issueFarmAccess(body, env) {
+  const farmId = Number(body.farm_id);
+  if (!farmId || !(await env.DB.prepare('SELECT id FROM cl_farms WHERE id = ?').bind(farmId).first())) throw bad('Unknown farm');
+  const link = newToken();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE cl_farm_access SET revoked_at = datetime('now') WHERE farm_id = ? AND revoked_at IS NULL").bind(farmId),
+    env.DB.prepare('INSERT INTO cl_farm_access (farm_id, token_hash) VALUES (?, ?)').bind(farmId, await tokenHash(link)),
+    history(env, 'cl_farms', farmId, 'issueFarmAccess', null, { farm_id: farmId }, body.actor || 'owner'),
+  ]);
+  return ok({ token: link });
+}
+
+/** Turn the farm's link off, with no replacement. */
+async function revokeFarmAccess(body, env) {
+  const farmId = Number(body.farm_id);
+  if (!farmId) throw bad('Unknown farm');
+  const r = await env.DB.batch([
+    env.DB.prepare("UPDATE cl_farm_access SET revoked_at = datetime('now') WHERE farm_id = ? AND revoked_at IS NULL").bind(farmId),
+    history(env, 'cl_farms', farmId, 'revokeFarmAccess', null, { farm_id: farmId }, body.actor || 'owner'),
+  ]);
+  return ok({ revoked: r[0].meta.changes, access: await accessState(env, farmId) });
 }
 
 async function openWork(env) {
@@ -635,6 +684,8 @@ export async function handleConsignD1(request, env, _ctx) {
     case 'farm': return farmDetail(body, env);
     case 'open': return openWork(env);
     case 'readSheet': return readSheet(body, env);
+    case 'issueFarmAccess': return issueFarmAccess(body, env);
+    case 'revokeFarmAccess': return revokeFarmAccess(body, env);
     default:
       throw createError('NOT_FOUND', `Unknown consign action: ${action}`);
   }
