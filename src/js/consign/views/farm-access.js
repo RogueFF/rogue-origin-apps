@@ -6,7 +6,7 @@
  */
 import { t } from '../../shared/i18n.js';
 import { esc, tf, when } from '../format.js';
-import { dialog, toast } from '../ui.js';
+import { dialog, toast, moreHtml } from '../ui.js';
 import { ownerCall } from '../owner.js';
 import { qrSvg } from './print.js';
 
@@ -37,6 +37,7 @@ export function accessCardHtml(access, shown) {
   const line = state === 'inuse' ? tf('farmPageInUse', { when: when(access.last_seen_at) }) : t(STATE[state].label);
   const linkBox = shown ? `<div class="cs-linkbox" id="farmLinkBox">
       <p class="cs-linkonce"><b>${esc(t('linkShownOnce'))}</b></p>
+      <p class="cs-muted">${esc(t('farmPageAbout'))}</p>
       <label class="cs-field" for="farmLink"><span class="cs-label">${esc(t('farmLink'))}</span>
         <input id="farmLink" class="cs-input cs-linktext" type="text" readonly value="${esc(farmLinkUrl(shown))}" autocomplete="off" spellcheck="false"></label>
       <div class="cs-qrbox" aria-hidden="true">${qrSvg(farmLinkUrl(shown))}</div>
@@ -45,18 +46,17 @@ export function accessCardHtml(access, shown) {
         <button type="button" class="cs-btn ghost" id="hideLink">${esc(t('hideLink'))}</button>
       </div>
     </div>` : '';
+  // One compact row: the state in a few words and its one control. A live link's two
+  // actions (new link, turn off) sit in a More, with the date it was made.
+  const action = live
+    ? moreHtml('access', `${access.issued_at ? `<p class="cs-muted cs-morenote">${esc(tf('farmPageIssued', { when: when(access.issued_at) }))}</p>` : ''}
+        <button type="button" class="cs-btn small" id="newLink">${esc(t('newLink'))}</button>
+        <button type="button" class="cs-btn small danger" id="turnOffLink">${esc(t('turnOff'))}</button>`)
+    : `<button type="button" class="cs-btn small primary" id="createLink">${esc(t('createLink'))}</button>`;
   return `<section class="cs-card st ${STATE[state].st} cs-owner-only cs-access" id="farmAccess" data-state="${state}">
-    <h3 class="cs-h3">${esc(t('farmPage'))}</h3>
-    <p class="cs-access-line" id="farmAccessLine"><b>${esc(line)}</b></p>
-    ${access && live && access.issued_at ? `<p class="cs-muted">${esc(tf('farmPageIssued', { when: when(access.issued_at) }))}</p>` : ''}
-    <p class="cs-muted">${esc(t('farmPageAbout'))}</p>
+    <div class="cs-accessrow"><div class="cs-accesstext"><h3 class="cs-h3">${esc(t('farmPage'))}</h3>
+      <p class="cs-access-line" id="farmAccessLine">${esc(line)}</p></div>${action}</div>
     ${linkBox}
-    <div class="cs-row-btns">
-      ${live
-    ? `<button type="button" class="cs-btn" id="newLink">${esc(t('newLink'))}</button>
-         <button type="button" class="cs-btn danger" id="turnOffLink">${esc(t('turnOff'))}</button>`
-    : `<button type="button" class="cs-btn primary" id="createLink">${esc(t('createLink'))}</button>`}
-    </div>
   </section>`;
 }
 

@@ -33,7 +33,7 @@ export function mount(root, { dropoffId, lotId }) {
       ${runs.map((r) => `<li class="cs-tap static${r.voided_at ? ' cs-voidedrow' : ''}">
         <span>${esc(when(r.run_at))}</span>
         <span class="cs-after">${esc(t('pulled'))} <b>${lbs(r.pulled_lbs)}</b> · ${esc(t(l.type === 'smalls' ? 'finalSmalls' : 'finalTops'))} <b>${lbs(r.final_lbs)}</b>${l.type === 'tops' ? ` · ${esc(t('toSmalls'))} <b>${lbs(r.to_smalls_lbs)}</b>` : ''} · ${esc(t('biomass'))} <b>${lbs(r.biomass_lbs)}</b> · ${esc(t('mold'))} <b>${lbs(r.mold_lbs)}</b></span>
-        ${r.voided_at ? `<span class="cs-chip st-voided">${esc(t('voided'))}</span>` : `<span class="cs-headbtns cs-right">${isOwner() ? `<button type="button" class="cs-btn small cs-edit" data-edit="run|${l.id}|${r.id}">✎ ${esc(t('edit'))}</button>` : ''}<button type="button" class="cs-btn small danger" data-voidrun="${r.id}">${esc(t('void'))}</button></span>`}
+        ${r.voided_at ? `<span class="cs-chip st-voided">${esc(t('voided'))}</span>` : `<span class="cs-headbtns cs-right">${isOwner() ? `<button type="button" class="cs-btn small cs-edit" data-edit="run|${l.id}|${r.id}">${esc(t('edit'))}</button>` : ''}<button type="button" class="cs-btn small danger" data-voidrun="${r.id}">${esc(t('void'))}</button></span>`}
       </li>`).join('')}</ul></section>`;
   }
 

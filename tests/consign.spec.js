@@ -117,6 +117,18 @@ async function open(page, { lang = 'en', hash = '#/', fake = makeFake() } = {}) 
 
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
+
 test.describe('Consignment lot ledger', () => {
   test('cultivar dropdown: pick a known one, or choose New cultivar and type it', async ({ page }) => {
     await open(page, { hash: '#/dropoff' });
@@ -149,6 +161,9 @@ test.describe('Consignment lot ledger', () => {
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Alpha');
+    // An unticked type is only its tick row; ticking shows the boxes.
+    await expect(page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]')).toHaveCount(0);
+    await tickOn(page, 'Alpha', 'tops');
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('42.5');
     await expect(page.locator('[data-row="Alpha"] [data-on$="|tops"]')).toBeChecked();
     await expect(page.locator('#summary')).toContainText('42.5');
@@ -168,6 +183,7 @@ test.describe('Consignment lot ledger', () => {
     const { fake } = await open(page, { hash: '#/dropoff' });
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Alpha');
+    await tickOn(page, 'Alpha', 'tops');
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('10');
     await expect(page.locator('#droppedOn')).toHaveValue('');
     await page.locator('#droppedOn').fill('2026-11-04');
@@ -183,9 +199,12 @@ test.describe('Consignment lot ledger', () => {
     await page.locator('[data-farm="1"]').click();
     for (const c of CULTIVARS) await page.locator('#cultPick').selectOption(c);
     for (const [i, c] of CULTIVARS.entries()) {
+      await tickOn(page, c, 'tops');
       await page.locator(`[data-row="${c}"] [data-type="tops"] input[data-lbs]`).fill(String(10 + i));
+      await tickOn(page, c, 'smalls');
       await page.locator(`[data-row="${c}"] [data-type="smalls"] input[data-lbs]`).fill(String(2 + i));
     }
+    await openMore(page, '[data-row="Alpha"] [data-type="tops"] details.cs-more');
     await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').nth(1).fill('5');
     await expect(page.locator('#saveBtn')).toHaveText('Guardar entrega');
@@ -227,6 +246,7 @@ test.describe('Consignment lot ledger', () => {
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Beta');
+    await tickOn(page, 'Beta', 'tops');
     await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').fill('12');
     await page.locator('#saveBtn').click();
     await expect(page.locator('#toast')).toContainText('No signal');
@@ -247,7 +267,12 @@ test.describe('Consignment lot ledger', () => {
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Alpha');
+    await tickOn(page, 'Alpha', 'tops');
+    await openMore(page, '[data-row="Alpha"] [data-type="tops"] details.cs-more');
+    // The closed More says what it holds.
+    await expect(page.locator('[data-row="Alpha"] [data-type="tops"] .cs-moresum')).toHaveText('More');
     await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
+    await expect(page.locator('[data-row="Alpha"] [data-type="tops"] .cs-moresum')).toHaveText('Split');
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').first().fill('30');
     await page.locator('#saveBtn').click();
     await expect(page.locator('#toast')).toHaveText('Saved');
@@ -261,6 +286,7 @@ test.describe('Consignment lot ledger', () => {
     const { blocked } = await open(page, { hash: '#/dropoff', fake });
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Gamma');
+    await tickOn(page, 'Gamma', 'smalls');
     await page.locator('[data-row="Gamma"] [data-type="smalls"] input[data-lbs]').fill('7.5');
     fake.readsOffline = true;
     await page.locator('#saveBtn').click();
@@ -345,9 +371,12 @@ test.describe('Consignment lot ledger', () => {
         await page.goto(`${PAGE}#/dropoff`);
         await page.locator('[data-farm="1"]').click();
         await page.locator('#cultPick').selectOption('Alpha');
+        await tickOn(page, 'Alpha', 'tops');
         await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').fill('100');
         await page.locator('[data-row="Alpha"] [data-on$="|smalls"]').check();
         await page.locator('#cultPick').selectOption('Beta');
+        await tickOn(page, 'Beta', 'tops');
+        await openMore(page, '[data-row="Beta"] [data-type="tops"] details.cs-more');
         await page.locator('[data-row="Beta"] [data-type="tops"] [data-split]').click();
         await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').first().fill('30');
         await page.locator('[data-row="Beta"] [data-type="tops"] input[data-lbs]').nth(1).fill('70');

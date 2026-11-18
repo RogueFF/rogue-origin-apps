@@ -26,7 +26,7 @@ export function mount(root, { dropoffId, lotId }) {
         <section class="cs-card st st-closed"><p class="cs-h3">${esc(t('saved'))}: ${lbs(s.value)} ${esc(t('lbs'))}</p>
         <div class="cs-stack" style="margin-top:12px">
           ${next.length
-            ? next.map((n) => `<a class="cs-btn primary big" href="#/weigh/${dropoffId}/${n.id}">${esc(t('nextLot'))} ${esc(n.cultivar)} ${esc(typeLabel(n.type))} ›</a>`).join('')
+            ? next.map((n, i) => `<a class="cs-btn${i === 0 ? ' primary' : ''} big" href="#/weigh/${dropoffId}/${n.id}">${esc(t('nextLot'))} ${esc(n.cultivar)} ${esc(typeLabel(n.type))} ›</a>`).join('')
             : `<p>${esc(t('allWeighed'))}</p>`}
           <a class="cs-btn big" href="#/">${esc(t('home'))}</a>
         </div></section></div>`;

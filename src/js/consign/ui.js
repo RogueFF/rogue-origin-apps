@@ -80,6 +80,24 @@ export function dialog({ title, message = '', fields = [], okLabel, danger = fal
   });
 }
 
+/**
+ * A "More" disclosure: native <details>, so keyboard and screen readers work with no JS state.
+ * key: a data-more value, unique on the screen, so keepOpen() can reopen it after a redraw.
+ * label: the summary text ("More", or a non-default choice it holds, like "Split").
+ */
+export const moreHtml = (key, body, { label = t('more'), cls = '' } = {}) => `<details class="cs-more${cls ? ` ${cls}` : ''}" data-more="${esc(key)}">
+  <summary class="cs-moresum">${esc(label)}</summary><div class="cs-morebody">${body}</div></details>`;
+
+/** Redraw root with draw(), keeping every open "More" disclosure open. */
+export function keepOpen(root, draw) {
+  const open = [...root.querySelectorAll('details[data-more][open]')].map((d) => d.dataset.more);
+  draw();
+  for (const k of open) {
+    const d = [...root.querySelectorAll('details[data-more]')].find((x) => x.dataset.more === k);
+    if (d) d.open = true;
+  }
+}
+
 /** A card that says what failed and offers a retry. Never a blank page. */
 export function errorCard(root, err, retry) {
   root.innerHTML = `<section class="cs-card cs-errcard"><p>${esc(t('errGeneric'))}</p><p class="cs-muted">${esc(err && err.network ? t('errOffline') : (err && err.message) || '')}</p><button type="button" class="cs-btn primary">${esc(t('retry'))}</button></section>`;

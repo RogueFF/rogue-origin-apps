@@ -129,6 +129,18 @@ async function expectNoMoney(page, label) {
   }
 }
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true });
 
 /** Fill the dropoff form: smallest is one line, largest is every cultivar with both types and a split. */
@@ -137,15 +149,21 @@ async function fillDropoff(page, large) {
   const names = large ? CULTIVARS : ['Alpha'];
   for (const c of names) await page.locator('#cultPick').selectOption(c);
   for (const [i, c] of names.entries()) {
+    await tickOn(page, c, 'tops');
     await page.locator(`[data-row="${c}"] [data-type="tops"] input[data-lbs]`).fill(String(10 + i));
-    if (large) await page.locator(`[data-row="${c}"] [data-type="smalls"] input[data-lbs]`).fill(String(2 + i));
+    if (large) {
+      await tickOn(page, c, 'smalls');
+      await page.locator(`[data-row="${c}"] [data-type="smalls"] input[data-lbs]`).fill(String(2 + i));
+    }
   }
   // A cultivar the farm has no price for: "No price" is a flag staff may see.
   await page.locator('#cultPick').selectOption('__new');
   await page.locator('#otherName').fill('Omega');
   await page.locator('#addOther').click();
+  await tickOn(page, 'Omega', 'tops');
   await page.locator('[data-row="Omega"] [data-type="tops"] input[data-lbs]').fill('5');
   if (large) {
+    await openMore(page, '[data-row="Alpha"] [data-type="tops"] details.cs-more');
     await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
     await page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]').nth(1).fill('5');
   }
