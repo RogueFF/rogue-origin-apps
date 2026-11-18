@@ -53,6 +53,13 @@ registerLabels({
     pickCover: '{n} left. Who took over?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
     onCell: 'on {c}', peopleFail: "Couldn't load the crew list. Unlock the page or check the connection.", loadingPeople: 'Loading the crew…',
     searchName: 'Type a name', close: 'Close',
+    gStart: '▶ Enter this hour, step by step', gExit: 'Exit', gSkip: 'Not used today: skip', gRest: 'No one else today: skip the rest', gNextBtn: 'Next cell to do ›', gDone: 'Done ✓',
+    gCount: '{h} · {d} of {n} cells', gWho: '{c}: who is on it? Tap the green button. Not used today? Skip.',
+    gType: '{c} · {n}: type the tops in lb, then Enter.', gTypeSub: 'Wrong person? Tap the name. Someone took over? Tap "Someone took over".',
+    gTwo: '{c}: type the tops for {a} and for {b}, Enter after each.', gGoNext: 'This cell is done. Go to the next one to do.',
+    gReviewTitle: 'Check {h} before moving on', gReviewSub: 'Tap one to fix it. If it is right, leave it.', gAllGood: 'Everything looks right. Done!',
+    gMissing: '{c}: no tops yet', gHigh: '{n}: {lb} lb in one hour looks high (grams?)', gZero: '{n}: 0 lb this hour',
+    gOff: '{n}: {lb} lb is far from their pace today ({u} lb/h)', gMoved: '{n} moved from {a} to {b}', gNoCultivar: 'The room cultivar for this hour is not set (top of the page)',
   },
   es: {
     title: 'Registro por hora de celdas', roomCultivar: 'Variedad de esta hora', roomSmalls: 'Smalls, todo el cuarto (lb)',
@@ -77,6 +84,13 @@ registerLabels({
     pickCover: '{n} se fue. ¿Quién lo cubrió?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
     onCell: 'en {c}', peopleFail: 'No cargó la lista del equipo. Desbloquee la página o revise la conexión.', loadingPeople: 'Cargando el equipo…',
     searchName: 'Escriba un nombre', close: 'Cerrar',
+    gStart: '▶ Anotar esta hora, paso a paso', gExit: 'Salir', gSkip: 'No se usa hoy: saltar', gRest: 'No hay nadie más hoy: saltar las demás', gNextBtn: 'Siguiente celda por hacer ›', gDone: 'Listo ✓',
+    gCount: '{h} · {d} de {n} celdas', gWho: '{c}: ¿quién está? Toque el botón verde. ¿No se usa hoy? Saltar.',
+    gType: '{c} · {n}: escriba los tops en lb y presione Enter.', gTypeSub: '¿Persona equivocada? Toque el nombre. ¿Alguien lo cubrió? Toque «Alguien lo cubrió».',
+    gTwo: '{c}: escriba los tops de {a} y de {b}, Enter después de cada uno.', gGoNext: 'Esta celda ya está. Vaya a la siguiente por hacer.',
+    gReviewTitle: 'Revise {h} antes de seguir', gReviewSub: 'Toque uno para corregirlo. Si está bien, déjelo.', gAllGood: 'Todo se ve bien. ¡Listo!',
+    gMissing: '{c}: faltan los tops', gHigh: '{n}: {lb} lb en una hora parece mucho (¿gramos?)', gZero: '{n}: 0 lb esta hora',
+    gOff: '{n}: {lb} lb está lejos de su ritmo de hoy ({u} lb/h)', gMoved: '{n} se cambió de {a} a {b}', gNoCultivar: 'Falta la variedad del cuarto de esta hora (arriba)',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -118,7 +132,9 @@ const el = {
   editBtn: $('editBtn'), editBox: $('editBox'), editLabel: $('editLabel'), laneW: $('laneWholesale'), laneR: $('laneRetail'),
   editSave: $('editSave'), editCancel: $('editCancel'), remove: $('removeBtn'),
   people: $('people'), picker: $('picker'), pickTitle: $('pickTitle'), pickClose: $('pickClose'), pickLeft: $('pickLeft'),
-  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
+  pickLeftWrap: $('pickLeftWrap'), pickLeftLabel: $('pickLeftLabel'),
+  guide: $('guide'), guideStart: $('guideStart'), guideBar: $('guideBar'), guideCount: $('guideCount'), guideStep: $('guideStep'),
+  guideSkip: $('guideSkip'), guideRest: $('guideRest'), guideNext: $('guideNext'), guideDone: $('guideDone'), guideExit: $('guideExit'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), checks: $('checks'), qOverall: $('qOverall'), stopAlert: $('stopAlert'), checkedBy: $('checkedBy'),
   batchTitle: $('batchTitle'), batchHistory: $('batchHistory'), nextBatch: $('nextBatchBtn'), gridTitle: $('gridTitle'),
   tabWeights: $('tabWeights'), tabQuality: $('tabQuality'),
@@ -525,6 +541,7 @@ function renderGrid() {
     el.grid.appendChild(b);
   });
   el.gridTitle.textContent = t(quality ? 'jumpToday' : 'jump');
+  renderGuided();
   el.doneCount.textContent = quality ? tf('batchesChecked', { n: checked }) : `${done}/${usedIds.size} ${t('entered')}`;
   renderHours();
 }
@@ -673,6 +690,12 @@ function commitPerson(pEl) {
 }
 // Enter on the last person's tops: save and go to the next cell, keypad still up.
 function nextCellFocused() {
+  // Guided mode: the next cell still to do; none left = the hour's check.
+  if (guided.on) {
+    const j = guidedNext();
+    if (j >= 0) { openCell(j); refreshCell(); focusPerson(); } else { refreshCell(); document.activeElement?.blur?.(); }
+    return;
+  }
   // First hour with people (placing them): walk every cell. After that: the next
   // cell with someone on it, then back to the first one still missing tops.
   const list = cells(); const used = new Set(usedCells().map(c => c.stationId));
@@ -807,6 +830,142 @@ el.pickList.addEventListener('click', async e => {
       choose(r.person.id);
     } catch { b.disabled = false; }
   }
+});
+
+// ---- guided mode (Koa 2026-11-18: "a walkthrough that helps them enter in
+// everyone's numbers correctly") ----
+// "Start this hour" walks the lead one cell at a time, says what to do on each,
+// and ends the hour with a check: cells still missing, numbers that look off,
+// and anyone who changed cells. Nothing new is saved here; it drives the same
+// entry (tops, Enter) and jumps to cells to fix.
+const guided = { on: false, skipped: new Set(), slot: null };
+const LOOKS_HIGH_LB = 3;      // more than this in one hour is probably grams typed as lb
+function guidedPlacing() {
+  const h = state.slots.findIndex(s => s.slot === state.slot);
+  return h <= 0 || !usedCells(state.slots[h - 1].slot).length;
+}
+// The cells this hour's walk goes through: in the first hour every cell (to place
+// people), after that the cells in use.
+function guidedTargets() { return guidedPlacing() ? cells() : usedCells(); }
+function guidedTodo() {
+  return guidedTargets().filter(c => eff(c.stationId) == null && !guided.skipped.has(c.stationId));
+}
+function guidedStart() {
+  guided.on = true; guided.skipped.clear(); guided.slot = state.slot;
+  const todo = guidedTodo();
+  if (todo.length) openCell(cells().findIndex(c => c.stationId === todo[0].stationId));
+  refreshCell();
+  focusPerson();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function guidedStop() { guided.on = false; renderGuided(); }
+// The next cell to do after the current one (wrapping), or -1 when the hour is done.
+function guidedNext() {
+  const todo = new Set(guidedTodo().map(c => c.stationId));
+  const list = cells();
+  for (let k = 1; k <= list.length; k++) {
+    const j = (state.cellIdx + k) % list.length;
+    if (todo.has(list[j].stationId)) return j;
+  }
+  return -1;
+}
+// The end-of-hour check: what to look at before moving on.
+function guidedReview() {
+  const items = [];
+  const h = state.slots.findIndex(s => s.slot === state.slot);
+  const prev = h > 0 ? state.slots[h - 1].slot : null;
+  for (const c of guidedTargets()) {
+    if (guided.skipped.has(c.stationId)) continue;
+    if (eff(c.stationId) == null) { items.push({ station: c.stationId, text: tf('gMissing', { c: c.label }) }); continue; }
+    for (const p of savedAt(c.stationId)) {
+      const name = nameOf(p.personId);
+      const lb = Number(p.lb) || 0; const min = Number(p.min) || 0;
+      if (lb > LOOKS_HIGH_LB) items.push({ station: c.stationId, text: tf('gHigh', { n: name, lb: lb.toFixed(2) }) });
+      else if (lb === 0 && min > 0) items.push({ station: c.stationId, text: tf('gZero', { n: name }) });
+      else {
+        // far from their own pace earlier today
+        let g = 0, m = 0;
+        for (const x of crew.ph.values()) if (x.personId === p.personId && x.long !== state.slot && (Number(x.min) || 0) > 0) { g += Number(x.lb) || 0; m += Number(x.min) || 0; }
+        const usual = m >= 60 ? g / (m / 60) : null;
+        const now = min > 0 ? lb / (min / 60) : null;
+        if (usual && now !== null && usual > 0.05 && (now > usual * 2 || now < usual * 0.4)) {
+          items.push({ station: c.stationId, text: tf('gOff', { n: name, lb: lb.toFixed(2), u: usual.toFixed(2) }) });
+        }
+      }
+      if (prev) {
+        const before = crew.ph.get(pkey(p.personId, prev));
+        if (before?.stationId && before.stationId !== c.stationId) items.push({ station: c.stationId, text: tf('gMoved', { n: name, a: labelOf(before.stationId), b: c.label }) });
+      }
+    }
+  }
+  if (!roomCultivar()) items.push({ room: true, text: t('gNoCultivar') });
+  return items;
+}
+function renderGuided() {
+  const box = el.guide;
+  document.body.classList.toggle('guided', guided.on);
+  el.guideStart.hidden = guided.on || state.view !== 'weights' || !crew.ok;
+  if (!guided.on) { box.hidden = true; return; }
+  if (guided.slot !== state.slot) { guided.slot = state.slot; guided.skipped.clear(); }
+  box.hidden = false;
+  const targets = guidedTargets().filter(c => !guided.skipped.has(c.stationId));
+  const todo = guidedTodo();
+  const done = targets.length - todo.length;
+  const hourName = state.slot.replace(/:00/g, '').replace(' – ', '–');
+  el.guideBar.style.width = `${targets.length ? Math.round(done / targets.length * 100) : 100}%`;
+  el.guideCount.textContent = tf('gCount', { d: done, n: targets.length, h: hourName });
+  if (!todo.length) {
+    const items = guidedReview();
+    el.guideStep.innerHTML = `<b>${esc(tf('gReviewTitle', { h: hourName }))}</b>`
+      + (items.length
+        ? `<p class="g-sub">${esc(t('gReviewSub'))}</p><ul class="g-list">${items.map((it, i) => `<li><button type="button" class="g-item" data-gi="${i}">${esc(it.text)} ›</button></li>`).join('')}</ul>`
+        : `<p class="g-ok">✓ ${esc(t('gAllGood'))}</p>`);
+    el.guideSkip.hidden = true;
+    el.guideRest.hidden = true;
+    el.guideNext.hidden = true;
+    el.guideDone.hidden = false;
+    guided.items = items;
+    return;
+  }
+  const c = cell();
+  const onTodo = todo.some(x => x.stationId === c?.stationId);
+  const who = c ? shownPeople(c.stationId) : [];
+  let text;
+  if (!onTodo) text = t('gGoNext');
+  else if (!who.length) text = tf('gWho', { c: c.label });
+  else if (who.length > 1) text = tf('gTwo', { c: c.label, a: nameOf(who[0].personId), b: nameOf(who[1].personId) });
+  else text = tf('gType', { c: c.label, n: nameOf(who[0].personId) });
+  el.guideStep.innerHTML = `<b>${esc(text)}</b>${onTodo && who.length ? `<p class="g-sub">${esc(t('gTypeSub'))}</p>` : ''}`;
+  el.guideSkip.hidden = !onTodo;
+  // Placing people in the first hour: the rest of the empty cells can go in one tap.
+  el.guideRest.hidden = !(onTodo && !who.length && guidedPlacing());
+  el.guideNext.hidden = onTodo;
+  el.guideDone.hidden = true;
+}
+el.guideStart.addEventListener('click', guidedStart);
+el.guideExit.addEventListener('click', guidedStop);
+el.guideDone.addEventListener('click', guidedStop);
+el.guideNext.addEventListener('click', () => {
+  const j = guidedNext(); if (j < 0) { renderGuided(); return; }
+  openCell(j); refreshCell(); focusPerson();
+});
+el.guideRest.addEventListener('click', () => {
+  for (const c of guidedTodo()) if (!shownPeople(c.stationId).length) guided.skipped.add(c.stationId);
+  nextCellFocused();
+});
+el.guideSkip.addEventListener('click', () => {
+  const c = cell(); if (!c) return;
+  guided.skipped.add(c.stationId);
+  nextCellFocused();
+});
+el.guideStep.addEventListener('click', e => {
+  const b = e.target.closest('[data-gi]'); if (!b) return;
+  const it = (guided.items || [])[Number(b.dataset.gi)]; if (!it) return;
+  if (it.room) { el.roomCultivar.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  openCell(cells().findIndex(c => c.stationId === it.station));
+  refreshCell();
+  focusPerson();
+  el.people.scrollIntoView({ behavior: 'smooth', block: 'center' });   // below the sticky banner
 });
 
 // ---- events ----
