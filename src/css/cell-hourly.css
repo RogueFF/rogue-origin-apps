@@ -105,3 +105,32 @@ body[data-view="weights"] .q-only { display: none; }
 .jump.failq { background: var(--danger-dim); border-color: var(--danger); }
 .jump.current { box-shadow: 0 0 0 3px var(--gold); }
 .jump.retail b::after { content: ' R'; color: var(--indoor); font-size: 12px; }
+
+/* People on the cell this hour (Koa 2026-11-18): tops typed per person, Enter = next cell. */
+.people { display: grid; gap: 10px; }
+.person { border: 1px solid var(--border-strong); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; background: var(--bg); }
+.person.waiting { border-style: dashed; }
+.person-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pname { font: 700 20px var(--font-ui); color: var(--text); background: none; border: none; padding: 4px 0; cursor: pointer; text-align: left; }
+.pname span { color: var(--green); font-size: 16px; }
+.pdel { margin-left: auto; min-width: 40px; min-height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); font-size: 16px; cursor: pointer; }
+.person-in { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 10px; align-items: center; }
+.person-in .tops-wrap input { width: 100%; min-width: 0; font: 700 34px var(--font-mono); text-align: right; color: var(--text); background: var(--bg-card);
+  border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 10px; min-height: 56px; box-sizing: border-box; }
+.p-minw { display: grid; gap: 2px; justify-items: center; }
+.p-minw input { width: 100%; font: 600 20px var(--font-mono); text-align: center; color: var(--text); background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 10px; min-height: 44px; box-sizing: border-box; }
+.p-g { min-height: 18px; }
+.person-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.who-btn { width: 100%; min-height: 60px; font-size: 20px; }
+.picker { border: 2px solid var(--green); border-radius: 14px; padding: 12px; display: grid; gap: 10px; background: var(--bg-card); }
+.picker[hidden] { display: none; }
+.picker-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 18px; }
+.pick-search, .picker .field input { font: 600 20px var(--font-ui); color: var(--text); background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: 10px; padding: 10px 12px; min-height: 48px; box-sizing: border-box; width: 100%; }
+.pick-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.pick-list .btn { font-size: 17px; }
+.pick-list small { color: var(--text-secondary); font-weight: 400; }
+.jump small.who { font: 600 12px var(--font-ui); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jump small.who.carried { color: var(--text-secondary); font-style: italic; }
+@media (max-width: 359px) { .person-in { grid-template-columns: minmax(0, 1fr) 76px; } .person-in .tops-wrap input { font-size: 28px; } }
