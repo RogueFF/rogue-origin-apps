@@ -92,7 +92,7 @@ test('staff never see the flag; the farm page owes the same as the owner page', 
 
 test('migration: lots that were owed on dropoff before take the usual case', opts, () => {
   const { sqlite } = freshConsignDb();
-  // The helper applies 0071 to an empty table; replay its UPDATE on rows written the old way.
+  // The helper applies 0072 to an empty table; replay its UPDATE on rows written the old way.
   sqlite.exec("INSERT INTO cl_farms (name) VALUES ('Farm A')");
   sqlite.exec("INSERT INTO cl_dropoffs (farm_id, client_key) VALUES (1, 'k')");
   sqlite.exec("INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term) VALUES (1, 1, 'Alpha', 'tops', 'dropoff'), (1, 1, 'Alpha', 'smalls', 'sold')");
