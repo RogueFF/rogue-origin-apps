@@ -14,24 +14,24 @@ const $ = (id) => document.getElementById(id);
 
 registerLabels({
   es: {
-    eyebrow: 'Mis números', speed: 'Tu velocidad', gPerHour: 'g de tops por hora', rank: 'Tu lugar', dayTotal: 'Tops del día',
-    byHour: 'Hora por hora', byHourSub: 'Tops por hora de trabajo, en gramos y libras. La línea es la meta.', myDays: 'Tus días',
+    eyebrow: 'Mis números', speed: 'Tu velocidad', gPerHour: 'lb de tops por hora', rank: 'Tu lugar', dayTotal: 'Tops del día',
+    byHour: 'Hora por hora', byHourSub: 'Tops por hora de trabajo, en libras y gramos. La línea es la meta.', myDays: 'Tus días',
     privacy: 'Solo tú ves esta página. Guarda tu tarjeta; si la pierdes, pide una nueva.',
     noCard: 'Escanea el código QR de tu tarjeta para ver tus números.', badCard: 'Esta tarjeta no funciona. Pide una nueva a tu líder.',
     noDays: 'Todavía no hay números para ti. Aparecen al día siguiente de trabajar.', loadFail: 'No se pudo cargar. Revisa tu conexión e intenta otra vez.',
-    goal: 'Meta', overGoal: '¡Arriba de la meta!', toGoal: 'Te faltan {g} g ({lb} lb) por hora para la meta', of: 'de', partDay: 'Día parcial',
+    goal: 'Meta', overGoal: '¡Arriba de la meta!', toGoal: 'Te faltan {lb} lb ({g} g) por hora para la meta', of: 'de', partDay: 'Día parcial',
     partDaySub: 'Sin lugar: no trabajaste el día completo en tu celda', top3: '¡Top 3 del día!', cell: 'Celda', hours: 'h',
-    best: 'Tu mejor día: {d}, {g} g ({lb} lb) por hora', lbHr: '{lb} lb por hora', notTrimming: '—', today: 'Hoy',
+    best: 'Tu mejor día: {d}, {lb} lb ({g} g) por hora', gHr: '{g} g por hora', notTrimming: '—', today: 'Hoy',
   },
   en: {
-    eyebrow: 'My numbers', speed: 'Your speed', gPerHour: 'g of tops per hour', rank: 'Your place', dayTotal: 'Tops for the day',
-    byHour: 'Hour by hour', byHourSub: 'Tops per working hour, in grams and pounds. The line is the goal.', myDays: 'Your days',
+    eyebrow: 'My numbers', speed: 'Your speed', gPerHour: 'lb of tops per hour', rank: 'Your place', dayTotal: 'Tops for the day',
+    byHour: 'Hour by hour', byHourSub: 'Tops per working hour, in pounds and grams. The line is the goal.', myDays: 'Your days',
     privacy: 'Only you see this page. Keep your card; if you lose it, ask for a new one.',
     noCard: 'Scan the QR code on your card to see your numbers.', badCard: "This card doesn't work. Ask your lead for a new one.",
     noDays: 'No numbers for you yet. They show up the day after you work.', loadFail: "Couldn't load. Check your connection and try again.",
-    goal: 'Goal', overGoal: 'Above the goal!', toGoal: '{g} g ({lb} lb) per hour to reach the goal', of: 'of', partDay: 'Part day',
+    goal: 'Goal', overGoal: 'Above the goal!', toGoal: '{lb} lb ({g} g) per hour to reach the goal', of: 'of', partDay: 'Part day',
     partDaySub: "No place: you didn't work the full day at your cell", top3: 'Top 3 of the day!', cell: 'Cell', hours: 'h',
-    best: 'Your best day: {d}, {g} g ({lb} lb) per hour', lbHr: '{lb} lb per hour', notTrimming: '—', today: 'Today',
+    best: 'Your best day: {d}, {lb} lb ({g} g) per hour', gHr: '{g} g per hour', notTrimming: '—', today: 'Today',
   },
 });
 let stored = null;
@@ -42,7 +42,7 @@ const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => vars[k]);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const gph = (lbHr) => (lbHr === null || lbHr === undefined ? null : Math.round(lbHr * G));
 const lb2 = (lbHr) => (lbHr === null || lbHr === undefined ? '—' : Number(lbHr).toFixed(2));
-const gl = (g, lbs) => `<b>${g}</b> g<small>${lbs} lb</small>`;
+const gl = (g, lbs) => `<b>${lbs}</b> lb<small>${g} g</small>`;
 function fmtShort(iso) {
   const d = new Date(`${iso}T12:00:00`);
   return d.toLocaleDateString(getLang() === 'es' ? 'es-MX' : 'en-US', { month: 'short', day: 'numeric' });
@@ -75,8 +75,8 @@ function render() {
   $('days').innerHTML = data.days.map((x, i) =>
     `<button type="button" data-i="${i}" aria-pressed="${i === sel}">${esc(fmtDate(x.date))}</button>`).join('');
 
-  $('rateG').textContent = me ?? '—';
-  $('rateLb').textContent = d.rate !== null ? fill(t('lbHr'), { lb: d.rate.toFixed(2) }) + (goal ? ` · ${t('goal')} ${goal} g (${lb2(d.target)} lb)` : '') : '';
+  $('rateG').textContent = d.rate !== null ? lb2(d.rate) : '—';
+  $('rateLb').textContent = d.rate !== null ? fill(t('gHr'), { g: me }) + (goal ? ` · ${t('goal')} ${lb2(d.target)} lb (${goal} g)` : '') : '';
   $('meterFill').style.width = `${me ? Math.min(100, me / scale * 100) : 0}%`;
   $('meterGoal').style.left = `${goal ? goal / scale * 100 : 0}%`;
   $('meterGoal').hidden = !goal;
@@ -99,8 +99,8 @@ function render() {
     $('rankSub').textContent = t('partDaySub');
     rankCard.classList.remove('top');
   }
-  $('topsG').textContent = d.topsG.toLocaleString();
-  $('topsLb').textContent = `${d.topsLb.toFixed(2)} lb`;
+  $('topsG').textContent = d.topsLb.toFixed(2);
+  $('topsLb').textContent = `${d.topsG.toLocaleString()} g`;
   $('daySub').textContent = [d.cell ? `${t('cell')} ${d.cell}` : null, `${d.hours} ${t('hours')}`, d.cultivar].filter(Boolean).join(' · ');
 
   const hmax = Math.max(...d.hourly.map((h) => gph(h.rate) || 0), goal || 0, 1) * 1.15;
