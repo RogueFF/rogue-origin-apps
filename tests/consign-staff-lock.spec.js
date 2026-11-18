@@ -135,12 +135,13 @@ const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.p
 async function fillDropoff(page, large) {
   await page.locator('[data-farm="1"]').click();
   const names = large ? CULTIVARS : ['Alpha'];
-  for (const c of names) await page.getByRole('button', { name: `＋ ${c}` }).click();
+  for (const c of names) await page.locator('#cultPick').selectOption(c);
   for (const [i, c] of names.entries()) {
     await page.locator(`[data-row="${c}"] [data-type="tops"] input[data-lbs]`).fill(String(10 + i));
     if (large) await page.locator(`[data-row="${c}"] [data-type="smalls"] input[data-lbs]`).fill(String(2 + i));
   }
   // A cultivar the farm has no price for: "No price" is a flag staff may see.
+  await page.locator('#cultPick').selectOption('__new');
   await page.locator('#otherName').fill('Omega');
   await page.locator('#addOther').click();
   await page.locator('[data-row="Omega"] [data-type="tops"] input[data-lbs]').fill('5');

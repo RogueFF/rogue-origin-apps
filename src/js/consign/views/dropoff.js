@@ -86,6 +86,14 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     return p == null ? null : { price: p };
   };
   const pricedCultivars = () => [...new Set((s.detail?.price_points || []).map((p) => p.cultivar))].sort((a, b) => a.localeCompare(b));
+  /** The dropdown's list: the farm's priced cultivars, then any it has dropped off before. One spelling each. */
+  const knownCultivars = () => {
+    const seen = new Map();
+    const add = (c) => { const k = String(c || '').trim(); if (k && !seen.has(k.toLowerCase())) seen.set(k.toLowerCase(), k); };
+    pricedCultivars().forEach(add);
+    for (const d of s.detail?.dropoffs || []) for (const l of d.lots || []) add(l.cultivar);
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  };
   const findRow = (uid) => s.rows.find((r) => r.uid === uid);
   const defaultTerm = () => s.farm?.default_term || 'dropoff';
 
@@ -93,7 +101,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     const raw = String(name || '').trim();
     if (!raw) return;
     // Use the price list's spelling so the server finds the price point.
-    const cultivar = pricedCultivars().find((c) => c.toLowerCase() === raw.toLowerCase()) || raw;
+    const cultivar = knownCultivars().find((c) => c.toLowerCase() === raw.toLowerCase()) || raw;
     if (s.rows.some((r) => r.cultivar.toLowerCase() === cultivar.toLowerCase())) return;
     s.rows.push({
       uid: `r${++uidSeq}`, cultivar, note: '',
@@ -270,13 +278,19 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   }
 
   function cultivarStep() {
-    const chips = pricedCultivars().filter((c) => !s.rows.some((r) => r.cultivar.toLowerCase() === c.toLowerCase()));
+    const left = knownCultivars().filter((c) => !s.rows.some((r) => r.cultivar.toLowerCase() === c.toLowerCase()));
+    // No known cultivar left to pick: go straight to typing a new one.
+    const typing = s.newCult || !left.length;
     return `<section class="cs-card cs-step">${stepHead(2, 'stepCultivars')}
       <div class="cs-stack" id="rows">${s.rows.map(rowHtml).join('')}</div>
-      <h3 class="cs-label" style="margin-top:16px">${esc(t('addCultivar'))}</h3>
-      <div class="cs-chips">${chips.map((c) => `<button type="button" class="cs-chipbtn" data-add="${esc(c)}">＋ ${esc(c)}</button>`).join('')}</div>
-      <div class="cs-other"><input class="cs-input" id="otherName" placeholder="${esc(t('otherPlaceholder'))}" aria-label="${esc(t('other'))}" autocomplete="off">
-        <button type="button" class="cs-btn" id="addOther">＋ ${esc(t('other'))}</button></div>
+      <label class="cs-field" style="margin-top:16px"><span class="cs-label">${esc(t('addCultivar'))}</span>
+        <select class="cs-input cs-select" id="cultPick">
+          <option value="">${esc(t('pickCultivar'))}</option>
+          ${left.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+          <option value="__new"${typing ? ' selected' : ''}>＋ ${esc(t('newCultivar'))}</option>
+        </select></label>
+      ${typing ? `<div class="cs-other"><input class="cs-input" id="otherName" placeholder="${esc(t('otherPlaceholder'))}" aria-label="${esc(t('newCultivar'))}" autocomplete="off">
+        <button type="button" class="cs-btn primary" id="addOther">＋ ${esc(t('addIt'))}</button></div>` : ''}
     </section>`;
   }
 
@@ -347,9 +361,10 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     if (!b || !root.contains(b)) return;
     if (b.dataset.farm) return pickFarm(Number(b.dataset.farm));
     if (b.id === 'changeFarm') { s.farm = null; s.detail = null; s.farmMark = false; return render(); }
-    if (b.dataset.add) { addRow(b.dataset.add); render(); return focusLast(); }
     if (b.id === 'addOther') {
       const v = root.querySelector('#otherName').value;
+      if (!v.trim()) return root.querySelector('#otherName').focus();
+      s.newCult = false;
       addRow(v); render(); return focusLast();
     }
     if (b.dataset.remove) { s.rows = s.rows.filter((r) => r.uid !== b.dataset.remove); return render(); }
@@ -461,6 +476,13 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   });
 
   root.addEventListener('change', (e) => {
+    if (e.target.id === 'cultPick') {
+      const v = e.target.value;
+      if (v === '__new') { s.newCult = true; render(); return root.querySelector('#otherName')?.focus(); }
+      s.newCult = false;
+      if (v) { addRow(v); render(); return focusLast(); }
+      return render();
+    }
     const el = e.target;
     if (el.dataset.name) { findRow(el.dataset.name).cultivar = canonical(el.value); return; }
     if (!el.dataset.on) return;

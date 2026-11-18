@@ -417,7 +417,7 @@ test.describe('Consignment photo: review findings', () => {
     await page.goto(`${PAGE}#/`);
     await page.goto(`${PAGE}#/dropoff`);
     await page.locator('[data-farm="1"]').click();
-    await page.getByRole('button', { name: '＋ Gamma' }).click();
+    await page.locator('#cultPick').selectOption('Gamma');
     await page.locator('[data-row="Gamma"] [data-type="tops"] input[data-lbs]').fill('7');
     await page.locator('#saveBtn').click();
     await expect(page.locator('#toast')).toHaveText('Saved');
