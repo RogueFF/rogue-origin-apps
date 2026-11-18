@@ -17,7 +17,9 @@ export const ownerPw = () => { try { return sessionStorage.getItem(OWNER_KEY) ||
 export const setOwnerPw = (v) => { try { if (v) sessionStorage.setItem(OWNER_KEY, v); else sessionStorage.removeItem(OWNER_KEY); } catch { /* private mode */ } };
 
 const TIMEOUT_MS = 20000;
-const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess']);
+// Same list as the worker (workers/src/handlers/consign-d1.js), plus voiding a payment.
+const OWNER_ACTIONS = new Set(['saveFarm', 'savePricePoint', 'setLotTerms', 'issueFarmAccess', 'revokeFarmAccess', 'savePayment']);
+const ownerOnly = (action, body) => OWNER_ACTIONS.has(action) || (action === 'voidRow' && !!body && body.table === 'payment');
 
 function networkError() {
   const err = new Error('network');
@@ -30,10 +32,17 @@ function networkError() {
  * server's own; `err.network` is true when the request never got an answer, and
  * `err.owner` when the owner password was refused. opts.timeoutMs: give up after this long
  * (a sheet photo read takes longer than a save).
+ *
+ * In owner mode every call carries the owner password, added here at send time: a held entry
+ * (held.js) keeps only its body, never the password. The server answers a non-owner with no
+ * money in it and says so (`owner: false` beside `data`); a password it did not take on a
+ * read is not an error, so the page is told with consign:ownerrefused and drops owner mode
+ * before the caller renders the reply.
  */
 export async function call(action, body = {}, { timeoutMs = TIMEOUT_MS } = {}) {
-  const owner = OWNER_ACTIONS.has(action);
-  const payload = owner ? { ...body, owner_password: ownerPw() } : body;
+  const owner = ownerOnly(action, body);
+  const pw = ownerPw();
+  const payload = pw ? { ...body, owner_password: pw } : body;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw networkError();
   let res;
   // A barn connection can be "online" and still dead: give up after a while and
@@ -61,10 +70,14 @@ export async function call(action, body = {}, { timeoutMs = TIMEOUT_MS } = {}) {
     err.status = res.status;
     err.code = json && json.code;
     err.owner = owner && res.status === 401 && /owner/i.test(err.message);
+    if (err.owner && typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('consign:ownerrefused'));
     // Worth trying again later (a held entry stays held): auth, timeout, rate limit,
     // server trouble. Only 400/404 mean the entry itself is wrong.
     err.retry = !err.owner && (res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500);
     throw err;
+  }
+  if (pw && json.owner === false && typeof document !== 'undefined') {
+    document.dispatchEvent(new CustomEvent('consign:ownerrefused'));
   }
   return json.data;
 }

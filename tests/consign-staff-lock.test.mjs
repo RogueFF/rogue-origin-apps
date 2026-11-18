@@ -278,3 +278,12 @@ test('every action is either owner only or has a staff view, so a new action can
   assert.throws(() => staffView('someNewAction', { anything: 1 }), /staff view/i);
 });
 
+
+test('the page sends the owner password at send time only: held entries never store it', () => {
+  const src = readFileSync(new URL('../src/js/consign/api.js', import.meta.url), 'utf8');
+  assert.match(src, /owner_password: pw/);
+  const save = readFileSync(new URL('../src/js/consign/save.js', import.meta.url), 'utf8');
+  assert.ok(!/owner_password/.test(save));
+  const held = readFileSync(new URL('../src/js/consign/held.js', import.meta.url), 'utf8');
+  assert.ok(!/owner_password/.test(held));
+});

@@ -396,8 +396,10 @@ async function openStaff(page, sf, { lang = 'en', width = 1024, owner = true } =
 test.describe("staff page: Farm's page card", () => {
   test('hidden outside owner mode', async ({ page }) => {
     await openStaff(page, staffFake(null), { owner: false });
-    await expect(page.locator('#balance')).toBeVisible();
-    await expect(page.locator('#farmAccess')).toBeHidden();
+    // Staff mode: no money (staff money lock) and no farm's page card, not even hidden.
+    await expect(page.locator('#view .cs-banner')).toBeVisible();
+    await expect(page.locator('#balance')).toHaveCount(0);
+    await expect(page.locator('#farmAccess')).toHaveCount(0);
   });
 
   test('create: link shown once with copy and QR, sent with the owner password, never stored', async ({ page, context }) => {

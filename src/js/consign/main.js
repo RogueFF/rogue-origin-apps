@@ -8,7 +8,7 @@
  *   #/weigh/<dropoff>/<lot>    set a late weight
  *   #/screen/<dropoff>/<lot>   screening run
  *   #/farm/<farm>              farm page
- *   #/pay or #/pay/<farm>      record a payment
+ *   #/pay or #/pay/<farm>      record a payment (owner mode only; staff land on home)
  *   #/print/dropoff(/<farm>)   print a dropoff sheet (blank, or for one farm)
  *   #/print/screen/<dropoff>   print a screening sheet
  *   #/photo/dropoff(/<farm>)   photo of a dropoff sheet -> prefilled dropoff form
@@ -27,7 +27,7 @@ import * as farm from './views/farm.js';
 import * as pay from './views/pay.js';
 import * as print from './views/print.js';
 import * as photo from './views/photo.js';
-import { initOwner } from './owner.js';
+import { initOwner, isOwner } from './owner.js';
 import { setGo } from './nav.js';
 import { queue, flush } from './held.js';
 import { toast } from './ui.js';
@@ -53,6 +53,8 @@ function match(hash) {
   for (const [re, view, names, extra] of ROUTES) {
     const m = re.exec(hash);
     if (!m) continue;
+    // Payments are the owner's: staff never get the pay screen, by link or by typing it.
+    if (view === pay && !isOwner()) break;
     const val = (n, raw) => {
       if (!raw) return null;
       return n === 'lotIds' ? raw.split('.').map(Number) : Number(raw);
@@ -72,6 +74,7 @@ function route() {
   currentHash = hash;
   if (current && current.unmount) current.unmount();
   const { view, params } = match(hash);
+  if (view === home && /^pay(\/|$)/.test(hash)) { history.replaceState(null, '', '#/'); currentHash = ''; }
   // Each view gets its own element. Views listen on the element they are given, so the
   // listeners of a view left behind go away with its element instead of piling up on #view
   // (a left review's Save all used to fire again from the next screen).
@@ -123,6 +126,14 @@ document.addEventListener('consign:held', heldChip);
 document.addEventListener('ro:langchange', heldChip);
 $('heldChip').addEventListener('click', sendHeld);
 window.addEventListener('online', sendHeld);
+
+// Owner mode on or off (owner.js): redraw now, so money on screen goes the moment owner mode
+// ends, then fetch again, so owner mode gets the money and staff mode gets none.
+document.addEventListener('consign:mode', () => {
+  if (!isOwner() && /^pay(\/|$)/.test(currentHash || '')) { location.hash = '#/'; return; }
+  if (current && current.rerender) current.rerender();
+  document.dispatchEvent(new CustomEvent('consign:reload'));
+});
 
 window.addEventListener('hashchange', route);
 window.addEventListener('beforeunload', (e) => {

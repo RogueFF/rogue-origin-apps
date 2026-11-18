@@ -1,10 +1,13 @@
 /**
  * Home: the two big actions, three work cards (weigh, screen, price) and a card per farm.
+ * Money (a farm's balance, the Estimate tag, Record payment, a held payment's amount) is
+ * drawn in owner mode only; staff replies carry none of it.
  */
 import { t } from '../../shared/i18n.js';
 import { call } from '../api.js';
 import { esc, lbs, money, when, typeLabel } from '../format.js';
 import { errorCard, loading, dialog } from '../ui.js';
+import { isOwner } from '../owner.js';
 import { queue, rejectedList, clearRejected, retryRejected } from '../held.js';
 
 const lotLine = (l) => `<b>${esc(l.farm_name)}</b> · ${esc(l.cultivar)} · ${esc(typeLabel(l.type))}`;
@@ -16,13 +19,24 @@ function workCard({ key, st, rows, row }) {
   </section>`;
 }
 
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
 function farmCard(f) {
+  const noPrice = f.needs_price ? `<span class="cs-chip noprice">${esc(t('needsPrice'))}</span>` : '';
+  // Staff: the farm and the needs-a-price flag. Never a balance, even if one came back.
+  if (!isOwner() || !isNum(f.balance)) {
+    return `<a class="cs-card cs-farm" href="#/farm/${f.id}" data-farm="${f.id}">
+      <div class="cs-cardhead"><h3 class="cs-h3">${esc(f.name)}</h3><span class="cs-right cs-muted">›</span></div>
+      <div class="cs-muted">${esc(t('farmLotsLink'))}</div>
+      ${noPrice}
+    </a>`;
+  }
   const credit = f.balance < 0;
   return `<a class="cs-card cs-farm" href="#/farm/${f.id}" data-farm="${f.id}">
     <div class="cs-cardhead"><h3 class="cs-h3">${esc(f.name)}</h3>${f.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
     <div class="cs-muted">${esc(t(credit ? 'creditToUs' : 'owed'))}</div>
     <div class="cs-big${credit ? ' cs-credit' : ''}">${money(f.balance)}</div>
-    ${f.needs_price ? `<span class="cs-chip noprice">${esc(t('needsPrice'))}</span>` : ''}
+    ${noPrice}
   </a>`;
 }
 
@@ -37,7 +51,8 @@ function entryWhat(e) {
     case 'setWeight': return `${b.lot_label || ''}: ${w(b.intake_lbs)}`;
     case 'saveScreenRun': return `${b.lot_label || ''}: ${t('pulled')} ${w(b.pulled_lbs)} · ${t('final')} ${w(b.final_lbs)} · ${t('toSmalls')} ${w(b.to_smalls_lbs)} · ${t('biomass')} ${w(b.biomass_lbs)} · ${t('mold')} ${w(b.mold_lbs)}`;
     case 'saveSold': return `${b.lot_label || ''}: ${w(b.lbs)}`;
-    case 'savePayment': return `${b.farm_name || ''}: ${money(b.amount)} ${b.method ? t(b.method) : ''} ${b.reference ? `#${b.reference}` : ''}`;
+    // A payment held in owner mode: its amount and reference are the owner's to see.
+    case 'savePayment': return isOwner() ? `${b.farm_name || ''}: ${money(b.amount)} ${b.method ? t(b.method) : ''} ${b.reference ? `#${b.reference}` : ''}` : (b.farm_name || '');
     default: return '';
   }
 }
@@ -80,7 +95,7 @@ export function mount(root) {
       <div class="cs-actions">
         <a class="cs-btn primary big" href="#/dropoff" id="newDropoffBtn">＋ ${esc(t('newDropoff'))}</a>
         <a class="cs-btn big" href="#/photo/dropoff" id="photoSheetBtn">📷 ${esc(t('photoSheet'))}</a>
-        <a class="cs-btn big" href="#/pay" id="payBtn">$ ${esc(t('recordPayment'))}</a>
+        ${isOwner() ? `<a class="cs-btn big" href="#/pay" id="payBtn">$ ${esc(t('recordPayment'))}</a>` : ''}
         <a class="cs-btn big" href="#/print/dropoff" id="printSheetBtn">🖨 ${esc(t('printDropoffSheet'))}</a>
         <button type="button" class="cs-btn big cs-owner-only" id="addFarmBtn">${esc(t('addFarm'))}</button>
       </div>
