@@ -427,6 +427,35 @@ test.describe("staff page: Farm's page card", () => {
     expect(blocked).toEqual([]);
   });
 
+  test('lot editor: "Show this note to the farm" sends note_visible; the lot shows it', async ({ page }) => {
+    const sf = staffFake(null);
+    sf.dropoffs = [{ id: 5, farm_id: 1, dropped_at: '2026-11-10 17:00:00', dropped_by: null, note: null, lots: [{
+      id: 9, dropoff_id: 5, farm_id: 1, cultivar: 'Alpha', type: 'tops', term: 'dropoff', intake_lbs: 40, price_per_lb: 10, smalls_price_per_lb: 4,
+      note: 'Damp bag', note_visible: 0, runs: [], sold: [],
+      money: { status: 'weighed', estimate: true, needs_price: false, intake_lbs: 40, pulled_lbs: 0, final_lbs: 0, to_smalls_lbs: 0, biomass_lbs: 0, mold_lbs: 0, remainder_lbs: 40, owed: 400 },
+    }] }];
+    await page.route(/\/api\/consign\?action=(farm|setLotTerms)/, async (route) => {
+      const action = new URL(route.request().url()).searchParams.get('action');
+      const body = JSON.parse(route.request().postData() || '{}');
+      sf.calls.push({ action, body });
+      if (action === 'setLotTerms') sf.dropoffs[0].lots[0].note_visible = body.note_visible ? 1 : 0;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: action === 'farm'
+        ? { farm: STAFF_FARM, price_points: [], dropoffs: sf.dropoffs, payments: [], totals: { owed: 400, paid: 0, balance: 400, credit: 0, estimate: true, needs_price: false }, access: null }
+        : { lot: sf.dropoffs[0].lots[0] } }) });
+    });
+    await openStaff(page, sf);
+    await expect(page.locator('[data-lot="9"]')).toContainText('Damp bag');
+    await expect(page.locator('[data-lot="9"]')).not.toContainText('Farm sees this note');
+    await page.locator('[data-terms="9"]').click();
+    const tick = page.locator('dialog input[name="note_visible"]');
+    await expect(tick).not.toBeChecked();
+    await expect(page.locator('dialog')).toContainText('Show this note to the farm: “Damp bag”');
+    await tick.check();
+    await page.locator('dialog [data-act="ok"]').click();
+    await expect(page.locator('[data-lot="9"]')).toContainText('Farm sees this note');
+    expect(sf.calls.find((c) => c.action === 'setLotTerms').body).toMatchObject({ lot_id: 9, note_visible: true, owner_password: 'test-owner' });
+  });
+
   test('new link asks first; turn off asks first', async ({ page }) => {
     const sf = staffFake({ active: true, pin_set: true, issued_at: '2026-11-01 16:00:00', last_seen_at: '2026-11-16 18:30:00', locked: false });
     await openStaff(page, sf);
