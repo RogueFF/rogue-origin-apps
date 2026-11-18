@@ -29,7 +29,7 @@ async function seeded() {
 
 const counts = (sqlite) => {
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'cl\\_%' ESCAPE '\\'").all().map((r) => r.name);
-  assert.equal(tables.length, 8);
+  assert.equal(tables.length, 9); // 0066 + cl_farm_access (0067)
   return Object.fromEntries(tables.map((t) => [t, sqlite.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n]));
 };
 
