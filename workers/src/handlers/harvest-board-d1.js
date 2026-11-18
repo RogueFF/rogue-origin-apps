@@ -50,9 +50,13 @@ const STAGE_ORDER = [
 const CULTIVAR_STAGE_ORDER = ['not_sent', 'sent', 'photos_done', 'on_website'];
 const CULTIVAR_STAGES = new Set(CULTIVAR_STAGE_ORDER);
 
+// When the flower smokes best: the chips on the card. One time, or a time
+// paired with anytime. NULL until the cultivar has been tasted.
+const USE_TIMES = ['day', 'day_anytime', 'night', 'night_anytime', 'anytime'];
+
 const SELECT_CULTIVAR = `
   SELECT cultivar_slug, cultivar, stage, post_sent, post_date, post_thc, post_cbd, url,
-         notes, docs, updated_at, updated_by
+         use_time, notes, docs, updated_at, updated_by
     FROM harvest_cultivars
 `;
 
@@ -316,6 +320,15 @@ async function setCultivar(db, body, actor) {
     }
     put('url', u);
   }
+  if (has('use_time')) {
+    const w = body.use_time === null || body.use_time === ''
+      ? null : String(body.use_time).trim().toLowerCase().replace(/[\s/+-]+/g, '_');
+    if (w !== null && !USE_TIMES.includes(w)) {
+      throw createError('VALIDATION_ERROR',
+        `Unknown use_time "${w}". Use one of: ${USE_TIMES.join(', ')} (or null to clear)`);
+    }
+    put('use_time', w);
+  }
   if (has('notes')) put('notes', body.notes === null ? null : String(body.notes));
   if (has('docs')) {
     const docs = normaliseDocs(body.docs);
@@ -327,7 +340,7 @@ async function setCultivar(db, body, actor) {
   if (!sets.length) {
     throw createError(
       'VALIDATION_ERROR',
-      'Nothing to change. Send at least one of: stage, post_sent, post_date, post_thc, post_cbd, url, notes, docs',
+      'Nothing to change. Send at least one of: stage, post_sent, post_date, post_thc, post_cbd, url, use_time, notes, docs',
     );
   }
 

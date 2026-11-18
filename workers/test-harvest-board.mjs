@@ -36,7 +36,7 @@ const CULTIVARS = [
   { cultivar_slug: 'sour-lifter', cultivar: 'Sour Lifter' },
 ].map((c) => ({
   ...c, stage: 'not_sent', post_sent: null, post_date: null, post_thc: null, post_cbd: null, url: null,
-  notes: null, docs: '[]', updated_at: null, updated_by: 'migration',
+  use_time: null, notes: null, docs: '[]', updated_at: null, updated_by: 'migration',
 }));
 let cards = CULTIVARS.map((c) => ({ ...c }));
 
@@ -264,6 +264,22 @@ await check('the lab drop-off date is stored, validated and clearable', async ()
   await expectThrow(() => call('board_set', { cultivar: 'lifter', post_sent: 'today' }), 'YYYY-MM-DD');
   const c = (await body(await call('board_set', { cultivar: 'lifter', post_sent: null })));
   eq(c.cultivar.post_sent, null, 'cleared');
+});
+
+await check('the best-time chip takes day, night, anytime or a pair with anytime, nothing else', async () => {
+  eq((await body(await call('board'))).cultivars[0].use_time, null, 'unset by default');
+  const before = (await body(await call('board'))).cultivars.find((c) => c.cultivar_slug === 'lemon').stage;
+  const d = (await body(await call('board_set', { cultivar: 'lemon', use_time: 'Day' })));
+  eq(d.cultivar.use_time, 'day', 'stored, lower-cased');
+  eq(d.cultivar.stage, before, 'stage untouched');
+  eq((await body(await call('board'))).cultivars.find((c) => c.cultivar_slug === 'lemon').use_time, 'day', 'on the board');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', use_time: 'evening' }), 'Unknown use_time');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'night' }))).cultivar.use_time, 'night', 'night');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'anytime' }))).cultivar.use_time, 'anytime', 'anytime');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'day_anytime' }))).cultivar.use_time, 'day_anytime', 'day pair');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: 'Night / Anytime' }))).cultivar.use_time, 'night_anytime', 'night pair, as typed');
+  await expectThrow(() => call('board_set', { cultivar: 'lemon', use_time: 'day_night' }), 'Unknown use_time');
+  eq((await body(await call('board_set', { cultivar: 'lemon', use_time: '' }))).cultivar.use_time, null, 'cleared');
 });
 
 await check('cultivar writes need the password', () =>
