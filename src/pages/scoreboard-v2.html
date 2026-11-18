@@ -13,15 +13,28 @@
   <link rel="apple-touch-icon" href="/rogue-origin-apps/assets/icon-apple-touch.png">
   <title>Production Scoreboard V2</title>
 
-  <!-- TV Mode Detection: Apply before render to prevent flash -->
+  <!-- TV Mode Detection (TV Mode = the crew-board rotation) and the
+       scale-to-fit board: applied before render to prevent a flash. -->
   <script>
     (function() {
       var urlParams = new URLSearchParams(window.location.search);
       var urlTvMode = urlParams.get('tv') === '1';
-      var storedTvMode = localStorage.getItem('tvMode') === 'true';
+      var storedTvMode = false;
+      try { storedTvMode = localStorage.getItem('tvMode') === 'true'; } catch (e) { /* storage blocked */ }
       if (urlTvMode || storedTvMode) {
         document.documentElement.classList.add('tv-mode');
       }
+      // Any screen wider than 1024 px draws the 1920x1080 board scaled to fit;
+      // phones and tablets keep the stacked layout.
+      function fit() {
+        var w = window.innerWidth, h = window.innerHeight;
+        var on = w > 1024;
+        var z = on ? Math.min(w / 1920, h / 1080) : 1;
+        document.documentElement.classList.toggle('fit', on);
+        document.documentElement.style.setProperty('--tv-zoom', String(Math.round(z * 1000) / 1000));
+      }
+      fit();
+      window.addEventListener('resize', fit);
     })();
   </script>
 
@@ -52,7 +65,7 @@
 <script type="importmap">
 {
   "imports": {
-    "../js/scoreboard-v2/i18n-labels.js": "../js/scoreboard-v2/i18n-labels.js?h=9d0ef791",
+    "../js/scoreboard-v2/i18n-labels.js": "../js/scoreboard-v2/i18n-labels.js?h=fa0702f5",
     "../js/scoreboard-v2/leaders-logic.js": "../js/scoreboard-v2/leaders-logic.js?h=61c9b1ee",
     "../js/scoreboard-v2/leaders.js": "../js/scoreboard-v2/leaders.js?h=f67a1c5f",
     "../js/shared/i18n.js": "../js/shared/i18n.js?h=f305b6e9"
@@ -61,30 +74,30 @@
 </script>
 <!-- module-hashes:end -->
   <script type="module" src="../js/shared/i18n.js?h=f305b6e9"></script>
-  <script type="module" src="../js/scoreboard-v2/i18n-labels.js?h=9d0ef791"></script>
+  <script type="module" src="../js/scoreboard-v2/i18n-labels.js?h=fa0702f5"></script>
   <script defer src="../js/scoreboard-v2/config.js?h=083362a4"></script>
   <script defer src="../js/scoreboard-v2/state.js?h=4be9fd83"></script>
   <script defer src="../js/scoreboard-v2/dom.js?h=6242a8fb"></script>
   <script defer src="../js/scoreboard-v2/api.js?h=581e8c7b"></script>
-  <script defer src="../js/scoreboard-v2/timer.js?h=4e543dbc"></script>
+  <script defer src="../js/scoreboard-v2/timer.js?h=c2a7c708"></script>
   <script defer src="../js/scoreboard-v2/cycle-history.js?h=fe53642d"></script>
-  <script defer src="../js/scoreboard-v2/chart.js?h=c59ec199"></script>
-  <script defer src="../js/scoreboard-v2/render.js?h=1162baef"></script>
+  <script defer src="../js/scoreboard-v2/chart.js?h=119a4b78"></script>
+  <script defer src="../js/scoreboard-v2/render.js?h=ba2772a4"></script>
   <script defer src="../js/scoreboard-v2/shift-start.js?h=61b34a85"></script>
   <script defer src="../js/scoreboard-v2/morning-report.js?h=37930b7a"></script>
   <script defer src="../js/scoreboard-v2/scale.js?h=9c932393"></script>
   <script defer src="../js/scoreboard-v2/debug.js?h=62d18cd5"></script>
   <script defer src="../js/scoreboard-v2/events.js?h=38300ba6"></script>
   <script defer src="../js/scoreboard-v2/fab-menu.js?h=318ac0be"></script>
-  <script defer src="../js/scoreboard-v2/main.js?h=d91d0566"></script>
+  <script defer src="../js/scoreboard-v2/main.js?h=f2db5881"></script>
   <script type="module" src="../js/scoreboard-v2/leaders.js?h=f67a1c5f"></script>
 
   <!-- Critical CSS: Loaded synchronously -->
   <link rel="stylesheet" href="../css/shared-base.css?h=c18beb73">
 
   <!-- Non-critical CSS: Deferred for faster initial render -->
-  <link rel="preload" href="../css/scoreboard-v2.css?h=c7f371ce" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=c7f371ce"></noscript>
+  <link rel="preload" href="../css/scoreboard-v2.css?h=bcb2b8f0" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="../css/scoreboard-v2.css?h=bcb2b8f0"></noscript>
 
   <!-- SVG Noise Filter Definition -->
   <style>
@@ -216,7 +229,7 @@
     <button class="lang-btn active" id="langToggleBtn">
       <span id="langToggleText">EN</span>
     </button>
-    <button class="lang-btn" id="tvModeToggleBtn" title="TV Mode (65% scale for 4K displays)">
+    <button class="lang-btn" id="tvModeToggleBtn" title="TV Mode (crew board rotation)">
       <i class="ph-duotone ph-television"></i>
     </button>
     <a href="https://docs.google.com/spreadsheets/d/REDACTED-COMPLAINTS-SHEET-ID/edit?gid=0#gid=0" target="_blank" class="lang-btn complaints-btn" title="Customer Complaints / Quejas de Clientes">
@@ -571,7 +584,7 @@
       <!-- Bag Stats Row -->
       <div class="timer-stats">
         <!-- #bagsToday retained as hidden total fallback for any legacy consumer -->
-        <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value">5kg&nbsp;·&nbsp;<span id="bags5kgToday">0</span>&nbsp;|&nbsp;10lb&nbsp;·&nbsp;<span id="bags10lbToday">0</span><span id="bagsToday" hidden>0</span></span></div>
+        <div class="timer-stat"><span class="timer-stat-label" id="bagsTodayLabel">Bags Today</span><span class="timer-stat-value timer-stat-bags"><span class="bag-line">5kg&nbsp;·&nbsp;<span id="bags5kgToday">0</span></span><span class="bag-line">10lb&nbsp;·&nbsp;<span id="bags10lbToday">0</span></span><span id="bagsToday" hidden>0</span></span></div>
         <div class="timer-stat"><span class="timer-stat-label" id="avgTodayLabel">Avg Today</span><span class="timer-stat-value" id="avgToday">--:--</span></div>
         <div class="timer-stat"><span class="timer-stat-label" id="vsTargetLabel">vs Target</span><span class="timer-stat-value" id="vsTarget">—</span></div>
       </div>

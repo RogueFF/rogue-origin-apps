@@ -80,7 +80,11 @@
       let status = 'idle';
       let statusIcon = '⏸';
       let statusKey = 'waiting';
-      if (todayLbs > 0 || lastHourLbs > 0) {
+      if (data.graded === false && (todayLbs > 0 || lastHourLbs > 0)) {
+        // no strain logged today: there is no fair target, so no verdict
+        statusIcon = '–';
+        statusKey = 'ungraded';
+      } else if (todayLbs > 0 || lastHourLbs > 0) {
         if (statusPct >= 105) {
           status = 'ahead';
           statusIcon = '🔥';

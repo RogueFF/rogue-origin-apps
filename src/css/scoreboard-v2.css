@@ -104,8 +104,10 @@
   /* --- Layout --- */
   --header-height: 60px;
   --bottom-height: 28vh;
-  --scale-size: 200px;
-  --timer-size: 220px;
+  /* sized to the height so the timer panel keeps Bag Complete on screen
+     (it was cut off at 1920x1080; review L6-04) */
+  --scale-size: min(156px, 14.4vh);
+  --timer-size: min(188px, 17.4vh);
 }
 
 /* ========================================
@@ -3358,65 +3360,25 @@ body.shift-ended .status-badge {
   color: var(--cream-muted);
 }
 
-html.tv-mode .shift-summary-value { font-size: 28px; }
-html.tv-mode .shift-summary-label { font-size: 13px; }
-html.tv-mode .shift-summary-title { font-size: 16px; }
-
 /* ========================================
-   TV MODE — Scales everything up 20%
+   FIT — the 1920×1080 board, scaled to fill any screen wider than 1024 px
+   The head script sets --tv-zoom = min(width/1920, height/1080) and adds
+   html.fit, so a 4K panel shows the same board twice as big (it used to
+   shrink it to 0.65 in TV Mode) and a laptop shows all of it, Bag Complete
+   included (review 2026-10-13, L1-06 and L6-04). Zoom multiplies viewport
+   units too, so anything sized in vw/vh gets its 1920×1080 value in px.
+   Phones and tablets keep the stacked layout.
    ======================================== */
-html.tv-mode {
-  zoom: 0.65;
+html.fit {
+  zoom: var(--tv-zoom, 1);
+  --bottom-height: 302px;
+  --scale-size: 156px;
+  --timer-size: 188px;
 }
-
-html.tv-mode .daily-actual {
-  font-size: clamp(240px, 26vw, 480px);
-}
-
-html.tv-mode .timer-display {
-  --timer-size: 280px;
-}
-
-html.tv-mode .scale-display {
-  --scale-size: 260px;
-}
-
-html.tv-mode .timer-value { font-size: 64px; }
-html.tv-mode .scale-value { font-size: 52px; }
-html.tv-mode .timer-label,
-html.tv-mode .scale-label { font-size: 14px; }
-html.tv-mode .scale-header,
-html.tv-mode .timer-header { font-size: 14px; }
-html.tv-mode .timer-btn-row { max-width: 400px; }
-html.tv-mode .manual-btn { font-size: 17px; padding: 16px var(--sp-5); }
-html.tv-mode .pause-btn { width: 54px; height: 54px; font-size: 20px; }
-html.tv-mode .timer-stats { max-width: 400px; }
-html.tv-mode .timer-stat { padding: var(--sp-3) var(--sp-3); }
-html.tv-mode .timer-stat-label { font-size: 13px; }
-html.tv-mode .timer-stat-value { font-size: 24px; }
-html.tv-mode .actual-lbs { font-size: 72px; }
-html.tv-mode .target-lbs { font-size: 34px; }
-html.tv-mode .strain-name { font-size: 32px; }
-html.tv-mode .time-display .time { font-size: 40px; }
+html.fit .hero-spotlight { width: 1536px; height: 648px; }
+html.fit .help-content { max-height: 864px; }
+html.fit .daily-actual { font-size: 380px; }
 html.tv-mode .expand-hint { display: none; }
-html.tv-mode .cycle-donut-ring { width: 170px; height: 170px; }
-html.tv-mode .daily-delta { font-size: 26px; padding: 10px 32px; }
-html.tv-mode .status-badge { font-size: 16px; padding: 10px 32px; }
-html.tv-mode .info-section { font-size: 18px; }
-html.tv-mode .stat-group .value { font-size: 22px; }
-html.tv-mode .stat-group .label { font-size: 13px; }
-html.tv-mode .percentage-value { font-size: 28px; }
-html.tv-mode .projection-value { font-size: 24px; }
-html.tv-mode .projection-delta { font-size: 22px; }
-html.tv-mode .hour-card-header { font-size: 14px; }
-html.tv-mode .timer-target { font-size: 16px; }
-html.tv-mode .daily-target { font-size: 30px; }
-html.tv-mode .daily-unit { font-size: 16px; }
-html.tv-mode .cycle-stat-value { font-size: 28px; }
-html.tv-mode .cycle-stat-label { font-size: 14px; }
-html.tv-mode .cycle-item { font-size: 20px; padding: 8px 14px; }
-html.tv-mode .cycle-item-num,
-html.tv-mode .cycle-item .cycle-num { font-size: 13px; }
 
 /* ========================================
    IFRAME EMBED MODE
@@ -3562,39 +3524,9 @@ a:focus:not(:focus-visible) {
    RESPONSIVE BREAKPOINTS
    ======================================== */
 
-/* --- 1600px: Slightly tighter instruments --- */
-@media (max-width: 1600px) {
-  .left-instrument { width: clamp(260px, 26vw, 380px); }
-  .timer-panel { width: clamp(240px, 22vw, 340px); }
-  :root { --scale-size: 180px; --timer-size: 200px; }
-  .scale-value { font-size: 36px; }
-  .timer-value { font-size: 42px; }
-}
-
-/* --- 1400px: Compact --- */
-@media (max-width: 1400px) {
-  :root { --scale-size: 170px; --timer-size: 190px; }
-  .daily-actual { font-size: clamp(140px, 18vw, 300px); }
-  .actual-lbs { font-size: 44px; }
-  .strain-name { font-size: 20px; }
-  .time-display .time { font-size: 24px; }
-  .scale-value { font-size: 34px; }
-  .timer-value { font-size: 38px; }
-  .left-instrument { width: clamp(240px, 24vw, 350px); }
-  .timer-panel { width: clamp(220px, 20vw, 320px); }
-}
-
-/* --- 1200px: Compact instruments --- */
-@media (max-width: 1200px) {
-  :root { --scale-size: 150px; --timer-size: 170px; }
-  .scale-value, .timer-value { font-size: 32px; }
-  .strain-name { font-size: 18px; }
-  .daily-actual { font-size: clamp(120px, 16vw, 260px); }
-  .actual-lbs { font-size: 40px; }
-  .left-instrument { left: var(--sp-4); width: clamp(220px, 22vw, 320px); }
-  .timer-panel { right: var(--sp-4); width: clamp(200px, 20vw, 300px); }
-  .hud-header { padding: 0 var(--sp-5); }
-}
+/* 1200–1600 px desktops used to get their own compact rules here. Every
+   screen wider than 1024 px now draws the 1920×1080 board scaled to fit
+   (html.fit, above), so those rules are gone. */
 
 /* --- 1024px: Tablet — Stacked layout --- */
 @media (max-width: 1024px) {
@@ -3692,7 +3624,6 @@ a:focus:not(:focus-visible) {
   transition: color var(--t-normal) var(--ease-out);
 }
 
-html.tv-mode .momentum-arrow { font-size: 24px; }
 
 /* ========================================
    PASS 7: RACE MODE OVERLAY
@@ -3727,10 +3658,6 @@ body.race-mode::after {
 .info-bar { padding: var(--sp-2) var(--sp-4); gap: var(--sp-3); }
 .bottom-strip { gap: var(--sp-3); }
 
-/* Push hero number bigger in TV mode */
-html.tv-mode .daily-actual {
-  font-size: clamp(280px, 30vw, 560px);
-}
 
 /* ========================================
    PASS 7: TIMELINE VIEW (cycle history)
@@ -3894,10 +3821,6 @@ html.tv-mode .daily-actual {
   white-space: nowrap;
 }
 
-html.tv-mode .cycle-pace-track { height: 20px; }
-html.tv-mode .cycle-pace-label { font-size: 13px; width: 36px; }
-html.tv-mode .cycle-pace-time { font-size: 12px; }
-html.tv-mode .cycle-pace-target-label { font-size: 11px; }
 
 /* ========================================
    PASS 7: BAR RACE VIEW (cycle history)
@@ -3982,10 +3905,6 @@ html.tv-mode .cycle-pace-target-label { font-size: 11px; }
   white-space: nowrap;
 }
 
-html.tv-mode .cycle-bars { height: 150px; }
-html.tv-mode .cycle-bar-label { font-size: 11px; }
-html.tv-mode .cycle-bar-value { font-size: 10px; }
-html.tv-mode .cycle-bars-target-label { font-size: 11px; }
 
 /* ========================================
    CREW CHANGE TOAST
@@ -4232,11 +4151,6 @@ html.tv-mode .cycle-bars-target-label { font-size: 11px; }
 .ldr-card.over .ldr-val { color: var(--green); }
 .ldr-card.r1 .ldr-val { color: var(--gold); text-shadow: 0 0 24px rgba(247, 204, 122, 0.25); }
 
-/* TV Mode draws the page at 0.65: lift the small labels so they read from the tables */
-html.tv-mode .leaders-title,
-html.tv-mode .leaders-day { font-size: 20px; }
-html.tv-mode .leaders-goal { font-size: 20px; padding: 3px 14px; }
-
 /* tablet/phone: the strip stacks, the panel becomes its own card row */
 @media (max-width: 1024px) {
   .leaders-panel { flex: none; align-self: stretch; width: auto; height: auto; container-type: normal; }
@@ -4279,3 +4193,107 @@ html.tv-mode .leaders-goal { font-size: 20px; padding: 3px 14px; }
 @media (prefers-reduced-motion: reduce) {
   .leaders-overlay, .leaders-overlay.on { transition: none; }
 }
+
+/* ========================================
+   END OF DAY — a headline, not a footnote (2026-11-18)
+   "Will we make it today?" sits right under the hero, as big
+   as the hour cards, in the same glass card.
+   ======================================== */
+.daily-projection {
+  margin-top: var(--sp-4);
+  padding: var(--sp-2) var(--sp-6);
+  gap: var(--sp-4);
+  align-items: baseline;
+  background: rgba(28, 34, 32, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--r-lg);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.projection-label { font-size: 18px; font-weight: 700; color: var(--cream-soft); }
+.projection-value {
+  font-family: var(--font-hero);
+  font-weight: 400;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+.projection-goal { font-size: 20px; }
+.projection-delta {
+  font-family: var(--font-hero);
+  font-weight: 400;
+  font-size: 52px;
+  line-height: 1;
+}
+.projection-delta.neutral { color: var(--gold); }
+@media (max-width: 768px) {
+  .daily-projection { flex-wrap: wrap; padding: var(--sp-2) var(--sp-4); gap: var(--sp-2) var(--sp-3); }
+  .projection-value { font-size: 44px; }
+  .projection-delta { font-size: 36px; }
+}
+
+/* ========================================
+   READABILITY FLOOR (2026-11-18)
+   Labels the crew reads from the tables were 10–13 px. Nothing that
+   explains a number goes below 14 px; operator controls are left alone.
+   ======================================== */
+.strain-label { font-size: 14px; }
+.time-display .date { font-size: 15px; }
+.progress-hours { font-size: 15px; }
+.hour-card-header { font-size: 15px; }
+.hour-card-timeslot { font-size: 14px; }
+.lbs-unit { font-size: 14px; }
+.percentage-label { font-size: 15px; }
+.stat-group .label { font-size: 14px; }
+.scale-header,
+.timer-header { font-size: 15px; }
+.scale-label,
+.timer-label { font-size: 13px; }
+.timer-stat-label { font-size: 13px; }
+.chart-header,
+.cycle-history-title { font-size: 15px; }
+.cycle-stat-label { font-size: 14px; }
+.comparison-pill { font-size: 14px; padding: 6px 14px; }
+.comparison-label { font-size: 13px; }
+.leaders-title,
+.leaders-day { font-size: 16px; }
+.leaders-goal { font-size: 16px; }
+
+/* ========================================
+   MORNING SCREEN (2026-11-18)
+   Before the shift the board shows yesterday. That used to be a bar over
+   the whole header, and Start Day sat on top of the Last Hour card.
+   Now: a small chip under the header, and the start controls live in
+   the header bar beside the status badge.
+   ======================================== */
+.historical-date-banner.is-yesterday {
+  top: calc(var(--header-height) + var(--sp-2));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border: 1px solid var(--border-accent);
+  border-radius: 100px;
+  background: rgba(228, 170, 79, 0.1);
+}
+.historical-date-banner.is-yesterday .historical-banner-label,
+.historical-date-banner.is-yesterday .historical-banner-close { display: none; }
+.historical-date-banner.is-yesterday .historical-banner-date { font-size: 16px; }
+@media (min-width: 1025px) {
+  .time-controls {
+    top: calc((var(--header-height) - 36px) / 2);
+    left: calc(50% + 150px);
+  }
+}
+
+/* the bigger labels need the room back: tighter gaps in the left column */
+.left-instrument { gap: var(--sp-3); }
+.hour-cards { gap: var(--sp-2); }
+
+
+/* Bags Today: two fixed lines (5 kg, 10 lb) instead of one line that wrapped
+   into two or three depending on the screen and pushed Bag Complete off */
+.timer-stat-bags .bag-line { display: block; white-space: nowrap; }
+/* the left column gets back the few pixels the bigger labels took */
+.left-instrument { max-height: calc(100% - var(--bottom-height) - var(--sp-6)); }
+.timer-stat-label,
+.timer-stat-value { white-space: nowrap; }

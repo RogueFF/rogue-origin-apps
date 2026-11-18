@@ -99,9 +99,13 @@
                   var dateDisplay = document.getElementById('historicalDateDisplay');
                   if (banner) {
                     banner.style.display = 'flex';
+                    // a small chip under the header, not a bar over it
+                    banner.classList.add('is-yesterday');
                   }
                   if (dateDisplay) {
-                    dateDisplay.textContent = 'Yesterday\'s results (' + yStr + ')';
+                    var yLang = (State && State.currentLang) || 'en';
+                    var yDay = new Date(yStr + 'T12:00:00').toLocaleDateString(yLang === 'es' ? 'es-MX' : 'en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    dateDisplay.textContent = (yLang === 'es' ? 'Ayer · ' : 'Yesterday · ') + yDay;
                   }
 
                   // Load yesterday's cycle history + timer data
@@ -131,7 +135,7 @@
             State._showingYesterday = false;
             State._yesterdayLoaded = false;
             var banner = document.getElementById('historicalDateBanner');
-            if (banner) banner.style.display = 'none';
+            if (banner) { banner.style.display = 'none'; banner.classList.remove('is-yesterday'); }
           }
 
           if (response.scoreboard) {
@@ -328,6 +332,7 @@
     var liveBtn = DOM ? DOM.get('historicalViewBtn') : document.getElementById('historicalViewBtn');
 
     if (banner && dateDisplay) {
+      banner.classList.remove('is-yesterday');
       // Format date for display
       var date = new Date(dateStr + 'T12:00:00');
       var lang = (State && State.currentLang) || 'en';
