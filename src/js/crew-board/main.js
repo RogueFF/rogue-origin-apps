@@ -21,10 +21,10 @@ registerLabels({
   es: {
     eyebrow: 'Celdas · tops por hora', title: 'Tablero del equipo', fullscreen: 'Pantalla completa',
     viewDay: 'Por día', viewAll: 'General',
-    room: 'El equipo', roomOn: 'El equipo · {d}', roomAllTitle: 'El equipo · todos los días', gPerHour: 'g de tops por hora', improved: 'Más mejorado',
-    goal: 'Meta', goalKey: 'Meta: {g} g ({lb} lb) por hora', goalTick: 'Meta {g}', overGoal: '¡El equipo está arriba de la meta!', toGoal: 'Faltan {g} g ({lb} lb) por hora para la meta',
-    allDays: 'Todos los días: {g} g ({lb} lb) por hora', lbHr: '{lb} lb por hora', nDays: '{n} días', oneDay: '1 día', dShort: '{n} d',
-    impLine: 'De {g1} g ({lb1} lb) a {g2} g ({lb2} lb) por hora: +{gd} g en {n} días',
+    room: 'El equipo', roomOn: 'El equipo · {d}', roomAllTitle: 'El equipo · todos los días', gPerHour: 'lb de tops por hora', improved: 'Más mejorado',
+    goal: 'Meta', goalKey: 'Meta: {lb} lb ({g} g) por hora', goalTick: 'Meta {lb}', overGoal: '¡El equipo está arriba de la meta!', toGoal: 'Faltan {lb} lb ({g} g) por hora para la meta',
+    allDays: 'Todos los días: {lb} lb ({g} g) por hora', gHr: '{g} g por hora', nDays: '{n} días', oneDay: '1 día', dShort: '{n} d',
+    impLine: 'De {lb1} lb ({g1} g) a {lb2} lb ({g2} g) por hora: +{ld} lb ({gd} g) en {n} días',
     noImp: 'Todavía nadie fuera de los 5. ¡Puede ser tú!', empty: 'Todavía no hay días completos.',
     part: 'Día parcial (sin lugar)', partOnly: 'Solo días parciales (sin lugar)', partH: '{h} h',
     loadFail: 'No se pudo cargar. Se intentará otra vez.', updated: 'Actualizado {t}',
@@ -35,10 +35,10 @@ registerLabels({
   en: {
     eyebrow: 'Cells · tops per hour', title: 'Crew board', fullscreen: 'Full screen',
     viewDay: 'Day by day', viewAll: 'Overall',
-    room: 'The crew', roomOn: 'The crew · {d}', roomAllTitle: 'The crew · all days', gPerHour: 'g of tops per hour', improved: 'Most improved',
-    goal: 'Goal', goalKey: 'Goal: {g} g ({lb} lb) per hour', goalTick: 'Goal {g}', overGoal: 'The crew is above the goal!', toGoal: '{g} g ({lb} lb) per hour to reach the goal',
-    allDays: 'All days: {g} g ({lb} lb) per hour', lbHr: '{lb} lb per hour', nDays: '{n} days', oneDay: '1 day', dShort: '{n} d',
-    impLine: 'From {g1} g ({lb1} lb) to {g2} g ({lb2} lb) per hour: +{gd} g over {n} days',
+    room: 'The crew', roomOn: 'The crew · {d}', roomAllTitle: 'The crew · all days', gPerHour: 'lb of tops per hour', improved: 'Most improved',
+    goal: 'Goal', goalKey: 'Goal: {lb} lb ({g} g) per hour', goalTick: 'Goal {lb}', overGoal: 'The crew is above the goal!', toGoal: '{lb} lb ({g} g) per hour to reach the goal',
+    allDays: 'All days: {lb} lb ({g} g) per hour', gHr: '{g} g per hour', nDays: '{n} days', oneDay: '1 day', dShort: '{n} d',
+    impLine: 'From {lb1} lb ({g1} g) to {lb2} lb ({g2} g) per hour: +{ld} lb ({gd} g) over {n} days',
     noImp: 'No one outside the top 5 yet. It could be you!', empty: 'No full days yet.',
     part: 'Part day (not ranked)', partOnly: 'Part days only (not ranked)', partH: '{h} h',
     loadFail: "Couldn't load. Trying again soon.", updated: 'Updated {t}',
@@ -64,15 +64,15 @@ let failed = false;
 let view = params.get('view') === 'overall' ? 'overall' : 'day';
 let pickedDay = /^\d{4}-\d{2}-\d{2}$/.test(params.get('day') || '') ? params.get('day') : null;
 
-function bigRow(p, goal, max, extra) {
+function bigRow(p, goal, goalLb, max, extra) {
   return `<li class="cb-row"><span class="cb-rk r${p.rank}">${p.rank}</span>
     <div class="cb-who"><span class="cb-name">${esc(p.name)}</span>
-      <span class="cb-bar"><i style="width:${Math.min(100, p.gph / max * 100)}%"></i>${goal ? `<s style="left:${Math.min(100, goal / max * 100)}%">${p.rank === 1 ? `<em>${esc(fill(t('goalTick'), { g: goal }))}</em>` : ''}</s>` : ''}</span>${extra ? `<span class="cb-days">${esc(extra)}</span>` : ''}</div>
-    <div class="cb-val"><b>${p.gph}</b><span>g/h</span><small>${lb2(p.lbHr)} lb/h</small></div></li>`;
+      <span class="cb-bar"><i style="width:${Math.min(100, p.gph / max * 100)}%"></i>${goal ? `<s style="left:${Math.min(100, goal / max * 100)}%">${p.rank === 1 ? `<em>${esc(fill(t('goalTick'), { lb: lb2(goalLb) }))}</em>` : ''}</s>` : ''}</span>${extra ? `<span class="cb-days">${esc(extra)}</span>` : ''}</div>
+    <div class="cb-val"><b>${lb2(p.lbHr)}</b><span>lb/h</span><small>${p.gph} g/h</small></div></li>`;
 }
 function smallRow(p, extra) {
   return `<li class="cb-srow"><span class="cb-srk">${p.rank}</span><span class="cb-sname">${esc(p.name)}${extra ? ` <small>${esc(extra)}</small>` : ''}</span>
-    <span class="cb-sval"><b>${p.gph}</b> g/h <small>${lb2(p.lbHr)} lb</small></span></li>`;
+    <span class="cb-sval"><b>${lb2(p.lbHr)}</b> lb/h <small>${p.gph} g</small></span></li>`;
 }
 const daysLabel = (n) => (n === 1 ? t('oneDay') : fill(t('nDays'), { n }));
 
@@ -98,15 +98,16 @@ function render() {
   const dayData = view === 'day' && pickedDay ? data.byDay?.[pickedDay] : null;
   const ranked = view === 'day' ? (dayData?.ranked || []) : (data.overall?.ranked || []);
   const goal = view === 'day' ? dayData?.room?.goal?.gph ?? null : null;
+  const goalLb = goal ? dayData.room.goal.lbHr : null;
   const max = Math.max(...ranked.map((p) => p.gph), goal || 0, 1) * 1.1;
   const extra = (p) => (view === 'overall' ? daysLabel(p.days) : '');
-  $('top').innerHTML = ranked.length ? ranked.slice(0, TOP).map((p) => bigRow(p, goal, max, extra(p))).join('') : `<li class="cb-sub">${esc(t('empty'))}</li>`;
+  $('top').innerHTML = ranked.length ? ranked.slice(0, TOP).map((p) => bigRow(p, goal, goalLb, max, extra(p))).join('') : `<li class="cb-sub">${esc(t('empty'))}</li>`;
   $('rest').innerHTML = ranked.slice(TOP).map((p) => smallRow(p, view === 'overall' ? fill(t('dShort'), { n: p.days }) : '')).join('');
   $('rest').hidden = ranked.length <= TOP;
 
   let partHtml = '';
   if (view === 'day' && dayData?.part?.length) {
-    partHtml = `<span class="cb-k">${esc(t('part'))}</span><ul class="cb-part">${dayData.part.map((p) => `<li>${esc(p.name)} <small>${p.gph} g/h · ${esc(fill(t('partH'), { h: p.hours }))}</small></li>`).join('')}</ul>`;
+    partHtml = `<span class="cb-k">${esc(t('part'))}</span><ul class="cb-part">${dayData.part.map((p) => `<li>${esc(p.name)} <small>${lb2(p.lbHr)} lb/h · ${esc(fill(t('partH'), { h: p.hours }))}</small></li>`).join('')}</ul>`;
   } else if (view === 'overall' && data.overall?.partOnly?.length) {
     partHtml = `<span class="cb-k">${esc(t('partOnly'))}</span><ul class="cb-part">${data.overall.partOnly.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
   }
@@ -129,8 +130,8 @@ function render() {
   $('roomTitle').textContent = view === 'day' ? (pickedDay ? fill(t('roomOn'), { d: fmtDate(pickedDay) }) : t('room')) : t('roomAllTitle');
   const me = view === 'day' ? (r?.rate?.gph ?? null) : (all?.gph ?? null);
   const meLb = view === 'day' ? r?.rate?.lbHr : all?.lbHr;
-  $('roomG').textContent = me ?? '—';
-  $('roomLb').textContent = me !== null ? fill(t('lbHr'), { lb: lb2(meLb) }) + (goal ? ` · ${t('goal')} ${goal} g (${lb2(r.goal.lbHr)} lb)` : '') : '';
+  $('roomG').textContent = me !== null ? lb2(meLb) : '—';
+  $('roomLb').textContent = me !== null ? fill(t('gHr'), { g: me }) + (goal ? ` · ${t('goal')} ${lb2(r.goal.lbHr)} lb (${goal} g)` : '') : '';
   const scale = Math.max(me || 0, goal || 0, 1) * 1.25;
   $('roomFill').style.width = `${me ? Math.min(100, me / scale * 100) : 0}%`;
   $('roomGoal').style.left = `${goal ? goal / scale * 100 : 0}%`;
@@ -145,7 +146,7 @@ function render() {
 
   const m = data.mostImproved;
   $('impName').textContent = m ? m.name : '—';
-  $('impLine').textContent = m ? fill(t('impLine'), { g1: m.from.gph, lb1: lb2(m.from.lbHr), g2: m.to.gph, lb2: lb2(m.to.lbHr), gd: m.rise.gph, n: m.days }) : t('noImp');
+  $('impLine').textContent = m ? fill(t('impLine'), { g1: m.from.gph, lb1: lb2(m.from.lbHr), g2: m.to.gph, lb2: lb2(m.to.lbHr), gd: m.rise.gph, ld: lb2(m.to.lbHr - m.from.lbHr), n: m.days }) : t('noImp');
   $('howRate').textContent = view === 'day' ? t('howDay') : t('howAll');
   $('updated').textContent = fill(t('updated'), { t: new Date().toLocaleTimeString(getLang() === 'es' ? 'es-MX' : 'en-US', { hour: 'numeric', minute: '2-digit' }) });
 }
