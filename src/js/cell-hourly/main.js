@@ -52,6 +52,10 @@ registerLabels({
     pickCover: '{n} left. Who took over?', leftAfter: '{n} left after (min)', addNew: 'Add new: {n}',
     onCell: 'on {c}', peopleFail: "Couldn't load the crew list. Unlock the page or check the connection.", loadingPeople: 'Loading the crew…',
     searchName: 'Type a name', close: 'Close',
+    fillLabel: 'Fill Hourly entry from the cells this day (test)', fillFilled: 'Hourly entry filled from the cells: {lb} lb, {n} trimmers',
+    fillHand: 'Hourly entry was typed by hand: {lb} lb (cells: {c} lb). The hand row stays.', fillHandOnly: 'Hourly entry was typed by hand: {lb} lb.',
+    fillMixed: 'cultivars this hour: {list}', fillConfirmOn: 'Fill Hourly entry from the cells for this day? Hours typed by hand stay as they are.',
+    fillConfirmOff: 'Stop filling Hourly entry for this day? The hours the cells filled are removed; hours typed by hand stay.',
     qOk: 'Quality OK', qOkDone: '✓ Quality OK', qRedo: '✕ Redo · tap when it is fixed', qNote: 'Note', qFailsToday: 'Quality fails today',
     stopPage: 'STOP: mold or insects at {list}. Set the basket aside and call the lead.',
     gQuality: '{c}: quality good? Tap "Quality OK". A problem? Tap the check that fails.',
@@ -87,6 +91,10 @@ registerLabels({
     pickCover: '{n} se fue. ¿Quién lo cubrió?', leftAfter: '{n} se fue a los (min)', addNew: 'Agregar nuevo: {n}',
     onCell: 'en {c}', peopleFail: 'No cargó la lista del equipo. Desbloquee la página o revise la conexión.', loadingPeople: 'Cargando el equipo…',
     searchName: 'Escriba un nombre', close: 'Cerrar',
+    fillLabel: 'Llenar la entrada por hora con las celdas este día (prueba)', fillFilled: 'Entrada por hora llenada con las celdas: {lb} lb, {n} trimmers',
+    fillHand: 'La entrada por hora se escribió a mano: {lb} lb (celdas: {c} lb). Se queda la de mano.', fillHandOnly: 'La entrada por hora se escribió a mano: {lb} lb.',
+    fillMixed: 'variedades esta hora: {list}', fillConfirmOn: '¿Llenar la entrada por hora con las celdas este día? Las horas escritas a mano se quedan igual.',
+    fillConfirmOff: '¿Dejar de llenar la entrada por hora este día? Se quitan las horas que llenaron las celdas; las escritas a mano se quedan.',
     qOk: 'Calidad OK', qOkDone: '✓ Calidad OK', qRedo: '✕ Rehacer · toque cuando quede bien', qNote: 'Nota', qFailsToday: 'Fallas de calidad hoy',
     stopPage: 'PARE: moho o insectos en {list}. Aparte la canasta y llame al líder.',
     gQuality: '{c}: ¿calidad bien? Toque «Calidad OK». ¿Algún problema? Toque el punto que falla.',
@@ -120,7 +128,7 @@ async function api(method, action, body, query = {}) {
   url.searchParams.set('action', action);
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
   // The people actions are behind the farm password (the page gate unlocked it).
-  const payload = action.startsWith('crew') ? { ...body, password: storedPassword() } : body;
+  const payload = action.startsWith('crew') || action === 'cellFillSet' ? { ...body, password: storedPassword() } : body;
   const res = await fetch(url, method === 'GET'
     ? { cache: 'no-store' }
     : { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
@@ -143,7 +151,7 @@ const el = {
   guide: $('guide'), guideStart: $('guideStart'), guideBar: $('guideBar'), guideCount: $('guideCount'), guideStep: $('guideStep'),
   guideSkip: $('guideSkip'), guideRest: $('guideRest'), guideNext: $('guideNext'), guideDone: $('guideDone'), guideExit: $('guideExit'), pickSearch: $('pickSearch'), pickList: $('pickList'), topsLabel: $('topsLabel'), rate: $('rate'), autoBox: $('autoBox'), autoVal: $('autoVal'), autoState: $('autoState'),
   overrideNote: $('overrideNote'), diffFlag: $('diffFlag'), tareFlag: $('tareFlag'), hourTotal: $('hourTotal'), hourTotalParts: $('hourTotalParts'), 
-  gridTitle: $('gridTitle'), quality: $('quality'), stopBanner: $('stopBanner'),
+  gridTitle: $('gridTitle'), fillOn: $('fillOn'), fillState: $('fillState'), quality: $('quality'), stopBanner: $('stopBanner'),
   cellCultivar: $('cellCultivar'), cellStatus: $('cellStatus'),
   grid: $('jumpGrid'), doneCount: $('doneCount'), add: $('addBtn'),
 };
@@ -433,6 +441,22 @@ function renderRoom() {
   const r = state.room.get(state.slot) || {};
   fillCultivars(el.roomCultivar, r.cultivar || '', false);
   if (document.activeElement !== el.roomSmalls) el.roomSmalls.value = r.smalls ?? '';
+  renderFill();
+}
+// The Hourly entry fill (Koa 2026-11-18): a per-day switch, off unless turned on,
+// and this hour's Hourly entry row against what the cells add up to.
+function renderFill() {
+  const f = state.fill || { on: false, slots: [] };
+  el.fillOn.checked = !!f.on;
+  const s = f.slots.find(x => x.slot === state.slot);
+  const lb = v => (Number(v) || 0).toFixed(2);
+  let text = '';
+  if (s && s.state === 'filled') text = tf('fillFilled', { lb: lb(s.hourly?.tops), n: s.hourly?.trimmers ?? 0 });
+  else if (s && s.state === 'hand' && s.cells) text = tf('fillHand', { lb: lb(s.hourly?.tops), c: lb(s.cells.tops) });
+  else if (s && s.state === 'hand') text = tf('fillHandOnly', { lb: lb(s.hourly?.tops) });
+  if (s?.cells?.mixed?.length) text += (text ? ' · ' : '') + tf('fillMixed', { list: s.cells.mixed.join(', ') });
+  el.fillState.textContent = text;
+  el.fillState.className = 'muted small fill-state' + (s?.state === 'hand' && s.cells && Math.abs((s.hourly?.tops || 0) - (s.cells.tops || 0)) >= 0.05 ? ' differ' : '');
 }
 function renderBag() {
   const ws = new Set(state.roster.filter(c => c.lane === 'wholesale').map(c => c.stationId));
@@ -549,6 +573,7 @@ async function load() {
   const [d] = await Promise.all([api('GET', 'cellHourly', null, { date: DATE }), loadCrew()]);
   state.slots = d.slots; state.roster = d.roster;
   state.auto = new Map((d.auto || []).map(a => [rowKey(a.slot, a.stationId), a]));
+  state.fill = d.fill || { on: false, slots: [] };
   for (const r of d.rows) {
     const key = rowKey(r.slot, r.stationId);
     const local = state.rows.get(key) || {};
@@ -992,6 +1017,14 @@ el.prev.addEventListener('click', () => { openCell((state.cellIdx - 1 + cells().
 el.next.addEventListener('click', () => { openCell((state.cellIdx + 1) % cells().length); renderCell(true); renderGrid(); });
 el.cellCultivar.addEventListener('change', () => { setCellField('cultivar', el.cellCultivar.value || roomCultivar() || null); renderCell(); });
 
+el.fillOn.addEventListener('change', async () => {
+  const on = el.fillOn.checked;
+  if (!window.confirm(t(on ? 'fillConfirmOn' : 'fillConfirmOff'))) { el.fillOn.checked = !on; return; }
+  el.fillOn.disabled = true;
+  try { await api('POST', 'cellFillSet', { date: DATE, on }); await load(); renderAll(); }
+  catch { el.fillOn.checked = !on; el.roomStatus.className = 'save-status bad'; el.roomStatus.textContent = `✕ ${t('notSaved')}`; }
+  finally { el.fillOn.disabled = false; }
+});
 el.roomCultivar.addEventListener('change', () => {
   const v = el.roomCultivar.value || null;
   state.room.set(state.slot, { ...(state.room.get(state.slot) || {}), cultivar: v });

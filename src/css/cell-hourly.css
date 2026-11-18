@@ -183,3 +183,9 @@ body.guided .guide-start { display: none; }
 .jump.stopq { background: var(--danger); border-color: var(--danger); color: #fff; }
 .jump small.qfail { color: var(--danger); font: 700 12px var(--font-mono); }
 .jump.stopq small.qfail { color: #fff; }
+/* The Hourly entry fill switch (off unless turned on for the day). */
+.fill-row { display: grid; gap: 4px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.fill-toggle { display: flex; align-items: center; gap: 10px; font: 600 15px var(--font-ui); cursor: pointer; }
+.fill-toggle input { width: 24px; height: 24px; accent-color: var(--green); }
+.fill-state:empty { display: none; }
+.fill-state.differ { color: var(--warning, var(--gold)); font-weight: 600; }

@@ -27,6 +27,7 @@ import { successResponse, errorResponse } from '../../lib/response.js';
 import { requireAuth } from '../../lib/auth.js';
 import { newToken } from './crew-numbers.js';
 import { ALL_TIME_SLOTS } from '../../lib/production-helpers.js';
+import { fillSlot } from './cell-fill.js';
 
 const G_PER_LB = 453.59237;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -193,6 +194,8 @@ export async function crewHourSave(body, env, request) {
   }
   for (const st of touched) await deriveCellTops(env.DB, date, slot, st);
   await recomputeDay(env.DB, date);
+  // Hourly entry, if the day's fill switch is on (lib/cell-fill.js).
+  if (touched.size) await fillSlot(env, date, slot);
   return successResponse({ success: true, date, personId, slot });
 }
 

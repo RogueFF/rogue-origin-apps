@@ -317,7 +317,8 @@
       var _el = safeGetEl('currentHourHeader'); if (_el) _el.innerHTML = '<i class="ph-duotone ph-timer" style="margin-right:6px"></i> ' + t('currentHour');
       var _el = safeGetEl('trimmersLabel'); if (_el) _el.textContent = t('trimmersLabel');
       var _el = safeGetEl('trimmersSmallLabel'); if (_el) _el.textContent = t('trimmers');
-      var _el = safeGetEl('targetRateLabel'); if (_el) _el.textContent = t('targetRate');
+      // a cell hour is graded per person on the crew goal, not the line's per-trimmer target
+      var _el = safeGetEl('targetRateLabel'); if (_el) _el.textContent = t(data.targetBasis === 'cells' ? 'cellGoalRate' : 'targetRate');
       var _el = safeGetEl('streakLabel'); if (_el) _el.textContent = t('hrStreak');
       var _el = safeGetEl('bagsTodayLabel'); if (_el) _el.textContent = t('bagsToday');
 
