@@ -3,7 +3,8 @@
  *
  *   GET  ?action=myNumbers&t=<token>    public; the personal QR card's token
  *                                        unlocks that one person's days only
- *   POST ?action=crewLoadDay             password; replaces one day's rows
+ *   POST ?action=crewLoadDay             password; replaces one day's SHEET hours (typed
+ *                                        hours from crew-hourly.html stay and win)
  *        { date, target, roomRate, note, people: [{ name, cell, cultivar,
  *          fullDay, note, hours: [{ slot, g, min }] }] }
  *   POST ?action=crewPeople              password; names + tokens (for cards)
@@ -14,6 +15,7 @@
  */
 import { successResponse, errorResponse } from '../../lib/response.js';
 import { requireAuth } from '../../lib/auth.js';
+import { recomputeDay, slotKey } from './crew-hours.js';
 
 const G_PER_LB = 453.59237;
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -151,12 +153,33 @@ export async function crewLoadDay(body, env, request) {
     out.push({ name: r.name, token: person.token });
   }
 
-  const stmts = [env.DB.prepare('DELETE FROM crew_days WHERE work_date = ?').bind(date)];
+  // One source of truth (crew-hours.js): the sheet's hours go into crew_hours as
+  // src 'sheet', replacing this date's earlier sheet rows only. Hours a lead typed
+  // on crew-hourly.html stay and win for that person and hour. crew_days is then
+  // rebuilt from crew_hours for the whole date.
+  const stmts = [
+    env.DB.prepare("DELETE FROM crew_hours WHERE work_date = ? AND src = 'sheet'").bind(date),
+    env.DB.prepare('UPDATE crew_days SET sheet_full_day = NULL WHERE work_date = ?').bind(date),
+  ];
   for (const r of rows) {
+    const bySlot = new Map();
+    for (const h of r.hours) {
+      const k = slotKey(h.slot);
+      if (!k) continue;
+      const cur = bySlot.get(k) || { g: 0, min: 0 };
+      bySlot.set(k, { g: cur.g + h.g, min: cur.min + h.min });
+    }
+    for (const [slot, h] of bySlot) {
+      if (!(h.g > 0) && !(h.min > 0)) continue;
+      stmts.push(env.DB.prepare(
+        "INSERT INTO crew_hours (work_date, person_id, slot, src, cell, g, min) VALUES (?, ?, ?, 'sheet', ?, ?, ?)"
+      ).bind(date, r.personId, slot, r.cell, h.g, h.min));
+    }
     stmts.push(env.DB.prepare(
-      `INSERT INTO crew_days (work_date, person_id, cell, cultivar, hours_json, tops_g, work_min, full_day, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(date, r.personId, r.cell, r.cultivar, JSON.stringify(r.hours), r.topsG, r.workMin, r.fullDay, r.note));
+      `INSERT INTO crew_days (work_date, person_id, cell, cultivar, hours_json, tops_g, work_min, full_day, note, sheet_full_day)
+       VALUES (?, ?, ?, ?, '[]', 0, 0, ?, ?, ?)
+       ON CONFLICT(work_date, person_id) DO UPDATE SET cultivar = excluded.cultivar, note = excluded.note, sheet_full_day = excluded.sheet_full_day`
+    ).bind(date, r.personId, r.cell, r.cultivar, r.fullDay, r.note, r.fullDay));
   }
   const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
   stmts.push(env.DB.prepare(
@@ -164,6 +187,7 @@ export async function crewLoadDay(body, env, request) {
      ON CONFLICT(work_date) DO UPDATE SET target_lb_hr = excluded.target_lb_hr, room_lb_hr = excluded.room_lb_hr, note = excluded.note`
   ).bind(date, num(body.target), num(body.roomRate), cleanText(body.note, 300)));
   await env.DB.batch(stmts);
+  await recomputeDay(env.DB, date);
   return successResponse({ success: true, date, loaded: rows.length, people: out });
 }
 

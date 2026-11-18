@@ -26,6 +26,7 @@ import { getOrderQueue, orderSync } from './order-queue.js';
 import { getCellQueue, orderAction, jobDone } from './order-flow.js';
 import { migrateFromSheets, checkSheet } from './migrate.js';
 import { getMyNumbers, crewLoadDay, crewPeople } from './crew-numbers.js';
+import { crewHourDay, crewHourSave, crewPersonAdd } from './crew-hours.js';
 import { getCrewBoard } from './crew-board.js';
 
 async function test(env) {
@@ -127,6 +128,12 @@ export async function handleProductionD1(request, env, ctx) {
         return await crewLoadDay(body, env, request);
       case 'crewPeople':
         return await crewPeople(body, env, request);
+      case 'crewHourDay':
+        return await crewHourDay(body, env, request);
+      case 'crewHourSave':
+        return await crewHourSave(body, env, request);
+      case 'crewPersonAdd':
+        return await crewPersonAdd(body, env, request);
       case 'orderQueue':
         return await getOrderQueue(params, env);
       case 'orderSync':
