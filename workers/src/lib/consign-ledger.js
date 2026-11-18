@@ -45,10 +45,14 @@ export function lotMoney(lot, runs = [], sold = []) {
   const remainder = intake == null || closed ? 0 : Math.max(intake - pulled, 0);
   const price = lot.price_per_lb == null ? null : n0(lot.price_per_lb);
   const smallsPrice = lot.smalls_price_per_lb == null ? null : n0(lot.smalls_price_per_lb);
-  const needsPrice = price == null || (toSmalls > 0 && smallsPrice == null);
+  const absorbs = Number(lot.absorb_loss) === 1 && lot.term !== 'sold';
+  const needsPrice = price == null || (!absorbs && toSmalls > 0 && smallsPrice == null);
 
+  // "We absorb the loss": a lot owed on dropoff is paid on its dropoff weight, whatever the
+  // screening lost. The after numbers above still show the loss. No effect on an as-sold lot.
+  const absorb = Number(lot.absorb_loss) === 1 && lot.term !== 'sold' && intake != null;
   const mainLbs = finalLbs + remainder;
-  const value = mainLbs * n0(price) + toSmalls * n0(smallsPrice);
+  const value = absorb ? intake * n0(price) : mainLbs * n0(price) + toSmalls * n0(smallsPrice);
 
   const soldMain = sum(ss.filter((s) => s.kind !== 'smalls'), 'lbs');
   const soldSmalls = sum(ss.filter((s) => s.kind === 'smalls'), 'lbs');
@@ -60,7 +64,9 @@ export function lotMoney(lot, runs = [], sold = []) {
 
   return {
     status,
-    estimate: status !== 'closed' && status !== 'voided',
+    // Paid on the dropoff weight: the figure is final as soon as the lot is weighed.
+    estimate: status !== 'closed' && status !== 'voided' && !absorb,
+    absorb_loss: absorb,
     needs_price: status !== 'voided' && needsPrice,
     intake_lbs: intake,
     pulled_lbs: round2(pulled),
