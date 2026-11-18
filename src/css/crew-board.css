@@ -51,6 +51,70 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .cb-imp { border-top: 6px solid var(--gold); }
 .cb-impname { font: 800 clamp(28px, 3.4vw, 64px)/1.05 "Outfit", var(--font-ui), sans-serif; }
 
+/* view chips: Por día / General, then a chip per date */
+.cb-views { display: grid; gap: 8px; padding: 0 clamp(16px, 3vw, 48px) clamp(8px, 1vw, 16px); }
+.cb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.cb-chips[hidden] { display: none; }
+.cb-chip { font: 700 clamp(15px, 1.3vw, 24px) var(--font-ui); min-height: 44px; padding: 0 clamp(14px, 1.4vw, 26px); border-radius: 999px;
+  border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; }
+.cb-chip.on { background: var(--green); border-color: var(--green); color: #fff; }
+.cb-dchip { font-size: clamp(13px, 1.1vw, 20px); min-height: 38px; border-width: 1px; }
+.cb-dchip.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+.tv .cb-eyebrow { display: none; }
+.tv .cb-chip { min-height: 38px; }
+.cb-days { font-size: clamp(12px, 1.05vw, 20px); color: var(--text-secondary); font-weight: 600; }
+
+/* everyone after the top 5: compact rows, two columns on wide screens */
+.cb-rest { list-style: none; margin: clamp(6px, 0.8vw, 14px) 0 0; padding: clamp(8px, 0.8vw, 14px) 0 0; border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: 1fr; gap: 0 clamp(16px, 2vw, 36px); }
+.cb-rest[hidden] { display: none; }
+@media (min-width: 760px) { .cb-rest { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1500px) {
+  .cb-main { grid-template-columns: 2fr 1fr; }
+  .cb-rest { grid-template-columns: 1fr 1fr 1fr; }
+  .cb-rest .cb-sval small { display: none; }
+}
+.cb-srow { display: grid; grid-template-columns: clamp(30px, 2.6vw, 50px) 1fr auto; gap: 10px; align-items: baseline; padding: clamp(5px, 0.5vw, 9px) 0;
+  border-bottom: 1px solid var(--border); font-size: clamp(16px, 1.45vw, 28px); }
+.cb-srk { font: 800 clamp(15px, 1.35vw, 26px) "Outfit", var(--font-ui), sans-serif; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+.cb-sname { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cb-sname small { font-weight: 600; color: var(--text-secondary); font-size: .75em; }
+.cb-sval { white-space: nowrap; color: var(--text-secondary); font-size: .85em; }
+.cb-sval b { color: var(--text); font: 800 1.15em "Outfit", var(--font-ui), sans-serif; font-variant-numeric: tabular-nums; }
+.cb-sval small { font-size: .85em; }
+.cb-partbox { display: grid; gap: 6px; }
+.cb-partbox.inrank .cb-part { font-size: clamp(14px, 1vw, 19px); gap: 4px 16px; }
+.cb-partbox.inrank { background: none; border: 0; border-radius: 0; padding: clamp(8px, 0.8vw, 14px) 0 0; margin-top: clamp(6px, 0.6vw, 10px); border-top: 1px solid var(--border); }
+.cb-partbox[hidden] { display: none; }
+.cb-part { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: clamp(14px, 1.25vw, 24px); font-weight: 600; }
+.cb-part small { color: var(--text-secondary); font-weight: 500; }
+
+/* wide screens (the barn TV): the whole crew fits on one screen, so the top 5 rows get
+   tighter and both chip rows sit on one line */
+@media (min-width: 1000px) {
+  .cb-head { padding-top: clamp(10px, 1.2vw, 22px); }
+  .cb-head h1 { font-size: clamp(30px, 2.8vw, 54px); }
+  .cb-views { display: flex; align-items: center; gap: clamp(12px, 1.6vw, 30px); }
+  .cb-list { gap: clamp(8px, 0.8vw, 14px); }
+  .cb-row { grid-template-columns: clamp(40px, 3.2vw, 60px) 1fr auto; }
+  .cb-rk { width: clamp(40px, 3.2vw, 60px); height: clamp(40px, 3.2vw, 60px); font-size: clamp(18px, 1.6vw, 30px); }
+  .cb-name { font-size: clamp(22px, 2.1vw, 40px); }
+  .cb-who { gap: 4px; }
+  .cb-bar { height: clamp(8px, 0.7vw, 13px); }
+  .cb-val b { font-size: clamp(24px, 2.2vw, 42px); }
+  .cb-val small { font-size: clamp(12px, 1vw, 19px); }
+  .cb-card { padding: clamp(12px, 1.2vw, 22px); }
+  .cb-srow { font-size: clamp(15px, 1.15vw, 22px); padding: clamp(2px, 0.25vw, 5px) 0; gap: 8px; }
+}
+
+@media (min-width: 1500px) {
+  .cb-list { gap: clamp(6px, 0.5vw, 10px); }
+  .cb-row { grid-template-columns: clamp(40px, 2.8vw, 54px) 1fr auto; }
+  .cb-rk { width: clamp(40px, 2.8vw, 54px); height: clamp(40px, 2.8vw, 54px); font-size: clamp(18px, 1.4vw, 27px); }
+  .cb-name { font-size: clamp(22px, 1.85vw, 36px); }
+  .cb-val b { font-size: clamp(24px, 2vw, 38px); }
+}
+
 .cb-foot { padding: 4px clamp(16px, 3vw, 48px) 24px; color: var(--text-muted); font-size: clamp(12px, 1.05vw, 19px); display: grid; gap: 2px; }
 .cb-foot p { margin: 0; }
 @media (max-width: 420px) { .cb-row { grid-template-columns: 40px 1fr auto; } .cb-name { font-size: 22px; } }
