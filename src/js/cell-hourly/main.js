@@ -778,8 +778,9 @@ function openPicker(mode, personId = null) {
   renderPick();
   el.picker.hidden = false;
   el.pickSearch.focus();
+  if (guided.on) renderGuided();
 }
-function closePicker() { el.picker.hidden = true; pick.mode = null; }
+function closePicker() { el.picker.hidden = true; pick.mode = null; if (guided.on) renderGuided(); }
 function renderPick() {
   const c = cell();
   const here = new Set(shownPeople(c.stationId).map(p => p.personId));
@@ -858,7 +859,7 @@ function guidedStart() {
   focusPerson();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function guidedStop() { guided.on = false; renderGuided(); }
+function guidedStop() { guided.on = false; document.body.classList.remove('guide-review'); guidedHighlight(false); renderGuided(); }
 // The next cell to do after the current one (wrapping), or -1 when the hour is done.
 function guidedNext() {
   const todo = new Set(guidedTodo().map(c => c.stationId));
@@ -901,6 +902,21 @@ function guidedReview() {
   if (!roomCultivar()) items.push({ room: true, text: t('gNoCultivar') });
   return items;
 }
+// Light up the one thing to do next (Koa 2026-11-18: "maybe it can highlight what
+// needs to happen"): the person picker, the who-is-on-it button, or the tops box.
+function guidedHighlight(onTodo) {
+  document.querySelectorAll('.g-focus').forEach(x => x.classList.remove('g-focus'));
+  if (!guided.on || !onTodo) return;
+  let target = null;
+  if (!el.picker.hidden) target = el.pickSearch;
+  else target = el.people.querySelector('.who-btn')
+    || [...el.people.querySelectorAll('.p-lb')].find(i => i.value.trim() === '')?.closest('.tops-wrap');
+  if (!target) return;
+  target.classList.add('g-focus');
+  const r = target.getBoundingClientRect();
+  const top = el.guide.getBoundingClientRect().bottom;
+  if (r.top < top + 8 || r.bottom > window.innerHeight - 8) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 function renderGuided() {
   const box = el.guide;
   document.body.classList.toggle('guided', guided.on);
@@ -920,6 +936,8 @@ function renderGuided() {
       + (items.length
         ? `<p class="g-sub">${esc(t('gReviewSub'))}</p><ul class="g-list">${items.map((it, i) => `<li><button type="button" class="g-item" data-gi="${i}">${esc(it.text)} ›</button></li>`).join('')}</ul>`
         : `<p class="g-ok">✓ ${esc(t('gAllGood'))}</p>`);
+    guidedHighlight(false);
+    document.body.classList.add('guide-review');
     el.guideSkip.hidden = true;
     el.guideRest.hidden = true;
     el.guideNext.hidden = true;
@@ -936,6 +954,8 @@ function renderGuided() {
   else if (who.length > 1) text = tf('gTwo', { c: c.label, a: nameOf(who[0].personId), b: nameOf(who[1].personId) });
   else text = tf('gType', { c: c.label, n: nameOf(who[0].personId) });
   el.guideStep.innerHTML = `<b>${esc(text)}</b>${onTodo && who.length ? `<p class="g-sub">${esc(t('gTypeSub'))}</p>` : ''}`;
+  document.body.classList.remove('guide-review');
+  guidedHighlight(onTodo);
   el.guideSkip.hidden = !onTodo;
   // Placing people in the first hour: the rest of the empty cells can go in one tap.
   el.guideRest.hidden = !(onTodo && !who.length && guidedPlacing());

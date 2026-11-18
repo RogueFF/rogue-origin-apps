@@ -154,3 +154,9 @@ body[data-view="weights"] .q-only { display: none; }
 .guide-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .guide-acts [hidden] { display: none; }
 body[data-view="quality"] .guide { display: none; }
+/* Guided mode: the next thing to do pulses; the room box steps aside until the check. */
+.g-focus { position: relative; z-index: 1; border-radius: 12px; box-shadow: 0 0 0 4px var(--gold); animation: gpulse 1.4s ease-in-out infinite; }
+@keyframes gpulse { 0%, 100% { box-shadow: 0 0 0 3px var(--gold); } 50% { box-shadow: 0 0 0 9px rgba(228, 170, 79, .35); } }
+@media (prefers-reduced-motion: reduce) { .g-focus { animation: none; } }
+body.guided:not(.guide-review) .card.room { display: none; }
+body.guided .guide-start { display: none; }
