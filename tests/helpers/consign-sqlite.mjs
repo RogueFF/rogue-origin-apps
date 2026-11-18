@@ -8,7 +8,7 @@ export const sqliteOk = !!DatabaseSync;
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const MIGRATIONS = ['workers/migrations/0066-consign-lots.sql', 'workers/migrations/0067-consign-farm-access.sql',
-  'workers/migrations/0068-consign-farm-access-lockouts.sql'];
+  'workers/migrations/0068-consign-farm-access-lockouts.sql', 'workers/migrations/0071-consign-absorb-loss.sql'];
 
 export function freshConsignDb() {
   const sqlite = new DatabaseSync(':memory:');
@@ -47,7 +47,16 @@ export function freshConsignDb() {
   return { DB, sqlite, env: { DB, ORDERS_PASSWORD: 'pw', CONSIGN_OWNER_PASSWORD: 'owner-pw' } };
 }
 
+// New dropoff lots absorb the screening loss by default (paid on the dropoff weight). A test
+// file about the other rule, lots paid on their after-loss numbers, calls payOnFinalWeight()
+// once: its saveDropoff lines then say absorb_loss: false unless a line sets it itself.
+let lineDefaults = null;
+export function payOnFinalWeight() { lineDefaults = { absorb_loss: false }; }
+
 export function post(action, body = {}, { auth = true } = {}) {
+  if (lineDefaults && action === 'saveDropoff' && Array.isArray(body.lines)) {
+    body = { ...body, lines: body.lines.map((ln) => (ln && typeof ln === 'object' ? { ...lineDefaults, ...ln } : ln)) };
+  }
   return new Request(`https://x/api/consign?action=${action}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

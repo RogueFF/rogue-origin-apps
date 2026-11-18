@@ -96,7 +96,7 @@ async function loadView(env, farmId, now) {
     price_points: await all('SELECT id, farm_id, cultivar, type, price_per_lb, effective_from FROM cl_price_points WHERE farm_id = ?'),
     dropoffs: await all('SELECT id, farm_id, dropped_at, voided_at FROM cl_dropoffs WHERE farm_id = ? AND voided_at IS NULL'),
     lots: await all(
-      `SELECT id, dropoff_id, farm_id, cultivar, type, term, intake_lbs, price_per_lb, smalls_price_per_lb, closed_at, note, note_visible, voided_at
+      `SELECT id, dropoff_id, farm_id, cultivar, type, term, intake_lbs, price_per_lb, smalls_price_per_lb, closed_at, note, note_visible, absorb_loss, voided_at
        FROM cl_lots WHERE farm_id = ? AND voided_at IS NULL`
     ),
     runs: await all(

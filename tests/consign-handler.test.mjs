@@ -1,7 +1,10 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { freshConsignDb, post, sqliteOk } from './helpers/consign-sqlite.mjs';
+import { freshConsignDb, post, sqliteOk, payOnFinalWeight } from './helpers/consign-sqlite.mjs';
+
+// These tests are about lots paid on their after-loss numbers.
+payOnFinalWeight();
 import { handleConsignD1 } from '../workers/src/handlers/consign-d1.js';
 
 before((t) => { if (!sqliteOk) t.skip('node:sqlite unavailable'); });
