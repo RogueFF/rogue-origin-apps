@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -57,7 +57,8 @@
 
     /* Header */
     .header {
-      padding: 18px 20px;
+      /* Left padding clears the fixed home button. */
+      padding: 18px 20px 18px 60px;
       border-bottom: 1px solid var(--card-border);
       display: flex;
       align-items: center;
@@ -362,6 +363,48 @@
       font-family: var(--font-mono);
     }
 
+    /* Day by day */
+    .days-sub { margin: -4px 0 10px; }
+    .days-notice {
+      font-size: 12px; color: var(--gold); background: var(--gold-dim);
+      border: 1px solid rgba(228,170,79,0.3); border-radius: var(--radius-sm);
+      padding: 10px 12px; margin-bottom: 10px; line-height: 1.4;
+    }
+    .day-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+    @media (min-width: 600px) { .day-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .day-card {
+      background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+      padding: 14px 16px; box-shadow: var(--shadow);
+    }
+    .day-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .day-date { font-family: var(--font-display); font-size: 18px; color: var(--text); }
+    .day-badge {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 3px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap;
+    }
+    .day-badge.closed { color: var(--green); border-color: rgba(102,137,113,0.5); background: var(--green-dim); }
+    .day-badge.open { color: var(--gold); border-color: rgba(228,170,79,0.45); background: var(--gold-dim); }
+    .day-badge.today { color: var(--text-dim); border-color: var(--card-border); }
+    .day-total { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+    .day-big { font-family: var(--font-mono); font-size: 40px; font-weight: 700; line-height: 1; color: var(--text); }
+    .day-unit { font-size: 13px; color: var(--text-dim); }
+    .day-raw { margin-left: 14px; color: var(--gold); }
+    .cult-raw { font-size: 12px; font-weight: 400; color: var(--gold); margin-left: 8px; }
+    .day-line { font-size: 12px; color: var(--text-dim); margin: 4px 0 10px; font-family: var(--font-mono); }
+    .day-cults { display: grid; gap: 8px; }
+    .cult-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .cult-name { font-size: 14px; font-weight: 500; }
+    .cult-sacks { font-family: var(--font-mono); font-size: 18px; font-weight: 700; }
+    .cult-flag { margin-left: 6px; color: var(--gold); font-size: 12px; cursor: help; }
+    .cult-bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; margin: 3px 0; }
+    .cult-fill { height: 100%; background: var(--green); border-radius: 3px; }
+    .cult-tops { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
+    .show-more {
+      width: 100%; min-height: 44px; margin-bottom: 12px; cursor: pointer;
+      background: var(--green-dim); border: 1px solid rgba(102,137,113,0.3); border-radius: var(--radius-sm);
+      color: var(--green); font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+    }
+
     /* Touch feedback */
     @media (hover: none) {
       .preset-btn:active, .lang-btn:active { transform: scale(0.93); }
@@ -409,14 +452,20 @@
     <div class="kpi-card">
       <div class="kpi-label" data-i18n="kpiRawProcessed">Raw Processed</div>
       <div class="kpi-value" id="kpi-raw">--</div>
-      <div class="kpi-sub">lbs</div>
+      <div class="kpi-sub" id="kpi-raw-sub">lbs</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label" data-i18n="kpiAvgYield">Avg Tops Yield %</div>
       <div class="kpi-value" id="kpi-yield">--</div>
-      <div class="kpi-sub" data-i18n="kpiTopsSmalls">tops only</div>
+      <div class="kpi-sub" id="kpi-yield-sub">tops only</div>
     </div>
   </div>
+
+  <!-- Day by day: scanned-out sacks per cultivar -->
+  <div class="section-title" data-i18n="sectionDays">Day by Day</div>
+  <div class="card-subtitle days-sub" data-i18n="daysSub">Sacks scanned out at salida. Tops from the hourly log.</div>
+  <div id="days-notice"></div>
+  <div id="days-list"><div class="loading-msg" data-i18n="loading">Loading...</div></div>
 
   <!-- Charts Row 1 -->
   <div class="chart-grid">
@@ -435,6 +484,7 @@
   <div class="chart-grid">
     <div class="card">
       <div class="card-title" data-i18n="chartStrain">Strain Comparison</div>
+      <div class="card-subtitle" data-i18n="chartStrainSub">Tops and smalls as % of raw</div>
       <div class="chart-wrap"><canvas id="chart-strain"></canvas></div>
     </div>
     <div class="card">
@@ -465,747 +515,28 @@
 
 </div>
 
-<script>
-(function() {
-  'use strict';
-
-  // -- i18n --
-  const LANG = {
-    en: {
-      title: 'Supersack Analytics', entryLink: 'Entry', today: 'Today',
-      thisWeek: 'This Week', thisMonth: 'This Month', last30: 'Last 30 Days',
-      allTime: 'All Time', kpiTotalSacks: 'Total Sacks', kpiOpened: 'opened',
-      kpiAvgDay: 'Avg / Day', kpiSacksDay: 'sacks/day',
-      kpiRawProcessed: 'Raw Processed', kpiAvgYield: 'Avg Tops Yield %',
-      kpiTopsSmalls: 'tops only', chartSacksDay: 'Supersacks / Day',
-      chartYield: 'Yield Composition', chartYieldSub: 'Percent of raw material by day', chartStrain: 'Strain Comparison',
-      chartRate: 'Production Rate (lbs/hr)', sectionInventory: 'Remaining Inventory & Projections',
-      currentInventory: 'Current Inventory by Strain', totalInventory: 'Total Supersacks', totalDaysLeft: 'Total Days Left', sectionCost: 'Production Rate & Cost Metrics',
-      laborMetrics: 'Labor & Cost Metrics', loading: 'Loading...',
-      costsLocked: 'Labor costs are locked. Unlock with the shared password on the Hub, then reload.',
-      strain: 'Strain', sacks: 'Sacks', daysSupply: 'Days Supply',
-      projYield: 'Proj. Yield (lbs)', depletes: 'Depletes',
-      noData: 'No data for selected range', lbsHr: 'Lbs / Hr',
-      lbsTrimmer: 'Lbs / Trimmer', costLb: 'Cost / Tops Lb', totalLabor: 'Total Labor',
-      topsLabor: 'Tops Labor', smallsLabor: 'Smalls Labor',
-      topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Trimmer', smallsTrimmer: 'Smalls / Trimmer',
-      chartSacksOp: 'Supersacks / Operator / Day',
-      sacksOp: 'Sacks/Operator', operators: 'Operators',
-      movingAvg: '7-day avg', tops: 'Tops', smalls: 'Smalls',
-      biomass: 'Biomass', trim: 'Trim', waste: 'Waste',
-      topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Waste %',
-      never: 'N/A', errorLoad: 'Failed to load data',
-    },
-    es: {
-      title: 'Analisis de Supersacos', entryLink: 'Entrada', today: 'Hoy',
-      thisWeek: 'Esta Semana', thisMonth: 'Este Mes', last30: 'Ultimos 30 Dias',
-      allTime: 'Todo', kpiTotalSacks: 'Total Sacos', kpiOpened: 'abiertos',
-      kpiAvgDay: 'Prom / Dia', kpiSacksDay: 'sacos/dia',
-      kpiRawProcessed: 'Bruto Procesado', kpiAvgYield: 'Rend. Prom. Tops %',
-      kpiTopsSmalls: 'solo tops', chartSacksDay: 'Supersacos / Dia',
-      chartYield: 'Composicion del Rendimiento', chartYieldSub: 'Porcentaje del material bruto por dia', chartStrain: 'Comparacion por Variedad',
-      chartRate: 'Tasa de Produccion (lbs/hr)', sectionInventory: 'Inventario Restante y Proyecciones',
-      currentInventory: 'Inventario Actual por Variedad', totalInventory: 'Supersacos Totales', totalDaysLeft: 'Dias Totales Restantes', sectionCost: 'Tasa de Produccion y Costos',
-      laborMetrics: 'Metricas de Labor y Costo', loading: 'Cargando...',
-      costsLocked: 'Los costos de labor estan bloqueados. Desbloquee con la contrasena compartida en el Hub y recargue.',
-      strain: 'Variedad', sacks: 'Sacos', daysSupply: 'Dias Restantes',
-      projYield: 'Rend. Proy. (lbs)', depletes: 'Se Agota',
-      noData: 'Sin datos para el rango seleccionado', lbsHr: 'Lbs / Hr',
-      lbsTrimmer: 'Lbs / Podador', costLb: 'Costo / Lb Tops', totalLabor: 'Labor Total',
-      topsLabor: 'Labor Tops', smallsLabor: 'Labor Smalls',
-      topsHr: 'Tops / Hr', smallsHr: 'Smalls / Hr', topsTrimmer: 'Tops / Podador', smallsTrimmer: 'Smalls / Podador',
-      chartSacksOp: 'Supersacos / Operador / Dia',
-      sacksOp: 'Sacos/Operador', operators: 'Operadores',
-      movingAvg: 'Prom. 7 dias', tops: 'Tops', smalls: 'Smalls',
-      biomass: 'Biomasa', trim: 'Recorte', waste: 'Desperdicio',
-      topsP: 'Tops %', smallsP: 'Smalls %', wasteP: 'Desperdicio %',
-      never: 'N/A', errorLoad: 'Error al cargar datos',
-    }
-  };
-  const t = (key) => {
-    const l = (window.getLang && window.getLang()) || 'en';
-    return (LANG[l] && LANG[l][key]) || LANG.en[key] || key;
-  };
-
-  function applyLang() {
-    const l = (window.getLang && window.getLang()) || 'en';
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.getAttribute('data-i18n');
-      if (LANG[l][key]) el.textContent = LANG[l][key];
-    });
-    document.getElementById('lang-toggle').textContent = l === 'en' ? 'ES' : 'EN';
-    if (state.summaryData) renderCharts();
-    if (state.inventoryData) renderInventory();
-    if (state.costData) renderCostCard();
-  }
-
-  document.getElementById('lang-toggle').addEventListener('click', () => window.toggleLang());
-  document.addEventListener('ro:langchange', applyLang);
-
-  // -- APIs --
-  const SS_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/supersack';
-  const POOL_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/pool';
-  const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
-
-  // -- State --
-  const state = {
-    startDate: '', endDate: '', activePreset: 'month',
-    summaryData: null, historyData: null, inventoryData: null, costData: null,
-  };
-
-  // -- Chart instances --
-  let chartSacks = null, chartYield = null, chartStrain = null, chartRate = null, chartSacksOp = null;
-
-  // -- Chart.js defaults --
-  Chart.defaults.color = 'rgba(232,228,220,0.55)';
-  Chart.defaults.borderColor = 'rgba(102, 137, 113, 0.1)';
-  Chart.defaults.font.family = "'Outfit', system-ui, sans-serif";
-  Chart.defaults.font.size = 11;
-
-  // -- Helpers --
-  function todayStr() { return new Date().toLocaleDateString('en-CA'); }
-  function fmt(n, dec = 0) { return n == null ? '--' : Number(n).toLocaleString(undefined, { maximumFractionDigits: dec }); }
-
-  function getPresetDates(preset) {
-    const today = new Date();
-    const end = todayStr();
-    let start;
-    switch (preset) {
-      case 'today':
-        start = end; break;
-      case 'week': {
-        const d = new Date(today);
-        d.setDate(d.getDate() - d.getDay());
-        start = d.toLocaleDateString('en-CA');
-        break;
-      }
-      case 'month':
-        start = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-01';
-        break;
-      case '30': {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 30);
-        start = d.toLocaleDateString('en-CA');
-        break;
-      }
-      case 'all':
-        start = '2025-01-01'; break;
-      default:
-        start = end;
-    }
-    return { start, end };
-  }
-
-  function movingAverage(arr, window = 7) {
-    return arr.map((_, i) => {
-      const slice = arr.slice(Math.max(0, i - window + 1), i + 1);
-      return slice.reduce((a, b) => a + b, 0) / slice.length;
-    });
-  }
-
-  // -- Date Controls --
-  const dateStart = document.getElementById('date-start');
-  const dateEnd = document.getElementById('date-end');
-  const presetBtns = document.querySelectorAll('.preset-btn');
-
-  function setPreset(preset) {
-    state.activePreset = preset;
-    const { start, end } = getPresetDates(preset);
-    state.startDate = start;
-    state.endDate = end;
-    dateStart.value = start;
-    dateEnd.value = end;
-    presetBtns.forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
-    loadAllData();
-  }
-
-  presetBtns.forEach(btn => {
-    btn.addEventListener('click', () => setPreset(btn.dataset.preset));
-  });
-
-  dateStart.addEventListener('change', () => {
-    state.startDate = dateStart.value;
-    state.activePreset = null;
-    presetBtns.forEach(b => b.classList.remove('active'));
-    loadAllData();
-  });
-  dateEnd.addEventListener('change', () => {
-    state.endDate = dateEnd.value;
-    state.activePreset = null;
-    presetBtns.forEach(b => b.classList.remove('active'));
-    loadAllData();
-  });
-
-  // -- Data Loading --
-  async function fetchJSON(url) {
-    // The dashboard read only includes labor costs for callers with the
-    // shared password; send it when this device has unlocked on the Hub.
-    const headers = {};
-    try { const pw = localStorage.getItem('ro_api_password'); if (pw) headers.Authorization = `Bearer ${pw}`; } catch { /* storage blocked */ }
-    const r = await fetch(url, { headers });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const raw = await r.json();
-    return raw.data || raw;
-  }
-
-  async function loadAllData() {
-    const s = state.startDate, e = state.endDate;
-    try {
-      const [summary, history] = await Promise.all([
-        fetchJSON(`${SS_API}?action=summary&start=${s}&end=${e}&group_by=day&complete=true`),
-        fetchJSON(`${SS_API}?action=history&start=${s}&end=${e}&complete=true`),
-      ]);
-      state.summaryData = summary;
-      state.historyData = history;
-      renderKPIs();
-      renderCharts();
-    } catch (err) {
-      console.error('Load error:', err);
-      document.getElementById('kpi-sacks').textContent = '--';
-      document.getElementById('kpi-avg-day').textContent = '--';
-      document.getElementById('kpi-raw').textContent = '--';
-      document.getElementById('kpi-yield').textContent = '--';
-    }
-
-    // Inventory (independent)
-    loadInventory();
-    // Production/cost (independent)
-    loadCostData();
-  }
-
-  async function loadInventory() {
-    const card = document.getElementById('inventory-card');
-    try {
-      const r = await fetch(`${POOL_API}?action=get_supersack_variants`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({}),
-      });
-      const raw = await r.json();
-      state.inventoryData = (raw.data || raw).variants || [];
-      renderInventory();
-    } catch (err) {
-      console.error('Inventory error:', err);
-      card.innerHTML = `<div class="card-title" data-i18n="currentInventory">${t('currentInventory')}</div><div class="error-msg">${t('errorLoad')}</div>`;
-    }
-  }
-
-  async function loadCostData() {
-    const card = document.getElementById('cost-card');
-    try {
-      const start = state.startDate;
-      const end = state.endDate;
-      const dashboard = await fetchJSON(`${PROD_API}?action=dashboard&start=${start}&end=${end}`);
-      const daily = dashboard.daily || [];
-
-      if (dashboard.costsLocked) { state.costData = { locked: true }; renderCostCard(); return; }
-      if (!daily.length) { state.costData = null; renderCostCard(); return; }
-
-      const totalTops = daily.reduce((s, d) => s + (d.totalTops || 0), 0);
-      const totalSmalls = daily.reduce((s, d) => s + (d.totalSmalls || 0), 0);
-      const totalLabor = daily.reduce((s, d) => s + (d.laborCost || 0), 0);
-      const totalOperatorHours = daily.reduce((s, d) => s + (d.operatorHours || 0), 0);
-      const totalTrimmerHours = daily.reduce((s, d) => s + (d.trimmerHours || 0), 0);
-      const totalTopsLaborCost = daily.reduce((s, d) => s + ((d.topsCostPerLb || 0) * (d.totalTops || 0)), 0);
-      const totalSmallsLaborCost = daily.reduce((s, d) => s + ((d.smallsCostPerLb || 0) * (d.totalSmalls || 0)), 0);
-      const daysWorked = daily.filter(d => (d.totalTops || 0) > 0 || (d.totalSmalls || 0) > 0).length || daily.length;
-
-      state.costData = {
-        totalTops,
-        totalSmalls,
-        totalHours: totalOperatorHours,
-        totalLabor,
-        totalTopsLaborCost,
-        totalSmallsLaborCost,
-        totalTrimmerHours,
-        avgTrimmers: daysWorked > 0 ? (totalTrimmerHours / 7.5) / daysWorked : 0,
-        daysWorked,
-      };
-      renderCostCard();
-    } catch (err) {
-      console.error('Cost data error:', err);
-      card.innerHTML = `<div class="card-title" data-i18n="laborMetrics">${t('laborMetrics')}</div><div class="error-msg">${t('errorLoad')}</div>`;
-    }
-  }
-
-  // -- KPI Rendering --
-  function renderKPIs() {
-    const periods = state.summaryData?.periods || [];
-    if (!periods.length) {
-      ['kpi-sacks', 'kpi-avg-day', 'kpi-raw', 'kpi-yield'].forEach(id => {
-        document.getElementById(id).textContent = '--';
-      });
-      return;
-    }
-
-    const totalSacks = periods.reduce((s, p) => s + (p.total_sacks || 0), 0);
-    const totalRaw = periods.reduce((s, p) => s + (p.total_raw || 0), 0);
-    const totalTops = periods.reduce((s, p) => s + (p.total_tops || 0), 0);
-    const daysWorked = periods.filter(p => p.total_sacks > 0).length || 1;
-    const avgYield = totalRaw > 0 ? (totalTops / totalRaw * 100) : 0;
-
-    document.getElementById('kpi-sacks').textContent = fmt(totalSacks);
-    document.getElementById('kpi-avg-day').textContent = fmt(totalSacks / daysWorked, 1);
-    document.getElementById('kpi-raw').textContent = fmt(totalRaw);
-    document.getElementById('kpi-yield').textContent = fmt(avgYield, 1) + '%';
-  }
-
-  // -- Chart Rendering --
-  const COLORS = {
-    tops: '#668971', smalls: '#e4aa4f', biomass: '#62758d',
-    trim: '#8b7355', waste: '#c45c4a',
-  };
-
-  function destroyCharts() {
-    [chartSacks, chartYield, chartStrain, chartRate, chartSacksOp].forEach(c => c && c.destroy());
-    chartSacks = chartYield = chartStrain = chartRate = chartSacksOp = null;
-  }
-
-  function renderCharts() {
-    destroyCharts();
-    const periods = (state.summaryData?.periods || []).slice().reverse(); // oldest first
-    const strains = state.summaryData?.strains || [];
-
-    // -- Sacks/Day line chart --
-    const labels = periods.map(p => p.period);
-    const sacksData = periods.map(p => p.total_sacks || 0);
-    const ma = movingAverage(sacksData, 7);
-
-    chartSacks = new Chart(document.getElementById('chart-sacks-day'), {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: t('kpiTotalSacks'),
-            data: sacksData,
-            borderColor: COLORS.tops,
-            backgroundColor: 'rgba(102, 137, 113, 0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: sacksData.length > 30 ? 0 : 3,
-            pointBackgroundColor: COLORS.tops,
-          },
-          {
-            label: t('movingAvg'),
-            data: ma,
-            borderColor: COLORS.smalls,
-            borderDash: [5, 3],
-            pointRadius: 0,
-            tension: 0.4,
-            fill: false,
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
-        scales: {
-          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-          y: { beginAtZero: true }
-        }
-      }
-    });
-    // -- Yield composition (100% stacked) --
-    chartYield = new Chart(document.getElementById('chart-yield'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: t('tops'),
-            data: periods.map(p => p.total_raw > 0 ? ((p.total_tops || 0) / p.total_raw * 100) : 0),
-            rawData: periods.map(p => p.total_tops || 0),
-            backgroundColor: COLORS.tops,
-          },
-          {
-            label: t('smalls'),
-            data: periods.map(p => p.total_raw > 0 ? ((p.total_smalls || 0) / p.total_raw * 100) : 0),
-            rawData: periods.map(p => p.total_smalls || 0),
-            backgroundColor: COLORS.smalls,
-          },
-          {
-            label: t('biomass'),
-            data: periods.map(p => p.total_raw > 0 ? ((p.total_biomass || 0) / p.total_raw * 100) : 0),
-            rawData: periods.map(p => p.total_biomass || 0),
-            backgroundColor: COLORS.biomass,
-          },
-          {
-            label: t('trim'),
-            data: periods.map(p => p.total_raw > 0 ? ((p.total_trim || 0) / p.total_raw * 100) : 0),
-            rawData: periods.map(p => p.total_trim || 0),
-            backgroundColor: COLORS.trim,
-          },
-          {
-            label: t('waste'),
-            data: periods.map(p => p.total_raw > 0 ? ((p.total_waste || 0) / p.total_raw * 100) : 0),
-            rawData: periods.map(p => p.total_waste || 0),
-            backgroundColor: COLORS.waste,
-          },
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { boxWidth: 12, padding: 10 } },
-          tooltip: {
-            callbacks: {
-              label(context) {
-                const pct = context.parsed.y || 0;
-                const lbs = context.dataset.rawData?.[context.dataIndex] || 0;
-                return `${context.dataset.label}: ${fmt(pct, 1)}% (${fmt(lbs, 1)} lbs)`;
-              },
-              footer(items) {
-                const idx = items[0]?.dataIndex;
-                const raw = idx != null ? (periods[idx]?.total_raw || 0) : 0;
-                return `Raw: ${fmt(raw, 1)} lbs`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: { stacked: true, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-          y: {
-            stacked: true,
-            beginAtZero: true,
-            max: 100,
-            ticks: { callback: v => v + '%' }
-          }
-        }
-      }
-    });
-
-    // -- Strain comparison horizontal bar --
-    if (strains.length) {
-      const strainLabels = strains.map(s => {
-        const name = s.strain || 'Unknown';
-        return name.length > 25 ? name.substring(0, 22) + '...' : name;
-      });
-      const strainRaw = strains.map(s => s.total_raw || 1);
-      chartStrain = new Chart(document.getElementById('chart-strain'), {
-        type: 'bar',
-        data: {
-          labels: strainLabels,
-          datasets: [
-            {
-              label: t('topsP'),
-              data: strains.map((s, i) => ((s.total_tops || 0) / strainRaw[i] * 100)),
-              backgroundColor: COLORS.tops,
-            },
-            {
-              label: t('smallsP'),
-              data: strains.map((s, i) => ((s.total_smalls || 0) / strainRaw[i] * 100)),
-              backgroundColor: COLORS.smalls,
-            },
-            {
-              label: t('wasteP'),
-              data: strains.map((s, i) => ((s.total_waste || 0) / strainRaw[i] * 100)),
-              backgroundColor: COLORS.waste,
-            },
-          ]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
-          scales: {
-            x: { stacked: true, max: 100, ticks: { callback: v => v + '%' } },
-            y: { stacked: true }
-          }
-        }
-      });
-    }
-
-    // -- Production rate chart (from history data) --
-    renderRateChart();
-
-    // -- Sacks/Operator chart (needs crew data per date) --
-    renderSacksPerOperator(periods);
-  }
-
-  function renderRateChart() {
-    const entries = state.historyData?.entries || [];
-    if (!entries.length) return;
-
-    // Group by date, compute lbs processed per day
-    const byDate = {};
-    entries.forEach(e => {
-      if (!byDate[e.date]) byDate[e.date] = { raw: 0, sacks: 0, tops: 0, smalls: 0 };
-      byDate[e.date].raw += e.raw_lbs || 0;
-      byDate[e.date].sacks += e.sacks_opened || 0;
-      byDate[e.date].tops += e.tops_lbs || 0;
-      byDate[e.date].smalls += e.smalls_lbs || 0;
-    });
-
-    const dates = Object.keys(byDate).sort();
-    // Estimate lbs/hr: assume 7.5 effective hours per day
-    const HOURS_PER_DAY = 7.5;
-    const topsRate = dates.map(d => byDate[d].tops > 0 ? (byDate[d].tops / HOURS_PER_DAY) : 0);
-    const smallsRate = dates.map(d => byDate[d].smalls > 0 ? (byDate[d].smalls / HOURS_PER_DAY) : 0);
-    const ptRadius = dates.length > 30 ? 0 : 3;
-
-    chartRate = new Chart(document.getElementById('chart-rate'), {
-      type: 'line',
-      data: {
-        labels: dates,
-        datasets: [{
-          label: t('tops') + ' /hr',
-          data: topsRate,
-          borderColor: COLORS.tops,
-          backgroundColor: 'rgba(102, 137, 113, 0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: ptRadius,
-          pointBackgroundColor: COLORS.tops,
-        }, {
-          label: t('smalls') + ' /hr',
-          data: smallsRate,
-          borderColor: COLORS.smalls,
-          backgroundColor: 'rgba(228, 170, 79, 0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: ptRadius,
-          pointBackgroundColor: COLORS.smalls,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
-        scales: {
-          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-          y: { beginAtZero: true }
-        }
-      }
-    });
-  }
-
-  // -- Sacks per Operator chart --
-  async function renderSacksPerOperator(periods) {
-    if (!periods.length) return;
-
-    const dates = periods.map(p => p.period);
-    const sacksPerDay = periods.map(p => p.total_sacks || 0);
-
-    // Fetch crew counts per date from production API
-    const crewPerDay = [];
-    for (const date of dates) {
-      try {
-        const data = await fetchJSON(`${PROD_API}?action=getProduction&date=${date}`);
-        const rows = data.production || [];
-        // Avg operators = avg (trimmers + buckers) across active slots
-        const activeSlots = rows.filter(r => (r.trimmers1 || 0) + (r.trimmers2 || 0) + (r.buckers1 || 0) + (r.buckers2 || 0) > 0);
-        if (activeSlots.length > 0) {
-          const totalOps = activeSlots.reduce((s, r) =>
-            s + (r.effectiveTrimmers1 || r.trimmers1 || 0) + (r.effectiveTrimmers2 || r.trimmers2 || 0)
-              + (r.buckers1 || 0) + (r.buckers2 || 0), 0);
-          crewPerDay.push(totalOps / activeSlots.length);
-        } else {
-          crewPerDay.push(0);
-        }
-      } catch {
-        crewPerDay.push(0);
-      }
-    }
-
-    const sacksOpData = sacksPerDay.map((s, i) => crewPerDay[i] > 0 ? +(s / crewPerDay[i]).toFixed(2) : 0);
-    const ptRadius = dates.length > 30 ? 0 : 4;
-
-    chartSacksOp = new Chart(document.getElementById('chart-sacks-op'), {
-      type: 'bar',
-      data: {
-        labels: dates,
-        datasets: [
-          {
-            label: t('sacksOp'),
-            data: sacksOpData,
-            backgroundColor: 'rgba(102, 137, 113, 0.6)',
-            borderColor: COLORS.tops,
-            borderWidth: 1,
-            borderRadius: 4,
-            yAxisID: 'y',
-          },
-          {
-            label: t('operators'),
-            data: crewPerDay.map(c => +c.toFixed(1)),
-            type: 'line',
-            borderColor: COLORS.smalls,
-            backgroundColor: 'transparent',
-            tension: 0.3,
-            pointRadius: ptRadius,
-            pointBackgroundColor: COLORS.smalls,
-            borderDash: [5, 3],
-            yAxisID: 'y1',
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { labels: { boxWidth: 12, padding: 10 } } },
-        scales: {
-          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
-          y: { beginAtZero: true, position: 'left', title: { display: true, text: t('sacksOp'), font: { size: 10 } } },
-          y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: t('operators'), font: { size: 10 } } },
-        }
-      }
-    });
-  }
-
-  // -- Inventory Rendering --
-  function renderInventory() {
-    const card = document.getElementById('inventory-card');
-    const variants = state.inventoryData || [];
-    const periods = state.summaryData?.periods || [];
-
-    // Per-strain "if we ran this strain full-time" rate. effective_days_worked
-    // sums each day's fraction of sacks attributed to this strain (half-day on
-    // Lifter while Sour Lifter runs the other half = 0.5 each), so a strain
-    // that was rarely worked isn't diluted by calendar days it sat idle.
-    const daysWorked = periods.filter(p => p.total_sacks > 0).length;
-    const hasCompleteData = daysWorked > 0;
-    const MIN_SACKS_FOR_PREDICTION = 10;
-    const strainUsage = {};
-    const strainYields = {};
-    (state.summaryData?.strains || []).forEach(s => {
-      const name = s.strain || 'Unknown';
-      const effDays = s.effective_days_worked || 0;
-      const sacks = s.total_sacks || 0;
-      strainUsage[name] = effDays > 0 ? sacks / effDays : 0;
-      strainYields[name] = {
-        topsRate: sacks > 0 ? (s.total_tops || 0) / sacks : 0,
-        smallsRate: sacks > 0 ? (s.total_smalls || 0) / sacks : 0,
-        sacks,
-        thinSample: sacks > 0 && sacks < MIN_SACKS_FOR_PREDICTION,
-      };
-    });
-
-    if (!variants.length) {
-      card.innerHTML = `<div class="card-title" data-i18n="currentInventory">${t('currentInventory')}</div><div class="loading-msg">${t('noData')}</div>`;
-      return;
-    }
-
-    const totalInventory = variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
-    // "Total days left" uses the global daily throughput (sum of all strains' sacks
-    // ÷ days worked), not the sum of per-strain full-time rates — those would
-    // double-count capacity since strains share the same line time.
-    const totalDailyThroughput = hasCompleteData
-      ? (state.summaryData?.strains || []).reduce((sum, s) => sum + (s.total_sacks || 0), 0) / daysWorked
-      : 0;
-    const totalDaysLeft = totalDailyThroughput > 0 ? Math.round(totalInventory / totalDailyThroughput) : null;
-
-    let html = `<div class="card-title">${t('currentInventory')}</div>`;
-    html += `<div class="inventory-summary">`;
-    html += `<div class="inventory-stat"><div class="inventory-stat-label">${t('totalInventory')}</div><div class="inventory-stat-value">${fmt(totalInventory)}</div></div>`;
-    html += `<div class="inventory-stat"><div class="inventory-stat-label">${t('totalDaysLeft')}</div><div class="inventory-stat-value">${totalDaysLeft != null ? fmt(totalDaysLeft) : t('never')}</div></div>`;
-    html += `</div>`;
-    html += `<div style="overflow-x:auto"><table class="inv-table"><thead><tr>`;
-    html += `<th>${t('strain')}</th><th>${t('sacks')}</th><th>${t('daysSupply')}</th><th>${t('projYield')}</th><th>${t('depletes')}</th>`;
-    html += `</tr></thead><tbody>`;
-
-    variants.forEach(v => {
-      const name = v.title || 'Unknown';
-      const qty = v.quantity || 0;
-      const usage = strainUsage[name] || 0;
-      const daysLeft = (hasCompleteData && usage > 0) ? Math.round(qty / usage) : null;
-      const daysStr = daysLeft != null ? daysLeft : t('never');
-
-      const yields = strainYields[name] || { topsRate: 0, smallsRate: 0, thinSample: false };
-      const hasProjData = hasCompleteData && (yields.topsRate > 0 || yields.smallsRate > 0);
-      const projTops = hasProjData ? (qty * yields.topsRate).toFixed(0) : '--';
-      const projSmalls = hasProjData ? (qty * yields.smallsRate).toFixed(0) : '--';
-      const thinBadge = (hasProjData && yields.thinSample)
-        ? `<span class="thin-sample-badge" title="Only ${yields.sacks} sacks of clean data — projection is directional, not predictive">⚠ thin</span>`
-        : '';
-
-      // Depletion date
-      let depleteStr = t('never');
-      if (daysLeft != null && daysLeft < 9999) {
-        const d = new Date();
-        d.setDate(d.getDate() + daysLeft);
-        depleteStr = d.toLocaleDateString('en-CA');
-      }
-
-      // Bar color based on days
-      const barPct = daysLeft != null ? Math.min(100, (daysLeft / 60) * 100) : 0;
-      const barColor = daysLeft != null ? (daysLeft < 7 ? 'var(--red)' : daysLeft < 21 ? 'var(--gold)' : 'var(--green)') : 'var(--text-faint)';
-
-      html += `<tr>`;
-      html += `<td style="font-family:var(--font-ui);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</td>`;
-      html += `<td>${fmt(qty)}</td>`;
-      html += `<td>${daysStr}<div class="depletion-bar-bg"><div class="depletion-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>`;
-      html += `<td style="font-size:11px"><span style="color:var(--green)">${projTops}t</span> / <span style="color:var(--gold)">${projSmalls}s</span>${thinBadge}</td>`;
-      html += `<td style="font-size:11px">${depleteStr}</td>`;
-      html += `</tr>`;
-    });
-
-    html += `</tbody></table></div>`;
-    card.innerHTML = html;
-  }
-
-  // -- Cost Card Rendering --
-  function renderCostCard() {
-    const card = document.getElementById('cost-card');
-    const data = state.costData;
-
-    if (data && data.locked) {
-      card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">🔒 ${t('costsLocked')}</div>`;
-      return;
-    }
-    if (!data || (!data.totalTops && !data.totalSmalls)) {
-      card.innerHTML = `<div class="card-title">${t('laborMetrics')}</div><div class="loading-msg">${t('noData')}</div>`;
-      return;
-    }
-
-    const topsHr = data.totalHours > 0 ? (data.totalTops / data.totalHours) : 0;
-    const smallsHr = data.totalHours > 0 ? (data.totalSmalls / data.totalHours) : 0;
-    const topsTrimmer = data.avgTrimmers > 0 ? (data.totalTops / data.avgTrimmers / data.daysWorked) : 0;
-    const smallsTrimmer = data.avgTrimmers > 0 ? (data.totalSmalls / data.avgTrimmers / data.daysWorked) : 0;
-    const costLb = data.totalTops > 0 ? (data.totalTopsLaborCost / data.totalTops) : 0;
-
-    let html = `<div class="card-title">${t('laborMetrics')}</div>`;
-    html += `<div class="cost-grid">`;
-    html += `<div class="cost-item"><div class="cost-label">${t('topsHr')}</div><div class="cost-value" style="color:var(--green)">${fmt(topsHr, 1)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('smallsHr')}</div><div class="cost-value" style="color:var(--gold)">${fmt(smallsHr, 1)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('topsTrimmer')}</div><div class="cost-value" style="color:var(--green)">${fmt(topsTrimmer, 1)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('smallsTrimmer')}</div><div class="cost-value" style="color:var(--gold)">${fmt(smallsTrimmer, 1)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('costLb')}</div><div class="cost-value" style="color:var(--red)">$${fmt(costLb, 2)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('topsLabor')}</div><div class="cost-value" style="color:var(--green)">$${fmt(data.totalTopsLaborCost)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('smallsLabor')}</div><div class="cost-value" style="color:var(--gold)">$${fmt(data.totalSmallsLaborCost)}</div></div>`;
-    html += `<div class="cost-item"><div class="cost-label">${t('totalLabor')}</div><div class="cost-value" style="color:var(--blue)">$${fmt(data.totalLabor)}</div></div>`;
-    html += `</div>`;
-
-    card.innerHTML = html;
-  }
-
-  // -- Init --
-  applyLang();
-  setPreset('month');
-
-})();
-</script>
-
-
-
-
-
-
-
-
-
 <!-- module-hashes:start -->
 <!-- generated by stamp-modules — do not edit by hand -->
 <script type="importmap">
 {
   "imports": {
-    "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7"
+    "../js/shared/i18n.js": "../js/shared/i18n.js?h=6c5893f7",
+    "../js/shared/supersack-days.js": "../js/shared/supersack-days.js?h=09d5f709",
+    "../js/supersack-analytics/main.js": "../js/supersack-analytics/main.js?h=8f1df6b5"
   }
 }
 </script>
 <!-- module-hashes:end -->
+<script type="module" src="../js/supersack-analytics/main.js?h=8f1df6b5"></script>
+
+
+
+
+
+
+
+
+
 <script type="module" src="../js/shared/i18n.js?h=6c5893f7"></script>
 </body>
 </html>
