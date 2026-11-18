@@ -16,7 +16,7 @@ import { successResponse, parseBody } from '../lib/response.js';
 import { createError } from '../lib/errors.js';
 import { constantTimeEqual } from '../lib/auth.js';
 import { pacificDay } from '../lib/pacific.js';
-import { tokenHash, pinHash, validPin, validToken, lockState, sqlTime, MAX_TRIES, LOCK_MINUTES } from '../lib/consign-access.js';
+import { tokenHash, pinHash, validPin, validToken, lockState, sqlTime, MAX_TRIES, LOCK_MINUTES, MAX_LOCKOUTS } from '../lib/consign-access.js';
 import { farmView } from '../lib/consign-farm-view.js';
 
 const ok = (data) => successResponse({ success: true, data });
@@ -42,6 +42,11 @@ const lockedError = (minutes) => createError('RATE_LIMITED', 'Too many wrong PIN
  * runs while the link is not locked (an expired lock starts the count over). So parallel
  * requests can never get more than MAX_TRIES guesses past the lock, and a correct PIN is
  * refused while locked. A correct PIN resets the count.
+ *
+ * Cap on total guesses: each lock adds one to `lockouts`; a correct PIN clears it. At
+ * MAX_LOCKOUTS locks in a row the link is turned off (revoked) and needs a new link from
+ * the owner. Only the one request that lands the fifth try reaches that UPDATE, so
+ * parallel guesses count one lockout.
  */
 async function checkPin(env, row, token, pin, now) {
   if (!validPin(pin)) throw bad('The PIN is 4 digits');
@@ -64,10 +69,20 @@ async function checkPin(env, row, token, pin, now) {
   }
   const good = constantTimeEqual(await pinHash(token, row.id, pin), row.pin_hash);
   if (good) {
-    await env.DB.prepare('UPDATE cl_farm_access SET failed_tries = 0, locked_until = NULL, last_seen_at = ? WHERE id = ?').bind(at, row.id).run();
+    await env.DB.prepare('UPDATE cl_farm_access SET failed_tries = 0, lockouts = 0, locked_until = NULL, last_seen_at = ? WHERE id = ?').bind(at, row.id).run();
     return;
   }
-  if (tried.failed_tries >= MAX_TRIES) throw lockedError(LOCK_MINUTES);
+  if (tried.failed_tries >= MAX_TRIES) {
+    const capped = await env.DB.prepare(
+      `UPDATE cl_farm_access SET
+         lockouts = lockouts + 1,
+         revoked_at = CASE WHEN lockouts + 1 >= ?1 THEN ?2 ELSE revoked_at END
+       WHERE id = ?3 AND revoked_at IS NULL
+       RETURNING revoked_at`
+    ).bind(MAX_LOCKOUTS, at, row.id).first();
+    if (!capped || capped.revoked_at) throw notActive();
+    throw lockedError(LOCK_MINUTES);
+  }
   throw bad('Wrong PIN', { tries_left: MAX_TRIES - tried.failed_tries });
 }
 

@@ -13,10 +13,10 @@ import { qrSvg } from './print.js';
 /** The farm's page, next to this one, with the link in the fragment (never sent to a server). */
 export const farmLinkUrl = (link) => `${location.origin}${location.pathname.replace(/[^/]*$/, 'consign-farm.html')}#k=${link}`;
 
-/** none | off | locked | waiting | inuse */
+/** none | off | autooff | locked | waiting | inuse */
 export function accessState(access) {
   if (!access) return 'none';
-  if (!access.active) return 'off';
+  if (!access.active) return access.auto_off ? 'autooff' : 'off';
   if (access.locked) return 'locked';
   return access.pin_set ? 'inuse' : 'waiting';
 }
@@ -24,6 +24,7 @@ export function accessState(access) {
 const STATE = {
   none: { label: 'farmPageNone', st: 'st-voided' },
   off: { label: 'farmPageOff', st: 'st-voided' },
+  autooff: { label: 'farmPageAutoOff', st: 'st-price' },
   locked: { label: 'farmPageLocked', st: 'st-price' },
   waiting: { label: 'farmPageWaiting', st: 'st-weighed' },
   inuse: { label: 'farmPageInUse', st: 'st-closed' },
