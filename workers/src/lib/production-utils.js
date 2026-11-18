@@ -156,14 +156,23 @@ async function getEffectiveTargetRate(env, days = 7, timeSlotMultipliers = null,
     return 0.85;
   }
 
-  // Query ALL available data for this strain (no date cutoff)
-  const strainSlots = await query(env.DB, `
+  // Query ALL available data for this strain (no date cutoff). The line's own
+  // hours only: hours the cell log filled (fill_source 'cells', migration 0071)
+  // are people bucking and trimming, graded on the crew goal, and would drag the
+  // line's per-trimmer target down (Koa 2026-11-18). Before 0071 there are none.
+  const strainSql = (cellFilter) => `
     SELECT production_date, time_slot, tops_lbs1, trimmers_line1, effective_trimmers_line1
     FROM (${MP_BY_CULTIVAR})
     WHERE tops_lbs1 > 0 AND trimmers_line1 > 0
       AND cultivar1 = ?
-    ORDER BY production_date, time_slot
-  `, [strain]);
+      ${cellFilter ? "AND id NOT IN (SELECT id FROM monthly_production WHERE fill_source = 'cells')" : ''}
+    ORDER BY production_date, time_slot`;
+  let strainSlots;
+  try {
+    strainSlots = await query(env.DB, strainSql(true), [strain]);
+  } catch {
+    strainSlots = await query(env.DB, strainSql(false), [strain]);
+  }
 
   if (!strainSlots || strainSlots.length === 0) {
     // New cultivar with no data yet → return default baseline

@@ -22,6 +22,21 @@ import {
 } from '../../lib/production-utils.js';
 import { laborSplit, CELL_MODE_FROM } from '../../lib/labor-split.js';
 import { MP_BY_CULTIVAR } from '../../lib/cultivar-parts.js';
+import { FILL_SOURCE as CELL_FILL_SOURCE } from '../../lib/cell-fill.js';
+import { dayGoal } from '../../lib/cell-goal.js';
+
+/**
+ * The crew goal for a day (lib/cell-goal.js: the sheet's, else the one set on the
+ * Cell hourly log, else the break-even rate for the day's cultivar, else the last
+ * goal before the day). { lbHr, date, source } or null.
+ */
+export async function getCellGoal(env, date) {
+  try {
+    return await dayGoal(env.DB, date);
+  } catch {
+    return null;   // before 0065: no crew goals yet
+  }
+}
 
 // Inputs laborSplit needs, read once per request.
 async function laborOptions(env) {
@@ -75,12 +90,16 @@ async function getScoreboardData(env, date = null) {
     graded: false,
   };
 
-  const todayRows = await query(env.DB, `
-    SELECT time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1,
-           effective_trimmers_line1, qc, change_cultivar
-    FROM monthly_production
-    WHERE production_date = ?
-  `, [today]);
+  // fill_source exists from migration 0071 (the cell log fill). Before it is
+  // applied every row is a line row, so the board must still load.
+  const DAY_COLS = `time_slot, cultivar1, tops_lbs1, smalls_lbs1, trimmers_line1, buckers_line1,
+           effective_trimmers_line1, qc, change_cultivar`;
+  let todayRows;
+  try {
+    todayRows = await query(env.DB, `SELECT ${DAY_COLS}, fill_source FROM monthly_production WHERE production_date = ?`, [today]);
+  } catch {
+    todayRows = await query(env.DB, `SELECT ${DAY_COLS} FROM monthly_production WHERE production_date = ?`, [today]);
+  }
 
   if (todayRows.length === 0) return result;
 
@@ -118,8 +137,16 @@ async function getScoreboardData(env, date = null) {
     const changeTo = changeToBySlot.get(row.timeSlot);
     if (!isBlank(changeTo)) carried = changeTo;
   }
-  const graded = !isBlank(firstStrain);
-  result.graded = graded;
+  // Cell hours (Koa 2026-11-18: "fix the line board target for cells"). A row
+  // the cell log filled (fill_source 'cells', migration 0071) is one-touch
+  // people, each bucking and trimming their own: it is graded per person
+  // against the crew goal (crew_day_meta.target_lb_hr, "the rate that ties the
+  // line at the day's yield"; a typed day carries the last goal set), never
+  // against the line's strain target, which is lbs per trimmer with buckers
+  // beside them. Each hour keeps its own basis, so a mixed day grades right.
+  const cellBySlot = new Map(todayRows.map(r => [r.time_slot || '', r.fill_source === CELL_FILL_SOURCE]));
+  for (const row of rows) row.cells = cellBySlot.get(row.timeSlot) === true;
+  const cellGoal = rows.some(r => r.cells) ? await getCellGoal(env, today) : null;
 
   const { lastCompletedHourIndex, currentHourIndex } = findHourIndices(rows);
 
@@ -149,12 +176,19 @@ async function getScoreboardData(env, date = null) {
   // Each row carries its own target, so the hour badge, todayTarget, best,
   // streak and the day projection (calculateDailyProjection reads
   // row.targetRate) are all on one basis.
-  for (const row of rows) row.targetRate = getTargetRateForStrain(row.strain);
+  for (const row of rows) row.targetRate = row.cells ? (cellGoal?.lbHr ?? 0) : getTargetRateForStrain(row.strain);
+  const graded = rows.some(r => r.targetRate > 0);
+  result.graded = graded;
 
-  // Active strain's target rate (for display; also the rate for hours not
-  // logged yet in the projection)
-  const targetRate = getTargetRateForStrain(activeStrain);
+  // Active target (for display; also the rate for hours not logged yet in the
+  // projection): the cell goal when the latest hour is a cell hour.
+  const activeIdx = currentHourIndex >= 0 ? currentHourIndex : lastCompletedHourIndex;
+  const activeIsCells = activeIdx >= 0 && rows[activeIdx].cells;
+  const targetRate = activeIsCells ? (cellGoal?.lbHr ?? 0) : getTargetRateForStrain(activeStrain);
   result.targetRate = targetRate;
+  // 'cells' = lb of tops per person-hour against the crew goal; 'line' = per trimmer
+  result.targetBasis = activeIsCells ? 'cells' : 'line';
+  result.cellGoal = cellGoal;   // { lbHr, date, source } or null
 
   // Flag whether we're using strain-specific data (vs no basis)
   result.usingStrainRate = !!activeStrain && strainTargetRates.has(activeStrain);
@@ -214,7 +248,7 @@ async function getScoreboardData(env, date = null) {
       // This hour's own strain target (the same one the projection uses)
       const rowTargetRate = row.targetRate;
 
-      if (graded) {
+      if (graded && rowTargetRate > 0) {
         const hourTarget = row.trimmers * rowTargetRate * row.multiplier;
         totalTarget += hourTarget;
         const pct = hourTarget > 0 ? (row.tops / hourTarget) * 100 : 0;
@@ -240,6 +274,7 @@ async function getScoreboardData(env, date = null) {
         // row's own strain target; 0 when ungraded (a number, not null:
         // scoreboard-v2 chart.js calls h.target.toFixed)
         target: graded ? rowTargetRate : 0,
+        basis: row.cells ? 'cells' : 'line',
         strain: row.strain || '', // strain for the tooltip (carried forward when the hour was logged blank)
         trimmers: row.rawTrimmers,
         effectiveTrimmers: row.trimmers,

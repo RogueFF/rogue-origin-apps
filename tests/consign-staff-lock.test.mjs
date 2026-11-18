@@ -4,7 +4,10 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { freshConsignDb, post, sqliteOk } from './helpers/consign-sqlite.mjs';
+import { freshConsignDb, post, sqliteOk, payOnFinalWeight } from './helpers/consign-sqlite.mjs';
+
+// These tests are about lots paid on their after-loss numbers.
+payOnFinalWeight();
 import { handleConsignD1, isOwner } from '../workers/src/handlers/consign-d1.js';
 import { staffView, STAFF_VIEW_ACTIONS } from '../workers/src/lib/consign-staff-view.js';
 
@@ -174,9 +177,9 @@ test('owner replies keep today\'s shape: the same keys as before the lock', asyn
   const { env, farm } = await world();
   const d = await owner(env, 'saveDropoff', { farm_id: farm.id, client_key: 'k1', lines: lineSet });
   const LOT = ['id', 'dropoff_id', 'farm_id', 'cultivar', 'type', 'term', 'intake_lbs', 'weighed_at', 'price_per_lb', 'smalls_price_per_lb',
-    'closed_at', 'note', 'note_visible', 'voided_at', 'void_reason', 'farm_name', 'dropped_at', 'runs', 'sold', 'money'].sort();
+    'closed_at', 'note', 'note_visible', 'voided_at', 'void_reason', 'farm_name', 'dropped_at', 'runs', 'sold', 'money', 'absorb_loss'].sort();
   const MONEY = ['status', 'estimate', 'needs_price', 'intake_lbs', 'pulled_lbs', 'final_lbs', 'to_smalls_lbs', 'biomass_lbs', 'mold_lbs',
-    'remainder_lbs', 'payable_main_lbs', 'payable_smalls_lbs', 'sold_main_lbs', 'sold_smalls_lbs', 'on_hand_lbs', 'value', 'owed'].sort();
+    'remainder_lbs', 'payable_main_lbs', 'payable_smalls_lbs', 'sold_main_lbs', 'sold_smalls_lbs', 'on_hand_lbs', 'value', 'owed', 'absorb_loss'].sort();
   assert.deepEqual(Object.keys(d).sort(), ['dropoff', 'lots']);
   assert.deepEqual(Object.keys(d.lots[0]).sort(), LOT);
   assert.deepEqual(Object.keys(d.lots[0].money).sort(), MONEY);

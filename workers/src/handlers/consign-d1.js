@@ -234,7 +234,9 @@ async function saveDropoff(body, env) {
       run = finalRun(ln.final, ln.type, intake, `Line ${i + 1}`);
       intake = run.pulled_lbs;
     }
-    return { cultivar, type: ln.type, term, intake, run, note: clean(ln.note) || null };
+    // We usually eat the screening loss on product owed on dropoff; a line can say otherwise.
+    const absorb = term === 'dropoff' && ln.absorb_loss !== false && ln.absorb_loss !== 0 ? 1 : 0;
+    return { cultivar, type: ln.type, term, intake, run, note: clean(ln.note) || null, absorb };
   });
 
   // Optional past date (a catch-up entry). Not in the future, not more than a year back.
@@ -256,9 +258,9 @@ async function saveDropoff(body, env) {
     env.DB.prepare("INSERT INTO cl_dropoffs (farm_id, dropped_by, note, source, client_key, dropped_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))")
       .bind(farmId, clean(body.dropped_by) || null, clean(body.note) || null, source, key, droppedAt),
     ...lines.map((ln) => env.DB.prepare(
-      `INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term, intake_lbs, weighed_at, price_per_lb, smalls_price_per_lb, note)
-       VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)`
-    ).bind(key, farmId, ln.cultivar, ln.type, ln.term, ln.intake, ln.intake, ln.price, ln.smallsPrice, ln.note)),
+      `INSERT INTO cl_lots (dropoff_id, farm_id, cultivar, type, term, intake_lbs, weighed_at, price_per_lb, smalls_price_per_lb, note, absorb_loss)
+       VALUES ((SELECT id FROM cl_dropoffs WHERE client_key = ?), ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?, ?)`
+    ).bind(key, farmId, ln.cultivar, ln.type, ln.term, ln.intake, ln.intake, ln.price, ln.smallsPrice, ln.note, ln.absorb)),
   ];
   // Finished at dropoff: the lot closes and gets its one run in the same batch. The run finds
   // its lot by dropoff key + cultivar + type + term (unique within a dropoff, checked above);
@@ -456,12 +458,15 @@ async function setLotTerms(body, env) {
     smalls_price_per_lb: body.smalls_price_per_lb == null ? lot.smalls_price_per_lb : posNum(body.smalls_price_per_lb, 'Smalls price per lb'),
     // Shows the lot's note on the farm's own page. Off by default.
     note_visible: body.note_visible == null ? (Number(lot.note_visible) === 1 ? 1 : 0) : (body.note_visible === true || body.note_visible === 1 ? 1 : 0),
+    // Paid on the dropoff weight (we absorb the screening loss). Only means something on a dropoff lot.
+    absorb_loss: body.absorb_loss == null ? (Number(lot.absorb_loss) === 1 ? 1 : 0) : (body.absorb_loss === true || body.absorb_loss === 1 ? 1 : 0),
   };
+  if (next.term === 'sold') next.absorb_loss = 0;
   if (!TERMS.has(next.term)) throw bad('term must be dropoff or sold');
   if (next.term === 'dropoff' && lot.sold.some((s) => !s.voided_at)) throw bad('Void the sold entries before changing this lot to owed on dropoff');
-  const before = { term: lot.term, price_per_lb: lot.price_per_lb, smalls_price_per_lb: lot.smalls_price_per_lb, note_visible: Number(lot.note_visible) === 1 ? 1 : 0 };
+  const before = { term: lot.term, price_per_lb: lot.price_per_lb, smalls_price_per_lb: lot.smalls_price_per_lb, note_visible: Number(lot.note_visible) === 1 ? 1 : 0, absorb_loss: Number(lot.absorb_loss) === 1 ? 1 : 0 };
   await env.DB.batch([
-    env.DB.prepare('UPDATE cl_lots SET term = ?, price_per_lb = ?, smalls_price_per_lb = ?, note_visible = ? WHERE id = ?').bind(next.term, next.price_per_lb, next.smalls_price_per_lb, next.note_visible, lot.id),
+    env.DB.prepare('UPDATE cl_lots SET term = ?, price_per_lb = ?, smalls_price_per_lb = ?, note_visible = ?, absorb_loss = ? WHERE id = ?').bind(next.term, next.price_per_lb, next.smalls_price_per_lb, next.note_visible, next.absorb_loss, lot.id),
     history(env, 'cl_lots', lot.id, 'setLotTerms', before, next, body.actor || 'owner'),
   ]);
   return ok({ lot: await oneLot(env, lot.id) });
