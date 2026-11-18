@@ -123,6 +123,18 @@ async function openFarm(page, { fake = makeFake(), lang = 'en', hash = `#k=${LIN
 }
 
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
 const shot = (page, name, full = false) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: full });
 
 async function enterPin(page, pin) {
@@ -449,6 +461,7 @@ test.describe("staff page: Farm's page card", () => {
     await openStaff(page, sf);
     await expect(page.locator('[data-lot="9"]')).toContainText('Damp bag');
     await expect(page.locator('[data-lot="9"]')).not.toContainText('Farm sees this note');
+    await openMore(page, '[data-more="lot|9"]');
     await page.locator('[data-terms="9"]').click();
     const tick = page.locator('dialog input[name="note_visible"]');
     await expect(tick).not.toBeChecked();
@@ -463,7 +476,8 @@ test.describe("staff page: Farm's page card", () => {
     const sf = staffFake({ active: true, pin_set: true, issued_at: '2026-11-01 16:00:00', last_seen_at: '2026-11-16 18:30:00', locked: false });
     await openStaff(page, sf);
     await expect(page.locator('#farmAccess')).toHaveAttribute('data-state', 'inuse');
-    await expect(page.locator('#farmAccessLine')).toContainText('In use. Last opened');
+    await expect(page.locator('#farmAccessLine')).toContainText('In use. Opened');
+    await openMore(page, '#farmAccess details.cs-more');
     await page.locator('#newLink').click();
     await expect(page.locator('dialog .cs-dlgmsg')).toHaveText('The old link stops working right away. The farm opens the new link and sets a new PIN.');
     await page.locator('dialog [data-act="cancel"]').click();
@@ -471,7 +485,7 @@ test.describe("staff page: Farm's page card", () => {
     await page.locator('#turnOffLink').click();
     await page.locator('dialog [data-act="ok"]').click();
     await expect(page.locator('#farmAccess')).toHaveAttribute('data-state', 'off');
-    await expect(page.locator('#farmAccessLine')).toHaveText('Turned off. The farm cannot open its page.');
+    await expect(page.locator('#farmAccessLine')).toHaveText('Turned off.');
     await expect(page.locator('#createLink')).toBeVisible();
   });
 

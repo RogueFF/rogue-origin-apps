@@ -1,5 +1,5 @@
 /**
- * Home: the two big actions, three work cards (weigh, screen, price) and a card per farm.
+ * Home: the big actions, three work cards (weigh, screen, price) and one row per farm.
  * Money (a farm's balance, the Estimate tag, Record payment, a held payment's amount) is
  * drawn in owner mode only; staff replies carry none of it.
  */
@@ -21,23 +21,16 @@ function workCard({ key, st, rows, row }) {
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-function farmCard(f) {
+/** One farm as a plain row: name, the needs-a-price flag, and (owner mode) the balance on the right. */
+function farmRow(f) {
   const noPrice = f.needs_price ? `<span class="cs-chip noprice">${esc(t('needsPrice'))}</span>` : '';
   // Staff: the farm and the needs-a-price flag. Never a balance, even if one came back.
   if (!isOwner() || !isNum(f.balance)) {
-    return `<a class="cs-card cs-farm" href="#/farm/${f.id}" data-farm="${f.id}">
-      <div class="cs-cardhead"><h3 class="cs-h3">${esc(f.name)}</h3><span class="cs-right cs-muted">›</span></div>
-      <div class="cs-muted">${esc(t('farmLotsLink'))}</div>
-      ${noPrice}
-    </a>`;
+    return `<li><a class="cs-tap cs-farm" href="#/farm/${f.id}" data-farm="${f.id}"><b class="cs-farmname">${esc(f.name)}</b>${noPrice}<span class="cs-right cs-muted" aria-hidden="true">›</span></a></li>`;
   }
   const credit = f.balance < 0;
-  return `<a class="cs-card cs-farm" href="#/farm/${f.id}" data-farm="${f.id}">
-    <div class="cs-cardhead"><h3 class="cs-h3">${esc(f.name)}</h3>${f.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
-    <div class="cs-muted">${esc(t(credit ? 'creditToUs' : 'owed'))}</div>
-    <div class="cs-big${credit ? ' cs-credit' : ''}">${money(f.balance)}</div>
-    ${noPrice}
-  </a>`;
+  return `<li><a class="cs-tap cs-farm" href="#/farm/${f.id}" data-farm="${f.id}"><b class="cs-farmname">${esc(f.name)}</b>${noPrice}${f.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}
+    <span class="cs-right cs-farmbal"><span class="cs-muted">${esc(t(credit ? 'creditToUs' : 'owed'))}</span> <span class="cs-big${credit ? ' cs-credit' : ''}">${money(f.balance)}</span></span></a></li>`;
 }
 
 const ACTION_KEYS = { saveDropoff: 'newDropoff', setWeight: 'weigh', saveScreenRun: 'screening', saveSold: 'addSold', savePayment: 'recordPayment' };
@@ -93,10 +86,10 @@ export function mount(root) {
     const live = farms.filter((f) => f.active);
     root.innerHTML = `
       <div class="cs-actions">
-        <a class="cs-btn primary big" href="#/dropoff" id="newDropoffBtn">＋ ${esc(t('newDropoff'))}</a>
-        <a class="cs-btn big" href="#/photo/dropoff" id="photoSheetBtn">📷 ${esc(t('photoSheet'))}</a>
-        ${isOwner() ? `<a class="cs-btn big" href="#/pay" id="payBtn">$ ${esc(t('recordPayment'))}</a>` : ''}
-        <a class="cs-btn big" href="#/print/dropoff" id="printSheetBtn">🖨 ${esc(t('printDropoffSheet'))}</a>
+        <a class="cs-btn primary big" href="#/dropoff" id="newDropoffBtn">${esc(t('newDropoff'))}</a>
+        <a class="cs-btn big" href="#/photo/dropoff" id="photoSheetBtn">${esc(t('photoSheet'))}</a>
+        ${isOwner() ? `<a class="cs-btn big" href="#/pay" id="payBtn">${esc(t('recordPayment'))}</a>` : ''}
+        <a class="cs-btn big" href="#/print/dropoff" id="printSheetBtn">${esc(t('printDropoffSheet'))}</a>
         <button type="button" class="cs-btn big cs-owner-only" id="addFarmBtn">${esc(t('addFarm'))}</button>
       </div>
       <div id="heldBox">${heldBox()}</div>
@@ -106,7 +99,7 @@ export function mount(root) {
         ${workCard({ key: 'needsPrice', st: 'price', rows: open.needs_price, row: (l) => `<li><a class="cs-tap owner-link" href="#/farm/${l.farm_id}" data-staff-static>${lotLine(l)}<span class="cs-muted">${esc(when(l.dropped_at))}</span></a></li>` })}
       </div>
       <h2 class="cs-h2">${esc(t('farms'))}</h2>
-      ${live.length ? `<div class="cs-grid2">${live.map(farmCard).join('')}</div>` : `<p class="cs-muted">${esc(t('noFarms'))}</p>`}
+      ${live.length ? `<section class="cs-card cs-farms"><ul class="cs-list">${live.map(farmRow).join('')}</ul></section>` : `<p class="cs-muted">${esc(t('noFarms'))}</p>`}
     `;
     // Needs-a-price rows are only links in owner mode; staff cannot set a price.
     root.querySelectorAll('[data-staff-static]').forEach((a) => {

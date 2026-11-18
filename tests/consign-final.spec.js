@@ -78,9 +78,22 @@ const loss = (page, cultivar, type, key) => page.locator(`[data-row="${cultivar}
 const finalx = (page, cultivar, type) => page.locator(`[data-row="${cultivar}"] [data-type="${type}"] .cs-finalx`).first();
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-async function startAlpha(page) {
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
+
+async function startAlpha(page, types = ['tops']) {
   await page.locator('[data-farm="1"]').click();
   await page.locator('#cultPick').selectOption('Alpha');
+  for (const ty of types) await tickOn(page, 'Alpha', ty);
 }
 const savedLines = (fake) => fake.posts.filter((p) => p.action === 'saveDropoff').at(-1).body.lines;
 
@@ -152,7 +165,7 @@ test.describe('Consignment: finished at dropoff', () => {
 
   test('final lower (smalls): only Biomass and Mold', async ({ page }) => {
     const { fake } = await open(page);
-    await startAlpha(page);
+    await startAlpha(page, ['smalls']);
     await box(page, 'Alpha', 'smalls').fill('40');
     await box(page, 'Alpha', 'smalls', 'final').fill('36');
     await expect(loss(page, 'Alpha', 'smalls', 'toSmalls')).toHaveCount(0);
@@ -204,6 +217,7 @@ test.describe('Consignment: finished at dropoff', () => {
   test('review: unsplitting clears the finals so the merged line is asked again', async ({ page }) => {
     await open(page);
     await startAlpha(page);
+    await openMore(page, '[data-row="Alpha"] [data-type="tops"] details.cs-more');
     const split = page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]');
     await split.click();
     const finals = page.locator('[data-row="Alpha"] [data-type="tops"] input[data-final]');
@@ -231,6 +245,7 @@ test.describe('Consignment: finished at dropoff', () => {
   test('a term split: each part has its own final', async ({ page }) => {
     const { fake } = await open(page);
     await startAlpha(page);
+    await openMore(page, '[data-row="Alpha"] [data-type="tops"] details.cs-more');
     await page.locator('[data-row="Alpha"] [data-type="tops"] [data-split]').click();
     const lbsBoxes = page.locator('[data-row="Alpha"] [data-type="tops"] input[data-lbs]');
     const finals = page.locator('[data-row="Alpha"] [data-type="tops"] input[data-final]');
@@ -325,6 +340,7 @@ test.describe('Consignment: finished at dropoff', () => {
         await expect(finalx(page, 'Alpha', 'tops')).toContainText(want[lang].done);
         expect(await noHorizontalScroll(page)).toBe(true);
         await page.locator('.cs-step').nth(1).screenshot({ path: path.join(SHOTS, `final-equal-${lang}-${width}.png`) });
+        await tickOn(page, 'Alpha', 'smalls');
         await box(page, 'Alpha', 'smalls').fill('100');
         await box(page, 'Alpha', 'smalls', 'final').fill('80');
         await expect(finalx(page, 'Alpha', 'smalls')).toContainText(want[lang].where);

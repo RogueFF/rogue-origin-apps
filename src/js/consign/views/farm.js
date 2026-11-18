@@ -8,7 +8,7 @@
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
 import { esc, lbs, money, num, when, day, typeLabel, termLabel, statusChip, todayLocal } from '../format.js';
-import { errorCard, loading, toast, dialog } from '../ui.js';
+import { errorCard, loading, toast, dialog, moreHtml, keepOpen } from '../ui.js';
 import { submit, actor } from '../save.js';
 import { farmDialog, priceDialog, lotTermsDialog, isOwner } from '../owner.js';
 import { accessCardHtml, onAccessClick } from './farm-access.js';
@@ -23,7 +23,7 @@ export function mount(root, { farmId }) {
   const showMoney = () => isOwner() && !!s.data.totals && typeof s.data.totals.balance === 'number';
   /** An Edit button, owner mode only. what: price|dropoff|lot|run|sold|payment, then ids. */
   const editBtn = (what, cls = '') => (isOwner()
-    ? `<button type="button" class="cs-btn small cs-edit${cls ? ` ${cls}` : ''}" data-edit="${esc(what)}">✎ ${esc(t('edit'))}</button>` : '');
+    ? `<button type="button" class="cs-btn small cs-edit${cls ? ` ${cls}` : ''}" data-edit="${esc(what)}">${esc(t('edit'))}</button>` : '');
 
   function banner() {
     if (!showMoney()) {
@@ -32,7 +32,7 @@ export function mount(root, { farmId }) {
         <h2 class="cs-h2" style="margin:0">${esc(s.data.farm.name)}</h2>
         ${noPrice ? `<div class="cs-chips" style="justify-content:center"><span class="cs-chip noprice">${esc(t('needsPrice'))}</span></div>` : ''}
         <div class="cs-row-btns" style="justify-content:center">
-          <a class="cs-btn primary" href="#/dropoff">＋ ${esc(t('newDropoff'))}</a>
+          <a class="cs-btn primary" href="#/dropoff">${esc(t('newDropoff'))}</a>
           <button type="button" class="cs-btn cs-owner-only" id="editFarm">${esc(t('editFarm'))}</button>
         </div>
       </section>`;
@@ -46,21 +46,27 @@ export function mount(root, { farmId }) {
       <div class="cs-chips" style="justify-content:center">${tt.estimate ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}${tt.needs_price ? `<span class="cs-chip noprice">${esc(t('needsPrice'))}</span>` : ''}</div>
       <p class="cs-muted">${esc(t('paidToDate'))}: ${money(tt.paid)}</p>
       <div class="cs-row-btns" style="justify-content:center">
-        <a class="cs-btn primary" href="#/pay/${s.data.farm.id}">$ ${esc(t('recordPayment'))}</a>
+        <a class="cs-btn primary" href="#/pay/${s.data.farm.id}">${esc(t('recordPayment'))}</a>
         <button type="button" class="cs-btn cs-owner-only" id="editFarm">${esc(t('editFarm'))}</button>
       </div>
     </section>`;
   }
 
+  /** One row per cultivar: name, then tops and smalls, each price its own Edit button. */
   function prices() {
     if (!showMoney()) return '';
     const by = {};
     for (const p of s.data.price_points) (by[p.cultivar] ||= {})[p.type] = p;
     const names = Object.keys(by).sort((a, b) => a.localeCompare(b));
+    const cell = (c, ty) => {
+      const p = by[c][ty];
+      if (!p) return `<span class="cs-ppcell empty"><span class="cs-pptype">${esc(t(ty))}</span> <b>—</b></span>`;
+      return `<button type="button" class="cs-ppcell cs-edit" data-edit="price|${p.id}" data-pp="${p.id}" aria-label="${esc(t('edit'))}: ${esc(c)} ${esc(t(ty))}">
+        <span class="cs-pptype">${esc(t(ty))}</span> <b>${money(p.price_per_lb)}</b> <span class="cs-ppedit">${esc(t('edit'))}</span></button>`;
+    };
     return `<section class="cs-card"><div class="cs-crowhead"><h3 class="cs-h3">${esc(t('pricePoints'))}</h3>
-      <button type="button" class="cs-btn small cs-owner-only" id="addPrice">＋ ${esc(t('addPricePoint'))}</button></div>
-      ${names.length ? `<div class="cs-prices">${names.map((c) => `<div class="cs-tap static cs-pricecard"><b>${esc(c)}</b>
-        ${['tops', 'smalls'].map((ty) => `<div class="cs-pricerow"${by[c][ty] ? ` data-pp="${by[c][ty].id}"` : ''}><span>${esc(t(ty))} <b>${by[c][ty] ? money(by[c][ty].price_per_lb) : '—'}</b></span>${by[c][ty] ? editBtn(`price|${by[c][ty].id}`) : ''}</div>`).join('')}</div>`).join('')}</div>`
+      <button type="button" class="cs-btn small cs-owner-only" id="addPrice">${esc(t('addPricePoint'))}</button></div>
+      ${names.length ? `<ul class="cs-pplist">${names.map((c) => `<li class="cs-pprow"><b class="cs-ppname">${esc(c)}</b>${cell(c, 'tops')}${cell(c, 'smalls')}</li>`).join('')}</ul>`
       : `<p class="cs-muted">${esc(t('noPricePoints'))}</p>`}
     </section>`;
   }
@@ -78,16 +84,28 @@ export function mount(root, { farmId }) {
         ${showMoney() && l.term === 'dropoff' && m.pulled_lbs > 0 ? `<span class="cs-chip">${esc(t(Number(l.absorb_loss) === 1 ? 'paidOnDropoffLbs' : 'paidOnFinalLbs'))}</span>` : ''}
         ${m.needs_price ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : ''}${showMoney() && m.estimate && m.owed > 0 ? `<span class="cs-chip est">${esc(t('estimate'))}</span>` : ''}</div>
       ${after}${sold}${l.note ? `<div class="cs-muted">${esc(t('note'))}: ${esc(l.note)}${Number(l.note_visible) === 1 ? ` <span class="cs-chip">${esc(t('farmSeesNote'))}</span>` : ''}</div>` : ''}
-      <div class="cs-lotbtns">
-        ${m.status === 'dropped' ? `<a class="cs-btn small" href="#/weigh/${d.id}/${l.id}">${esc(t('weigh'))}</a>` : ''}
-        ${m.status === 'weighed' || m.status === 'screening' ? `<a class="cs-btn small" href="#/screen/${d.id}/${l.id}">${esc(t('screen'))}</a>` : ''}
-        ${l.term === 'sold' && m.intake_lbs != null ? `<button type="button" class="cs-btn small" data-sold="${l.id}">＋ ${esc(t('addSold'))}</button>` : ''}
+      <div class="cs-lotbtns">${lotMain(d, l)}${lotMore(l)}</div>
+    </div>`;
+  }
+
+  /** The lot's one main step as a button: Weigh, else Screen, else none (finished). */
+  function lotMain(d, l) {
+    const st = l.money.status;
+    if (st === 'dropped') return `<a class="cs-btn small" href="#/weigh/${d.id}/${l.id}">${esc(t('weigh'))}</a>`;
+    if (st === 'weighed' || st === 'screening') return `<a class="cs-btn small" href="#/screen/${d.id}/${l.id}">${esc(t('screen'))}</a>`;
+    return '';
+  }
+
+  /** Everything else on a lot, in one More: sold pounds, Edit, term / price, Void, and (owner) its runs and sold entries. */
+  function lotMore(l) {
+    const m = l.money;
+    return moreHtml(`lot|${l.id}`, `<div class="cs-lotbtns">
+        ${l.term === 'sold' && m.intake_lbs != null ? `<button type="button" class="cs-btn small" data-sold="${l.id}">${esc(t('addSold'))}</button>` : ''}
         ${editBtn(`lot|${l.id}`)}
         <button type="button" class="cs-btn small cs-owner-only" data-terms="${l.id}">${esc(t('editPrice'))}</button>
         <button type="button" class="cs-btn small danger" data-void="lot|${l.id}">${esc(t('void'))}</button>
       </div>
-      ${entriesHtml(l)}
-    </div>`;
+      ${entriesHtml(l)}`);
   }
 
   /** Owner mode: each live screening run and sold entry of a lot, with its own Edit. */
@@ -107,15 +125,23 @@ export function mount(root, { farmId }) {
     </ul>`;
   }
 
+  /** Who received it and the note, as one quiet labelled line. */
+  const dropMeta = (d) => {
+    const bits = [];
+    if (d.dropped_by) bits.push(`${esc(t('receivedBy'))}: ${esc(d.dropped_by)}`);
+    if (d.note) bits.push(`${esc(t('note'))}: ${esc(d.note)}`);
+    return bits.length ? `<p class="cs-muted cs-dropmeta">${bits.join(' · ')}</p>` : '';
+  };
+
   function dropoffs() {
     const ds = s.data.dropoffs;
+    const screenable = (d) => d.lots.some((l) => l.money.status === 'weighed' || l.money.status === 'screening');
     return `<h2 class="cs-h2">${esc(t('dropoffs'))}</h2>
       ${ds.length ? `<div class="cs-stack">${ds.map((d) => `<section class="cs-card" data-dropoff="${d.id}">
         <div class="cs-cardhead"><h3 class="cs-h3">${esc(when(d.dropped_at))}</h3>
-          <span class="cs-headbtns">${editBtn(`dropoff|${d.id}`)}<button type="button" class="cs-btn small danger" data-void="dropoff|${d.id}">${esc(t('void'))}</button></span></div>
-        ${d.lots.some((l) => l.money.status === 'weighed' || l.money.status === 'screening') ? `<div class="cs-row-btns"><a class="cs-btn small" href="#/print/screen/${d.id}" data-printscreen="${d.id}">🖨 ${esc(t('printScreenSheet'))}</a>
-          <a class="cs-btn small" href="#/photo/screen/${d.id}" data-photoscreen="${d.id}">📷 ${esc(t('photoSheet'))}</a></div>` : ''}
-        ${d.dropped_by || d.note ? `<p class="cs-muted">${esc(d.dropped_by || '')}${d.dropped_by && d.note ? ' · ' : ''}${esc(d.note || '')}</p>` : ''}
+          ${moreHtml(`dropoff|${d.id}`, `${screenable(d) ? `<a class="cs-btn small" href="#/print/screen/${d.id}" data-printscreen="${d.id}">${esc(t('printScreenSheet'))}</a>
+            <a class="cs-btn small" href="#/photo/screen/${d.id}" data-photoscreen="${d.id}">${esc(t('photoSheet'))}</a>` : ''}${editBtn(`dropoff|${d.id}`)}<button type="button" class="cs-btn small danger" data-void="dropoff|${d.id}">${esc(t('void'))}</button>`, { cls: 'cs-headmore' })}</div>
+        ${dropMeta(d)}
         ${d.lots.map((l) => lotHtml(d, l)).join('')}
       </section>`).join('')}</div>` : `<p class="cs-muted">${esc(t('noDropoffs'))}</p>`}`;
   }
@@ -134,7 +160,7 @@ export function mount(root, { farmId }) {
   function render() {
     if (s.error) return errorCard(root, s.error, load);
     if (!s.data) return loading(root);
-    root.innerHTML = `<div class="cs-stack">${banner()}${isOwner() && 'access' in s.data ? accessCardHtml(s.data.access, s.shown) : ''}${prices()}${dropoffs()}${payments()}</div>`;
+    keepOpen(root, () => { root.innerHTML = `<div class="cs-stack">${banner()}${isOwner() && 'access' in s.data ? accessCardHtml(s.data.access, s.shown) : ''}${prices()}${dropoffs()}${payments()}</div>`; });
   }
 
   root.addEventListener('click', async (e) => {

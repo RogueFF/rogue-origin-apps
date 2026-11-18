@@ -56,7 +56,7 @@ export function mount(root, { kind, farmId, dropoffId, lotIds }) {
       <section class="cs-card">
         <p>${esc(t('photoHint'))}</p>
         <div class="cs-photobtns">
-          <label class="cs-btn primary big cs-filebtn">📷 ${esc(t(s.phase === 'failed' ? 'tryAnother' : 'takePhoto'))}
+          <label class="cs-btn primary big cs-filebtn">${esc(t(s.phase === 'failed' ? 'tryAnother' : 'takePhoto'))}
             <input type="file" accept="image/*" capture="environment" id="takePhoto" class="cs-fileinput"></label>
           <label class="cs-btn big cs-filebtn">${esc(t('choosePhoto'))}
             <input type="file" accept="image/*" id="choosePhoto" class="cs-fileinput"></label>

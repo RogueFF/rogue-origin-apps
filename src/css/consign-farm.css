@@ -1,7 +1,9 @@
 /* A partner farm's own page (consignment stage 4).
    Same teal and sage family as consign.css: deep teal, mid teal, mist, sage on a light
    grey page with white cards. Red is kept for attention only. Large, distinct cards;
-   every state carries its word, never colour alone. Self-contained: no shared-base. */
+   every state carries its word, never colour alone. Self-contained: no shared-base.
+   Type and colour follow the staff page (Koa 2026-11-18): one sans, Outfit, with tabular
+   figures for numbers; the lighter look (mist header, mist main buttons). */
 
 .consign-farm {
   --cf-green: #24594f;   /* deep teal: top bar, main buttons, done */
@@ -42,7 +44,7 @@
   padding: 8px 16px; padding-top: max(8px, env(safe-area-inset-top));
   background: var(--cf-green); color: #fff;
 }
-.cf-brand { flex: 1 1 auto; margin: 0; font-family: 'DM Serif Display', Georgia, serif; font-size: 22px; font-weight: 400; min-width: 0; }
+.cf-brand { flex: 1 1 auto; margin: 0; font-size: 20px; font-weight: 700; min-width: 0; }
 .cf-topbtn {
   min-height: 44px; padding: 0 14px; border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.45); background: transparent; color: #fff; cursor: pointer; font-size: 16px;
@@ -50,7 +52,7 @@
 
 .cf-view { max-width: 760px; margin: 0 auto; padding: 16px 16px 64px; }
 .cf-stack { display: grid; gap: 18px; }
-.cf-farm { margin: 4px 0 0; font-family: 'DM Serif Display', Georgia, serif; font-size: 30px; font-weight: 400; overflow-wrap: anywhere; }
+.cf-farm { margin: 4px 0 0; font-size: 28px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
 .cf-h2 { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
 .cf-h3 { margin: 0 0 10px; font-size: 19px; font-weight: 700; }
 .cf-muted { color: var(--text2); }
@@ -67,13 +69,13 @@
 .cf-stand.is-credit { border-left-color: var(--cf-teal); }
 .cf-stand.is-zero { border-left-color: var(--cf-sage); }
 .cf-standlabel { font-size: 20px; font-weight: 600; margin: 4px 0 0; }
-.cf-big { margin: 4px 0 8px !important; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 48px; font-weight: 700; line-height: 1.1; color: var(--cf-green); }
+.cf-big { margin: 4px 0 8px !important; font-variant-numeric: tabular-nums; font-size: 48px; font-weight: 700; line-height: 1.1; color: var(--cf-green); }
 .is-credit .cf-big { color: var(--text); }
 .cf-est { display: flex; gap: 8px; align-items: flex-start; justify-content: center; text-align: left; font-size: 16px; color: var(--text2); }
 .cf-facts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); margin: 14px 0 0; text-align: left; }
 .cf-facts div { background: var(--bg); border-radius: var(--r-md); padding: 10px 12px; }
 .cf-facts dt { font-size: 15px; color: var(--text2); }
-.cf-facts dd { margin: 2px 0 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 20px; font-weight: 700; }
+.cf-facts dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 700; }
 
 /* lists */
 .cf-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
@@ -85,7 +87,7 @@
 .cf-prices .cf-pp { flex-direction: column; margin-left: 0; }
 .cf-name { font-weight: 700; font-size: 19px; }
 .cf-pp { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; }
-.cf-pp b, .cf-payamt { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.cf-pp b, .cf-payamt { font-variant-numeric: tabular-nums; }
 .cf-payday { min-width: 8em; }
 .cf-payamt { font-size: 20px; }
 
@@ -98,7 +100,7 @@
 }
 .cf-lothead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .cf-lotin, .cf-soldline, .cf-lotowed, .cf-note { margin: 6px 0 0 !important; }
-.cf-lotowed b { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.cf-lotowed b { font-variant-numeric: tabular-nums; }
 .cf-note { font-style: italic; }
 .cf-noprice { color: var(--cf-red); font-weight: 700; }
 .cf-after { margin-top: 8px; }
@@ -106,7 +108,7 @@
 .cf-outs { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); margin: 4px 0 0; }
 .cf-outs div { background: var(--card); border: 1px solid var(--cf-line); border-radius: var(--r-sm); padding: 6px 10px; }
 .cf-outs dt { font-size: 14px; color: var(--text2); }
-.cf-outs dd { margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; }
+.cf-outs dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 700; }
 .st-dropped { --st: var(--st-dropped); }
 .st-weighed { --st: var(--st-weighed); }
 .st-screening { --st: var(--st-screening); }
@@ -131,7 +133,7 @@
 .cf-pin {
   width: 100%; min-height: 64px; padding: 8px 12px; border-radius: var(--r-md);
   border: 2px solid var(--cf-line); background: var(--bg);
-  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 32px; letter-spacing: 0.5em; text-align: center;
+  font-variant-numeric: tabular-nums; font-size: 32px; letter-spacing: 0.5em; text-align: center;
 }
 .cf-pin:focus { border-color: var(--cf-green); outline: 3px solid color-mix(in srgb, var(--cf-green) 35%, transparent); outline-offset: 1px; }
 .cf-msg { padding: 10px 12px; border-radius: var(--r-sm); font-weight: 600; }
@@ -156,3 +158,12 @@
   .cf-farm { font-size: 26px; }
   .cf-pp { margin-left: 0; }
 }
+
+/* ---------- lighter look, same as the staff page (Koa 2026-11-18) ---------- */
+.consign-farm { --bg: #f4f8f6; --cf-line: #cfdcd7; --tint: 18%; }
+.cf-top { background: #dcebe6; color: #1d4a42; border-bottom: 1px solid var(--cf-mist); }
+.cf-topbtn { color: #1d4a42; border-color: color-mix(in srgb, #1d4a42 35%, transparent); background: rgba(255, 255, 255, 0.55); }
+.cf-card { border-color: #e2ebe7; box-shadow: none; }
+.cf-btn { border-width: 1.5px; }
+.cf-btn.primary { background: var(--cf-teal); border-color: var(--cf-teal); color: #fff; }
+.cf-btn:focus-visible, .cf-topbtn:focus-visible { outline-color: var(--cf-green); }

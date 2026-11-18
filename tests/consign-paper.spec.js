@@ -101,6 +101,18 @@ async function open(page, { lang = 'en', hash = '#/', fake = makeFake() } = {}) 
 }
 
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
 const pdfPages = (buf) => (buf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
 
 /** A plain test photo made in the page: a big white canvas with lines on it, as a JPEG. Never committed. */
@@ -201,6 +213,8 @@ test.describe('Consignment paper sheets', () => {
     await page.locator('[data-farm="1"]').click();
     await expect(page.locator('#printFarmSheet')).toHaveAttribute('href', '#/print/dropoff/1');
     await page.goto(`${PAGE}#/farm/1`);
+    await openMore(page, '[data-more="dropoff|5"]');
+    await expect(page.locator('[data-printscreen="5"]')).toBeVisible();
     await expect(page.locator('[data-printscreen="5"]')).toHaveAttribute('href', '#/print/screen/5');
   });
 });
@@ -418,6 +432,7 @@ test.describe('Consignment photo: review findings', () => {
     await page.goto(`${PAGE}#/dropoff`);
     await page.locator('[data-farm="1"]').click();
     await page.locator('#cultPick').selectOption('Gamma');
+    await tickOn(page, 'Gamma', 'tops');
     await page.locator('[data-row="Gamma"] [data-type="tops"] input[data-lbs]').fill('7');
     await page.locator('#saveBtn').click();
     await expect(page.locator('#toast')).toHaveText('Saved');

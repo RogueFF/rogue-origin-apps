@@ -53,7 +53,7 @@ export function mount(root, { kind, farmId, dropoffId }) {
         <h2 class="cs-h3">${esc(title())}</h2>
         <p class="cs-muted">${esc(t('printHint'))}</p>
         <div class="cs-row-btns"><a class="cs-btn ghost" href="${s.back}">${esc(t('cancel'))}</a>
-          <a class="cs-btn" id="photoAfterPrint" href="#/${photoHash()}">📷 ${esc(t('photoSheet'))}</a>
+          <a class="cs-btn" id="photoAfterPrint" href="#/${photoHash()}">${esc(t('photoSheet'))}</a>
           <button type="button" class="cs-btn primary big" id="printBtn">${esc(t('printBtn'))}</button></div>
       </section>
       <div class="sh-preview" id="sheetPreview" aria-label="${esc(title())}"><div class="sh-paper">${s.html}</div></div>

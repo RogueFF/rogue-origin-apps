@@ -15,7 +15,7 @@
 import { t } from '../../shared/i18n.js';
 import { call, newKey } from '../api.js';
 import { esc, lbs, money, num, tf, termLabel, typeLabel, runCheck, checkBarHtml } from '../format.js';
-import { errorCard, loading, toast } from '../ui.js';
+import { errorCard, loading, toast, moreHtml, keepOpen } from '../ui.js';
 import { submit, actor, setActor } from '../save.js';
 import { isOwner } from '../owner.js';
 import { go } from '../nav.js';
@@ -193,14 +193,14 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
         <div class="cs-crowhead${s.farmMark ? ' cs-marked' : ''}"><span class="cs-crowname" id="farmName">${esc(s.farm.name)}</span>
         ${s.farmMark ? `<span class="cs-markline">${markTail('farm')}</span>` : ''}
         <button type="button" class="cs-btn small" id="changeFarm">${esc(t('change'))}</button></div>
-        <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">🖨 ${esc(t('printFarmSheet'))}</a>
-          ${s.fromPhoto ? '' : `<a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff/${s.farm.id}">📷 ${esc(t('fillFromPhoto'))}</a>`}</div></section>`;
+        <div class="cs-row-btns"><a class="cs-btn small ghost" id="printFarmSheet" href="#/print/dropoff/${s.farm.id}">${esc(t('printFarmSheet'))}</a>
+          ${s.fromPhoto ? '' : `<a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff/${s.farm.id}">${esc(t('fillFromPhoto'))}</a>`}</div></section>`;
     }
     const live = s.farms.filter((f) => f.active);
     return `<section class="cs-card cs-step">${stepHead(1, 'stepFarm')}
       <p class="cs-muted">${esc(t('chooseFarm'))}</p>
       ${live.length ? `<div class="cs-farmpick">${live.map((f) => `<button type="button" class="cs-btn big" data-farm="${f.id}">${esc(f.name)}</button>`).join('')}</div>` : `<p>${esc(t('noFarms'))}</p>`}
-      ${s.fromPhoto ? '' : `<div class="cs-row-btns"><a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff">📷 ${esc(t('fillFromPhoto'))}</a></div>`}
+      ${s.fromPhoto ? '' : `<div class="cs-row-btns"><a class="cs-btn small ghost" id="fillFromPhoto" href="#/photo/dropoff">${esc(t('fillFromPhoto'))}</a></div>`}
     </section>`;
   }
 
@@ -231,23 +231,64 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   }
   const finalxHtml = (r, ty, p, i) => `<div class="cs-finalx" data-finalx="${r.uid}|${ty}|${i}" data-mode="${finalMode(p)}">${finalxInner(r, ty, p, i)}</div>`;
 
+  /**
+   * One part of a type: the weight box and the Final lb box side by side, labels above.
+   * A split part is headed by its term.
+   */
   function partHtml(r, ty, p, i, split) {
-    const price = priceText(r.cultivar, ty);
     const id = `${r.uid}-${ty}-${i}`;
     const marked = i === 0 && liveMark(r, ty);
     const finMarked = i === 0 && liveMark(r, `${ty}_final`);
-    return `<div class="cs-part${marked ? ' cs-marked' : ''}">
-      <label class="cs-label" for="${id}">${esc(typeLabel(ty))} ${esc(t('lbs'))}${split ? ` · ${esc(termLabel(p.term))}` : ''}</label>
-      <input id="${id}" class="cs-input cs-num${marked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-lbs="${r.uid}|${ty}|${i}" value="${esc(p.lbs)}" placeholder="${esc(r.types[ty].on ? t('notWeighedYet') : t('notBrought'))}">
-      ${marked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}`)}</div>` : ''}
-      <div class="cs-finalbox${finMarked ? ' cs-marked' : ''}">
-        <label class="cs-label" for="${id}-final">${esc(t('finalLb'))}</label>
-        <input id="${id}-final" class="cs-input cs-num${finMarked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-final="${r.uid}|${ty}|${i}" value="${esc(p.final)}" placeholder="${esc(t('finalOptional'))}">
-        ${finMarked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}_final`)}</div>` : ''}
+    return `<div class="cs-part">
+      ${split ? `<div class="cs-partterm">${esc(termLabel(p.term))}</div>` : ''}
+      <div class="cs-pair">
+        <div class="cs-pairbox${marked ? ' cs-marked' : ''}">
+          <label class="cs-label" for="${id}">${esc(t('weightLb'))}</label>
+          <input id="${id}" class="cs-input cs-num${marked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-lbs="${r.uid}|${ty}|${i}" value="${esc(p.lbs)}" placeholder="${esc(r.types[ty].on ? t('notWeighedYet') : t('notBrought'))}">
+          ${marked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}`)}</div>` : ''}
+        </div>
+        <div class="cs-pairbox cs-finalbox${finMarked ? ' cs-marked' : ''}">
+          <label class="cs-label" for="${id}-final">${esc(t('finalLb'))}</label>
+          <input id="${id}-final" class="cs-input cs-num${finMarked ? ' cs-mark' : ''}" inputmode="decimal" autocomplete="off" data-final="${r.uid}|${ty}|${i}" value="${esc(p.final)}" placeholder="${esc(t('finalOptional'))}">
+          ${finMarked ? `<div class="cs-markline">${markTail(`${r.uid}|${ty}_final`)}</div>` : ''}
+        </div>
       </div>
       ${finalxHtml(r, ty, p, i)}
-      ${price == null ? '' : `<div class="cs-price">${price.none ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : `${esc(t('price'))}: ${money(price.price)} ${esc(t('perLb'))}`}</div>`}
-      ${split ? '' : `<button type="button" class="cs-termbtn ${p.term}" data-term="${r.uid}|${ty}|${i}">${esc(termLabel(p.term))}</button>`}
+    </div>`;
+  }
+
+  /** A type's boxes show once it is ticked, or once something is in them (a photo read, an untick). */
+  const typeShown = (slot) => slot.on || slot.parts.some((p) => !blank(p.lbs) || !blank(p.final));
+
+  /**
+   * The term and Split for one type, in a small More. Its summary names a non-default choice
+   * ("Split", "Owed as sold") so it shows at a glance while closed.
+   */
+  function typeMore(r, ty) {
+    const slot = r.types[ty];
+    const split = slot.parts.length > 1;
+    const p = slot.parts[0];
+    let label = '';
+    if (split) label = t('splitLine');
+    else if (p.term !== defaultTerm()) label = termLabel(p.term);
+    const terms = split ? '' : `<div class="cs-chips" role="group" aria-label="${esc(t('term'))}">${['dropoff', 'sold'].map((term) => `<button type="button" class="cs-chipbtn${p.term === term ? ' on' : ''}" aria-pressed="${p.term === term}" data-term="${r.uid}|${ty}|0" data-termval="${term}">${esc(termLabel(term))}</button>`).join('')}</div>`;
+    return moreHtml(`${r.uid}|${ty}`, `${terms}<button type="button" class="cs-btn small ghost" data-split="${r.uid}|${ty}">${esc(t(split ? 'unsplit' : 'splitLine'))}</button>`,
+      { label: label || t('more'), cls: `cs-typemore${label ? ' cs-set' : ''}` });
+  }
+
+  /** One type: its tick row (tick, price, More), then its boxes once shown. */
+  function typeHtml(r, ty) {
+    const slot = r.types[ty];
+    const split = slot.parts.length > 1;
+    const shown = typeShown(slot);
+    const price = priceText(r.cultivar, ty);
+    return `<div class="cs-type${slot.on ? '' : ' off'}" data-type="${ty}">
+      <div class="cs-typehead">
+        <label class="cs-check"><input type="checkbox" data-on="${r.uid}|${ty}"${slot.on ? ' checked' : ''}> <span>${esc(typeLabel(ty))}</span></label>
+        ${price == null ? '' : `<span class="cs-price">${price.none ? `<span class="cs-chip noprice">${esc(t('noPrice'))}</span>` : `${money(price.price)} ${esc(t('perLb'))}`}</span>`}
+        ${shown ? typeMore(r, ty) : ''}
+      </div>
+      ${shown ? slot.parts.map((p, i) => partHtml(r, ty, p, i, split)).join('') : ''}
     </div>`;
   }
 
@@ -258,22 +299,14 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
       <div class="cs-markline">${markTail(`${r.uid}|name`)}${listed || !r.cultivar.trim() ? '' : `<span class="cs-muted">${esc(t('notOnPriceList'))}</span>`}</div></div>`;
   }
 
+  /** One cultivar: name and Remove, tops and smalls, and its note (behind "Add a note" until it has text). */
   function rowHtml(r) {
+    const note = `<label class="cs-field"><span class="cs-label">${esc(t('note'))}</span><input class="cs-input" data-rownote="${r.uid}" value="${esc(r.note)}" autocomplete="off"></label>`;
     return `<div class="cs-crow" data-row="${esc(r.cultivar)}" data-uid="${r.uid}">
       <div class="cs-crowhead">${nameHtml(r)}
-        <button type="button" class="cs-btn small danger" data-remove="${r.uid}" aria-label="${esc(t('remove'))} ${esc(r.cultivar)}">✕ ${esc(t('remove'))}</button></div>
-      <div class="cs-types">
-        ${TYPES.map((ty) => {
-          const slot = r.types[ty];
-          const split = slot.parts.length > 1;
-          return `<div class="cs-type${slot.on ? '' : ' off'}" data-type="${ty}">
-            <label class="cs-check"><input type="checkbox" data-on="${r.uid}|${ty}"${slot.on ? ' checked' : ''}> <span>${esc(typeLabel(ty))}</span></label>
-            ${slot.parts.map((p, i) => partHtml(r, ty, p, i, split)).join('')}
-            <button type="button" class="cs-btn small ghost" data-split="${r.uid}|${ty}">${esc(t(split ? 'unsplit' : 'splitLine'))}</button>
-          </div>`;
-        }).join('')}
-      </div>
-      <label class="cs-field"><span class="cs-label">${esc(t('note'))}</span><input class="cs-input" data-rownote="${r.uid}" value="${esc(r.note)}" autocomplete="off"></label>
+        <button type="button" class="cs-btn small ghost danger" data-remove="${r.uid}" aria-label="${esc(t('remove'))} ${esc(r.cultivar)}">${esc(t('remove'))}</button></div>
+      <div class="cs-types">${TYPES.map((ty) => typeHtml(r, ty)).join('')}</div>
+      ${r.note.trim() ? note : moreHtml(`${r.uid}|note`, note, { label: t('addNote'), cls: 'cs-notemore' })}
     </div>`;
   }
 
@@ -287,10 +320,10 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
         <select class="cs-input cs-select" id="cultPick">
           <option value="">${esc(t('pickCultivar'))}</option>
           ${left.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
-          <option value="__new"${typing ? ' selected' : ''}>＋ ${esc(t('newCultivar'))}</option>
+          <option value="__new"${typing ? ' selected' : ''}>${esc(t('newCultivar'))}</option>
         </select></label>
       ${typing ? `<div class="cs-other"><input class="cs-input" id="otherName" placeholder="${esc(t('otherPlaceholder'))}" aria-label="${esc(t('newCultivar'))}" autocomplete="off">
-        <button type="button" class="cs-btn primary" id="addOther">＋ ${esc(t('addIt'))}</button></div>` : ''}
+        <button type="button" class="cs-btn primary" id="addOther">${esc(t('addIt'))}</button></div>` : ''}
     </section>`;
   }
 
@@ -340,8 +373,11 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     if (s.error) return errorCard(root, s.error, load);
     if (!s.farms || s.loadingFarm) return loading(root);
     const banner = s.fromPhoto ? `<div class="cs-photobanner" id="photoBanner" role="status">${esc(t('fromPhoto'))}</div>` : '';
-    root.innerHTML = `<h2 class="cs-h2">${esc(t('newDropoff'))}</h2>${banner}<div class="cs-stack">
-      ${farmStep()}${s.farm ? cultivarStep() + notesStep() + confirmStep() : ''}</div>`;
+    // Redraws keep each open More open (a term or Split tap inside it redraws the form).
+    keepOpen(root, () => {
+      root.innerHTML = `<h2 class="cs-h2">${esc(t('newDropoff'))}</h2>${banner}<div class="cs-stack">
+        ${farmStep()}${s.farm ? cultivarStep() + notesStep() + confirmStep() : ''}</div>`;
+    });
   }
 
   /** Refresh only the summary and save button, so typing keeps focus. */
@@ -372,7 +408,7 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     if (b.dataset.term) {
       const [uid, ty, i] = b.dataset.term.split('|');
       const p = findRow(uid).types[ty].parts[Number(i)];
-      p.term = p.term === 'sold' ? 'dropoff' : 'sold';
+      p.term = b.dataset.termval || (p.term === 'sold' ? 'dropoff' : 'sold');
       return render();
     }
     if (b.dataset.split) {
@@ -494,6 +530,11 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
     // Ticking never confirms a number. An unsure weight's mark only counts while its type is
     // ticked (unticked, it is not saved); tick it again and the mark is back until edited or OK'd.
     render();
+    // Ticked: its boxes now show; put the cursor in the weight box if it is empty.
+    if (el.checked) {
+      const box = root.querySelector(`[data-lbs="${uid}|${ty}|0"]`);
+      if (box && !box.value) box.focus();
+    }
   });
 
   root.addEventListener('keydown', (e) => {
@@ -501,7 +542,8 @@ export function mount(root, { prefill = null, farmId = null, farmCheck = false }
   });
 
   function focusLast() {
-    const last = root.querySelector('#rows .cs-crow:last-child input[data-lbs]');
+    // A new row has no boxes yet: its tops tick is where the person goes next.
+    const last = root.querySelector('#rows .cs-crow:last-child input[data-on]');
     if (last) last.focus();
   }
 

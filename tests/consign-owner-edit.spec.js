@@ -122,6 +122,18 @@ async function open(page, { owner = false, fake = makeFake(), hash = '#/farm/1' 
   return { fake, blocked };
 }
 const noHorizontalScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+// The dropoff form shows a type's boxes once it is ticked; tick it the way a person does.
+const tickOn = async (page, cultivar, type) => {
+  const box = page.locator(`[data-row="${cultivar}"] [data-on$="|${type}"]`);
+  if (!(await box.isChecked())) await box.check();
+};
+// Controls that live in a "More" disclosure: open it the way a person does (tap its summary).
+const openMore = async (page, sel = 'details.cs-more') => {
+  await page.locator(sel).first().waitFor({ state: 'attached' });
+  const closed = page.locator(`${sel}:not([open]) > summary`);
+  while (await closed.count()) await closed.first().click();
+};
 const shot = (page, name, full = true) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: full });
 const edits = (fake, action) => fake.posts.filter((p) => p.action === action);
 
@@ -131,6 +143,10 @@ test.describe('Consignment owner edits', () => {
       await page.setViewportSize({ width, height: 900 });
       const { blocked } = await open(page, { owner: true });
       await expect(page.locator('[data-edit^="price|"]')).toHaveCount(3);
+      // Lot and dropoff controls sit in each one's More: closed at first, then opened.
+      // (Same URL on the second width: the page is not reloaded, so the Mores are still open.)
+      if (width === 375) await expect(page.locator('[data-edit="lot|10"]')).toBeHidden();
+      await openMore(page);
       await expect(page.locator('[data-edit="dropoff|5"]')).toBeVisible();
       await expect(page.locator('[data-edit="lot|10"]')).toBeVisible();
       await expect(page.locator('[data-edit="lot|11"]')).toBeVisible();

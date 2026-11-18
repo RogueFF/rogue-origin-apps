@@ -1,4 +1,7 @@
 /* Consignment lot ledger, staff page.
+   Type (Koa 2026-11-18, "not a fan of the fonts"): one sans, Outfit, everywhere. No serif
+   titles and no typewriter numbers: numbers are the same sans with tabular figures so
+   columns still line up. Hierarchy is size and weight only (400, 600, 700).
    Palette (Koa 2026-11-16, from a reference dashboard): one family of deep teal,
    mid teal, mist and sage on a light grey page with white cards. Each step has
    its own shade of that family and always carries its word too. Red is kept for
@@ -34,7 +37,10 @@
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-ui, 'Outfit', system-ui, sans-serif);
+  --font-ui: 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-ui);
+  --font-mono: var(--font-ui);
+  font-family: var(--font-ui);
   font-size: 18px;
   line-height: 1.4;
   -webkit-text-size-adjust: 100%;
@@ -57,6 +63,9 @@
 }
 .consign *, .consign *::before, .consign *::after { box-sizing: border-box; }
 :where(.consign) :where(button, input, select, textarea) { font: inherit; color: inherit; }
+/* shared-base lifts every button and link 1px on hover: on this page they stay put (a moving
+   target is harder to tap, and it made the farm buttons jitter under a resting pointer). */
+.consign :is(button, a, summary):hover { transform: none; }
 
 /* ---------- top bar ---------- */
 .cs-top {
@@ -65,7 +74,7 @@
   padding: 8px 16px;
   background: var(--header-bg); color: var(--header-text);
 }
-.cs-title { flex: 1 1 auto; margin: 0; font-family: var(--font-display, serif); font-size: 24px; font-weight: 400; min-width: 0; }
+.cs-title { flex: 1 1 auto; margin: 0; font-size: 22px; font-weight: 700; min-width: 0; }
 .cs-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cs-topbtn, .cs-held {
   min-height: 44px; padding: 0 14px; border-radius: var(--radius-sm);
@@ -78,7 +87,9 @@ body[data-owner="1"] #ownerBtn { background: #fff; color: #111 !important; borde
 
 /* ---------- layout ---------- */
 .cs-view { max-width: 1100px; margin: 0 auto; padding: 16px 16px 120px; outline: none; }
-.cs-h2 { font-family: var(--font-display, serif); font-weight: 400; font-size: 28px; margin: 8px 0 16px; }
+.cs-h2 { font-weight: 700; font-size: 26px; line-height: 1.2; margin: 8px 0 16px; }
+/* Numbers: same sans, figures of equal width so columns line up. */
+.cs-num, .cs-count, .cs-big, .cs-right, .cs-after b, .cs-summary td.n, .cs-tap b { font-variant-numeric: tabular-nums; }
 .cs-h3 { font-size: 20px; font-weight: 700; margin: 0; }
 .cs-muted { color: var(--text-secondary); }
 .cs-loading { padding: 24px 0; }
@@ -97,7 +108,7 @@ body[data-owner="1"] #ownerBtn { background: #fff; color: #111 !important; borde
   background: color-mix(in srgb, var(--st, var(--border)) var(--cs-tint), transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--st, var(--border)) 40%, transparent);
 }
-.cs-count { font-family: var(--font-mono, monospace); font-size: 22px; font-weight: 700; }
+.cs-count { font-size: 22px; font-weight: 700; }
 .st-dropped { --st: var(--st-dropped); }
 .st-weighed { --st: var(--st-weighed); }
 .st-screening { --st: var(--st-screening); }
@@ -119,6 +130,8 @@ body[data-owner="1"] #ownerBtn { background: #fff; color: #111 !important; borde
 .cs-btn.danger { border-color: var(--st-price); color: var(--st-price); }
 .cs-btn.ghost { background: transparent; }
 .cs-btn.small { min-height: 44px; padding: 6px 12px; font-size: 16px; }
+/* shared-base shrinks any .small to 12px on phones; a button label stays readable. */
+.consign .cs-btn.small { font-size: 16px !important; }
 .cs-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .cs-btn.big { min-height: 88px; font-size: 22px; border-radius: var(--radius-lg); width: 100%; }
 .cs-row-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
@@ -136,7 +149,7 @@ body[data-owner="1"] #ownerBtn { background: #fff; color: #111 !important; borde
 a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-tap.static { cursor: default; }
 .cs-tap b { font-weight: 700; }
-.cs-tap .cs-right { margin-left: auto; font-family: var(--font-mono, monospace); font-weight: 700; }
+.cs-tap .cs-right { margin-left: auto; font-weight: 700; }
 
 .cs-chip {
   display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border-radius: 999px;
@@ -147,9 +160,12 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-chip.est { font-weight: 600; }
 .cs-chip.noprice { --st: var(--st-price); }
 
-/* ---------- farm cards on home ---------- */
-.cs-farm { display: block; text-decoration: none; color: var(--text); }
-.cs-farm .cs-big { font-family: var(--font-mono, monospace); font-size: 34px; font-weight: 700; margin: 4px 0; }
+/* ---------- farm rows on home: name, needs-a-price, balance on the right (owner) ---------- */
+.cs-farm { text-decoration: none; color: var(--text); }
+.cs-farmname { font-size: 20px; }
+.cs-farmbal { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.cs-farmbal .cs-muted { font-size: 15px; font-weight: 600; }
+.cs-farm .cs-big { font-size: 22px; font-weight: 700; }
 .cs-credit { color: var(--st-closed); }
 
 /* ---------- forms ---------- */
@@ -160,7 +176,8 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
   border: 2px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 18px;
 }
 .cs-input:focus { outline: none; border-color: var(--gold); }
-.cs-num { font-family: var(--font-mono, monospace); font-size: 24px; font-weight: 700; min-height: 60px; text-align: right; }
+.cs-num { font-size: 24px; font-weight: 600; min-height: 60px; text-align: right; }
+.cs-num::placeholder { font-size: 16px; font-weight: 400; }
 .cs-check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 600; }
 .cs-check input { width: 26px; height: 26px; accent-color: var(--ro-green, #2d3a2e); }
 .cs-error { color: var(--st-price); font-weight: 600; margin: 8px 0; }
@@ -181,12 +198,25 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-crow { border: 2px solid var(--border-strong); border-radius: var(--radius-lg); padding: 12px; background: var(--bg); }
 .cs-crowhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .cs-crowname { font-size: 22px; font-weight: 700; }
-.cs-types { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-.cs-type { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
-.cs-type.off { opacity: 0.7; }
-.cs-part { display: grid; gap: 6px; }
+.cs-crowhead > .cs-crowname { min-width: 0; }
+.cs-crowhead > .cs-btn { flex: 0 0 auto; white-space: nowrap; }
+/* Tops and smalls: each one row (tick, price, More), then weight and Final side by side.
+   Stacked on phones; side by side from 760 px. An unticked type is only its tick row. */
+.cs-types { display: grid; gap: 10px; }
+@media (min-width: 760px) { .cs-types { grid-template-columns: 1fr 1fr; } }
+.cs-type { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; display: grid; gap: 8px; align-content: start; min-width: 0; background: var(--bg-card); }
+.cs-type.off { background: transparent; }
+.cs-type.off .cs-check { color: var(--text-secondary); }
+.cs-typehead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 48px; }
+.cs-typehead .cs-check { margin-right: auto; font-size: 20px; }
+.cs-part { display: grid; gap: 6px; min-width: 0; }
 .cs-part + .cs-part { border-top: 1px dashed var(--border-strong); padding-top: 8px; }
-.cs-price { font-size: 16px; color: var(--text-secondary); }
+.cs-partterm { font-size: 16px; font-weight: 700; }
+.cs-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.cs-pairbox { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.cs-pair .cs-num { font-size: 22px; min-height: 56px; padding: 8px 10px; }
+.cs-pair .cs-num::placeholder { font-size: 14px; }
+.cs-price { font-size: 16px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 /* Final lb (finished at dropoff) under each weight */
 .cs-finalbox { display: grid; gap: 6px; }
 .cs-finalx:empty { display: none; }
@@ -197,16 +227,11 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-losses { display: grid; gap: 8px; padding: 10px; border-radius: var(--radius-md); border: 2px solid var(--cs-teal); background: var(--bg-card); }
 .cs-losses.cs-marked { border: 3px solid var(--st-price); }
 .cs-losshead { font-size: 17px; font-weight: 700; color: var(--text); }
-.cs-lossgrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+.cs-lossgrid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 96px), 1fr)); }
 .cs-losses .cs-checkbar { margin-top: 0; font-size: 17px; padding: 10px 12px; }
 .cs-sumdone .cs-chip { white-space: normal; }
 .cs-summary td:first-child { overflow-wrap: anywhere; }
 .cs-sumdone { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 16px; }
-.cs-termbtn {
-  min-height: 44px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 15px; font-weight: 700;
-  border: 2px solid var(--border-strong); background: transparent; color: var(--text); text-align: center;
-}
-.cs-termbtn.sold { border-color: var(--text); }
 .cs-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .cs-chipbtn { min-height: 48px; padding: 6px 16px; border-radius: 999px; border: 2px solid var(--border-strong); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 18px; font-weight: 600; }
 .cs-chipbtn.on { border-color: var(--cs-green); background: color-mix(in srgb, var(--cs-green) 14%, transparent); }
@@ -215,32 +240,84 @@ a.cs-tap:hover, button.cs-tap:hover { border-color: var(--st, var(--gold)); }
 .cs-other .cs-input { flex: 1 1 200px; width: auto; }
 .cs-summary { width: 100%; border-collapse: collapse; font-size: 18px; }
 .cs-summary td { padding: 8px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.cs-summary td.n { text-align: right; font-family: var(--font-mono, monospace); font-weight: 700; white-space: nowrap; }
+.cs-summary td.n { text-align: right; font-weight: 700; white-space: nowrap; }
 
 /* ---------- screening ---------- */
 .cs-band { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .cs-band > div { border-radius: var(--radius-md); padding: 12px; background: color-mix(in srgb, var(--st, var(--border)) var(--cs-tint), transparent); border: 2px solid var(--st, var(--border-strong)); }
-.cs-band .cs-big { font-family: var(--font-mono, monospace); font-size: 32px; font-weight: 700; }
+.cs-band .cs-big { font-size: 32px; font-weight: 700; }
 .cs-outs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
 .cs-checkbar { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); font-size: 20px; font-weight: 700; border: 2px solid var(--st); background: color-mix(in srgb, var(--st) var(--cs-tint), transparent); }
 .cs-checkbar.good { --st: var(--st-closed); }
 .cs-checkbar.bad { --st: var(--st-price); }
 .cs-after { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 16px; color: var(--text-secondary); }
-.cs-after b { color: var(--text); font-family: var(--font-mono, monospace); }
+.cs-after b { color: var(--text); }
+
+/* ---------- More: a native <details> disclosure with a large touch target ---------- */
+.cs-more { min-width: 0; }
+.cs-moresum {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px;
+  border-radius: var(--radius-md); border: 1.5px solid var(--border-strong); background: var(--bg-card);
+  color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; list-style: none; user-select: none;
+}
+.cs-moresum::-webkit-details-marker { display: none; }
+/* A plain drawn chevron: down when closed, up when open. */
+.cs-moresum::after {
+  content: ''; width: 8px; height: 8px; margin-top: -4px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+}
+.cs-more[open] > .cs-moresum::after { margin-top: 4px; transform: rotate(-135deg); }
+.cs-moresum:hover { border-color: var(--cs-teal); }
+.cs-moresum:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.cs-more[open] > .cs-moresum { background: color-mix(in srgb, var(--cs-mist) 30%, var(--bg-card)); border-color: var(--cs-teal); }
+.cs-morebody { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.cs-morebody > .cs-entries, .cs-morebody > .cs-lotbtns, .cs-morebody > .cs-morenote { flex: 1 1 100%; }
+.cs-morenote { margin: 0; font-size: 16px; }
+/* An open More takes the whole row, under the thing it belongs to. */
+.cs-more[open] { flex: 1 1 100%; }
+.cs-headmore, .cs-typemore { margin-left: auto; }
+.cs-headmore[open], .cs-typemore[open] { display: flex; flex-direction: column; align-items: flex-end; }
+.cs-headmore[open] > .cs-morebody, .cs-typemore[open] > .cs-morebody { align-self: stretch; justify-content: flex-end; }
+/* A More that holds a non-default choice says it ("Split", "Owed as sold"). */
+.cs-typemore.cs-set > .cs-moresum { border-color: var(--cs-teal); background: color-mix(in srgb, var(--cs-mist) 30%, var(--bg-card)); font-weight: 700; }
+.cs-notemore { margin-top: 8px; }
+.cs-notemore > .cs-moresum { border-style: dashed; }
+.cs-notemore > .cs-morebody { display: block; }
+.cs-notemore .cs-field { margin: 0; }
 
 /* ---------- farm page ---------- */
 .cs-banner { text-align: center; }
-.cs-banner .cs-big { font-family: var(--font-mono, monospace); font-size: 48px; font-weight: 700; line-height: 1.1; }
-.cs-lot { border-top: 1px solid var(--border); padding: 12px 0; display: grid; gap: 6px; }
+.cs-banner .cs-big { font-size: 48px; font-weight: 700; line-height: 1.1; }
+.cs-lot { border-top: 1px solid var(--border); padding: 12px 0; display: grid; gap: 6px; min-width: 0; }
+.cs-dropmeta { margin: -4px 0 4px; font-size: 16px; }
 .cs-lot:first-of-type { border-top: 0; }
 .cs-lothead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.cs-lotbtns { display: flex; flex-wrap: wrap; gap: 8px; }
-.cs-prices { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.cs-lotbtns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+/* Price points: one row per cultivar, each price its own Edit button. */
+.cs-pplist { list-style: none; margin: 0; padding: 0; }
+.cs-pprow {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px;
+  padding: 8px 0; border-top: 1px solid var(--border);
+}
+.cs-pprow:first-child { border-top: 0; }
+.cs-ppname { font-size: 18px; min-width: 0; }
+.cs-ppcell {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 48px; padding: 6px 10px;
+  border-radius: var(--radius-md); border: 1.5px solid transparent; background: transparent; color: var(--text);
+  font-size: 16px; text-align: left; cursor: pointer; min-width: 0;
+}
+button.cs-ppcell:hover, button.cs-ppcell:focus-visible { border-color: var(--cs-teal); }
+button.cs-ppcell:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.cs-ppcell b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.cs-ppcell.empty { cursor: default; color: var(--text-secondary); }
+.cs-pptype { color: var(--text-secondary); font-size: 15px; }
+.cs-ppedit { color: var(--cs-green); font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 599px) {
+  .cs-pprow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .cs-ppname { grid-column: 1 / -1; }
+}
 .cs-voidedrow { opacity: 0.55; text-decoration: line-through; }
-/* owner edits: Edit sits on the thing itself, next to Void */
-.cs-pricecard { flex-direction: column; align-items: stretch; }
-.cs-pricerow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-height: 44px; }
-.cs-pricerow b { font-family: var(--font-mono, monospace); }
+/* owner edits: Edit sits next to Void */
 .cs-headbtns { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .cs-tap .cs-headbtns.cs-right, .cs-tap .cs-btn.cs-edit.cs-right { font-family: inherit; font-weight: 600; }
 .cs-entries { margin-top: 4px; }
@@ -269,7 +346,6 @@ body[data-owner="1"] .cs-owner-only { display: revert !important; }
 
 @media (max-width: 599px) {
   .cs-title { font-size: 20px; flex-basis: 100%; order: -1; }
-  .cs-types { grid-template-columns: 1fr; }
   .cs-band .cs-big { font-size: 26px; }
   .cs-banner .cs-big { font-size: 38px; }
 }
@@ -321,7 +397,7 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-fvalue { min-height: 0.42in; border-bottom: 1.5pt solid #000; font-size: 14pt; font-weight: 700; display: flex; align-items: flex-end; padding-bottom: 2pt; }
 .sh-qr { flex: 0 0 1.3in; text-align: center; }
 .sh-qrimg svg { display: block; width: 1.3in; height: 1.3in; }
-.sh-code { margin-top: 4pt; font-family: 'JetBrains Mono', monospace; font-size: 11pt; font-weight: 700; letter-spacing: 0.04em; }
+.sh-code { margin-top: 4pt; font-size: 11pt; font-weight: 700; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
 .sh-pageno { font-size: 9pt; }
 .sh-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .sh-table th, .sh-table td { border: 1.5pt solid #000; padding: 3pt 5pt; vertical-align: middle; text-align: left; }
@@ -333,7 +409,7 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-type { font-size: 10pt; }
 .sh-before { font-size: 13pt; font-weight: 700; }
 .sh-left { display: block; font-size: 7.5pt; font-weight: 400; }
-.sh-ref { display: block; font-family: 'JetBrains Mono', monospace; font-size: 8pt; font-weight: 700; }
+.sh-ref { display: block; font-size: 8pt; font-weight: 700; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
 .sh-na { background: repeating-linear-gradient(45deg, #bbb 0 2px, #fff 2px 7px); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 .sh-tick { text-align: center !important; }
 .sh-tickbox { display: inline-block; width: 0.3in; height: 0.3in; border: 1.5pt solid #000; }
@@ -349,13 +425,17 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
 .sh-paper .sh-page { width: 8.5in; height: 11in; padding: 0.4in; margin-bottom: 0.3in; border: 1px solid var(--border-strong); box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15)); }
 
 /* ---------- farm's page card (owner) ---------- */
-.cs-access .cs-access-line { margin: 8px 0 4px; font-size: 20px; }
+.cs-accessrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.cs-accesstext { flex: 1 1 200px; min-width: 0; }
+.cs-access .cs-access-line { margin: 2px 0 0; font-size: 18px; font-weight: 600; }
+.cs-access .cs-more { margin-left: auto; }
+.cs-access .cs-more[open] { display: flex; flex-direction: column; align-items: flex-end; }
 .cs-linkbox {
   margin-top: 12px; padding: 12px; border-radius: var(--radius-md);
   border: 2px solid var(--cs-green); background: color-mix(in srgb, var(--cs-mist) var(--cs-tint), transparent);
 }
 .cs-linkonce { margin: 0 0 4px; }
-.cs-linktext { font-family: var(--font-mono, monospace); font-size: 15px; }
+.cs-linktext { font-size: 15px; }
 .cs-qrbox { width: min(220px, 100%); margin: 12px auto 0; background: #fff; padding: 10px; border-radius: var(--radius-sm); }
 .cs-qrbox svg { display: block; width: 100%; height: auto; }
 .cs-dlgmsg { margin: 8px 0 0; }
@@ -369,3 +449,29 @@ body:not([data-owner="1"]) [data-staff-static] { cursor: default; }
   #printArea .sh-page { break-after: page; page-break-after: always; }
   #printArea .sh-page:last-child { break-after: auto; page-break-after: auto; }
 }
+
+/* ---------- lighter look (Koa 2026-11-18: "use the lighter colors") ----------
+   Light theme only. The mist and sage carry the page; deep teal is kept for text,
+   the Owner-on state and the one main action per screen. */
+html:not([data-theme="dark"]) .consign {
+  --bg: #f4f8f6;
+  --border: #e2ebe7;
+  --cs-line: #cfdcd7;
+  --header-bg: #dcebe6;
+  --header-text: #1d4a42;
+  --cs-tint: 18%;
+}
+html:not([data-theme="dark"]) .consign .cs-top { border-bottom: 1px solid var(--cs-mist); }
+html:not([data-theme="dark"]) .consign .cs-topbtn { border-color: color-mix(in srgb, var(--header-text) 35%, transparent); background: rgba(255, 255, 255, 0.55); }
+html:not([data-theme="dark"]) .consign[data-owner="1"] #ownerBtn { background: var(--cs-green); border-color: var(--cs-green); color: #fff !important; }
+html:not([data-theme="dark"]) .consign .cs-held { background: var(--cs-green); border-color: var(--cs-green); color: #fff !important; }
+html:not([data-theme="dark"]) .consign .cs-card { border-color: var(--border); box-shadow: none; }
+html:not([data-theme="dark"]) .consign .cs-card.st { border-left: 6px solid var(--st); }
+html:not([data-theme="dark"]) .consign .cs-btn { border-width: 1.5px; }
+/* Main buttons: a mist fill with deep teal words, not a dark block. */
+html:not([data-theme="dark"]) .consign .cs-btn.primary { background: #cfe5df; border-color: var(--cs-teal); color: #173f38; }
+/* The one big action on Home keeps the strong fill so it is found first. */
+html:not([data-theme="dark"]) .consign .cs-btn.primary.big { background: var(--cs-teal); border-color: var(--cs-teal); color: #fff; }
+html:not([data-theme="dark"]) .consign .cs-btn.danger { background: transparent; border-color: color-mix(in srgb, var(--st-price) 45%, transparent); }
+/* Edit is everywhere in owner mode: keep it quiet. */
+html:not([data-theme="dark"]) .consign .cs-btn.cs-edit { border-color: transparent; background: color-mix(in srgb, var(--cs-mist) 28%, transparent); color: #1d4a42; }
