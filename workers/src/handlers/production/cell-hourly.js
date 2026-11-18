@@ -30,6 +30,7 @@ import { autoTops } from '../../lib/cell-auto.js';
 import { eodWindows } from '../../lib/cell-eod.js';
 import { pacificParts } from '../../lib/pacific.js';
 import { completeJob } from './order-flow.js';
+import { fillSlot, fillStatus } from './cell-fill.js';
 
 const MAX_SMALLS_LBS = 200;
 const MAX_NOTE = 500;
@@ -221,6 +222,8 @@ async function getCellHourly(params, env) {
       slot: r.time_slot, smalls: r.smalls_lbs, cultivar: r.cultivar, updatedAt: r.updated_at,
     })),
     auto: await autoRows(env, date, (roster.results || []).map(r => r.station_id)),
+    // The Hourly entry fill: its switch, and each hour's row against the cells (lib/cell-fill.js).
+    fill: await fillStatus(env, date),
   });
 }
 
@@ -257,6 +260,7 @@ async function setCellHourly(body, env) {
      ON CONFLICT (production_date, time_slot, station_id) DO UPDATE SET
        ${cols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`
   ).bind(date, slot, cell.station_id, ...vals).run();
+  if (cols.includes('cultivar')) await fillSlot(env, date, slot);
 
   return successResponse({ success: true, date, slot, stationId: cell.station_id, saved: cols });
 }
@@ -331,6 +335,7 @@ async function setRoomSmalls(body, env) {
      ON CONFLICT (production_date, time_slot) DO UPDATE SET
        ${cols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = datetime('now')`
   ).bind(date, slot, ...vals).run();
+  await fillSlot(env, date, slot);
 
   return successResponse({ success: true, date, slot, saved: cols });
 }
