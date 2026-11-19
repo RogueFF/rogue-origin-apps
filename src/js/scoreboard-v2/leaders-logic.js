@@ -7,10 +7,14 @@
  *         last workday ("hold")
  *       - once today's hours are coming in: every ROTATE_EVERY_MS (start to
  *         start) for ROTATE_SHOW_MS, showing today ("rotate")
+ *       - from EOD_HOLD_FROM (4:20 cleanup) on: today's full ranking, the whole
+ *         time, until the next day's first hour ("hold")
  * Koa 2026-11-18: "before numbers are entered tomorrow, the scoreboard shows
  * rankings from today. As soon as they start entering numbers, it revolves every
  * 10 minutes for 2 minutes holding. Once they start entering numbers into the
  * cells hourly-entry, the rankings start going off of those new ones."
+ * Then: "at EOD it should show the full rankings for the day (4:20 cleanup)… left
+ * until tomorrow's numbers start getting entered."
  * Toyota rule: celebrate the best, never show the bottom. Only the top 5 is
  * drawn here, and nobody is ever marked red.
  *
@@ -29,6 +33,7 @@ export const PRELOAD_MS = 15 * 1000;              // the board loads hidden this
 export const READY_TIMEOUT_MS = 12 * 1000;        // not ready by then: skip this turn, never show an error
 export const IDLE_AFTER_INPUT_MS = 60 * 1000;     // someone touched the board: leave it alone a minute
 export const MIN_ROTATE_WIDTH = 1025;             // phones and tablets never rotate
+export const EOD_HOLD_FROM = 16 * 60 + 20;        // 4:20 PM Pacific (cleanup): the day's board holds from here
 
 export const LABELS = {
   en: {
@@ -55,6 +60,13 @@ const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** Today's date on the farm (Pacific), YYYY-MM-DD. */
 export function pacificToday(ms = Date.now()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+}
+
+/** Minutes since midnight on the farm (Pacific). */
+export function pacificMinutes(ms = Date.now()) {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(new Date(ms)).split(':').map(Number);
+  return h * 60 + m;
 }
 
 /**
@@ -101,13 +113,14 @@ export function panelModel(resp, today = pacificToday()) {
 }
 
 /**
- * How the TV uses the crew board: 'hold' (no hours typed today yet: the last
- * workday's board stays up), 'rotate' (today's hours are in: 10 min / 2 min),
- * or null (nothing to show).
+ * How the TV uses the crew board: 'hold' (the board stays up: before today's
+ * first typed hour it shows the last workday; from 4:20 PM it shows today),
+ * 'rotate' (today's hours are coming in: 10 min / 2 min), or null (nothing to show).
  */
-export function rotationMode(model) {
+export function rotationMode(model, ms = Date.now()) {
   if (!model) return null;
-  return model.live ? 'rotate' : 'hold';
+  if (!model.live) return 'hold';
+  return pacificMinutes(ms) >= EOD_HOLD_FROM ? 'hold' : 'rotate';
 }
 
 /** "Mon, Nov 17" / "lun, 17 nov" for the panel title (the data's own day, never "yesterday"). */
