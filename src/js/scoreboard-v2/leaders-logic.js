@@ -1,9 +1,16 @@
 /**
  * Crew Top 5 on the barn scoreboard (Koa 2026-11-17: "both"):
- *   · an always-on panel with the last workday's top 5 by tops lb per hour
- *     (lb big, grams small, as on the crew board) and the goal
- *   · on the TV only, every ROTATE_EVERY_MS (start to start) the full crew board covers the
- *     scoreboard for ROTATE_SHOW_MS, then the scoreboard comes back
+ *   · an always-on panel with the top 5 by tops lb per hour (lb big, grams
+ *     small, as on the crew board) and the goal
+ *   · on the TV only, the full crew board covers the scoreboard:
+ *       - before anyone types today's first hour: the whole time, showing the
+ *         last workday ("hold")
+ *       - once today's hours are coming in: every ROTATE_EVERY_MS (start to
+ *         start) for ROTATE_SHOW_MS, showing today ("rotate")
+ * Koa 2026-11-18: "before numbers are entered tomorrow, the scoreboard shows
+ * rankings from today. As soon as they start entering numbers, it revolves every
+ * 10 minutes for 2 minutes holding. Once they start entering numbers into the
+ * cells hourly-entry, the rankings start going off of those new ones."
  * Toyota rule: celebrate the best, never show the bottom. Only the top 5 is
  * drawn here, and nobody is ever marked red.
  *
@@ -11,7 +18,8 @@
  */
 
 export const TOP = 5;
-export const REFRESH_MS = 5 * 60 * 1000;          // re-read the crew board every 5 min
+export const REFRESH_MS = 5 * 60 * 1000;          // re-read the crew board every 5 min…
+export const HOLD_REFRESH_MS = 60 * 1000;         // …every minute while waiting for today's first hour
 export const FETCH_TIMEOUT_MS = 10 * 1000;
 // Koa 2026-11-18: "every 10 minutes for 2 minutes at a time" (was 30 s)
 export const ROTATE_EVERY_MS = 10 * 60 * 1000;    // the crew board comes up every 10 min, start to start…
@@ -50,28 +58,26 @@ export function pacificToday(ms = Date.now()) {
 }
 
 /**
- * Which day the panel shows (Koa 2026-11-18: "show top 5 leaderboard on bottom
- * (based off of yesterdays numbers)"): the latest workday BEFORE today with a
- * ranking. Typed hours land in crew_hours during the shift, so the API's own
- * `day` can flip to today mid-shift; the board never shows a half day.
- * Returns { day, ranked, room } or null.
+ * Which day the panel shows: today, as soon as today has a ranking (someone
+ * typed an hour on the Cell hourly log); before that, the latest workday before
+ * today (Koa 2026-11-18, see the header). Returns { day, ranked, room } or null.
  */
 export function pickDay(resp, today) {
   if (!resp || resp.success === false) return null;
   const by = resp.byDay && typeof resp.byDay === 'object' ? resp.byDay : null;
   if (by) {
-    const days = Object.keys(by).filter((d) => ISO_DAY.test(d) && d < today && Array.isArray(by[d]?.ranked) && by[d].ranked.length).sort();
+    const days = Object.keys(by).filter((d) => ISO_DAY.test(d) && d <= today && Array.isArray(by[d]?.ranked) && by[d].ranked.length).sort();
     const d = days[days.length - 1];
     return d ? { day: d, ranked: by[d].ranked, room: by[d].room || null } : null;
   }
-  // an older reply without byDay: only its own last workday, and only if it isn't today
-  if (Array.isArray(resp.top) && ISO_DAY.test(resp.day || '') && resp.day < today) return { day: resp.day, ranked: resp.top, room: resp.room || null };
+  // an older reply without byDay: its own last workday (never a future date)
+  if (Array.isArray(resp.top) && ISO_DAY.test(resp.day || '') && resp.day <= today) return { day: resp.day, ranked: resp.top, room: resp.room || null };
   return null;
 }
 
 /**
  * The crewBoard reply → what the panel draws, or null to hide the panel
- * (failed call, success:false, no ranked workday before today). Rows are
+ * (failed call, success:false, no ranked workday). Rows are
  * capped at TOP and kept in the API's order (rank 1 first).
  */
 export function panelModel(resp, today = pacificToday()) {
@@ -91,7 +97,17 @@ export function panelModel(resp, today = pacificToday()) {
       overGoal: goal ? p.lbHr >= goal.lbHr : false,
     }));
   if (!rows.length) return null;
-  return { day: pick.day, goal, rows };
+  return { day: pick.day, live: pick.day === today, goal, rows };
+}
+
+/**
+ * How the TV uses the crew board: 'hold' (no hours typed today yet: the last
+ * workday's board stays up), 'rotate' (today's hours are in: 10 min / 2 min),
+ * or null (nothing to show).
+ */
+export function rotationMode(model) {
+  if (!model) return null;
+  return model.live ? 'rotate' : 'hold';
 }
 
 /** "Mon, Nov 17" / "lun, 17 nov" for the panel title (the data's own day, never "yesterday"). */
@@ -134,7 +150,7 @@ export function localApi(param) {
 
 /**
  * The crew board's TV view of one workday, in the scoreboard's language. With
- * `day` it shows the same day as the Top 5 panel (never today's half day).
+ * `day` it shows the same day as the Top 5 panel.
  */
 export function crewBoardUrl(lang, api, day) {
   const q = new URLSearchParams({ tv: '1', view: 'day', lang: lang === 'en' ? 'en' : 'es' });

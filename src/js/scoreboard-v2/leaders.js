@@ -10,8 +10,8 @@
  */
 import { registerLabels, getLang, t } from '../shared/i18n.js';
 import {
-  LABELS, REFRESH_MS, FETCH_TIMEOUT_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, ROTATE_RETRY_MS,
-  PRELOAD_MS, READY_TIMEOUT_MS, nextRotationAt, panelModel, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  LABELS, REFRESH_MS, HOLD_REFRESH_MS, FETCH_TIMEOUT_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, ROTATE_RETRY_MS,
+  PRELOAD_MS, READY_TIMEOUT_MS, nextRotationAt, panelModel, rotationMode, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from './leaders-logic.js';
 
 registerLabels(LABELS);
@@ -28,7 +28,7 @@ let lastInput = 0;
 
 // ---------- panel ----------
 function render() {
-  // the latest workday BEFORE today (Koa 2026-11-18: "based off of yesterdays numbers")
+  // today once its hours are coming in, else the last workday (leaders-logic.js)
   model = lastReply ? panelModel(lastReply, pacificToday()) : null;
   const panel = $('leadersPanel');
   if (!panel) return;
@@ -49,7 +49,9 @@ function render() {
   panel.hidden = false;
 }
 
+let loadTimer = null;
 async function load() {
+  clearTimeout(loadTimer);
   try {
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     const timer = ctl ? setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS) : null;
@@ -61,6 +63,8 @@ async function load() {
     lastReply = null;       // hide the panel; the rotation skips too
   }
   render();
+  // waiting for today's first hour: look every minute so the switch is quick
+  loadTimer = setTimeout(load, rotationMode(model) === 'hold' ? HOLD_REFRESH_MS : REFRESH_MS);
 }
 
 // ---------- rotation (TV only) ----------
@@ -90,6 +94,7 @@ function flags() {
 let nextAt = Date.now() + ROTATE_EVERY_MS;
 let phase = 'idle';          // idle → loading → showing → idle
 let frameEl = null;
+let frameDay = null;         // the day the frame on screen shows
 let phaseAt = 0;
 
 function boardReady(frame) {
@@ -121,8 +126,10 @@ function tick() {
   const now = Date.now();
   const ov = $('leadersOverlay');
   if (!ov) return;
+  const hold = rotationMode(model) === 'hold';
   if (phase === 'idle') {
-    if (now < nextAt - PRELOAD_MS) return;
+    // hold: before today's first hour the board stays up, no schedule
+    if (!hold && now < nextAt - PRELOAD_MS) return;
     if (!shouldRotate(flags())) { nextAt = now + ROTATE_RETRY_MS; return; }
     // undo the page zoom (TV Mode) so the board draws at its own size
     const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
@@ -131,7 +138,8 @@ function tick() {
     frameEl.className = 'ldr-frame';
     frameEl.title = t('ldrBoard');
     frameEl.setAttribute('tabindex', '-1');
-    frameEl.src = crewBoardUrl(getLang(), params.get('api'), model?.day);
+    frameDay = model?.day || null;
+    frameEl.src = crewBoardUrl(getLang(), params.get('api'), frameDay);
     ov.appendChild(frameEl);
     phase = 'loading';
     phaseAt = now;
@@ -140,8 +148,8 @@ function tick() {
   if (phase === 'loading') {
     if (!shouldRotate(flags())) { skip(ROTATE_RETRY_MS); return; }
     const ready = boardReady(frameEl);
-    if (!ready && now - phaseAt > READY_TIMEOUT_MS) { skip(ROTATE_EVERY_MS); return; }
-    if (ready && now >= nextAt) {
+    if (!ready && now - phaseAt > READY_TIMEOUT_MS) { skip(hold ? ROTATE_RETRY_MS : ROTATE_EVERY_MS); return; }
+    if (ready && (hold || now >= nextAt)) {
       ov.classList.add('on');
       document.documentElement.classList.add('ldr-rotating');
       phase = 'showing';
@@ -150,6 +158,13 @@ function tick() {
     return;
   }
   if (phase === 'showing') {
+    // today's first hour just came in: the scoreboard comes back, the 10-min beat starts now
+    if (frameDay !== (model?.day || null)) { dropFrame(); nextAt = now + ROTATE_EVERY_MS; return; }
+    if (hold) {
+      // the last workday's board stays up until today's hours start (or something needs the screen)
+      if (isBusy() || document.hidden || !boardReady(frameEl) || !shouldRotate(flags())) skip(ROTATE_RETRY_MS);
+      return;
+    }
     // back early if the scoreboard has something to say (a bag, a modal) or the board broke
     if (now - phaseAt >= ROTATE_SHOW_MS || isBusy() || document.hidden || !boardReady(frameEl)) {
       const startedAt = phaseAt;
@@ -161,13 +176,13 @@ function tick() {
 
 function onInput() {
   lastInput = Date.now();
-  if (phase !== 'idle') skip(ROTATE_EVERY_MS);            // a touch brings the scoreboard back
+  // a touch brings the scoreboard back; while holding, the board returns after a minute untouched
+  if (phase !== 'idle') skip(rotationMode(model) === 'hold' ? ROTATE_RETRY_MS : ROTATE_EVERY_MS);
 }
 
 function init() {
   render();
   load();
-  setInterval(load, REFRESH_MS);
   document.addEventListener('ro:langchange', render);
   ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => window.addEventListener(ev, onInput, { passive: true, capture: true }));
   setInterval(tick, 1000);
