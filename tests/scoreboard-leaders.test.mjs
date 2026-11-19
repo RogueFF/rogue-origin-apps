@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 
 import {
   TOP, REFRESH_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, PRELOAD_MS, READY_TIMEOUT_MS, IDLE_AFTER_INPUT_MS, nextRotationAt,
-  MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, rotationMode, HOLD_REFRESH_MS, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, rotationMode, HOLD_REFRESH_MS, pacificMinutes, EOD_HOLD_FROM, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from '../src/js/scoreboard-v2/leaders-logic.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -193,12 +193,16 @@ test("before today's first hour: the last workday's ranking, held on the TV", ()
   assert.equal(rotationMode(panelModel(BY_DAY, '2026-11-16')), 'hold');
 });
 
+// Pacific times on 2026-11-18 (PST, UTC-8)
+const AT = (hhmm) => Date.parse(`2026-11-18T${hhmm}:00-08:00`);
+
 test("once today's hours are typed: today's ranking, rotating 10 min / 2 min", () => {
   const m = panelModel(BY_DAY, '2026-11-18');
   assert.equal(m.day, '2026-11-18');
   assert.equal(m.live, true);
   assert.deepEqual(m.goal, { lbHr: 0.48, lb: '0.48', gph: 218 });   // today's goal
-  assert.equal(rotationMode(m), 'rotate');
+  assert.equal(rotationMode(m, AT('08:05')), 'rotate');
+  assert.equal(rotationMode(m, AT('16:19')), 'rotate');
   // the same reply the next morning is the last workday again: hold
   assert.equal(rotationMode(panelModel(BY_DAY, '2026-11-19')), 'hold');
 });
@@ -214,6 +218,19 @@ test('a day with no ranked rows is skipped; nothing ranked: no panel and no boar
   // an older reply without byDay: its own day, live when it is today
   assert.equal(panelModel(LIVE, '2026-11-17').live, true);
   assert.equal(panelModel(LIVE, '2026-11-16'), null);
+});
+
+test("from 4:20 PM (cleanup) today's full ranking holds until the next day's first hour", () => {
+  assert.equal(EOD_HOLD_FROM, 16 * 60 + 20);
+  assert.equal(pacificMinutes(AT('16:20')), 16 * 60 + 20);
+  assert.equal(pacificMinutes(Date.parse('2026-11-19T07:55:00Z')), 23 * 60 + 55);   // 11:55 PM Pacific
+  const m = panelModel(BY_DAY, '2026-11-18');
+  assert.equal(rotationMode(m, AT('16:20')), 'hold');
+  assert.equal(rotationMode(m, AT('23:55')), 'hold');
+  // after midnight the same day is "the last workday": still held, still the 18th
+  const next = panelModel(BY_DAY, '2026-11-19');
+  assert.equal(next.day, '2026-11-18');
+  assert.equal(rotationMode(next, Date.parse('2026-11-19T07:00:00-08:00')), 'hold');
 });
 
 test('while holding, the board is re-read every minute so the switch is quick', () => {
