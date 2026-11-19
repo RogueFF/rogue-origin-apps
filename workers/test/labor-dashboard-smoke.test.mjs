@@ -38,8 +38,9 @@ test('dashboard for a past day: hours by slot length in the day view and the dai
   const data = body.data || body;
   const day = (data.daily || []).find(d => d.date === DAY);
   assert.ok(day, 'the day is in the daily list');
-  assert.ok(Math.abs(day.operatorHours - 166.5) < 0.1, `daily operatorHours ${day.operatorHours}`);
+  // 166.5 by slot length + the cell-day bagger/tagger, one per counted slot (7.6 h)
+  assert.ok(Math.abs(day.operatorHours - 174.1) < 0.1, `daily operatorHours ${day.operatorHours}`);
   // the day view (today here: no cost config in the fake DB, so the costs are 0)
-  assert.ok(Math.abs(data.today.operatorHours - 166.5) < 0.1, `today operatorHours ${data.today.operatorHours}`);
+  assert.ok(Math.abs(data.today.operatorHours - 174.1) < 0.1, `today operatorHours ${data.today.operatorHours}`);
   assert.equal(data.today.totalTops, 43);
 });
