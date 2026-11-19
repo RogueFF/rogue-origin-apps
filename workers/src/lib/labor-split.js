@@ -11,6 +11,11 @@
  *   trimmers           tops
  *   smalls inspector   smalls (config labor.smalls_inspector_count per slot)
  *   buckers, water spider (one per slot)   shared, split by the day's tops/smalls weight
+ *   bagger/tagger      cell days only: tops (config labor.bagger_count per slot,
+ *                      default 1). Koa 2026-11-18: "Bagging/Tagging is usually 1
+ *                      person", cell days only. Charged to tops: the 5 kg bags,
+ *                      their tags and the Shopify scans are the tops; smalls go
+ *                      out through the T-Zero op, already on smalls.
  *   T-Zero             line days: shared, split by weight.
  *                      cell days: smalls only. In cell mode the T-Zero works only
  *                      on smalls (Koa, 2026-11-10), like the smalls inspector.
@@ -32,12 +37,13 @@ const n = v => Number(v) || 0;
  * @param {number} [o.inspectors=1] smalls inspectors per slot
  * @param {object} [o.multipliers] schedule.time_slot_multipliers
  * @param {string} [o.cellModeFrom]
+ * @param {number} [o.baggers=1] bagger/taggers per slot on cell days
  */
-export function laborSplit(rows, { loadedRate, inspectors = 1, multipliers = null, cellModeFrom = CELL_MODE_FROM }) {
+export function laborSplit(rows, { loadedRate, inspectors = 1, multipliers = null, cellModeFrom = CELL_MODE_FROM, baggers = 1 }) {
   const date = rows.length ? String(rows[0].production_date) : '';
   const cellMode = !!cellModeFrom && date >= cellModeFrom;
   let tops = 0, smalls = 0;
-  const h = { trimmer: 0, bucker: 0, tzero: 0, spider: 0, inspector: 0 };
+  const h = { trimmer: 0, bucker: 0, tzero: 0, spider: 0, inspector: 0, bagger: 0 };
   const heads = { trimmers: 0, buckers: 0, tzero: 0, slots: 0 };
   for (const r of rows) {
     tops += n(r.tops_lbs1);
@@ -50,12 +56,13 @@ export function laborSplit(rows, { loadedRate, inspectors = 1, multipliers = nul
     h.tzero += z * m;
     h.spider += m;
     h.inspector += inspectors * m;
+    if (cellMode) h.bagger += n(baggers) * m;
     heads.trimmers += t; heads.buckers += b; heads.tzero += z; heads.slots += 1;
   }
   const total = tops + smalls;
   const topsRatio = total > 0 ? tops / total : 1;
   const shared = h.bucker + h.spider + (cellMode ? 0 : h.tzero);
-  const topsHours = h.trimmer + shared * topsRatio;
+  const topsHours = h.trimmer + h.bagger + shared * topsRatio;
   const smallsHours = shared * (1 - topsRatio) + h.inspector + (cellMode ? h.tzero : 0);
   const topsCost = topsHours * loadedRate;
   const smallsCost = smallsHours * loadedRate;
@@ -64,7 +71,7 @@ export function laborSplit(rows, { loadedRate, inspectors = 1, multipliers = nul
     tops, smalls, totalLbs: total,
     hours: h,
     heads,
-    operatorHours: h.trimmer + h.bucker + h.tzero + h.spider + h.inspector,
+    operatorHours: h.trimmer + h.bucker + h.tzero + h.spider + h.inspector + h.bagger,
     topsHours, smallsHours,
     topsLaborCost: topsCost,
     smallsLaborCost: smallsCost,

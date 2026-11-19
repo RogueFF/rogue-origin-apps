@@ -43,6 +43,7 @@ async function laborOptions(env) {
   return {
     loadedRate: await getLoadedLaborRate(env),
     inspectors: (await getConfig(env, 'labor.smalls_inspector_count')) ?? 1,
+    baggers: (await getConfig(env, 'labor.bagger_count')) ?? 1,
     multipliers: (await getConfig(env, 'schedule.time_slot_multipliers')) ?? TIME_SLOT_MULTIPLIERS,
     cellModeFrom: (await getConfig(env, 'labor.cell_mode_from')) ?? CELL_MODE_FROM,
   };

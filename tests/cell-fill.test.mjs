@@ -77,7 +77,7 @@ test('mapping: cells in use, person-minutes, the cells\' tops, the room\'s small
   assert.equal(row.smalls_lbs1, 4);
   assert.equal(row.cultivar1, '2026 - Sour Lifter / Sungrown');
   assert.equal(row.buckers_line1, 0);
-  assert.equal(row.tzero_line1, 0);
+  assert.equal(row.tzero_line1, 1, 'one T-Zero op runs the smalls every filled hour');
   assert.deepEqual(row.mixedCultivars, ['2026 - Sour Lifter / Sungrown', 'Sour Lifter']);
 });
 
@@ -100,6 +100,7 @@ test('room smalls with no cell typed fill nothing; the hour fills once a cell is
   await typeTops(env, a, 'table1', 0.6);
   const r = prodRow(sqlite);
   assert.deepEqual([r.trimmers_line1, r.tops_lbs1, r.smalls_lbs1], [1, 0.6, 3]);
+  assert.equal(r.tzero_line1, 1, 'the filled hour carries the T-Zero op (Koa 2026-11-18)');
 });
 
 test('a hand row that lands after the read is still left alone (one-statement upsert)', async () => {
