@@ -95,14 +95,17 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
 
   // 0 g: the tared empty basket is armed.
   await setKg(page, fake, 0);
-  await expect(page.locator('#netValue')).toHaveText('0.0 g');
+  await expect(page.locator('#netValue')).toHaveText('0.00 lb');
+  await expect(page.locator('#toGo')).toHaveText('0.0 g');
+  await expect(page.locator('#targetText')).toHaveText('of 1.10 lb goal this hour');
   await shot(page, '1-zero');
 
   // Mid-batch.
   for (const kg of [0.03, 0.07, 0.11, 0.15, 0.19, 0.212]) await setKg(page, fake, kg, 700);
   await page.waitForTimeout(800);
-  await expect(page.locator('#toGo')).toHaveText('0.47 lb');
-  await expect(page.locator('#hourLb')).toHaveText('0.47 lb');
+  await expect(page.locator('#netValue')).toHaveText('0.47 lb');
+  await expect(page.locator('#toGo')).toHaveText('212.0 g');
+  await expect(page.locator('#ringFill')).not.toHaveClass(/full/);
   await expect(page.locator('#pct')).toContainText('9:00');
   await shot(page, '2-mid-batch');
 
@@ -122,7 +125,6 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
   await expect(guide).toContainText('0.47 lb');
   await expect(page.locator('#swapSteps li').nth(0)).toHaveClass('now');
   await expect(page.locator('#banner')).toBeHidden();
-  await expect(page.locator('#ringFill')).toHaveClass(/full/);
   await expect.poll(() => posted(fake, 'setCellState').some((p) => p.body.phase === 'finished')).toBe(true);
   await shot(page, '4-swap-step1');
 
@@ -163,7 +165,7 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
 
   // Spanish.
   await page.locator('#langToggle').click();
-  await expect(page.locator('#hourLabel')).toContainText('Esta hora');
+  await expect(page.locator('#targetText')).toContainText('meta esta hora');
   expect(errors).toEqual([]);
   await context.close();
 });
@@ -202,8 +204,13 @@ test('day start: yesterday\'s batch is gone; name, TARE, "Ready: start trimming"
   await shot(page, 'day-2-ready');
   await setKg(page, fake, 0.012, 2000);
   await expect(page.locator('#banner')).toBeHidden();
-  await expect(page.locator('#toGo')).toHaveText('0.03 lb');
+  await expect(page.locator('#netValue')).toHaveText('0.03 lb');
   await shot(page, 'day-3-trimming');
+  // The hour's goal (1.10 lb/trimmer-hr x 60 min = 499 g): the circle turns green.
+  for (const kg of [0.15, 0.3, 0.45, 0.52]) await setKg(page, fake, kg, 1200);
+  await expect(page.locator('#ringFill')).toHaveClass(/full/);
+  await expect(page.locator('#netValue')).toHaveText('1.15 lb');
+  await shot(page, 'day-4-goal-met');
   expect(errors).toEqual([]);
   await context.close();
 });

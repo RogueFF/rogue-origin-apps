@@ -26,7 +26,7 @@ import { LIFT_G } from './lift.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 import { shortCultivar } from './queue.mjs';
 import {
-  G_PER_LB, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, hourFraction, slotEnd, workingMinute,
+  G_PER_LB, hourGoalG, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, slotEnd, workingMinute,
 } from './line.mjs';
 import { createSeat, elapsedMs } from './seat.mjs';
 
@@ -39,6 +39,7 @@ const IDLE_MS = 1000;
 const DOWN_MS = 2000;    // scale disconnected
 const SLOW_MS = 5000;    // page hidden
 const LINE_MS = 15000;   // Hourly entry's cultivar and this seat's name, read this often
+const RATE_MS = 5 * 60000; // the line's lb per trimmer-hour (the hour's goal), read this often
 const SEND_MS = 60000;   // the hour totals go to the Worker at least this often while they change
 const RING_LEN = 597;
 const CHIME_AGAIN_MS = 60000;   // the hour is done and no swap yet: chime again this often
@@ -54,7 +55,7 @@ registerLabels({
     notListed: 'Not on the list? Tell the lead.',
     cultivar: 'Cultivar', fromHourly: 'from Hourly entry', waitHourly: 'Waiting for Hourly entry',
     newCvNext: 'New cultivar next batch: {c}',
-    netHint: 'net · in this basket', inBasket: 'In this basket', hourEnds: 'Batch ends',
+    goalOf: 'of {lb} lb goal this hour', thisHourLb: 'this hour', onScale: 'On the scale', hourEnds: 'Batch ends',
     endsAt: '{t} · {m} min left', batchDone: 'Batch done',
     thisHour: 'This hour', today: 'Today at this seat', pace: 'Pace',
     baskets: '{n} batches', basket1: '1 batch', lbHr: 'lb/hr',
@@ -81,7 +82,7 @@ registerLabels({
     notListed: '¿No está en la lista? Avise al líder.',
     cultivar: 'Variedad', fromHourly: 'de la entrada por hora', waitHourly: 'Esperando la entrada por hora',
     newCvNext: 'Variedad nueva en el siguiente lote: {c}',
-    netHint: 'neto · en esta canasta', inBasket: 'En esta canasta', hourEnds: 'El lote termina',
+    goalOf: 'de {lb} lb de meta esta hora', thisHourLb: 'esta hora', onScale: 'En la báscula', hourEnds: 'El lote termina',
     endsAt: '{t} · faltan {m} min', batchDone: 'Lote terminado',
     thisHour: 'Esta hora', today: 'Hoy en este puesto', pace: 'Ritmo',
     baskets: '{n} lotes', basket1: '1 lote', lbHr: 'lb/h',
@@ -121,7 +122,7 @@ const el = {
   whoBtn: $('whoBtn'), whoName: $('whoName'), whoHint: $('whoHint'),
   cv: $('cvName'), cvSub: $('cvSub'), cvNext: $('cvNext'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
-  hourLb: $('hourLb'), hourLabel: $('hourLabel'), dayLb: $('dayLb'), dayBaskets: $('dayBaskets'), pace: $('paceLb'),
+  dayLb: $('dayLb'), dayBaskets: $('dayBaskets'), pace: $('paceLb'),
   reset: $('resetBtn'), swap: $('swapGuide'), swapSteps: $('swapSteps'), swapHeld: $('swapHeld'), swapDone: $('swapDone'),
   dialog: $('nameDialog'), search: $('nameSearch'), names: $('nameList'), leave: $('leaveSeat'), cancel: $('nameCancel'),
 };
@@ -152,6 +153,7 @@ const disconnected = () => serverStale || (failingSince !== null && Date.now() -
 let lineHours = [];     // Hourly entry's line 1 cultivars by hour (lineState)
 let lineCv = state.cultivar || '';
 let crew = [];          // [{ id, name }] for the name tap
+let lineRate = null;    // lb per trimmer-hour for the cultivar on the line (getProduction targetRate)
 
 const me = () => personToday(state, pacificDate());
 const myId = () => me()?.id || 0;
@@ -173,7 +175,6 @@ const seat = createSeat({
 
 const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`;
 const fmtLb = g => (Math.max(0, g) / G_PER_LB).toFixed(2);
-const slotLabel = key => key.replace('-', '–');
 const net = () => (gross === null ? 0 : seat.net(gross));
 
 // ---- Render
@@ -182,21 +183,24 @@ function render() {
   renderWho();
   renderCultivar();
   const now = Date.now();
-  const n = net();
-  const counting = state.phase !== 'idle';
-  // The ring is the batch's hour: it fills with the clock, full when the hour is done.
-  const key = state.batchSlot || slotOf(now);
+  // The circle (Koa 2026-11-24): this hour's tops toward this trimmer's goal for
+  // the hour, green once it's met. First thing in the morning: empty, "0.00 lb of
+  // 1.10 lb goal". Without a rate yet it fills toward 1 lb.
+  const slot = slotOf(now);
+  const hourG = tally.hourG(slot, myId());
+  const goalG = hourGoalG(lineRate, slot);
+  const fullG = goalG || G_PER_LB;
+  const frac = Math.min(1, hourG / fullG);
+  el.net.textContent = `${fmtLb(hourG)} lb`;
+  el.targetText.textContent = goalG ? t('goalOf').replace('{lb}', fmtLb(goalG)) : t('thisHourLb');
+  el.toGo.textContent = gross === null ? '—' : fmtG(gross);   // the scale's own number, for TARE checks
+  const key = state.batchSlot || slot;
   const done = state.phase === 'finished';
-  const frac = done ? 1 : hourFraction(pacificMinutes(now), key);
-  el.net.textContent = gross === null ? '—' : fmtG(gross);   // the scale's own number
-  el.targetText.textContent = t('netHint');
-  el.toGo.textContent = gross === null || !counting ? '—' : `${fmtLb(n)} lb`;
   const end = slotEnd(key);
   const left = end === null ? null : Math.max(0, Math.ceil(end - pacificMinutes(now)));
   el.pct.textContent = done ? t('batchDone') : end === null ? '—' : t('endsAt').replace('{t}', clockOf(end)).replace('{m}', left);
   el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - frac)));
-  el.ring.classList.toggle('near', !done && left !== null && left <= 5);
-  el.ring.classList.toggle('full', done);
+  el.ring.classList.toggle('full', hourG >= fullG);
   el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
   el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
   renderBattery();
@@ -252,9 +256,6 @@ function renderCultivar() {
 
 function renderTiles() {
   const id = myId();
-  const slot = slotAt(pacificMinutes(Date.now()));
-  el.hourLabel.textContent = `${t('thisHour')} · ${slotLabel(slot)}`;
-  el.hourLb.textContent = `${fmtLb(tally.hourG(slot, id))} lb`;
   el.dayLb.textContent = `${fmtLb(tally.dayG(id))} lb`;
   const picks = tally.picks(id);
   el.dayBaskets.textContent = picks === 1 ? t('basket1') : t('baskets').replace('{n}', picks);
@@ -403,6 +404,18 @@ async function syncSeat() {
     if ((me()?.id || 0) === sent) { state.seatSynced = !!sent; save(); }
   } catch { state.seatSynced = false; save(); }
 }
+// The line's lb per trimmer-hour for the cultivar on the line: the same target
+// Hourly entry gives each hour (getProduction targetRate). Public, read-only.
+async function loadRate() {
+  try {
+    const r = await fetch(`${API}?action=getProduction&date=${pacificDate()}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    const rate = Number((d.data || d).targetRate);
+    if (rate > 0) { lineRate = rate; render(); }
+  } catch { /* keeps the last rate; with none the circle fills toward 1 lb */ }
+}
+
 async function loadLine() {
   try {
     const r = await fetch(`${API}?action=lineState&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
@@ -622,6 +635,7 @@ setInterval(() => {
   if (!document.hidden) reportBasket();
 }, 1000);
 setInterval(() => { if (!document.hidden) loadLine(); }, LINE_MS);
+setInterval(() => { if (!document.hidden) loadRate(); }, RATE_MS);
 
 // A tablet left open keeps running the code it loaded: every few minutes, reload
 // onto the current build while no basket is running. Everything lives in localStorage.
@@ -646,6 +660,7 @@ reportBasket(true);
 render();
 poll();
 loadLine();
+loadRate();
 loadCrew();
 seedHours();
 if (me() && !state.seatSynced) syncSeat();
