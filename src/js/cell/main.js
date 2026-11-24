@@ -41,6 +41,9 @@ const SLOW_MS = 5000;    // page hidden
 const LINE_MS = 15000;   // Hourly entry's cultivar and this seat's name, read this often
 const SEND_MS = 60000;   // the hour totals go to the Worker at least this often while they change
 const RING_LEN = 597;
+const CHIME_AGAIN_MS = 60000;   // the hour is done and no swap yet: chime again this often
+const SWAP_DONE_MS = 4000;      // "Keep trimming" shows this long after the swap
+const BASKET_OFF_G = -50;       // reading this low: the full basket is off the pan (an empty basket weighs ~168 g)
 
 registerLabels({
   en: {
@@ -53,8 +56,8 @@ registerLabels({
     newCvNext: 'New cultivar next batch: {c}',
     netHint: 'net · in this basket', inBasket: 'In this basket', hourEnds: 'Batch ends',
     endsAt: '{t} · {m} min left', batchDone: 'Batch done',
-    thisHour: 'This hour', today: 'Today at this seat', pace: 'Pace', thisBasket: 'This batch',
-    baskets: '{n} batches', basket1: '1 batch', lbHr: 'lb/hr', lastBasket: 'Last batch',
+    thisHour: 'This hour', today: 'Today at this seat', pace: 'Pace',
+    baskets: '{n} batches', basket1: '1 batch', lbHr: 'lb/hr',
     holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A batch is running. Reset it? Its timer clears; the tops already counted stay.',
     bannerFull: 'Hour done! Set the basket aside for pickup. Put the empty basket on and press TARE.',
     bannerSwap: 'New basket on? Press TARE on the scale.',
@@ -65,7 +68,9 @@ registerLabels({
     bannerBreak: 'Break until {to}: the clock is stopped. It starts again by itself.',
     bannerLunch: 'Lunch until {to}: the clock is stopped. It starts again by itself.',
     breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
-    armed: 'Starts when tops go in', finished: 'Done in', liftOff: 'ready for pickup',
+    swapTitle: 'Hour done: swap baskets', swap1: 'Lift the full basket off and set it aside',
+    swap2: 'Put the empty basket on the scale', swap3: 'Press TARE on the scale', swapDone: 'Done! Keep trimming',
+    swapHeld: 'In the full basket: {lb} lb',
   },
   es: {
     waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula', disconnected: 'Báscula desconectada',
@@ -77,8 +82,8 @@ registerLabels({
     newCvNext: 'Variedad nueva en el siguiente lote: {c}',
     netHint: 'neto · en esta canasta', inBasket: 'En esta canasta', hourEnds: 'El lote termina',
     endsAt: '{t} · faltan {m} min', batchDone: 'Lote terminado',
-    thisHour: 'Esta hora', today: 'Hoy en este puesto', pace: 'Ritmo', thisBasket: 'Este lote',
-    baskets: '{n} lotes', basket1: '1 lote', lbHr: 'lb/h', lastBasket: 'Último lote',
+    thisHour: 'Esta hora', today: 'Hoy en este puesto', pace: 'Ritmo',
+    baskets: '{n} lotes', basket1: '1 lote', lbHr: 'lb/h',
     holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un lote en curso. ¿Reiniciarlo? Su tiempo se borra; los tops ya contados se quedan.',
     bannerFull: '¡Hora terminada! Ponga la canasta aparte para recoger. Ponga la canasta vacía y presione TARA.',
     bannerSwap: '¿Canasta nueva? Presione TARA en la báscula.',
@@ -89,7 +94,9 @@ registerLabels({
     bannerBreak: 'Descanso hasta las {to}: el reloj está parado. Sigue solo.',
     bannerLunch: 'Almuerzo hasta las {to}: el reloj está parado. Sigue solo.',
     breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
-    armed: 'Empieza al poner tops', finished: 'Hecha en', liftOff: 'lista para recoger',
+    swapTitle: 'Hora terminada: cambie de canasta', swap1: 'Quite la canasta llena y póngala aparte',
+    swap2: 'Ponga la canasta vacía en la báscula', swap3: 'Presione TARA en la báscula', swapDone: '¡Listo! Siga trimeando',
+    swapHeld: 'En la canasta llena: {lb} lb',
   },
 });
 
@@ -113,7 +120,7 @@ const el = {
   cv: $('cvName'), cvSub: $('cvSub'), cvNext: $('cvNext'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   hourLb: $('hourLb'), hourLabel: $('hourLabel'), dayLb: $('dayLb'), dayBaskets: $('dayBaskets'), pace: $('paceLb'),
-  cycle: $('cycleTime'), cycleSub: $('cycleSub'), reset: $('resetBtn'),
+  reset: $('resetBtn'), swap: $('swapGuide'), swapSteps: $('swapSteps'), swapHeld: $('swapHeld'), swapDone: $('swapDone'),
   dialog: $('nameDialog'), search: $('nameSearch'), names: $('nameList'), leave: $('leaveSeat'), cancel: $('nameCancel'),
 };
 
@@ -152,8 +159,10 @@ const seat = createSeat({
   state, tally: { credit: (...a) => tally.credit(...a), pickup: (...a) => tally.pickup(...a) },
   slotOf, hourOver: (at, key) => batchOver(pacificMinutes(at), key), personId: myId, lineCultivar: () => lineCv,
   on: {
-    finish: () => chime(),
+    // The hour is done: the swap guide takes the screen (renderSwap) until the swap.
+    finish: () => { state.swap = { liftSeen: false, doneAt: null, heldG: net() }; lastChimeAt = Date.now(); chime(); },
     pickup: ({ g, cultivar, cycleMs, personId }) => {
+      if (state.swap && !state.swap.doneAt) state.swap.doneAt = Date.now();
       mark('pickup', g / 1000, { cultivar: cultivar || null, cycleS: cycleMs ? cycleMs / 1000 : null, personId: personId || null });
       setTimeout(sendHours, 1500);   // the hour's total right after a pickup
     },
@@ -162,12 +171,6 @@ const seat = createSeat({
 
 const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`;
 const fmtLb = g => (Math.max(0, g) / G_PER_LB).toFixed(2);
-function fmtClock(ms) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
-  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-}
 const slotLabel = key => key.replace('-', '–');
 const net = () => (gross === null ? 0 : seat.net(gross));
 
@@ -197,7 +200,36 @@ function render() {
   renderBattery();
   renderBanner();
   renderTiles();
-  renderCycle();
+  renderSwap();
+}
+
+// ---- The swap guide (Koa 2026-11-24: "make sure everything is very easy and
+// stream-lined for the trimmer"). At the hour mark it covers the screen with the
+// three steps and ticks each one off as the scale sees it; the swap closes the
+// batch and it says "Keep trimming" and gets out of the way.
+function swapStep(now) {
+  const s = state.swap;
+  if (!s) return 0;
+  if (s.doneAt) return now - s.doneAt < SWAP_DONE_MS ? 4 : 0;
+  if (state.phase !== 'finished') return 0;
+  if (gross !== null && gross <= BASKET_OFF_G) s.liftSeen = true;
+  if (!s.liftSeen) return 1;
+  return gross !== null && gross <= BASKET_OFF_G ? 2 : 3;
+}
+function renderSwap() {
+  const now = Date.now();
+  const step = swapStep(now);
+  if (!step && state.swap && (state.swap.doneAt || state.phase !== 'finished')) { state.swap = null; save(); }
+  el.swap.hidden = !step;
+  if (!step) return;
+  el.swapDone.hidden = step !== 4;
+  el.swapSteps.hidden = step === 4;
+  el.swapHeld.hidden = step === 4;
+  el.swapHeld.textContent = t('swapHeld').replace('{lb}', fmtLb(state.swap.heldG || state.finishedNetG || 0));
+  [...el.swapSteps.children].forEach((li, i) => {
+    li.className = i + 1 < step ? 'done' : i + 1 === step ? 'now' : '';
+    li.querySelector('.txt').textContent = t(`swap${i + 1}`);
+  });
 }
 
 function renderWho() {
@@ -243,7 +275,7 @@ function renderBanner() {
   const now = Date.now();
   const b = breakAt(pacificMinutes(now));
   let kind = null;
-  if (disconnected() || gross === null) kind = null;   // the dot says it; Koa gets the Telegram
+  if (disconnected() || gross === null || swapStep(now)) kind = null;   // the dot says it; the swap guide says the rest
   else if (seat.swapPending(now)) kind = 'swap';
   else if (state.phase === 'finished') kind = 'full';
   else if (live && (state.phase === 'running' || seat.lifted) && gross < -LIFT_G) kind = 'off';
@@ -263,25 +295,9 @@ function renderBanner() {
     .replace('{g}', fmtG(state.tareFlagG || 0));
 }
 
-function renderCycle() {
-  const now = Date.now();
-  if (state.phase === 'finished' && state.finishedMs !== null) {
-    el.cycle.textContent = fmtClock(state.finishedMs);
-    el.cycleSub.textContent = `${t('finished')} · ${t('liftOff')}`;
-    return;
-  }
-  if (state.phase !== 'running' || !state.startedAt) {
-    el.cycle.textContent = '--:--';
-    const hint = state.phase === 'armed' ? t('armed') : '';
-    el.cycleSub.textContent = [hint, state.lastMs ? `${t('lastBasket')} ${fmtClock(state.lastMs)}` : ''].filter(Boolean).join(' · ');
-    return;
-  }
-  el.cycle.textContent = fmtClock(elapsedMs(state, now));
-  el.cycleSub.textContent = state.pausedAt ? state.pauseNote : '';
-}
-
 // ---- Finish chime. Browsers only allow sound after a tap; any tap unlocks it.
 let audio = null;
+let lastChimeAt = 0;
 function unlockAudio() {
   try {
     audio = audio || new (window.AudioContext || window.webkitAudioContext)();
@@ -584,7 +600,9 @@ setInterval(() => {
   const slot = slotOf(now);
   if (slot !== lastSlot || now - lastSendAt >= SEND_MS) { lastSlot = slot; lastSendAt = now; sendHours(); }
   save();
-  renderCycle(); renderTiles();
+  renderTiles(); renderSwap();
+  // The hour is done and the basket hasn't been swapped: chime again every minute.
+  if (state.phase === 'finished' && now - lastChimeAt >= CHIME_AGAIN_MS) { lastChimeAt = now; chime(); }
   if (!document.hidden) reportBasket();
 }, 1000);
 setInterval(() => { if (!document.hidden) loadLine(); }, LINE_MS);

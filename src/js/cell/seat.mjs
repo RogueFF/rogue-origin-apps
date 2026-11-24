@@ -20,6 +20,9 @@ import { creditBasket, closeBasket, nextBasketCultivar } from './line.mjs';
 
 export const START_G = 1.0;     // two steps of the 0.5 g scale, so last-digit noise can't start it
 export const ON_SCALE_G = 2.0;  // more than this on an idle scale: not a tared empty basket
+// Less than this in the basket at the hour mark (the trimmer was away, or just
+// swapped): no swap is asked for, the batch simply goes on into the new hour.
+export const SWAP_MIN_G = 10;
 
 export function clearPauses(state) {
   state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = [];
@@ -148,9 +151,13 @@ export function createSeat({ state, tally, slotOf, hourOver, personId, lineCulti
       const waiting = watch.swapPending(at);
       if (!waiting && (state.phase === 'armed' || state.phase === 'running' || state.phase === 'finished')) credit(at, creditBasket(state, Math.max(0, n)));
       if (state.phase === 'running' && state.batchSlot && hourOver(at, state.batchSlot)) {
-        state.phase = 'finished'; state.finishedMs = elapsedMs(state, at); state.finishedNetG = n;
-        if (on.finish) on.finish();
-        what = 'finish';
+        if (n < SWAP_MIN_G) {
+          state.batchSlot = slotOf(at);   // next to nothing to pick up: carry on into the new hour
+        } else {
+          state.phase = 'finished'; state.finishedMs = elapsedMs(state, at); state.finishedNetG = n;
+          if (on.finish) on.finish();
+          what = 'finish';
+        }
       }
       return what;
     },

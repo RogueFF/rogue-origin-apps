@@ -255,3 +255,13 @@ test("at the screen's 1 s reading rate: the hour mark, a matched swap, and a hea
   near(p[1].g, 300);
   near(total(r.tally), 530, 1.5);
 });
+
+test('a near-empty basket at the hour mark asks for no swap: the batch carries on into the new hour', () => {
+  const r = rig({ t0: 8 * 60 + 59 });
+  tareEmptyBasket(r);
+  r.ramp(0, 6, 20000);
+  r.feed(6, 40000);            // past 9:00 with 6 g in the basket
+  assert.equal(r.state.phase, 'running');
+  assert.equal(r.state.batchSlot, '9-10');
+  assert.deepEqual(r.events, [], 'no chime, no pickup');
+});
