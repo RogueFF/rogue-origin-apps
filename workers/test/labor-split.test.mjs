@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { laborSplit, CELL_MODE_FROM } from '../src/lib/labor-split.js';
+import { laborSplit, CELL_MODE_FROM, isCellSlot } from '../src/lib/labor-split.js';
 
 // 2026-11-10 as logged (live D1): one row per slot.
 const DAY = '2026-11-10';
@@ -31,7 +31,8 @@ test('each slot counts for its real length, not a full hour (11/10: 193 -> 166.5
   close(y.hours.tzero, m);
   close(y.hours.spider, m);
   close(y.hours.inspector, m);
-  close(y.operatorHours, 166.53);
+  close(y.hours.bagger, m, 0.01);   // a cell day: one bagger/tagger per counted slot
+  close(y.operatorHours, 166.53 + m);
 });
 
 test('cell days: T-Zero goes 100% to smalls; the water spider still splits by weight', () => {
@@ -39,7 +40,7 @@ test('cell days: T-Zero goes 100% to smalls; the water spider still splits by we
   const y = laborSplit(NOV10, { loadedRate: RATE });
   assert.equal(y.cellMode, true);
   const topsShare = 43 / 63;
-  close(y.topsHours, y.hours.trimmer + y.hours.spider * topsShare);
+  close(y.topsHours, y.hours.trimmer + y.hours.bagger + y.hours.spider * topsShare);
   close(y.smallsHours, y.hours.spider * (1 - topsShare) + y.hours.inspector + y.hours.tzero);
   close(y.topsCostPerLb, (y.topsHours * RATE) / 43);
   close(y.smallsCostPerLb, (y.smallsHours * RATE) / 20);
@@ -68,4 +69,83 @@ test('no rows, or nothing counted, costs nothing', () => {
   const y = laborSplit([row('9:00 AM – 10:00 AM', 0, 1, 0, 5)], { loadedRate: RATE });
   assert.equal(y.operatorHours, 0);
   assert.equal(y.smallsCostPerLb, 0);
+});
+
+// Koa 2026-11-18: "Always will have a T-zero op to run smalls, and a Waterspider to
+// feed raw goods. Same with Bagging/Tagging, is usually 1 person" -- the bagger on
+// cell days only (Koa's pick), charged to tops.
+const M = 0.95 + 1 + 1 + 1 + 0.5 + 1 + 0.83 + 1 + 0.33;   // the counted slots' real length
+test('a cell day adds one bagger/tagger per counted slot, all on tops', () => {
+  const y = laborSplit(NOV10, { loadedRate: RATE });
+  close(y.hours.bagger, M);
+  const without = laborSplit(NOV10, { loadedRate: RATE, baggers: 0 });
+  assert.equal(without.hours.bagger, 0);
+  close(y.operatorHours - without.operatorHours, M);
+  close(y.topsHours - without.topsHours, M, 0.01);
+  close(y.smallsHours, without.smallsHours);
+  close(y.totalLaborCost - without.totalLaborCost, M * RATE);
+  close(laborSplit(NOV10, { loadedRate: RATE, baggers: 2 }).hours.bagger, 2 * M);   // labor.bagger_count
+});
+
+test('a line day before 11/9 is unchanged: no bagger, same hours and cost as before', () => {
+  const line = NOV10.map(r => ({ ...r, production_date: '2026-11-06' }));
+  const y = laborSplit(line, { loadedRate: RATE });
+  assert.equal(y.cellMode, false);
+  assert.equal(y.hours.bagger, 0);
+  close(y.operatorHours, 166.53);   // the 11/10 figure from before the bagger existed
+  const topsShare = 43 / 63;
+  close(y.topsHours, y.hours.trimmer + (y.hours.spider + y.hours.tzero) * topsShare);
+  close(y.totalLaborCost, 166.53 * RATE, 0.1);
+  // and the bagger count never reaches a line day
+  assert.equal(laborSplit(line, { loadedRate: RATE, baggers: 3 }).hours.bagger, 0);
+});
+
+// Koa 2026-11-24: cells abandoned, back on the line from 11/24 12:30. Cell or line
+// is per slot: an hour with buckers entered is a line hour (line rules: T-Zero
+// shared by weight, no bagger); a no-bucker hour from 11/9 on keeps the cell rules.
+const SPLIT = '2026-11-24';
+const at = (date) => (time_slot, t, b, z, tops, smalls = 0) =>
+  ({ production_date: date, time_slot, trimmers_line1: t, buckers_line1: b, tzero_line1: z, tops_lbs1: tops, smalls_lbs1: smalls });
+const s24 = at(SPLIT);
+const SPLIT_DAY = [
+  s24('7:00 AM – 8:00 AM', 20, 0, 1, 10, 4),     // cells
+  s24('8:00 AM – 9:00 AM', 20, 0, 1, 10, 0),     // cells
+  s24('12:30 PM – 1:00 PM', 12, 8, 1, 6, 0),     // line from 12:30
+  s24('1:00 PM – 2:00 PM', 12, 8, 1, 12, 6),     // line
+];
+
+test('isCellSlot: from 11/9, no buckers = cell hour; buckers entered = line hour', () => {
+  assert.equal(isCellSlot('2026-11-24', 0), true);
+  assert.equal(isCellSlot('2026-11-24', 8), false);
+  assert.equal(isCellSlot('2026-11-06', 0), false, 'before 11/9 is always the line');
+  assert.equal(isCellSlot('2026-11-24', 0, ''), false, 'no cell-mode date: never cells');
+});
+
+test('a split day: cell rules in the morning, line rules from 12:30', () => {
+  const y = laborSplit(SPLIT_DAY, { loadedRate: RATE });
+  assert.equal(y.heads.cellSlots, 2);
+  assert.equal(y.heads.lineSlots, 2);
+  assert.equal(y.cellMode, true, 'a split day still has cell hours');
+  close(y.hours.bagger, 2, 0.001, 'one bagger for the two cell hours only');
+  close(y.hours.tzero, 3.5, 0.001);
+  close(y.hours.bucker, 12, 0.001);   // 8 × 0.5 + 8 × 1
+  const topsShare = 38 / 48;
+  // T-Zero: the cell morning (2 h) on smalls; the line afternoon (1.5 h) shared by weight
+  const shared = y.hours.bucker + y.hours.spider + 1.5;
+  close(y.topsHours, y.hours.trimmer + y.hours.bagger + shared * topsShare);
+  close(y.smallsHours, shared * (1 - topsShare) + y.hours.inspector + 2);
+  close(y.totalLaborCost, y.operatorHours * RATE);
+});
+
+test('a line-only day after 11/24: line rules throughout, as before 11/9', () => {
+  const line = SPLIT_DAY.map((r) => ({ ...r, production_date: '2026-11-25', buckers_line1: 8 }));
+  const y = laborSplit(line, { loadedRate: RATE, baggers: 3 });
+  assert.equal(y.cellMode, false);
+  assert.equal(y.heads.cellSlots, 0);
+  assert.equal(y.hours.bagger, 0);
+  // identical to the same rows on a pre-cell date
+  const before = laborSplit(line.map((r) => ({ ...r, production_date: '2026-11-06' })), { loadedRate: RATE });
+  close(y.topsHours, before.topsHours);
+  close(y.smallsHours, before.smallsHours);
+  close(y.totalLaborCost, before.totalLaborCost);
 });
