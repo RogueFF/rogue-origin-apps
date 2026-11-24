@@ -12,6 +12,7 @@ import {
   incrementDataVersion,
 } from '../../lib/production-utils.js';
 import { changeShare } from '../../lib/cultivar-parts.js';
+import { keepsScaleTops, afterHandSave } from '../../lib/line-fill.js';
 
 // ===== VALIDATION HELPERS =====
 
@@ -218,6 +219,9 @@ async function addProduction(body, env) {
     [dateValidation.value, slotValidation.value]
   );
 
+  // Line scales (lib/line-fill.js): tops the scales filled stay theirs unless this save changes them.
+  const keepScales = await keepsScaleTops(env.DB, existing?.id, body, lbs1.tops);
+
   if (existing) {
     await execute(env.DB, `
       UPDATE monthly_production SET
@@ -238,6 +242,7 @@ async function addProduction(body, env) {
     // A hand save takes over an hour the cell log filled: from now on the fill
     // leaves it alone (lib/cell-fill.js). Before migration 0071 there is no column.
     try { await execute(env.DB, 'UPDATE monthly_production SET fill_source = NULL WHERE id = ?', [existing.id]); } catch { /* no fill_source yet */ }
+    await afterHandSave(env, dateValidation.value, slotValidation.value, keepScales);
 
     await incrementDataVersion(env);
 
@@ -263,6 +268,8 @@ async function addProduction(body, env) {
       effective_trimmers_line2: effTrim2,
       ...(change.cultivar ? { change_at: change.at, change_cultivar: change.cultivar, change_tops_lbs: change.tops, change_share: change.share } : {}),
     });
+    // A new row with crew picks up the hour's scale tops if the day's switch is on.
+    await afterHandSave(env, dateValidation.value, slotValidation.value, false);
 
     await incrementDataVersion(env);
 
@@ -326,6 +333,8 @@ async function getProduction(params, env) {
       changeAt: r.change_at || '',
       changeCultivar: r.change_cultivar || '',
       changeTops: r.change_tops_lbs || 0,
+      // 'scales' when the line seats' scales filled tops1 (lib/line-fill.js), else null.
+      topsSource: r.tops_source || null,
     })),
   });
 }

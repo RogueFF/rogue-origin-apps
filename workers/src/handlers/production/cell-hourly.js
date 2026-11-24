@@ -10,7 +10,7 @@
  *                                  checkedBy?, notes?, cultivar? }   (each check 1-4 or null; migration 0051)
  *   POST ?action=setRoomSmalls   { date, slot, smalls?, cultivar? }
  *   POST ?action=saveCellRoster  { stationId?, label, lane, active? }   (no stationId = add a cell)
- *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg, cultivar?, bag?, cycleS?, jobId? }   from the cell screen
+ *   POST ?action=scaleMark       { stationId, kind: 'pickup'|'tare', kg, cultivar?, bag?, cycleS?, jobId?, personId? }   from the cell screen
  *                                (jobId: a queued order's basket; the pickup closes it, migration 0061)
  *                                (a pickup = a finished job; cultivar/bag/cycleS say what it was, migration 0052)
  *                                (the auto rule uses pickups; readings are net since the crew tare on the scale)
@@ -166,6 +166,20 @@ async function scaleMark(body, env) {
       return successResponse({ success: true, job: { cultivar, bag, cycleS, jobId, closed: done.ok, orderReady: !!done.orderReady } });
     } catch (e) {
       // Migration 0060 not applied yet: keep the mark without its job.
+      if (!/no (such )?column|has no column/i.test(String(e && e.message))) throw e;
+    }
+  }
+  // Who the pickup was for: a line seat's name tap (migration 0074).
+  const pid = Number(body.personId);
+  const personId = kind === 'pickup' && Number.isInteger(pid) && pid > 0 ? pid : null;
+  if (personId) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO scale_marks (station_id, ts, kind, kg, cultivar, bag, cycle_s, person_id) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)`
+      ).bind(station.station_id, kind, kg, cultivar, bag, cycleS, personId).run();
+      return successResponse({ success: true, job: { cultivar, bag, cycleS, personId } });
+    } catch (e) {
+      // Migration 0074 not applied yet: keep the mark without the person.
       if (!/no (such )?column|has no column/i.test(String(e && e.message))) throw e;
     }
   }

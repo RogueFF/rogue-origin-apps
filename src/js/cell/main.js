@@ -1,371 +1,233 @@
 /**
- * Cell table screen: live net weight toward a target, a job timer that runs
- * itself off the scale, and the order picked from two dropdowns: cultivar and
- * bag size. Made-to-order retail trial (Koa 2026-11-09): the target is the bag
- * size's fill standard, set automatically; there is no next order for now.
+ * Line trimmer scale screen (Koa 2026-11-24). The cells are over: the room is
+ * back on buckers -> T-Zero -> trimmers, and every trimmer seat keeps a scale
+ * and this screen.
  *
- *   cell.html?station=table1
+ *   cell.html?station=table3     the station is the seat (one manifest serves every seat)
  *
- * Reads ?action=scaleWeight (GET, no token) every 250 ms while a job is armed
- * or running, every second otherwise, every 2 s while the scale is disconnected,
- * and every 5 s while the page is hidden (Koa 2026-11-09: follow the scale closer). The order and the
- * timer live in this tablet's localStorage, per station. Each pickup (finished or not) posts
- * a pickup mark carrying its cultivar, bag size and working time (migration 0052),
- * so the Worker keeps a record of what every job was.
+ *   · The trimmer taps their name when they sit down (the crew list Mis números
+ *     uses). Moving seats means tapping again; the name holds for the day.
+ *   · The cultivar is automatic: Hourly entry's line 1 cultivar for the current
+ *     hour (lineState). A change mid-basket waits for the next basket.
+ *   · A batch is one clock hour of the line (Koa 2026-11-24: "1 hour batch, not
+ *     a 1lb batch"). The ring fills with the hour. At the hour mark: the chime,
+ *     "ready for pickup" on the Cells board; basket A goes aside, B goes on, TARE,
+ *     and the next batch starts by itself. A basket lifted early counts with its weight.
+ *   · Tops per hour are measured, not counted: every gram is credited to the clock
+ *     hour it was read in, per person and cultivar (line.mjs, seat.mjs), and sent
+ *     to the Worker as absolute totals (lineScaleSave) for Hourly entry and Mis números.
  *
- * Orders at the cells (order flow slice 2, Koa 2026-11-11: "automatic order
- * assignment"): when the Worker has assigned this cell orders (cellQueue), the
- * NOW job is the order, shown as a card with NEXT under it, and the dropdowns step
- * aside. The pickup mark carries the job's id, which closes it on the Worker, and
- * NEXT moves up with no taps. With nothing assigned, the dropdowns work as before
- * (wholesale batches, or a day the queue is down).
- *
- * Continuous (wholesale, Koa 2026-11-11, rounds.mjs): the bag size "Continuous"
- * has no target. The cultivar is picked once; each pickup ends a round (saved as
- * a job, a pickup mark) and the next round starts by itself on the same cultivar.
+ * Reads ?action=scaleWeight (GET, no token) every second, every 2 s while the scale is disconnected,
+ * every 5 s while the page is hidden. The basket and the hour totals live in this
+ * tablet's localStorage (ro-line:<station>), so a reload loses nothing.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
-import { buildCultivarOptions } from '../hourly-entry/cultivar-options.mjs';
-import { enhanceSelect } from '../shared/select-search.js';
-import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
-import { applyQueue, shortCultivar, calmWait } from './queue.mjs';
+import { LIFT_G } from './lift.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
-import { createEod } from './eod.mjs';
-import { CONT, CONT_BAG, isContinuous, canFinish, roundNo, roundsToday, afterPickup, expireContinuous, endContinuous, queueMayApply,
-  changeState, afterChangeover, pickedAfterChangeover } from './rounds.mjs';
+import { shortCultivar } from './queue.mjs';
+import {
+  G_PER_LB, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, hourFraction, slotEnd,
+} from './line.mjs';
+import { createSeat, elapsedMs } from './seat.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
-// Reads cost one Worker request each, so the fast rate is kept to the moments
-// that need it. A read takes ~0.23 s, so 250 ms means a fresh number about
-// every half second during a job.
-const JOB_MS = 250;      // a job is armed or running
-const IDLE_MS = 1000;    // waiting for the next job, or finished
-const DOWN_MS = 2000;    // scale disconnected: keep checking for it to come back
+// A batch is an hour, so nothing needs the cells' 250 ms: every seat is busy all
+// day on the line, and 8 seats at 250 ms would be ~1.1M Worker reads a day. The
+// lift and TARE rules (lift.mjs) hold at 1 s (tests/line-seat.test.mjs runs them there).
+const JOB_MS = 1000;     // a batch is armed or running
+const IDLE_MS = 1000;
+const DOWN_MS = 2000;    // scale disconnected
 const SLOW_MS = 5000;    // page hidden
-// Scale disconnected: no fresh post from the scale for the station's stale
-// time (scale_stations.stale_after_s, 45 s while the node's heartbeat is 30 s).
-// No alarm on the tablet (Koa 2026-11-09: the alert goes to Koa on Telegram,
-// lib/scale-watch.js on the Worker); the screen only shows it in the status dot,
-// holds a running job's clock, and starts nothing until the scale is back.
-const NEAR = 0.9;
-// The job timer runs itself off the scale (Koa 2026-11-05: "couldn't it be automatic?"):
-//   Start (or the scale's own TARE with the basket on) -> armed; the first START_G
-//   of product starts the clock; reaching the
-//   target and settling (stable flag, or HOLD_MS at/over target) stops it. A basket
-//   lifted off and set back down about empty is a pickup, before or after the
-//   target (Koa 2026-11-10: the bagger's cart takes tops on rounds): the job is
-//   recorded and the next one is armed on the same basket. Set back with weight
-//   in it is a shake: the job carries on (lift.mjs). The order stays picked.
-const START_G = 1.0;     // two steps of the 0.5 g bench scale, so last-digit noise can't start it
-const HOLD_MS = 3000;
-// Fail-safes (Koa 2026-11-05: "make everything fool-proof"):
-// Tare happens on the scale itself (Koa 2026-11-09): with the basket on, the crew
-// press the scale's TARE, and the scale then sends NET weight. The screen shows
-// exactly the number the scale shows (grams, 2 decimals), with no offset of its own.
-// An empty tared basket reads about 0; a lifted basket reads negative.
-const ON_SCALE_G = 2.0;  // more than this on an idle, untared scale -> "Tare on the scale, then tap Start"
-const LIFT_G = 1.0;      // below -1 g mid-job: the basket is off the scale
-// Pauses (Koa 2026-11-05): a running job pauses itself at 4:20 pm Pacific (cleanup),
-// and the Pause button only works with a note saying why. Paused time is left out
-// of the cycle time. Breaks (Koa 2026-11-10, breaks.mjs: 9:00-9:10, 12:00-12:30,
-// 2:30-2:40) stop a running job's clock and start it again at the break's end,
-// with no tap; break time a sleeping tablet missed is left out too.
-const AUTO_PAUSE_MIN = 16 * 60 + 20;
-const NOTE_MIN_CHARS = 3;
-const REASONS = ['rScale', 'rWait', 'rEquip', 'rHelp'];
-// Fill weight standards, NET with the bag tared (wiki operations/fill-weight-standards.md,
-// Koa 2026-11-05). Every size sits a little over label on purpose. 10 lb and 5 kg are
-// never filled at a cell: several cells' jobs go to bagging, which checks them and
-// fills the big bag. The bag size picked for the order sets the target; there is
-// no other way to set it (Koa 2026-11-09).
-// One order per job (Koa 2026-11-10): every pickup clears the cultivar and bag
-// size, so each job is entered fresh. Flip to false once orders are assigned to
-// cells automatically; the order then carries over to the next job again.
-const ORDER_PER_JOB = true;
-const PRESETS = [
-  { key: 'qOz', g: 7.5 }, { key: 'hOz', g: 15.0 }, { key: 'oz1', g: 30.0 },
-  { key: 'qLb', g: 115.0 }, { key: 'hLb', g: 230.0 }, { key: 'lb1', g: 460.0 },
-];
+const LINE_MS = 15000;   // Hourly entry's cultivar and this seat's name, read this often
+const SEND_MS = 60000;   // the hour totals go to the Worker at least this often while they change
+const RING_LEN = 597;
 
 registerLabels({
   en: {
-    waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal',
-    cultivar: 'Cultivar', bagSize: 'Bag size', chooseCultivar: 'Choose the cultivar',
-    bannerOrder: 'Choose the cultivar and bag size for this order', chooseBag: 'Choose the bag size',
-    bannerWaitOrder: 'Waiting for the next order. It shows up here by itself.',
-    notRecording: 'NOT RECORDING', orderLocked: 'Locked during the job. To change it: Hold to reset.',
-    of: 'of', toGo: 'To go', done: 'Done', startJob: 'Start', liveCycle: 'Live cycle time', tareToStart: 'Tare on the scale, then tap Start',
-    armed: 'Starts when product goes in', finished: 'Finished in', pace: 'g/min', eta: 'finish in',
-    liftOff: 'leave it for pickup', lastJob: 'Last job', awake: 'Screen stays on', battery: 'Scale node battery',
-    holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A job is running. Reset it? The timer and the tare clear.',
-    bannerTared: 'Scale TARE pressed mid-job: {g} kept. Tell the lead.',
-    bannerTare: 'Empty basket on, TARE on the scale, then tap Start', bannerOff: 'Container off the scale: put it back',
-    bannerSignal: 'Scale disconnected: tell the lead', disconnected: 'Scale disconnected', searchCultivar: 'Type to search', clockHeld: 'Clock held until the scale is back',
-    confirmRetare: 'A job is running. Start over from zero?',
-    pause: 'Pause', resume: 'Resume', pauseTitle: 'Why are you pausing?', pauseOk: 'Pause job', cancel: 'Cancel',
-    notePlaceholder: 'Write what happened', noteRequired: 'Write why first', paused: 'Paused',
-    bannerPaused: 'Paused: tap Resume to keep going', autoNote: 'Cleanup 4:20',
-    breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
+    waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal', disconnected: 'Scale disconnected',
+    seat: 'Seat', awake: 'Screen stays on', battery: 'Scale node battery',
+    tapName: 'Tap your name', notYou: 'Not you? Tap here', changeName: 'Change', whoTitle: 'Who is at this seat?',
+    searchName: 'Type your name', leaveSeat: 'Nobody: leave the seat empty', cancel: 'Cancel', noCrew: 'No names yet. Tell the lead.',
+    notListed: 'Not on the list? Tell the lead.',
+    cultivar: 'Cultivar', fromHourly: 'from Hourly entry', waitHourly: 'Waiting for Hourly entry',
+    newCvNext: 'New cultivar next batch: {c}',
+    netHint: 'net · in this basket', inBasket: 'In this basket', hourEnds: 'Batch ends',
+    endsAt: '{t} · {m} min left', batchDone: 'Batch done',
+    thisHour: 'This hour', today: 'Today at this seat', pace: 'Pace', thisBasket: 'This batch',
+    baskets: '{n} batches', basket1: '1 batch', lbHr: 'lb/hr', lastBasket: 'Last batch',
+    holdReset: 'Hold to reset', holdHint: 'Keep holding to reset', confirmReset: 'A batch is running. Reset it? Its timer clears; the tops already counted stay.',
+    bannerFull: 'Hour done! Set the basket aside for pickup. Put the empty basket on and press TARE.',
+    bannerSwap: 'New basket on? Press TARE on the scale.',
+    bannerOff: 'Basket off the scale: put the empty basket on, then TARE',
+    bannerTare: 'Put the empty basket on and press TARE on the scale',
+    bannerTared: 'Scale TARE pressed mid-batch: {g} kept. Tell the lead.',
+    bannerName: 'Tap your name so your tops count for you',
     bannerBreak: 'Break until {to}: the clock is stopped. It starts again by itself.',
     bannerLunch: 'Lunch until {to}: the clock is stopped. It starts again by itself.',
-    rScale: 'Scale problem', rWait: 'Waiting for product', rEquip: 'Equipment problem', rHelp: 'Need help',
-    pilotNote: 'Pick the cultivar and the bag size this order goes into. The bag size sets the target for the basket. The scale weight is live.',
-    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Cell',
-    netHint: 'net · container tared',
-    nowLabel: 'NOW', nextLabel: 'NEXT', basketOf: 'basket {n} of {m}', nothingNext: 'Nothing next yet',
-    newCultivar: 'New cultivar', changedShopify: 'Changed in Shopify: ask bag/tag', rushTag: 'RUSH',
-    cont: 'Continuous', contOption: 'Continuous', endCont: 'End continuous',
-    contTarget: 'Continuous · round {n}', thisRound: 'This round', roundsToday: 'Rounds today', roundN: 'round {n}', lastRound: 'Last round',
-    contLock: 'Continuous: the cultivar stays for every round. To change it: End continuous between rounds, or Hold to reset.',
-    changeCv: 'Change cultivar', finishFirst: 'Finish this round first (pickup or swap)',
-    bannerChange: 'Changeover from {c}: pick the new cultivar, then put the empty basket on.',
+    breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
+    armed: 'Starts when tops go in', finished: 'Done in', liftOff: 'ready for pickup',
   },
   es: {
-    waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula',
-    cultivar: 'Variedad', bagSize: 'Tamaño de bolsa', chooseCultivar: 'Elija la variedad',
-    bannerOrder: 'Elija la variedad y el tamaño de bolsa de esta orden', chooseBag: 'Elija el tamaño de bolsa',
-    bannerWaitOrder: 'Esperando la siguiente orden. Aparece aquí sola.',
-    notRecording: 'NO SE ESTÁ GRABANDO', orderLocked: 'Bloqueado durante el trabajo. Para cambiarlo: Mantenga para reiniciar.',
-    of: 'de', toGo: 'Faltan', done: 'Hecho', startJob: 'Empezar', liveCycle: 'Tiempo de ciclo', tareToStart: 'Haga TARA en la báscula y toque Empezar',
-    armed: 'Empieza al poner producto', finished: 'Terminado en', pace: 'g/min', eta: 'termina en',
-    liftOff: 'déjela para recoger', lastJob: 'Último trabajo', awake: 'Pantalla encendida', battery: 'Batería del nodo de la báscula',
-    holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un trabajo en curso. ¿Reiniciarlo? El tiempo y la tara se borran.',
-    bannerTared: 'TARA de la báscula a mitad del trabajo: se guardaron {g}. Avise al líder.',
-    bannerTare: 'Canasta vacía, TARA en la báscula y toque Empezar', bannerOff: 'El contenedor no está en la báscula: regréselo',
-    bannerSignal: 'Báscula desconectada: avise al líder', disconnected: 'Báscula desconectada', searchCultivar: 'Escriba para buscar', clockHeld: 'Reloj detenido hasta que vuelva la báscula',
-    confirmRetare: 'Hay un trabajo en curso. ¿Empezar de cero?',
-    pause: 'Pausar', resume: 'Continuar', pauseTitle: '¿Por qué pausa?', pauseOk: 'Pausar trabajo', cancel: 'Cancelar',
-    notePlaceholder: 'Escriba qué pasó', noteRequired: 'Escriba primero por qué', paused: 'En pausa',
-    bannerPaused: 'En pausa: toque Continuar para seguir', autoNote: 'Limpieza 4:20',
-    breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
+    waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula', disconnected: 'Báscula desconectada',
+    seat: 'Puesto', awake: 'Pantalla encendida', battery: 'Batería del nodo de la báscula',
+    tapName: 'Toque su nombre', notYou: '¿No es usted? Toque aquí', changeName: 'Cambiar', whoTitle: '¿Quién está en este puesto?',
+    searchName: 'Escriba su nombre', leaveSeat: 'Nadie: dejar el puesto vacío', cancel: 'Cancelar', noCrew: 'Todavía no hay nombres. Avise al líder.',
+    notListed: '¿No está en la lista? Avise al líder.',
+    cultivar: 'Variedad', fromHourly: 'de la entrada por hora', waitHourly: 'Esperando la entrada por hora',
+    newCvNext: 'Variedad nueva en el siguiente lote: {c}',
+    netHint: 'neto · en esta canasta', inBasket: 'En esta canasta', hourEnds: 'El lote termina',
+    endsAt: '{t} · faltan {m} min', batchDone: 'Lote terminado',
+    thisHour: 'Esta hora', today: 'Hoy en este puesto', pace: 'Ritmo', thisBasket: 'Este lote',
+    baskets: '{n} lotes', basket1: '1 lote', lbHr: 'lb/h', lastBasket: 'Último lote',
+    holdReset: 'Mantenga para reiniciar', holdHint: 'Siga presionando para reiniciar', confirmReset: 'Hay un lote en curso. ¿Reiniciarlo? Su tiempo se borra; los tops ya contados se quedan.',
+    bannerFull: '¡Hora terminada! Ponga la canasta aparte para recoger. Ponga la canasta vacía y presione TARA.',
+    bannerSwap: '¿Canasta nueva? Presione TARA en la báscula.',
+    bannerOff: 'Canasta fuera de la báscula: ponga la canasta vacía y luego TARA',
+    bannerTare: 'Ponga la canasta vacía y presione TARA en la báscula',
+    bannerTared: 'TARA de la báscula a mitad del lote: se guardaron {g}. Avise al líder.',
+    bannerName: 'Toque su nombre para que sus tops cuenten para usted',
     bannerBreak: 'Descanso hasta las {to}: el reloj está parado. Sigue solo.',
     bannerLunch: 'Almuerzo hasta las {to}: el reloj está parado. Sigue solo.',
-    rScale: 'Problema con la báscula', rWait: 'Esperando producto', rEquip: 'Problema de equipo', rHelp: 'Necesito ayuda',
-    pilotNote: 'Elija la variedad y el tamaño de bolsa donde va esta orden. El tamaño de bolsa fija la meta de la canasta. El peso de la báscula es en vivo.',
-    qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cell: 'Celda',
-    netHint: 'neto · contenedor en tara',
-    nowLabel: 'AHORA', nextLabel: 'SIGUIENTE', basketOf: 'canasta {n} de {m}', nothingNext: 'Nada después todavía',
-    newCultivar: 'Variedad nueva', changedShopify: 'Cambió en Shopify: pregunte a empaque', rushTag: 'URGENTE',
-    cont: 'Continuo', contOption: 'Continuo', endCont: 'Terminar continuo',
-    contTarget: 'Continuo · ronda {n}', thisRound: 'Esta ronda', roundsToday: 'Rondas hoy', roundN: 'ronda {n}', lastRound: 'Última ronda',
-    contLock: 'Continuo: la variedad sigue en cada ronda. Para cambiarla: Terminar continuo entre rondas, o Mantenga para reiniciar.',
-    changeCv: 'Cambiar variedad', finishFirst: 'Termine esta ronda primero (recogida o cambio de canasta)',
-    bannerChange: 'Cambio desde {c}: elija la variedad nueva y ponga la canasta vacía.',
+    breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
+    armed: 'Empieza al poner tops', finished: 'Hecha en', liftOff: 'lista para recoger',
   },
 });
 
 const params = new URLSearchParams(location.search);
-// The home-screen app opens cell.html with no ?station=, so the tablet remembers
-// the station it was last opened for (one manifest serves table1..table8).
+// The home-screen app opens cell.html with no ?station=, so the tablet remembers its seat.
 const STATION_KEY = 'ro-cell:station';
 const clean = v => String(v || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 32);
 function rememberedStation() { try { return localStorage.getItem(STATION_KEY); } catch { return null; } }
 const station = clean(params.get('station')) || clean(rememberedStation()) || 'table1';
-try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode: falls back to the link each time */ }
+try { localStorage.setItem(STATION_KEY, station); } catch { /* private mode */ }
 // Local testing only: ?api=http://localhost:8799/api/production. Never another host.
 const apiParam = params.get('api') || '';
 const API = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(apiParam) ? apiParam : PROD_API;
-const KEY = `ro-cell:${station}`;
-const API_ROOT = API.replace(/\/production$/, '');
+// A new key: the old cell screen's state (orders, continuous, changeovers) never loads into this one.
+const KEY = `ro-line:${station}`;
 
 const $ = id => document.getElementById(id);
 const el = {
-  name: $('cellName'), batt: $('batt'), orderLock: $('orderLock'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'),
-  cultivar: $('cultivarSelect'), bag: $('bagSelect'), orderPick: $('orderPick'), queueCards: $('queueCards'),
-  nowOrder: $('nowOrder'), nowWhat: $('nowWhat'), nowMeta: $('nowMeta'), nextOrder: $('nextOrder'), nextWhat: $('nextWhat'), nextMeta: $('nextMeta'),
+  name: $('seatName'), batt: $('batt'), dot: $('liveDot'), liveText: $('liveText'), lang: $('langToggle'), banner: $('banner'),
+  whoBtn: $('whoBtn'), whoName: $('whoName'), whoHint: $('whoHint'),
+  cv: $('cvName'), cvSub: $('cvSub'), cvNext: $('cvNext'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
-  tare: $('tareBtn'),
-  cycle: $('cycleTime'), cycleSub: $('cycleSub'), banner: $('banner'),
-  of: $('ofLabel'), toGoLabel: $('toGoLabel'), pctLabel: $('pctLabel'), endCont: $('endContBtn'), changeCv: $('changeCvBtn'),
-  pauseBtn: $('pauseBtn'), resumeBtn: $('resumeBtn'), dialog: $('pauseDialog'), chips: $('pauseChips'),
-  note: $('pauseNote'), noteErr: $('pauseError'), pauseOk: $('pauseOk'), pauseCancel: $('pauseCancel'),
+  hourLb: $('hourLb'), hourLabel: $('hourLabel'), dayLb: $('dayLb'), dayBaskets: $('dayBaskets'), pace: $('paceLb'),
+  cycle: $('cycleTime'), cycleSub: $('cycleSub'), reset: $('resetBtn'),
+  dialog: $('nameDialog'), search: $('nameSearch'), names: $('nameList'), leave: $('leaveSeat'), cancel: $('nameCancel'),
 };
-const RING_LEN = 597;
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+function pacificDate(ms = Date.now()) {
+  return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 }
-// phase: idle (needs a tare) -> armed -> running -> finished -> idle
-const state = { cultivar: '', bag: '', targetG: 0, bankedG: 0, tareFlagG: 0, phase: 'idle', startedAt: null, finishedMs: null, lastMs: null,
-  pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], autoPausedOn: '',
-  breakKey: '', breakPause: false, breakEndsAt: null, tickAt: null, ...load() };
+function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } }
+const state = {
+  phase: 'idle', cultivar: '', nextCultivar: '', person: null, seatSynced: false,
+  bankedG: 0, basketG: 0, tareFlagG: 0, startedAt: null, finishedMs: null, finishedNetG: null, lastMs: null,
+  pausedMs: 0, pausedAt: null, pauseNote: '', pauseLog: [], breakKey: '', breakPause: false, breakEndsAt: null, tickAt: null,
+  basketBack: false, tally: null, ...load(),
+};
 if (!['idle', 'armed', 'running', 'finished'].includes(state.phase)) state.phase = 'idle';
-// The target is always the picked bag size's fill standard.
-const bagOf = key => (key === CONT ? CONT_BAG : PRESETS.find(p => p.key === key));
-if (state.bag && !bagOf(state.bag)) state.bag = '';
-// A queued order's basket keeps its own target (bags x fill, slice 2).
-state.targetG = state.jobId && state.jobTargetG > 0 && state.bag ? state.jobTargetG : state.bag ? bagOf(state.bag).g : 0;
-// A job needs both halves of its order: no cultivar or no bag size, nothing records.
-const hasOrder = () => !!state.cultivar && !!bagOf(state.bag);
-delete state.working; delete state.next;   // the old typed order fields
-let cultivars = [];
+let tally = createTally(state.tally, pacificDate());
+state.tally = tally.data;
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: still works for this visit */ } }
+
 let gross = null;       // grams, latest reading
-let stable = null;      // the scale's settled flag, when it sends one
-let battery = null;     // the scale node's battery { pct, mv, rssi } (firmware v6.5+), or null
-let overSince = null;   // when net first reached the target this job
-const watch = createLiftWatch(); // basket lifts: pickup or shake (lift.mjs)
-const zero = createZeroWatch();  // drops to about 0: the scale's TARE, or an un-tared lift (lift.mjs)
-let tareAt = null;               // when the last empty-basket TARE was taken (undone if it was a lift)
+let battery = null;
 let live = false;
 let timer = null;
-// Disconnected: the Worker says the scale's last post is older than its stale
-// time, or this tablet couldn't reach the Worker for that long.
 let serverStale = false;
 let staleAfterMs = 45000;
 let failingSince = null;
 const disconnected = () => serverStale || (failingSince !== null && Date.now() - failingSince >= staleAfterMs);
+let lineHours = [];     // Hourly entry's line 1 cultivars by hour (lineState)
+let lineCv = state.cultivar || '';
+let crew = [];          // [{ id, name }] for the name tap
 
-// End of day weighs (eod.mjs, Phase 1 scorecard): while the lead's panel is open
-// the scale belongs to it. No job starts, no lift or pickup is read, and once it
-// closes both watches start fresh so nothing is read off the weighs coming off.
-// Leftover raw is tagged with a cultivar (0063): default the one on the screen.
-const eod = createEod({
-  api: API, station,
-  isBusy: () => state.phase === 'running' || state.phase === 'finished',
-  onOpen: () => { if (state.phase === 'armed') { state.phase = 'idle'; save(); } render(); },
-  onClose: () => { watch.reset(); zero.reset(); tareAt = null; overSince = null; render(); },
-  cultivars: () => cultivars, current: () => state.cultivar || state.changeFrom || '', short: shortCultivar,
-});
-// Change cultivar (Continuous, between rounds only): the same panel weighs the old
-// cultivar's leftover raw, then the screen asks for the new cultivar. The window
-// it opens keeps those weighs out of tops, pickups and NOT RECORDING.
-const co = createEod({
-  api: API, station, mode: 'changeover',
-  isBusy: () => changeState(state) !== 'ok',
-  onOpen: () => { if (state.phase === 'armed') { state.phase = 'idle'; save(); } render(); },
-  onClose: () => {
-    watch.reset(); zero.reset(); tareAt = null; overSince = null;
-    afterChangeover(state, co.fromCultivar);
-    save(); renderOrder(); render();
+const me = () => personToday(state, pacificDate());
+const myId = () => me()?.id || 0;
+const slotOf = at => slotAt(pacificMinutes(at));
+
+const seat = createSeat({
+  state, tally: { credit: (...a) => tally.credit(...a), pickup: (...a) => tally.pickup(...a) },
+  slotOf, hourOver: (at, key) => batchOver(pacificMinutes(at), key), personId: myId, lineCultivar: () => lineCv,
+  on: {
+    finish: () => chime(),
+    pickup: ({ g, cultivar, cycleMs, personId }) => {
+      mark('pickup', g / 1000, { cultivar: cultivar || null, cycleS: cycleMs ? cycleMs / 1000 : null, personId: personId || null });
+      setTimeout(sendHours, 1500);   // the hour's total right after a pickup
+    },
   },
-  cultivars: () => cultivars, current: () => state.cultivar || state.changeFrom || '', short: shortCultivar,
 });
 
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode: still works for this visit */ }
-}
-
-const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} g`;
+const fmtG = g => `${g.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} g`;
+const fmtLb = g => (Math.max(0, g) / G_PER_LB).toFixed(2);
 function fmtClock(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   const mm = String(m).padStart(2, '0'), ss = String(sec).padStart(2, '0');
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
-// Progress on the job: what is on the pan now, plus anything banked by a mid-job TARE.
-const net = () => (gross === null ? 0 : Math.max(0, gross) + (state.bankedG || 0));
-// Working time on the job: wall time minus every pause, including one in progress.
-const elapsedMs = () => Date.now() - state.startedAt - (state.pausedMs || 0) - (state.pausedAt ? Date.now() - state.pausedAt : 0);
-function clearPauses() {
-  state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = [];
-  state.breakPause = false; state.breakEndsAt = null;
-}
-function pacificNow() {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(new Date()).map(x => [x.type, x.value]));
-  return { day: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
-}
-const fmtTarget = g => `${g.toLocaleString('en-US', { maximumFractionDigits: 2 })} g`;
+const slotLabel = key => key.replace('-', '–');
+const net = () => (gross === null ? 0 : seat.net(gross));
 
-// The order: cultivar (the Shopify 2026 list, Sungrown only: cells run 2026 Sungrown tops) and bag size.
-function renderOrder() {
-  const opts = [...cultivars];
-  if (state.cultivar && !opts.includes(state.cultivar)) opts.unshift(state.cultivar);
-  el.cultivar.innerHTML = '';
-  const first = document.createElement('option');
-  first.value = ''; first.textContent = t('chooseCultivar');
-  el.cultivar.appendChild(first);
-  for (const c of opts) { const o = document.createElement('option'); o.value = c; o.textContent = c; el.cultivar.appendChild(o); }
-  el.cultivar.value = state.cultivar || '';
-  el.cultivar.classList.toggle('missing', !state.cultivar);
-  el.bag.innerHTML = '';
-  const none = document.createElement('option');
-  none.value = ''; none.textContent = t('chooseBag');
-  el.bag.appendChild(none);
-  for (const p of PRESETS) {
-    const o = document.createElement('option');
-    o.value = p.key; o.textContent = `${t(p.key)} · ${fmtTarget(p.g)}`;
-    el.bag.appendChild(o);
-  }
-  const cont = document.createElement('option');
-  cont.value = CONT; cont.textContent = t('contOption');
-  el.bag.appendChild(cont);
-  el.bag.value = state.bag || '';
-  el.bag.classList.toggle('missing', !state.bag);
-}
-async function loadCultivars() {
-  let history = [];
-  try { history = (await (await fetch(`${API}?action=getCultivars`, { cache: 'no-store' })).json()).cultivars || []; } catch { /* stays short */ }
-  let variants = [];
-  try {
-    const r = await fetch(`${API_ROOT}/pool?action=get_supersack_variants`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{}' });
-    const v = await r.json();
-    variants = (v.data || v).variants || [];
-  } catch { /* history only */ }
-  cultivars = buildCultivarOptions(history, variants, { sungrownOnly: true });
-  renderOrder();
-}
-
+// ---- Render
 function render() {
-  el.name.textContent = `${t('cell')} ${station.replace(/^\D+/, '') || station}`;
+  el.name.textContent = `${t('seat')} ${station.replace(/^\D+/, '') || station}`;
+  renderWho();
+  renderCultivar();
+  const now = Date.now();
   const n = net();
-  const frac = state.targetG > 0 ? n / state.targetG : 0;
-  el.net.textContent = gross === null ? '—' : fmtG(gross); // the scale's own number, nothing added
-  el.targetText.textContent = state.targetG > 0 ? `${fmtTarget(state.targetG)} ${t('netHint')}` : '—';
-  el.toGo.textContent = gross === null || !(state.targetG > 0) ? '—' : fmtG(Math.max(0, state.targetG - n));
-  el.pct.textContent = `${Math.min(999, Math.round(frac * 100))}%`;
-  el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - Math.min(1, frac))));
-  el.ring.classList.toggle('near', frac >= NEAR && frac < 1);
-  el.ring.classList.toggle('over', frac > 1.02);
-  renderContinuous(n);
-
+  const counting = state.phase !== 'idle';
+  // The ring is the batch's hour: it fills with the clock, full when the hour is done.
+  const key = state.batchSlot || slotOf(now);
+  const done = state.phase === 'finished';
+  const frac = done ? 1 : hourFraction(pacificMinutes(now), key);
+  el.net.textContent = gross === null ? '—' : fmtG(gross);   // the scale's own number
+  el.targetText.textContent = t('netHint');
+  el.toGo.textContent = gross === null || !counting ? '—' : `${fmtLb(n)} lb`;
+  const end = slotEnd(key);
+  const left = end === null ? null : Math.max(0, Math.ceil(end - pacificMinutes(now)));
+  el.pct.textContent = done ? t('batchDone') : end === null ? '—' : t('endsAt').replace('{t}', clockOf(end)).replace('{m}', left);
+  el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - frac)));
+  el.ring.classList.toggle('near', !done && left !== null && left <= 5);
+  el.ring.classList.toggle('full', done);
   el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
   el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
   renderBattery();
   renderBanner();
+  renderTiles();
   renderCycle();
-  renderLock();
 }
 
-// Continuous: no target. The ring is full while a round is trimming (empty
-// while it waits for the first gram), the line under the number says the round,
-// and the two stats are this round's grams and the rounds closed today.
-function renderContinuous(n) {
-  const cont = isContinuous(state.bag);
-  const day = pacificNow().day;
-  el.of.hidden = cont;
-  el.toGoLabel.textContent = t(cont ? 'thisRound' : 'toGo');
-  el.pctLabel.textContent = t(cont ? 'roundsToday' : 'done');
-  el.ring.classList.toggle('cont', cont);
-  el.endCont.hidden = !(cont && (state.phase === 'idle' || state.phase === 'armed'));
-  // Change cultivar: between rounds only; mid-round it says how to get there.
-  const cs = changeState(state);
-  el.changeCv.hidden = cs === 'hidden';
-  el.changeCv.disabled = cs !== 'ok';
-  el.changeCv.textContent = t(cs === 'finishFirst' ? 'finishFirst' : 'changeCv');
-  if (!cont) return;
-  el.targetText.textContent = t('contTarget').replace('{n}', roundNo(state, day));
-  el.toGo.textContent = gross === null || state.phase !== 'running' ? '—' : fmtG(n);
-  el.pct.textContent = String(roundsToday(state, day));
-  el.ring.setAttribute('stroke-dashoffset', String(state.phase === 'running' ? 0 : RING_LEN));
+function renderWho() {
+  const p = me();
+  el.whoBtn.classList.toggle('missing', !p);
+  el.whoName.textContent = p ? p.name : t('tapName');
+  el.whoHint.textContent = p ? t('notYou') : '';
+  el.whoHint.hidden = !p;
 }
 
-// The order can't change under a running or finished job (Koa 2026-11-10: hard
-// restrictions): what it was recorded as is what was picked at Start. Idle or
-// armed (nothing trimmed yet) it stays open, so the next order can be set after
-// a pickup. A wrong pick mid-job means Hold to reset.
-function renderLock() {
-  const locked = orderLocked();
-  if (el.cultivar.disabled !== locked) el.cultivar.disabled = locked;
-  if (el.bag.disabled !== locked) el.bag.disabled = locked;
-  el.orderLock.hidden = !locked;
-  el.orderLock.textContent = t(isContinuous(state.bag) ? 'contLock' : 'orderLocked');
+function renderCultivar() {
+  el.cv.textContent = state.cultivar ? shortCultivar(state.cultivar) : t('waitHourly');
+  el.cv.classList.toggle('none', !state.cultivar);
+  el.cvSub.textContent = state.cultivar ? t('fromHourly') : '';
+  el.cvNext.hidden = !state.nextCultivar;
+  el.cvNext.textContent = t('newCvNext').replace('{c}', shortCultivar(state.nextCultivar));
 }
 
-// Scale node battery, beside the live dot. Red under BATT_LOW_PCT: charge it at
-// the end of the shift (Koa gets a Telegram under 15%).
+function renderTiles() {
+  const id = myId();
+  const slot = slotAt(pacificMinutes(Date.now()));
+  el.hourLabel.textContent = `${t('thisHour')} · ${slotLabel(slot)}`;
+  el.hourLb.textContent = `${fmtLb(tally.hourG(slot, id))} lb`;
+  el.dayLb.textContent = `${fmtLb(tally.dayG(id))} lb`;
+  const picks = tally.picks(id);
+  el.dayBaskets.textContent = picks === 1 ? t('basket1') : t('baskets').replace('{n}', picks);
+  const pace = id ? paceLbHr(tally.dayG(id), tally.dayMin(id)) : null;
+  el.pace.textContent = pace === null ? '—' : `${pace.toFixed(2)} ${t('lbHr')}`;
+}
+
 const BATT_LOW_PCT = 20;
 function renderBattery() {
   const b = live ? battery : null;
@@ -378,53 +240,47 @@ function renderBattery() {
 
 // One banner at a time, most urgent first.
 function renderBanner() {
+  const now = Date.now();
+  const b = breakAt(pacificMinutes(now));
   let kind = null;
-  if (disconnected()) kind = null;   // the dot says it; Koa gets the Telegram
-  else if (live && state.phase === 'running' && gross < -LIFT_G) kind = 'off';
-  else if (state.phase === 'running' && state.pausedAt && state.breakPause) kind = 'break';
-  else if (state.phase === 'running' && state.pausedAt) kind = 'paused';
-  else if ((state.phase === 'idle' || state.phase === 'armed') && breakAt(pacificMinutes(Date.now()))) kind = 'break';
+  if (disconnected() || gross === null) kind = null;   // the dot says it; Koa gets the Telegram
+  else if (seat.swapPending(now)) kind = 'swap';
+  else if (state.phase === 'finished') kind = 'full';
+  else if (live && (state.phase === 'running' || seat.lifted) && gross < -LIFT_G) kind = 'off';
+  else if (b) kind = 'break';
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
-  else if (state.phase === 'idle' && isContinuous(state.bag) && state.changeFrom && !state.cultivar) kind = 'change';
-  else if ((state.phase === 'idle' || state.phase === 'armed') && !hasOrder()) kind = 'order';
-  else if (live && state.phase === 'idle' && gross > ON_SCALE_G) kind = 'tare';
+  else if (state.phase === 'idle') kind = 'tare';
+  else if (!me()) kind = 'name';
   el.banner.hidden = !kind;
   if (!kind) return;
-  // A cell fed orders (queue.mjs calmWait), with nothing assigned and nothing being
-  // trimmed, is just waiting: say so calmly. Live today nothing assigns: the red stays.
-  if (kind === 'order' && calmWait({ takesOrders: !!(queueCell && queueCell.takesOrders), autoAssign: queueDriven, hasNow: !!queue.now, grossG: gross, onScaleG: ON_SCALE_G })) {
-    el.banner.className = 'banner break';
-    el.banner.textContent = t('bannerWaitOrder');
-    return;
-  }
-  // Mid-changeover the cell is not trimming: a calm prompt, not NOT RECORDING.
-  if (kind === 'change') {
-    el.banner.className = 'banner break';
-    el.banner.textContent = t('bannerChange').replace('{c}', shortCultivar(state.changeFrom));
-    return;
-  }
   if (kind === 'break') {
-    const b = breakAt(pacificMinutes(Date.now()));
     el.banner.className = 'banner break';
-    el.banner.textContent = b ? t(b.kind === 'lunch' ? 'bannerLunch' : 'bannerBreak').replace('{to}', clockOf(b.end)) : state.pauseNote;
-    return;
-  }
-  const text = t({ signal: 'bannerSignal', off: 'bannerOff', tare: 'bannerTare', paused: 'bannerPaused', tared: 'bannerTared', order: 'bannerOrder' }[kind])
-    .replace('{g}', fmtG(state.tareFlagG || 0));
-  // No job, no cultivar: whatever goes in the basket now is not recorded. Red,
-  // pulsing, headed NOT RECORDING (Koa 2026-11-10: hard restrictions).
-  if (kind === 'order' || kind === 'tare') {
-    el.banner.className = 'banner notrec';
-    el.banner.innerHTML = '';
-    const b = document.createElement('b'); b.textContent = t('notRecording');
-    el.banner.append(b, text);
+    el.banner.textContent = t(b.kind === 'lunch' ? 'bannerLunch' : 'bannerBreak').replace('{to}', clockOf(b.end));
     return;
   }
   el.banner.className = `banner ${kind}`;
-  el.banner.textContent = text;
+  el.banner.textContent = t({ swap: 'bannerSwap', full: 'bannerFull', off: 'bannerOff', tared: 'bannerTared', tare: 'bannerTare', name: 'bannerName' }[kind])
+    .replace('{g}', fmtG(state.tareFlagG || 0));
 }
 
-// Finish chime. Browsers only allow sound after a tap, so the Start tap unlocks it.
+function renderCycle() {
+  const now = Date.now();
+  if (state.phase === 'finished' && state.finishedMs !== null) {
+    el.cycle.textContent = fmtClock(state.finishedMs);
+    el.cycleSub.textContent = `${t('finished')} · ${t('liftOff')}`;
+    return;
+  }
+  if (state.phase !== 'running' || !state.startedAt) {
+    el.cycle.textContent = '--:--';
+    const hint = state.phase === 'armed' ? t('armed') : '';
+    el.cycleSub.textContent = [hint, state.lastMs ? `${t('lastBasket')} ${fmtClock(state.lastMs)}` : ''].filter(Boolean).join(' · ');
+    return;
+  }
+  el.cycle.textContent = fmtClock(elapsedMs(state, now));
+  el.cycleSub.textContent = state.pausedAt ? state.pauseNote : '';
+}
+
+// ---- Finish chime. Browsers only allow sound after a tap; any tap unlocks it.
 let audio = null;
 function unlockAudio() {
   try {
@@ -445,214 +301,36 @@ function chime() {
       o.connect(g).connect(audio.destination);
       o.start(now + at); o.stop(now + at + 0.5);
     });
-  } catch { /* no sound is never a reason to stop the job */ }
+  } catch { /* no sound is never a reason to stop */ }
 }
 
-// Move the job along from the latest reading. Called after every poll.
-function step() {
-  if (gross === null) return;
-  // A drop to about 0 with no lift between: someone pressing the scale's TARE,
-  // or a basket lifted off a scale nobody tared (it reads 0, not negative).
-  // zero (lift.mjs) waits for what comes back before it calls a loaded zero a TARE.
-  const now = Date.now();
-  const loaded = before => (state.phase === 'running' || state.phase === 'finished') && before + (state.bankedG || 0) > EMPTY_G;
-  const z = zero.reading(now, gross, loaded);
-  const lift = watch.reading(now, gross, net());
-  if (z && z.kind === 'undoTare') {
-    // The basket came back: that "TARE" was an un-tared lift of an empty basket.
-    // Undo what it did (an armed or just-started job); the screen asks for a TARE again.
-    if ((state.phase === 'armed' || state.phase === 'running') && tareAt !== null && (!state.startedAt || state.startedAt >= tareAt)) {
-      state.phase = 'idle'; state.startedAt = null; state.finishedMs = null; overSince = null;
-      state.bankedG = 0; state.tareFlagG = 0; clearPauses();
-    }
-    tareAt = null;
-    save();
-    return;
-  }
-  if (z && z.kind === 'pickup') {
-    // A loaded basket off and the reading back about empty with no negative seen
-    // (lift.mjs): the full basket went to the pickup spot and the matched empty
-    // one went on. A pickup of what the job held, same as the lift rule.
-    if (onLift({ kind: 'pickup', g: z.before + (state.bankedG || 0) })) { save(); return; }
-  }
-  if (z && z.kind === 'tare') {
-    const before = z.before;
-    tareAt = now;
-    // A TARE right after a basket came back heavy: a new basket went on, so the
-    // lift before it was a pickup (same rule as the Worker's hourly tops).
-    const swap = watch.tare(now);
-    if (swap && (state.phase === 'running' || state.phase === 'finished')) { closeJob(swap.g); save(); return; }
-    if (state.phase === 'idle' && hasOrder()) {
-      // Basket on, scale tared, order picked: the job is ready, same as tapping Start.
-      state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
-      state.bankedG = 0; state.tareFlagG = 0; clearPauses(); save();
-      return;
-    }
-    if (state.phase === 'running') {
-      // TARE pressed mid-job with tops in the basket: keep what was there, and say so.
-      state.bankedG = (state.bankedG || 0) + before;
-      state.tareFlagG = (state.tareFlagG || 0) + before;
-      save();
-    }
-  }
-  if (lift && onLift(lift)) { save(); return; }
-  // Basket off the pan, or still coming down: nothing starts or finishes on it.
-  if (watch.lifted) return;
-  // Just after an empty-basket TARE, a basket-sized reading may be that basket
-  // coming back (an un-tared lift): it never starts or finishes a job.
-  if (zero.provisional && gross >= BASKET_MIN_G) return;
-  if (state.phase === 'idle' && state.basketBack) { armIfReady(); if (state.phase === 'armed') { save(); return; } }
-  const n = net();
-  if (state.phase === 'running' && state.pausedAt) return; // a paused job waits for Resume
-  if (state.phase === 'armed' && n >= START_G) {
-    state.phase = 'running'; state.startedAt = Date.now(); state.finishedMs = null; overSince = null; clearPauses();
-  } else if (state.phase === 'running') {
-    if (canFinish(state, n)) {
-      if (overSince === null) overSince = Date.now();
-      if (stable === true || Date.now() - overSince >= HOLD_MS) {
-        state.phase = 'finished'; state.finishedMs = elapsedMs(); state.startedAt = null; state.finishedNetG = n;
-        chime();
-      }
-    } else {
-      overSince = null;
-    }
-  } else {
-    return;
-  }
-  save();
-}
-
-// A lift settled (lift.mjs). Returns true when it changed the job.
-//   Pickup, before or after the chime: the job closes with what the basket held,
-//   and the next one is ready on the same basket (Koa 2026-11-10: the bagger's
-//   cart takes tops on rounds, so a pickup before the target is normal).
-//   Shake: the job carries on with what came back. After the chime, a basket
-//   that shook out below the target goes back to running on the same clock.
-function onLift(ev) {
-  if (ev.kind === 'pickup') {
-    if (state.phase !== 'running' && state.phase !== 'finished') return false;
-    closeJob(ev.g);
-    return true;
-  }
-  if (state.phase !== 'finished') return false;
-  if (ev.backNet >= state.targetG) { state.finishedNetG = ev.backNet; return true; }
-  state.phase = 'running';
-  state.startedAt = Date.now() - (state.finishedMs || 0) - (state.pausedMs || 0);
-  state.finishedMs = null; state.finishedNetG = null; overSince = null;
-  return true;
-}
-
-// The pickup mark is the job's record: what it was, what the basket held and
-// how long it took.
-function closeJob(g) {
-  const ms = state.phase === 'finished' ? state.finishedMs : state.startedAt ? elapsedMs() : null;
-  // jobId: the queue job this basket was for (order flow slice 2); null when picked by hand.
-  const jobId = state.jobId || null;
-  const sent = mark('pickup', g / 1000, { cultivar: state.cultivar || null, bag: state.bag, cycleS: ms ? ms / 1000 : null, jobId });
-  // The Worker closes the job and moves NEXT up; ask for the new NOW once it has.
-  if (jobId) { closedJobs.set(jobId, Date.now()); state.jobId = null; sent.then(loadQueue); }
-  state.lastMs = ms; state.finishedMs = null; state.finishedNetG = null; state.startedAt = null; overSince = null;
-  state.tareFlagG = 0; clearPauses();
-  // Every order is entered fresh (Koa 2026-11-10: "All orders for now need to be
-  // re-inputted. shouldn't matter once auto assign is working"): the pickup
-  // clears the order, and the next job records only once one is picked.
-  // Continuous (rounds.mjs): the order stays and the next round is the same
-  // cultivar; the round count for the day goes up. ORDER_PER_JOB never clears it.
-  if (afterPickup(state, { day: pacificNow().day, perJob: ORDER_PER_JOB }) !== 'kept') renderOrder();
-  // The basket is back on the tared scale, so once the order is there the next
-  // job is ready with no Start tap. Crumbs in it (under 2 g) aren't the next job's tops.
-  state.basketBack = true;
-  state.bankedG = 0;
-  state.phase = 'idle';
-  armIfReady();
-}
-
-// After a pickup the basket is back about empty on the tared scale, so a fresh
-// order is all the next job needs: picking it arms the job, no TARE or Start.
-// At the start of the shift (no pickup yet) it's still TARE then Start.
-function armIfReady() {
-  if (!state.basketBack || state.phase !== 'idle' || !hasOrder() || !live || gross === null || Math.abs(gross) > ON_SCALE_G) return;
-  state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
-  state.bankedG = -Math.max(0, gross); state.tareFlagG = 0; state.basketBack = false; clearPauses();
-}
-
-function renderCycle() {
-  el.cycleSub.className = 'sub';
-  const running = state.phase === 'running' && !!state.startedAt;
-  el.pauseBtn.hidden = !running || !!state.pausedAt;
-  el.resumeBtn.hidden = !running || !state.pausedAt;
-  if (state.phase === 'finished' && state.finishedMs !== null) {
-    el.cycle.textContent = fmtClock(state.finishedMs);
-    el.cycleSub.textContent = `${t('finished')} · ${t('liftOff')}`;
-    return;
-  }
-  if (state.phase !== 'running' || !state.startedAt) {
-    el.cycle.textContent = '--:--';
-    const hint = state.phase === 'armed' ? t('armed') : t('tareToStart');
-    // The finished time stays readable after the container leaves the scale.
-    const last = isContinuous(state.bag) ? t('lastRound') : t('lastJob');
-    el.cycleSub.textContent = state.lastMs ? `${hint} · ${last} ${fmtClock(state.lastMs)}` : hint;
-    return;
-  }
-  const elapsed = elapsedMs();
-  el.cycle.textContent = fmtClock(elapsed);
-  if (state.pausedAt) {
-    el.cycleSub.textContent = `${t('paused')}: ${state.pauseNote}`;
-    return;
-  }
-  if (disconnected()) { el.cycleSub.textContent = t('clockHeld'); return; }
-  const mins = elapsed / 60000;
-  const n = net();
-  if (isContinuous(state.bag)) {
-    // No target, so no finish time: the pace and the round.
-    const round = t('roundN').replace('{n}', roundNo(state, pacificNow().day));
-    el.cycleSub.textContent = mins > 0.5 && n > 0 ? `${(n / mins).toFixed(1)} ${t('pace')} · ${round}` : round;
-    return;
-  }
-  if (mins > 0.5 && n > 0) {
-    const rate = n / mins;
-    const left = Math.max(0, state.targetG - n) / rate;
-    el.cycleSub.textContent = `${rate.toFixed(1)} ${t('pace')} · ${t('eta')} ${fmtClock(left * 60000)}`;
-  } else {
-    el.cycleSub.textContent = '';
-  }
-}
-
+// ---- The scale
 async function poll() {
   clearTimeout(timer);
-  // Hidden (screen off, tab in the background): don't fetch, but keep a slow
-  // retry alive. A page that loaded while hidden may never get a visibilitychange,
-  // and would otherwise sit on "Waiting for scale" until someone reloads it.
+  // Hidden: no fetch, but a slow retry stays alive (a page loaded hidden may never get visibilitychange).
   if (document.hidden) { timer = setTimeout(poll, SLOW_MS); return; }
   await read();
-  if (eod.isOpen) eod.reading(live ? gross : null, stable);
-  else if (co.isOpen) co.reading(live ? gross : null, stable);
-  else if (live) step();   // disconnected: no job starts, nothing is logged
+  if (live && gross !== null) { if (seat.reading(Date.now(), gross)) save(); }
   render();
   const delay = disconnected() ? DOWN_MS : !live ? IDLE_MS
     : (state.phase === 'armed' || state.phase === 'running') ? JOB_MS : IDLE_MS;
   timer = setTimeout(poll, delay);
 }
-
-// One fresh reading from the Worker into gross / stable / live.
 async function read() {
   try {
     const r = await fetch(`${API}?action=scaleWeight&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(String(r.status));   // a Worker error is not the scale's fault
+    if (!r.ok) throw new Error(String(r.status));
     const d = await r.json();
     failingSince = null;
     if (d && d.staleAfterS > 0) staleAfterMs = d.staleAfterS * 1000;
     if (d && d.updatedAt) {
-      gross = Number(d.weight) * 1000; // the API's weight is always kg; unit is only a tag
-      stable = d.stable === undefined ? null : d.stable;
+      gross = Number(d.weight) * 1000;   // the API's weight is always kg
       battery = d.battery || null;
-      // The Worker judges staleness against the station's own stale time
-      // (scale_stations.stale_after_s), with its own clock, not the tablet's.
       live = !d.isStale;
       serverStale = !!d.isStale;
     } else {
       live = false;
-      serverStale = true;   // the scale has never posted
+      serverStale = true;
     }
   } catch {
     live = false;
@@ -660,102 +338,146 @@ async function read() {
   }
 }
 
-function orderLocked() { return state.phase === 'running' || state.phase === 'finished'; }
-el.cultivar.addEventListener('change', () => {
-  if (orderLocked()) { renderOrder(); return; }   // locked: put the picker back
-  state.cultivar = el.cultivar.value; pickedAfterChangeover(state); armIfReady(); save(); renderOrder(); render();
-});
-// Picking a bag size sets the target. Only while no job is running (renderLock).
-el.bag.addEventListener('change', () => {
-  const p = bagOf(el.bag.value);
-  if (orderLocked()) { renderOrder(); return; }
-  state.bag = p ? p.key : ''; state.targetG = p ? p.g : 0; overSince = null;
-  // Continuous is for today only (rounds.mjs expireContinuous).
-  if (p && p.continuous) state.contDay = pacificNow().day;
-  armIfReady(); save(); renderOrder(); render();
-});
-// The Worker only sees gross weight (basket included). Tare and pickup marks let
-// it tell a pickup from a basket shaken out when it works out hourly tops
-// (lib/cell-auto.js). Best effort, one retry: the job here never waits on it.
+// ---- The Worker: marks, the hour totals, the seat
+async function postJson(action, body) {
+  const r = await fetch(`${API}?action=${action}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+// Pickup marks keep the record of every basket (and feed the Cells board). Best effort, one retry.
 async function mark(kind, kg, job = {}) {
-  const send = () => fetch(`${API}?action=scaleMark`, {
-    method: 'POST', headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ stationId: station, kind, kg: Math.max(0, Math.round(kg * 100000) / 100000), ...job }),
-  });
-  try { const r = await send(); if (!r.ok && r.status >= 500) throw new Error(); } catch {
-    setTimeout(() => send().catch(() => {}), 10000);
+  const body = { stationId: station, kind, kg: Math.max(0, Math.round(kg * 100000) / 100000), ...job };
+  try { await postJson('scaleMark', body); } catch { setTimeout(() => postJson('scaleMark', body).catch(() => {}), 10000); }
+}
+let sending = false;
+async function sendHours() {
+  if (sending) return;
+  const { rows, keys } = tally.takeDirty();
+  if (!rows.length) return;
+  sending = true;
+  save();
+  try {
+    for (let i = 0; i < rows.length; i += 50) await postJson('lineScaleSave', { stationId: station, date: tally.data.day, rows: rows.slice(i, i + 50) });
+  } catch {
+    tally.markDirty(keys);   // the next send carries them
+  } finally { sending = false; save(); }
+}
+async function seedHours() {
+  if (!tally.empty) return;
+  try {
+    const d = await (await fetch(`${API}?action=lineScaleSeat&stationId=${encodeURIComponent(station)}&date=${tally.data.day}`, { cache: 'no-store' })).json();
+    const rows = (d.data || d).rows || [];
+    if (tally.empty && rows.length) { tally.seed(rows); save(); render(); }
+  } catch { /* starts from 0 here; the Worker keeps its own totals until this seat sends */ }
+}
+async function loadCrew() {
+  try {
+    const d = await (await fetch(`${API}?action=lineCrew`, { cache: 'no-store' })).json();
+    crew = (d.data || d).people || [];
+  } catch { /* the dialog says to tell the lead */ }
+  if (!el.dialog.hidden) renderNames();
+}
+async function syncSeat() {
+  const sent = me()?.id || 0;
+  try {
+    await postJson('lineSeat', { stationId: station, personId: sent });
+    if ((me()?.id || 0) === sent) { state.seatSynced = !!sent; save(); }
+  } catch { state.seatSynced = false; save(); }
+}
+async function loadLine() {
+  try {
+    const r = await fetch(`${API}?action=lineState&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    const s = d.data || d;
+    lineHours = s.hours || [];
+    // The name went to another seat (or the lead cleared it): this seat is empty now.
+    const p = me();
+    if (p && state.seatSynced && (!s.seat || s.seat.personId !== p.id)) { state.person = null; state.seatSynced = false; }
+    else if (p && !state.seatSynced) syncSeat();
+  } catch { return; }
+  lineCv = lineCultivarAt(lineHours, pacificMinutes(Date.now()));
+  applyLineCultivar(state, lineCv);
+  save();
+  render();
+}
+
+// ---- Name tap
+function renderNames() {
+  const q = el.search.value.trim().toLowerCase();
+  el.names.innerHTML = '';
+  const list = crew.filter(p => !q || p.name.toLowerCase().includes(q));
+  if (!crew.length) {
+    const p = document.createElement('p'); p.className = 'muted'; p.textContent = t('noCrew'); el.names.append(p);
+    return;
+  }
+  for (const p of list) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn name-btn'; b.textContent = p.name;
+    if (me()?.id === p.id) b.classList.add('on');
+    b.addEventListener('click', () => pickName(p));
+    el.names.append(b);
   }
 }
-
-// Tare arms the timer for a new job (and re-arms it mid-job if pressed again).
-el.tare.addEventListener('click', async () => {
-  unlockAudio();
-  // A stray tap mid-job would wipe the timer: ask first.
-  if (state.phase === 'running' && !window.confirm(t('confirmRetare'))) return;
-  // Tare on a reading taken now, not the last poll (up to 5 s old), so a container
-  // set down a moment ago is what gets zeroed. No live scale, no tare.
-  await read();
-  if (gross === null || !live) { render(); return; }
-  // Every job needs its order: no cultivar or bag size, no start.
-  if (!state.cultivar) { render(); el.cultivar.focus(); return; }
-  if (!bagOf(state.bag)) { render(); el.bag.focus(); return; }
-  // Start needs a tared scale: an untared basket would count as tops.
-  if (Math.abs(gross) > ON_SCALE_G) { el.banner.hidden = false; el.banner.className = 'banner tare'; el.banner.textContent = t('bannerTare'); return; }
-  state.phase = 'armed'; state.startedAt = null; state.finishedMs = null; overSince = null;
-  state.bankedG = 0; state.tareFlagG = 0; state.basketBack = false; clearPauses();
+function openNames() {
+  el.search.value = '';
+  renderNames();
+  el.dialog.hidden = false;
+  loadCrew();
+}
+function pickName(p) {
+  el.dialog.hidden = true;
+  state.person = p ? { id: p.id, name: p.name, day: pacificDate() } : null;
+  state.seatSynced = false;
+  // On a tared empty basket the first basket is ready with no other tap.
+  if (p && live && gross !== null) seat.start(gross);
   save(); render();
-});
+  syncSeat();
+  sendHours();   // the old name's totals go before the new name's start
+}
+el.whoBtn.addEventListener('click', openNames);
+el.search.addEventListener('input', renderNames);
+el.leave.addEventListener('click', () => pickName(null));
+el.cancel.addEventListener('click', () => { el.dialog.hidden = true; });
 
-// Reset puts this job back to idle: timer, pauses and tare clear. Press and hold,
-// so a stray tap can't do it; a running job also asks. Hour counts the Worker
-// already logged are never touched.
+// ---- Hold to reset: the basket goes back to idle. The tops already counted stay.
 const HOLD_RESET_MS = 1200;
-el.resetBtn = $('resetBtn');
 let holdTimer = null;
-function resetJob() {
+let hintTimer = null;
+const holdLabel = () => el.reset.querySelector('[data-i18n]');
+function resetBasket() {
   if (state.phase === 'running' && !window.confirm(t('confirmReset'))) return;
-  state.phase = 'idle'; state.bankedG = 0; state.tareFlagG = 0; state.startedAt = null; state.finishedMs = null; overSince = null;
-  state.basketBack = false; clearPauses();
+  seat.reset();
   save(); render();
 }
-// On a tablet the hold used to break (Koa 2026-11-09: "wonky and hard to get it
-// to fill the bar all the way"): a finger that slid a little turned the press
-// into a scroll (pointercancel), drifting off the button ended it (pointerleave),
-// and Android's long-press menu cut in. Now the button keeps the pointer
-// (setPointerCapture) wherever the finger drifts, the CSS turns off scrolling,
-// selection and the long-press callout on it, and only lifting the finger ends
-// the hold.
-const holdLabel = () => el.resetBtn.querySelector('[data-i18n]');
-let hintTimer = null;
 function holdStart(e) {
   if (e.button > 0) return;
   e.preventDefault();
-  try { el.resetBtn.setPointerCapture(e.pointerId); } catch { /* old browser: still works without */ }
-  el.resetBtn.classList.add('holding');
-  holdTimer = setTimeout(() => { holdTimer = null; el.resetBtn.classList.remove('holding'); resetJob(); }, HOLD_RESET_MS);
+  try { el.reset.setPointerCapture(e.pointerId); } catch { /* old browser */ }
+  el.reset.classList.add('holding');
+  holdTimer = setTimeout(() => { holdTimer = null; el.reset.classList.remove('holding'); resetBasket(); }, HOLD_RESET_MS);
 }
 function holdEnd() {
   const early = holdTimer !== null;
   clearTimeout(holdTimer); holdTimer = null;
-  el.resetBtn.classList.remove('holding');
-  // Let go too soon: say so on the button itself for 2 s.
+  el.reset.classList.remove('holding');
   if (early) {
     holdLabel().textContent = t('holdHint');
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => { holdLabel().textContent = t('holdReset'); }, 2000);
   }
 }
-el.resetBtn.addEventListener('pointerdown', holdStart);
-['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.resetBtn.addEventListener(ev, holdEnd));
-el.resetBtn.addEventListener('contextmenu', e => e.preventDefault());
+el.reset.addEventListener('pointerdown', holdStart);
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.reset.addEventListener(ev, holdEnd));
+el.reset.addEventListener('contextmenu', e => e.preventDefault());
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
-document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; renderOrder(); render(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { poll(); keepAwake(); } });
+document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; if (!el.dialog.hidden) renderNames(); render(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) sendHours();
+  else { poll(); keepAwake(); loadLine(); }
+});
 
-// Keep the tablet's screen on while the page is up, on battery too (Samsung's
-// Stay awake only works while charging). The lock drops whenever the page is
-// hidden, so it is asked for again each time the page comes back, and on any
-// tap in case the browser wanted a gesture first. Unsupported: fails quietly.
+// ---- Screen on (Samsung's Stay awake only works while charging)
 let wakeLock = null;
 async function keepAwake() {
   if (!('wakeLock' in navigator) || document.hidden || wakeLock) return;
@@ -765,222 +487,132 @@ async function keepAwake() {
     wakeLock.addEventListener('release', () => { wakeLock = null; $('awake').hidden = true; });
   } catch { wakeLock = null; }
 }
-// Any tap turns sound on (browsers block it until one), so the finish chime
-// works without the Start button.
 document.addEventListener('pointerdown', () => { keepAwake(); unlockAudio(); });
 keepAwake();
-// endsAt: set for a break pause, the moment the break ends.
-function pauseJob(note, endsAt = null) {
+
+// ---- Breaks (breaks.mjs): a running basket's clock stops for a break and starts again after it.
+function pauseBasket(note, endsAt) {
   if (state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
-  state.pausedAt = Date.now(); state.pauseNote = note;
-  state.breakPause = endsAt !== null; state.breakEndsAt = endsAt; save(); render();
+  state.pausedAt = Date.now(); state.pauseNote = note; state.breakPause = true; state.breakEndsAt = endsAt; save();
 }
-function resumeJob() {
+function resumeBasket() {
   if (!state.pausedAt) return;
   const now = Date.now();
-  // A break pause counts only to the break's end, even if the tablet slept past
-  // it; any later break inside that gap is left out as well.
-  const end = state.breakPause && state.breakEndsAt ? Math.min(now, state.breakEndsAt) : now;
-  const ms = Math.max(0, end - state.pausedAt);
-  state.pausedMs = (state.pausedMs || 0) + ms + (end < now ? breakMsBetween(end, now) : 0);
-  (state.pauseLog = state.pauseLog || []).push({ note: state.pauseNote, ms, at: new Date(state.pausedAt).toISOString() });
-  state.pausedAt = null; state.pauseNote = ''; state.breakPause = false; state.breakEndsAt = null; save(); render();
+  const end = state.breakEndsAt ? Math.min(now, state.breakEndsAt) : now;
+  state.pausedMs = (state.pausedMs || 0) + Math.max(0, end - state.pausedAt) + (end < now ? breakMsBetween(end, now) : 0);
+  state.pausedAt = null; state.pauseNote = ''; state.breakPause = false; state.breakEndsAt = null; save();
 }
-
-// Pause needs a reason: tap one, or write it.
-function openPause() {
-  el.chips.innerHTML = '';
-  for (const key of REASONS) {
-    const b = document.createElement('button');
-    b.className = 'btn chip'; b.textContent = t(key);
-    b.addEventListener('click', () => { el.note.value = t(key); el.noteErr.hidden = true; });
-    el.chips.appendChild(b);
-  }
-  el.note.value = ''; el.noteErr.hidden = true; el.dialog.hidden = false; el.note.focus();
-}
-el.pauseBtn.addEventListener('click', openPause);
-el.pauseCancel.addEventListener('click', () => { el.dialog.hidden = true; });
-el.note.addEventListener('input', () => { el.noteErr.hidden = true; });
-el.pauseOk.addEventListener('click', () => {
-  const note = el.note.value.trim();
-  if (note.length < NOTE_MIN_CHARS) { el.noteErr.hidden = false; el.note.focus(); return; }
-  el.dialog.hidden = true;
-  pauseJob(note);
-});
-el.resumeBtn.addEventListener('click', resumeJob);
-
-// 4:20 pm Pacific: a job still running pauses itself for cleanup, once a day.
-function autoPause() {
-  const now = pacificNow();
-  if (now.minutes >= AUTO_PAUSE_MIN && state.autoPausedOn !== now.day && state.phase === 'running' && !state.pausedAt) {
-    state.autoPausedOn = now.day;
-    pauseJob(t('autoNote'));
-  }
-}
-
-// Breaks (breaks.mjs): a running job stops its clock when a break starts and
-// starts again when it ends, with no tap. Resume during a break keeps the job
-// running for the rest of that break; a pause the crew made themselves is theirs.
 const breakText = (b, key) => t(key).replace('{from}', clockOf(b.start)).replace('{to}', clockOf(b.end));
 function autoBreak() {
   const now = Date.now();
   const m = pacificMinutes(now);
   const b = breakAt(m);
-  if (state.pausedAt && state.breakPause) {
-    if (!b || now >= state.breakEndsAt) resumeJob();
-    return;
-  }
-  if (!b || state.phase !== 'running' || !state.startedAt || state.pausedAt) return;
-  const key = `${pacificNow().day}:${b.start}`;
+  if (state.pausedAt) { if (!b || now >= state.breakEndsAt) resumeBasket(); return; }
+  if (!b || state.phase !== 'running' || !state.startedAt) return;
+  const key = `${pacificDate(now)}:${b.start}`;
   if (state.breakKey === key) return;
   state.breakKey = key;
-  pauseJob(breakText(b, b.kind === 'lunch' ? 'lunchNote' : 'breakNote'), Math.round(now + (b.end - m) * 60000));
+  pauseBasket(breakText(b, b.kind === 'lunch' ? 'lunchNote' : 'breakNote'), Math.round(now + (b.end - m) * 60000));
 }
-// A tablet that slept, or a page reopened, misses those ticks: the break time
-// inside the gap is left out of the clock all the same.
+// A tablet that slept, or a page reopened, leaves the break time in the gap out of the clock too.
 function catchUpBreaks() {
   const now = Date.now();
   const from = state.tickAt || now;
   const running = state.phase === 'running' && !!state.startedAt && !state.pausedAt;
   if (running && now - from > 5000) state.pausedMs = (state.pausedMs || 0) + breakMsBetween(Math.max(from, state.startedAt), now);
   state.tickAt = now;
-  if (running) save();
+}
+// A basket running while the scale is disconnected holds its clock.
+let lastTickAt = Date.now();
+function holdWhileDisconnected(now) {
+  if (state.phase === 'running' && state.startedAt && !state.pausedAt && disconnected()) state.pausedMs = (state.pausedMs || 0) + (now - lastTickAt);
 }
 
-// A job running while the scale is disconnected holds its clock: the time is
-// added to the paused time, so the saved cycle time leaves the outage out. It
-// carries on by itself when posts resume, with no Resume tap.
-let lastTickAt = Date.now();
-function holdWhileDisconnected() {
-  const now = Date.now();
-  if (state.phase === 'running' && state.startedAt && !state.pausedAt && disconnected()) {
-    state.pausedMs = (state.pausedMs || 0) + (now - lastTickAt);
-    save();
-  }
-  lastTickAt = now;
+// ---- Minutes seated (pace on Mis números): only with a name, only working minutes.
+let minuteTickAt = Date.now();   // not saved: time the page was closed is never counted
+function countMinutes(now) {
+  const id = myId();
+  const min = id ? tickMinutes(minuteTickAt, now, pacificMinutes, breakAt) : 0;
+  minuteTickAt = now;
+  if (min > 0) tally.addMin(slotOf(now), id, state.cultivar, min);
 }
-// Report the job to the Worker so other computers see it on the Cells board
-// (Koa 2026-11-09; cells.html, setCellState). Sent when anything on the job
-// changes, and every 30 s anyway so the board can tell a tablet that's off.
-// Best effort: the next change or heartbeat repairs a lost one.
+
+// A new Pacific day: send what is left of yesterday, then start a fresh tally.
+async function rollDay() {
+  const day = pacificDate();
+  if (tally.data.day === day) return;
+  await sendHours();
+  tally = createTally(null, day);
+  state.tally = tally.data;
+  personToday(state, day);
+  save(); render();
+}
+
+// Report the basket to the Cells board (cells.html): a finished basket shows
+// "ready for pickup" there. Sent on change and every 30 s.
 const REPORT_EVERY_MS = 30000;
 let lastReportKey = '';
 let lastReportAt = 0;
-function jobSnapshot() {
+function reportBasket(force = false) {
   const running = state.phase === 'running' && !!state.startedAt;
   const held = running && disconnected();
-  const elapsed = running ? elapsedMs() : state.phase === 'finished' ? state.finishedMs : null;
-  return {
-    stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: state.bag || null, targetG: state.targetG || null,
-    jobId: state.jobId || null,
+  const elapsed = running ? elapsedMs(state, Date.now()) : state.phase === 'finished' ? state.finishedMs : null;
+  const snap = {
+    stationId: station, phase: state.phase, cultivar: state.cultivar || null, bag: null, targetG: null,
     elapsedMs: elapsed == null ? null : Math.max(0, Math.round(elapsed)),
-    paused: !!state.pausedAt || held,
-    pauseNote: state.pausedAt ? state.pauseNote : held ? 'Scale disconnected' : null,
+    paused: !!state.pausedAt || held, pauseNote: state.pausedAt ? state.pauseNote : held ? 'Scale disconnected' : null,
     finishedNetG: state.phase === 'finished' ? (state.finishedNetG ?? null) : null,
   };
-}
-function reportJob(force = false) {
-  const snap = jobSnapshot();
-  // A ticking clock isn't a change: the board ticks it from the start time.
   const ticking = snap.phase === 'running' && !snap.paused;
-  const key = JSON.stringify({ ...snap, elapsedMs: ticking || snap.elapsedMs == null ? null : Math.floor(snap.elapsedMs / 1000) });
-  if (!force && key === lastReportKey && Date.now() - lastReportAt < REPORT_EVERY_MS) return;
-  lastReportKey = key; lastReportAt = Date.now();
-  fetch(`${API}?action=setCellState`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(snap) })
-    .catch(() => { lastReportKey = ''; });   // retry on the next tick
+  const k = JSON.stringify({ ...snap, elapsedMs: ticking || snap.elapsedMs == null ? null : Math.floor(snap.elapsedMs / 1000) });
+  if (!force && k === lastReportKey && Date.now() - lastReportAt < REPORT_EVERY_MS) return;
+  lastReportKey = k; lastReportAt = Date.now();
+  postJson('setCellState', snap).catch(() => { lastReportKey = ''; });
 }
-// End continuous (between rounds only): the order clears and the screen asks for a pick.
-el.endCont.addEventListener('click', () => {
-  if (!isContinuous(state.bag) || orderLocked()) return;
-  endContinuous(state); overSince = null; save(); renderOrder(); render();
-});
-el.changeCv.addEventListener('click', () => { if (changeState(state) === 'ok') co.show(); });
-// Continuous picked yesterday clears before the first round of a new day.
-function expireDaily() { if (expireContinuous(state, pacificNow().day)) { save(); renderOrder(); render(); } }
-setInterval(() => { expireDaily(); catchUpBreaks(); holdWhileDisconnected(); autoBreak(); autoPause(); renderCycle(); if (!document.hidden) reportJob(); }, 1000);
 
-// A tablet left open keeps running the code it loaded (Koa 2026-11-10: Cell 1
-// read "Tablet off" all morning while trimming). Every few minutes, ask Pages
-// which build is current and reload onto it while no job is running. The order
-// and timer live in localStorage, so a reload loses nothing.
+let lastSlot = slotOf(Date.now());
+let lastSendAt = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  rollDay();
+  catchUpBreaks();
+  holdWhileDisconnected(now);
+  lastTickAt = now;
+  autoBreak();
+  countMinutes(now);
+  // The hour mark sends the hour that just ended; otherwise once a minute while it changes.
+  const slot = slotOf(now);
+  if (slot !== lastSlot || now - lastSendAt >= SEND_MS) { lastSlot = slot; lastSendAt = now; sendHours(); }
+  save();
+  renderCycle(); renderTiles();
+  if (!document.hidden) reportBasket();
+}, 1000);
+setInterval(() => { if (!document.hidden) loadLine(); }, LINE_MS);
+
+// A tablet left open keeps running the code it loaded: every few minutes, reload
+// onto the current build while no basket is running. Everything lives in localStorage.
 const BUILD = new URL(import.meta.url).searchParams.get('h');
 const BUILD_CHECK_MS = 3 * 60 * 1000;
 async function checkBuild() {
-  if (!BUILD || document.hidden || orderLocked() || watch.lifted || eod.isOpen || co.isOpen) return;
+  if (!BUILD || document.hidden || state.phase === 'running' || state.phase === 'finished' || seat.lifted || !el.dialog.hidden) return;
   try {
     const r = await fetch(`${location.pathname}?build=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return;
     const m = (await r.text()).match(/js\/cell\/main\.js\?h=([0-9a-f]+)/);
-    if (m && m[1] !== BUILD) location.reload();
+    if (m && m[1] !== BUILD) { await sendHours(); location.reload(); }
   } catch { /* offline: try again next time */ }
 }
 setInterval(checkBuild, BUILD_CHECK_MS);
 
-// Orders assigned to this cell (order flow slice 2): NOW is the order, NEXT is shown
-// under it. Read every QUEUE_MS, and right after a pickup.
-const QUEUE_MS = 5000;
-// Jobs this tablet closed with a pickup -> when. If the Worker still shows one as
-// NOW after LOST_PICKUP_MS, the pickup mark never landed: close it with jobDone
-// (not a second pickup mark, which would count the tops twice in the hourly log).
-const LOST_PICKUP_MS = 30000;
-const closedJobs = new Map();
-const jobDoneSent = new Set();
-let queue = { now: null, next: null };
-let queueCell = null;   // this cell's cellQueue row: takesOrders, NOW, NEXT
-let queueDriven = false; // something assigns orders (cellQueue autoAssign)
-async function loadQueue() {
-  try {
-    const r = await fetch(`${API}?action=cellQueue&stationId=${encodeURIComponent(station)}`, { cache: 'no-store' });
-    if (!r.ok) return;   // before migration 0061 (503) the screen works as it always has
-    const d = await r.json();
-    queue = { now: (d.cell && d.cell.now) || null, next: (d.cell && d.cell.next) || null };
-    queueCell = d.cell || null;
-    queueDriven = d.autoAssign === true;
-  } catch { return; }
-  const stuck = queue.now && closedJobs.has(queue.now.id) ? queue.now.id : null;
-  if (stuck && Date.now() - closedJobs.get(stuck) > LOST_PICKUP_MS && !jobDoneSent.has(stuck)) {
-    jobDoneSent.add(stuck);
-    fetch(`${API}?action=jobDone`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ jobId: stuck }) })
-      .then(() => loadQueue()).catch(() => jobDoneSent.delete(stuck));
-  }
-  for (const [id, at] of closedJobs) if (id !== stuck && Date.now() - at > 10 * 60000) { closedJobs.delete(id); jobDoneSent.delete(id); }
-  // A continuous order is never replaced by an assigned NOW (rounds.mjs).
-  const changed = queueMayApply(state) && applyQueue(state, queue.now, { locked: orderLocked(), closed: new Set(closedJobs.keys()), bagOk: k => !!bagOf(k) });
-  if (changed) { overSince = null; armIfReady(); save(); renderOrder(); }
-  renderQueue();
-  render();
-}
-function jobLine(j) {
-  return `${shortCultivar(j.cultivar)} · ${t(j.bag)} × ${j.bags}`;
-}
-function renderQueue() {
-  const now = state.jobId && queue.now && queue.now.id === state.jobId ? queue.now : null;
-  el.queueCards.hidden = !now;
-  el.orderPick.hidden = !!now;
-  if (!now) return;
-  el.nowOrder.textContent = now.orderName || '';
-  el.nowWhat.textContent = jobLine(now);
-  el.nowMeta.textContent = [
-    now.baskets > 1 ? t('basketOf').replace('{n}', now.basketNo).replace('{m}', now.baskets) : '',
-    now.rush ? t('rushTag') : '', now.changedInShopify ? t('changedShopify') : '',
-  ].filter(Boolean).join(' · ');
-  const next = queue.next;
-  el.nextOrder.textContent = next ? next.orderName || '' : '';
-  el.nextWhat.textContent = next ? jobLine(next) : t('nothingNext');
-  el.nextMeta.textContent = next && next.cultivar !== now.cultivar ? t('newCultivar') : '';
-}
-setInterval(() => { if (!document.hidden) loadQueue(); }, QUEUE_MS);
-
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
-eod.bindHold($('eodBtn'));
-eod.resume();
-co.resume();
-expireDaily();
+personToday(state, pacificDate());
 save();
-reportJob(true);
-enhanceSelect(el.cultivar, { placeholder: () => t('searchCultivar') });
-renderOrder();
+reportBasket(true);
 render();
 poll();
-loadCultivars();
-loadQueue();
+loadLine();
+loadCrew();
+seedHours();
+if (me() && !state.seatSynced) syncSeat();
+// No name yet: ask right away (Koa 2026-11-24: tap your name when you sit down).
+if (!me()) openNames();

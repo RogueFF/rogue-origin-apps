@@ -36,6 +36,13 @@ export function createLiftWatch() {
     get lifted() { return lift !== null; },
 
     /**
+     * A basket came back with weight in it less than GRACE_MS ago and no TARE yet:
+     * it may be basket B going on (a TARE would make the lift a pickup). The line
+     * seat holds its hour credit until this settles (seat.mjs).
+     */
+    swapPending(at) { return back !== null && at - back.at <= GRACE_MS; },
+
+    /**
      * One scale reading. gross = what the scale reads (g), net = job progress
      * (gross plus anything banked). Returns null, or
      *   { kind: 'pickup', g }  the basket came back empty; g = what it held

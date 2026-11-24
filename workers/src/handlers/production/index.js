@@ -30,6 +30,7 @@ import { crewHourDay, crewHourSave, crewPersonAdd } from './crew-hours.js';
 import { cellFillSet } from './cell-fill.js';
 import { crewGoalSet } from './crew-goal.js';
 import { getCrewBoard } from './crew-board.js';
+import { lineCrew, lineState, lineSeat, lineScaleSave, lineScaleSeat, lineScaleHours, lineScaleFillSet } from './line-scale.js';
 
 async function test(env) {
   return successResponse({
@@ -134,6 +135,20 @@ export async function handleProductionD1(request, env, ctx) {
         return await crewHourDay(body, env, request);
       case 'crewGoalSet':
         return await crewGoalSet(body, env, request);
+      case 'lineCrew':
+        return await lineCrew(env);
+      case 'lineState':
+        return await lineState(params, env);
+      case 'lineSeat':
+        return await lineSeat(body, env);
+      case 'lineScaleSave':
+        return await lineScaleSave(body, env);
+      case 'lineScaleSeat':
+        return await lineScaleSeat(params, env);
+      case 'lineScaleHours':
+        return await lineScaleHours(params, env);
+      case 'lineScaleFillSet':
+        return await lineScaleFillSet(body, env, request);
       case 'cellFillSet':
         return await cellFillSet(body, env, request);
       case 'crewHourSave':
