@@ -60,6 +60,8 @@ const data = async (p) => { const j = await json(p); return j.data ?? j; };
 const G = 453.59237;
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 const H1 = '7:00 AM – 8:00 AM', H2 = '8:00 AM – 9:00 AM';
+const LONGS = ['7:00 AM – 8:00 AM', '8:00 AM – 9:00 AM', '9:00 AM – 10:00 AM', '10:00 AM – 11:00 AM', '11:00 AM – 12:00 PM',
+  '12:30 PM – 1:00 PM', '1:00 PM – 2:00 PM', '2:00 PM – 3:00 PM', '3:00 PM – 4:00 PM'];
 const addPerson = async (env, name) => (await data(post(env, 'crewPersonAdd', { password: 'pw', name }))).person.id;
 const save = (env, rows, stationId = 'table1', date = TODAY) => post(env, 'lineScaleSave', { stationId, date, rows });
 const typeHour = (env, slot, o = {}) => post(env, 'addProduction', {
@@ -157,6 +159,8 @@ test('Mis números: scale hours count for the person; a typed hour wins; a scale
   const ana = await addPerson(env, 'Ana');
   const beto = await addPerson(env, 'Beto');
   const full = [['7-8', 60], ['8-9', 60], ['9-10', 50], ['10-11', 60], ['11-12', 60], ['12-1', 30], ['1-2', 60], ['2-3', 50], ['3-4', 60]];
+  // The line ran every hour (Hourly entry rows with crew): the yardstick for a scale-only full day.
+  for (const long of LONGS.slice(0, 9)) await typeHour(env, long);
   await save(env, full.map(([slot, min]) => ({ slot, personId: ana, cultivar: 'Alpha', g: 0.5 * G, min })));
   await save(env, [{ slot: '7-8', personId: beto, cultivar: 'Alpha', g: 0.4 * G, min: 60 }], 'table2');
   const day = (id) => sqlite.prepare('SELECT * FROM crew_days WHERE work_date = ? AND person_id = ?').get(TODAY, id);
@@ -244,4 +248,22 @@ test('pickup marks carry the person', async () => {
   const r = await post(env, 'scaleMark', { stationId: 'table1', kind: 'pickup', kg: 0.4536, cultivar: 'Alpha', bag: 'lb1', cycleS: 900, personId: ana });
   assert.equal(r.status, 200);
   assert.equal(sqlite.prepare('SELECT person_id FROM scale_marks').get().person_id, ana);
+});
+
+test('full day for a scale-only trimmer is judged against the hours the line ran, not the other scales', async () => {
+  // 2026-11-24: the line restarted at 12:30, one seat had a scale, Daniel sat 22 min of 3-4.
+  const { env, sqlite } = freshDb();
+  const dan = await addPerson(env, 'Dan');
+  const eva = await addPerson(env, 'Eva');
+  for (const long of LONGS.slice(5)) await typeHour(env, long);   // 12:30-1 .. 3-4
+  await save(env, [{ slot: '3-4', personId: dan, cultivar: 'Alpha', g: 326, min: 21.7 }]);
+  await save(env, [['12-1', 30], ['1-2', 60], ['2-3', 50], ['3-4', 58]].map(([slot, min]) => ({ slot, personId: eva, cultivar: 'Alpha', g: 300, min })), 'table2');
+  const day = (id) => sqlite.prepare('SELECT full_day FROM crew_days WHERE work_date = ? AND person_id = ?').get(TODAY, id);
+  assert.equal(day(dan).full_day, 0, '22 minutes is a part day, even as the only scale');
+  assert.equal(day(eva).full_day, 1, 'every hour the line ran, within 5 min');
+  // No Hourly entry rows at all: nobody is judged full.
+  const fresh = freshDb();
+  const x = await addPerson(fresh.env, 'Xi');
+  await save(fresh.env, [{ slot: '7-8', personId: x, cultivar: 'Alpha', g: 300, min: 60 }]);
+  assert.equal(fresh.sqlite.prepare('SELECT full_day FROM crew_days WHERE person_id = ?').get(x).full_day, 0);
 });
