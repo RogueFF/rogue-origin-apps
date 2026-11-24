@@ -6,7 +6,7 @@
 import { makeApi } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
 import { buildCultivarOptions } from './cultivar-options.mjs';
-import { scaleHourAt, chipHtml, panelHtml, scaleLabels } from './line-scales.mjs';
+import { scaleHourAt, chipHtml, panelHtml, scaleLabels, SHOW_TRIMMER_SCALES } from './line-scales.mjs';
 
 const productionApi = makeApi('production');
 // The line scales' per-day fill switch needs the farm password this device unlocked with.
@@ -942,7 +942,7 @@ function initializeUI() {
     if (e.target && e.target.id === 'line-scale-fill') setLineScaleFill(e.target.checked);
   });
   // The scales move without a save on this page: read them again every minute.
-  setInterval(() => { if (!document.hidden) loadLineScales(currentDate).then(() => { renderTimeline(); refreshOpenScales(); }); }, 60000);
+  if (SHOW_TRIMMER_SCALES) setInterval(() => { if (!document.hidden) loadLineScales(currentDate).then(() => { renderTimeline(); refreshOpenScales(); }); }, 60000);
 
   // Copy crew from previous hour
   const copyCrewBtn = document.getElementById('copy-crew-btn');
@@ -5001,6 +5001,7 @@ loadCultivars = async function () {
 // the typed tops; with the day's switch on they fill the tops (typed tops win).
 
 async function loadLineScales(date) {
+  if (!SHOW_TRIMMER_SCALES) return lineScales;   // switched off: nothing fetched, nothing shown
   try {
     const d = await productionApi.get('lineScaleHours', { date });
     lineScales = { fillOn: !!d.fillOn, slots: d.slots || [] };
@@ -5017,6 +5018,7 @@ function editorOpen() {
 function renderScaleSection(slot = TIME_SLOTS[currentSlotIndex]) {
   const box = document.getElementById('scale-section');
   if (!box) return;
+  if (!SHOW_TRIMMER_SCALES) { box.hidden = true; return; }
   const index = TIME_SLOTS.indexOf(slot);
   const hour = index >= 0 ? scaleHourAt(lineScales, index) : null;
   // Shown once any seat has weighed this day, so the switch is there before the first hour.

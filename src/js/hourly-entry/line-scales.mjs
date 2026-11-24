@@ -8,6 +8,13 @@
  *
  * Pure HTML builders, so they are unit-tested (tests/hourly-line-scales.test.mjs).
  */
+// Off for now (Koa 2026-11-24: "leave this out of the hourly-entry for now (keep
+// the feature, just turn it off if possible)"). Off: no chip, no per-trimmer
+// panel, no fill switch, and no lineScaleHours fetch. The seat screens, their
+// hourly storage, Mis números and the fill API keep running; flip to true to
+// bring the panel back.
+export const SHOW_TRIMMER_SCALES = false;
+
 export const LINE_KEYS = ['7-8', '8-9', '9-10', '10-11', '11-12', '12-1', '1-2', '2-3', '3-4', '4-4:30'];
 
 const L = {

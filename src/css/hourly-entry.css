@@ -4052,6 +4052,7 @@ input[type="number"] {
 .change-total.bad { color: var(--error); }
 
 /* Line trimmer scales (line-scales.mjs): a chip on each hour, the per-trimmer table in the editor. */
+.scale-section[hidden] { display: none !important; }
 .slot-scale { font-size: 12px; font-weight: 600; color: var(--info, #2f6f9f); white-space: nowrap; }
 .scale-section .scale-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .scale-section .scale-table th, .scale-section .scale-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }

@@ -220,7 +220,7 @@ test('seat screen at phone width: nothing runs off the side', async ({ browser }
   await context.close();
 });
 
-test('Hourly entry: the per-trimmer scales beside the typed tops, and the day\'s switch', async ({ browser }) => {
+test('Hourly entry: the trimmer scales are switched off (no chip, no panel, no fetch); saves still say topsTouched', async ({ browser }) => {
   const { context, page, fake } = await rig(browser, { width: 1280, height: 1400 });
   await page.addInitScript(() => {
     localStorage.setItem('hourlyEntry_tutorialComplete', 'true');
@@ -229,33 +229,26 @@ test('Hourly entry: the per-trimmer scales beside the typed tops, and the day\'s
   fake.production = [{ timeSlot: '8:00 AM – 9:00 AM', trimmers1: 8, buckers1: 3, tzero1: 1, cultivar1: SL, tops1: 6.2, smalls1: 1.4, topsSource: null }];
   fake.lineHours = { fillOn: false, slots: [{ slot: '8-9', long: '8:00 AM – 9:00 AM', g: 2617.3, lb: 5.77, fill: 'hand', rows: [
     { stationId: 'table1', personId: 1, name: 'Ana', cultivar: SL, g: 680.4, lb: 1.5, min: 58 },
-    { stationId: 'table2', personId: 2, name: 'Beto', cultivar: SL, g: 635.0, lb: 1.4, min: 60 },
-    { stationId: 'table3', personId: 3, name: 'Carla', cultivar: SL, g: 725.7, lb: 1.6, min: 60 },
-    { stationId: 'table4', personId: 4, name: 'Dani', cultivar: SL, g: 576.2, lb: 1.27, min: 55 },
   ] }] };
+  const asked = [];
+  page.on('request', (r) => { if (/action=lineScaleHours/.test(r.url())) asked.push(r.url()); });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${ROOT}/hourly-entry.html`);
-  await expect(page.locator('.slot-scale').first()).toContainText('5.8 lb');
-  await shot(page, '7-hourly-day');
-  await page.locator('.timeline-slot', { hasText: '5.8 lb' }).first().click();
-  const box = page.locator('#scale-section');
-  await expect(box).toBeVisible();
-  await expect(box.locator('tbody tr')).toHaveCount(4);
-  await expect(box).toContainText('Scales total: 5.77 lb');
-  await expect(box).toContainText('Typed tops: 6.2 lb');
-  await expect(box.locator('#line-scale-fill')).not.toBeChecked();
-  await box.scrollIntoViewIfNeeded();
-  await shot(page, '8-hourly-editor');
-  // The switch needs the farm password and a yes.
-  page.once('dialog', (d) => d.accept());
-  await box.locator('#line-scale-fill').check();
-  await expect.poll(() => posted(fake, 'lineScaleFillSet').map((p) => p.body.on)).toEqual([true]);
-  // A save with the tops box left alone says so.
+  const hour = page.locator('.timeline-slot', { hasText: '6.2 lbs' }).first();
+  await expect(hour).toBeVisible();
+  await expect(page.locator('.slot-scale')).toHaveCount(0);
+  await hour.click();
+  await expect(page.locator('#tops1')).toHaveValue('6.2');
+  await expect(page.locator('#scale-section')).toBeHidden();
+  await expect(page.locator('#line-scale-fill')).toHaveCount(0);
+  await shot(page, '8-hourly-editor-scales-off');
+  // A save with the tops box left alone still tells the Worker so (the fill API stays as it is).
   await page.locator('#qcNotes').fill('ok');
   await page.locator('#qcNotes').blur();
   await expect.poll(() => posted(fake, 'addProduction').length, { timeout: 5000 }).toBeGreaterThan(0);
   expect(posted(fake, 'addProduction').at(-1).body.topsTouched).toBe(false);
+  expect(asked).toEqual([]);
   expect(errors).toEqual([]);
   await context.close();
 });
