@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 
 import {
   TOP, REFRESH_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, PRELOAD_MS, READY_TIMEOUT_MS, IDLE_AFTER_INPUT_MS, nextRotationAt,
-  MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  MIN_ROTATE_WIDTH, LABELS, panelModel, pickDay, rotationMode, HOLD_REFRESH_MS, pacificMinutes, EOD_HOLD_FROM, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
 } from '../src/js/scoreboard-v2/leaders-logic.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -165,41 +165,77 @@ test('the scoreboard page carries the panel, the overlay and the module', () => 
   assert.ok(!/method:\s*'POST'/i.test(js));
 });
 
-// Koa 2026-11-18: "show top 5 leaderboard on bottom (based off of yesterdays
-// numbers)". Typed hours land during the shift, so the API's own `day` can be
-// today; the panel always shows the latest workday BEFORE today.
+// Koa 2026-11-18 (evening): "before numbers are entered tomorrow, the scoreboard
+// shows rankings from today. As soon as they start entering numbers, it revolves
+// every 10 minutes for 2 minutes holding. Once they start entering numbers into
+// the cells hourly-entry, the rankings start going off of those new ones."
 const R = (names) => names.map((n, i) => P(i + 1, n, 400 - i * 20, Math.round((400 - i * 20) / 453.59237 * 100) / 100));
 const BY_DAY = {
   success: true,
-  day: '2026-11-18',          // today's half day, already ranked mid-shift
-  top: R(['Half', 'Day', 'Today', 'Not', 'Shown']),
-  room: { date: '2026-11-18', goal: { gph: 300, lbHr: 0.66 } },
+  day: '2026-11-18',
+  top: R(['Diego', 'Ariel', 'Lucio', 'Alberto', 'Antonio']),
+  room: { date: '2026-11-18', goal: { gph: 218, lbHr: 0.48 } },
   byDay: {
     '2026-11-13': { ranked: R(['Old', 'Day']), room: { goal: { gph: 230, lbHr: 0.51 } } },
     '2026-11-17': { ranked: R(['Ariel', 'Alberto (Junior)', 'José Luis', 'Gandiva (Yair)', 'Antonio', 'Eduardo']), room: { goal: { gph: 240, lbHr: 0.53 } } },
-    '2026-11-18': { ranked: R(['Half', 'Day', 'Today', 'Not', 'Shown']), room: { goal: { gph: 300, lbHr: 0.66 } } },
+    '2026-11-18': { ranked: R(['Diego', 'Ariel', 'Lucio', 'Alberto', 'Antonio']), room: { goal: { gph: 218, lbHr: 0.48 } } },
   },
 };
 
-test("the Top 5 is the last workday before today, never today's half day", () => {
-  const m = panelModel(BY_DAY, '2026-11-18');
-  assert.equal(m.day, '2026-11-17');
-  assert.deepEqual(m.rows.map((r) => r.name), ['Ariel', 'Alberto (Junior)', 'José Luis', 'Gandiva (Yair)', 'Antonio']);
-  assert.deepEqual(m.goal, { lbHr: 0.53, lb: '0.53', gph: 240 });   // that day's goal, not today's
-  // the morning after a weekend: Friday's numbers on Monday
+test("before today's first hour: the last workday's ranking, held on the TV", () => {
+  const m = panelModel(BY_DAY, '2026-11-19');            // the morning after, nothing typed yet
+  assert.equal(m.day, '2026-11-18');
+  assert.equal(m.live, false);
+  assert.deepEqual(m.rows.map((r) => r.name), ['Diego', 'Ariel', 'Lucio', 'Alberto', 'Antonio']);
+  assert.equal(rotationMode(m), 'hold');
+  // Monday morning shows Friday's
   assert.equal(panelModel(BY_DAY, '2026-11-16').day, '2026-11-13');
-  // the next day, the 18th becomes "yesterday"
-  assert.equal(panelModel(BY_DAY, '2026-11-19').day, '2026-11-18');
+  assert.equal(rotationMode(panelModel(BY_DAY, '2026-11-16')), 'hold');
 });
 
-test('no workday before today: no panel (and so no rotation)', () => {
-  assert.equal(panelModel(BY_DAY, '2026-11-13'), null);
-  assert.equal(panelModel({ success: true, day: '2026-11-18', top: R(['A']), byDay: { '2026-11-18': { ranked: R(['A']) } } }, '2026-11-18'), null);
-  // a day with no ranked rows is skipped, not shown empty
+// Pacific times on 2026-11-18 (PST, UTC-8)
+const AT = (hhmm) => Date.parse(`2026-11-18T${hhmm}:00-08:00`);
+
+test("once today's hours are typed: today's ranking, rotating 10 min / 2 min", () => {
+  const m = panelModel(BY_DAY, '2026-11-18');
+  assert.equal(m.day, '2026-11-18');
+  assert.equal(m.live, true);
+  assert.deepEqual(m.goal, { lbHr: 0.48, lb: '0.48', gph: 218 });   // today's goal
+  assert.equal(rotationMode(m, AT('08:05')), 'rotate');
+  assert.equal(rotationMode(m, AT('16:19')), 'rotate');
+  // the same reply the next morning is the last workday again: hold
+  assert.equal(rotationMode(panelModel(BY_DAY, '2026-11-19')), 'hold');
+});
+
+test('a day with no ranked rows is skipped; nothing ranked: no panel and no board', () => {
+  assert.equal(panelModel(BY_DAY, '2026-11-12'), null);
+  assert.equal(rotationMode(null), null);
   const gap = { success: true, byDay: { '2026-11-14': { ranked: R(['Fri']) }, '2026-11-17': { ranked: [] } } };
-  assert.equal(pickDay(gap, '2026-11-18').day, '2026-11-14');
-  // an older reply without byDay: its own day only when it isn't today
-  assert.equal(panelModel(LIVE, '2026-11-17'), null);
+  assert.equal(pickDay(gap, '2026-11-17').day, '2026-11-14');   // today's row is empty: still Friday, held
+  assert.equal(rotationMode(panelModel(gap, '2026-11-17')), 'hold');
+  // a future day in the reply is never shown
+  assert.equal(pickDay({ success: true, byDay: { '2026-11-20': { ranked: R(['X']) } } }, '2026-11-19'), null);
+  // an older reply without byDay: its own day, live when it is today
+  assert.equal(panelModel(LIVE, '2026-11-17').live, true);
+  assert.equal(panelModel(LIVE, '2026-11-16'), null);
+});
+
+test("from 4:20 PM (cleanup) today's full ranking holds until the next day's first hour", () => {
+  assert.equal(EOD_HOLD_FROM, 16 * 60 + 20);
+  assert.equal(pacificMinutes(AT('16:20')), 16 * 60 + 20);
+  assert.equal(pacificMinutes(Date.parse('2026-11-19T07:55:00Z')), 23 * 60 + 55);   // 11:55 PM Pacific
+  const m = panelModel(BY_DAY, '2026-11-18');
+  assert.equal(rotationMode(m, AT('16:20')), 'hold');
+  assert.equal(rotationMode(m, AT('23:55')), 'hold');
+  // after midnight the same day is "the last workday": still held, still the 18th
+  const next = panelModel(BY_DAY, '2026-11-19');
+  assert.equal(next.day, '2026-11-18');
+  assert.equal(rotationMode(next, Date.parse('2026-11-19T07:00:00-08:00')), 'hold');
+});
+
+test('while holding, the board is re-read every minute so the switch is quick', () => {
+  assert.equal(HOLD_REFRESH_MS, 60 * 1000);
+  assert.ok(HOLD_REFRESH_MS < REFRESH_MS);
 });
 
 test("the farm's today is the Pacific date", () => {
