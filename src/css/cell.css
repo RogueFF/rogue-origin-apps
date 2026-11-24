@@ -59,7 +59,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .btn.ghost { min-height: 44px; padding: 6px 14px; font-size: 16px; }
 
 .banner { font: 800 26px var(--font-ui); text-align: center; padding: 18px 16px; border-radius: 18px; color: #fff; }
-.banner.full { background: var(--success); font-size: 30px; }
+.banner.full, .banner.ready { background: var(--success); font-size: 30px; }
 .banner.swap, .banner.off, .banner.tare, .banner.tared, .banner.name { background: var(--gold); color: #2d3a32; }
 .banner.break { background: var(--info); }
 
