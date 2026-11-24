@@ -60,14 +60,18 @@ function cleanText(v, max) {
 }
 const r1 = (x) => Math.round(x * 10) / 10;
 
-/** Effective hours for a date: per person, per slot, typed over sheet. Rows with no minutes and no tops drop out. */
+// Which row stands for a person and hour: typed, then sheet, then a line seat's
+// scale (line-scale.js, migration 0074), which only fills an hour nobody wrote down.
+const SRC_RANK = { typed: 3, sheet: 2, scale: 1 };
+
+/** Effective hours for a date: per person, per slot, typed over sheet over scale. Rows with no minutes and no tops drop out. */
 export function effectiveHours(rows) {
   const by = new Map();
   for (const r of rows) {
     let p = by.get(r.person_id);
     if (!p) { p = new Map(); by.set(r.person_id, p); }
     const cur = p.get(r.slot);
-    if (!cur || (cur.src === 'sheet' && r.src === 'typed')) p.set(r.slot, r);
+    if (!cur || (SRC_RANK[r.src] || 0) > (SRC_RANK[cur.src] || 0)) p.set(r.slot, r);
   }
   for (const [id, p] of by) {
     for (const [s, r] of p) if (!(Number(r.min) > 0) && !(Number(r.g) > 0)) p.delete(s);
@@ -81,18 +85,47 @@ export function fullDayOf(personHours, slotLen) {
   return FULL_SLOTS.every((s) => !(slotLen[s] > 0) || (Number(personHours.get(s)?.min) || 0) >= slotLen[s] - SLACK_MIN);
 }
 
-/** Rebuild crew_days (and a typed day's meta) for one date from crew_hours. */
-export async function recomputeDay(db, date) {
+/**
+ * A line seat's scale hours for a date (migration 0074), one row per person and
+ * hour, summed over seats and cultivars. Before 0074 there is no table: none.
+ */
+export async function scaleHourRows(db, date) {
+  try {
+    const rows = (await db.prepare(
+      `SELECT person_id, slot, MAX(station_id) AS station_id, SUM(MAX(g, 0)) AS g, SUM(min) AS min
+         FROM line_scale_hours WHERE work_date = ? AND person_id > 0 GROUP BY person_id, slot`
+    ).bind(date).all()).results || [];
+    const len = Object.fromEntries(SLOTS);
+    return rows.map((r) => ({ person_id: r.person_id, slot: r.slot, src: 'scale', cell: cellNumber(null, r.station_id),
+      g: Number(r.g) || 0, min: Math.round(Math.min(Number(r.min) || 0, len[r.slot] || 60)) }));
+  } catch (e) {
+    if (/no such table/i.test(String(e?.message))) return [];
+    throw e;
+  }
+}
+
+/**
+ * Rebuild crew_days (and a typed day's meta) for one date from crew_hours and
+ * the line seats' scale hours. only: rewrite just that person's day (a seat save
+ * does this every minute or so; the full day is still read to judge full day).
+ */
+export async function recomputeDay(db, date, { only = null } = {}) {
   const rows = (await db.prepare('SELECT person_id, slot, src, cell, g, min FROM crew_hours WHERE work_date = ?').bind(date).all()).results || [];
   const days = (await db.prepare('SELECT person_id, sheet_full_day FROM crew_days WHERE work_date = ?').bind(date).all()).results || [];
   const typedIds = new Set(rows.filter((r) => r.src === 'typed').map((r) => r.person_id));
-  const eff = effectiveHours(rows);
+  const scale = await scaleHourRows(db, date);
+  const scaleIds = new Set(scale.map((r) => r.person_id));
+  const eff = effectiveHours([...rows, ...scale]);
   const slotLen = {};
   for (const p of eff.values()) for (const [s, r] of p) slotLen[s] = Math.max(slotLen[s] || 0, Number(r.min) || 0);
 
   const stmts = [];
   let allG = 0, allMin = 0;
   for (const [id, p] of eff) {
+    if (only !== null && id !== only) {
+      for (const h of p.values()) { allG += Number(h.g) || 0; allMin += Number(h.min) || 0; }
+      continue;
+    }
     const hours = [...p.values()].sort((a, b) => order(a.slot) - order(b.slot))
       .map((r) => ({ slot: r.slot, g: r1(Number(r.g) || 0), min: Math.round(Number(r.min) || 0), cell: r.cell || null }));
     const topsG = hours.reduce((a, h) => a + h.g, 0);
@@ -102,7 +135,10 @@ export async function recomputeDay(db, date) {
     for (const h of hours) if (h.cell) byCell.set(h.cell, (byCell.get(h.cell) || 0) + h.min);
     const cell = [...byCell].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
     const sheetFull = days.find((d) => d.person_id === id)?.sheet_full_day;
-    const full = typedIds.has(id) ? (fullDayOf(p, slotLen) ? 1 : 0) : (sheetFull === 0 ? 0 : 1);
+    // Typed hours, or scale hours with no sheet call, are judged from the hours
+    // themselves: a scale-only half day is part day, never ranked as full.
+    const judged = typedIds.has(id) || (scaleIds.has(id) && (sheetFull === null || sheetFull === undefined));
+    const full = judged ? (fullDayOf(p, slotLen) ? 1 : 0) : (sheetFull === 0 ? 0 : 1);
     stmts.push(db.prepare(
       `INSERT INTO crew_days (work_date, person_id, cell, hours_json, tops_g, work_min, full_day)
        VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -111,7 +147,7 @@ export async function recomputeDay(db, date) {
     ).bind(date, id, cell, JSON.stringify(hours), topsG, workMin, full));
   }
   for (const d of days) {
-    if (!eff.has(d.person_id)) stmts.push(db.prepare('DELETE FROM crew_days WHERE work_date = ? AND person_id = ?').bind(date, d.person_id));
+    if ((only === null || d.person_id === only) && !eff.has(d.person_id)) stmts.push(db.prepare('DELETE FROM crew_days WHERE work_date = ? AND person_id = ?').bind(date, d.person_id));
   }
 
   // A sheet load sets the day's meta (goal and room rate from the hourly log) and
