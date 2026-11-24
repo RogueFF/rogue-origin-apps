@@ -4050,3 +4050,18 @@ input[type="number"] {
   border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); color-scheme: dark; }
 .change-total { margin: 10px 0 0; font-size: 16px; color: var(--text-primary); font-weight: 600; }
 .change-total.bad { color: var(--error); }
+
+/* Line trimmer scales (line-scales.mjs): a chip on each hour, the per-trimmer table in the editor. */
+.slot-scale { font-size: 12px; font-weight: 600; color: var(--info, #2f6f9f); white-space: nowrap; }
+.scale-section .scale-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.scale-section .scale-table th, .scale-section .scale-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.scale-section .scale-table th { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
+.scale-section .scale-table .n { text-align: right; font-variant-numeric: tabular-nums; }
+.scale-section .scale-none { color: var(--text-secondary); margin: 4px 0; }
+.scale-section .scale-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 16px; }
+.scale-section .scale-sum.differs b { color: var(--gold, #b8862b); }
+.scale-section .scale-note { margin: 8px 0 0; font-size: 14px; color: var(--text-secondary); }
+.scale-section .scale-note.filled, .scale-section .scale-note.ready { color: var(--success, #2e7d4f); font-weight: 600; }
+.scale-section .scale-switch { display: flex; gap: 10px; align-items: center; margin-top: 12px; font-size: 15px; font-weight: 600; min-height: 44px; }
+.scale-section .scale-switch input { width: 22px; height: 22px; }
+.scale-section .scale-hint { color: var(--text-secondary); font-size: 13px; }

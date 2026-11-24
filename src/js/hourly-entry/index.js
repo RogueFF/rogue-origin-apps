@@ -6,8 +6,11 @@
 import { makeApi } from '../shared/api.js';
 import { showToast } from '../shared/toast.js';
 import { buildCultivarOptions } from './cultivar-options.mjs';
+import { scaleHourAt, chipHtml, panelHtml, scaleLabels } from './line-scales.mjs';
 
 const productionApi = makeApi('production');
+// The line scales' per-day fill switch needs the farm password this device unlocked with.
+const productionWrite = makeApi('production', { auth: true });
 const poolApi = makeApi('pool');
 const wholesaleApi = makeApi('wholesale');
 // Reads are public; setting a credit is not. Same ro_api_password the SOP
@@ -376,6 +379,9 @@ const LABELS = {
 let currentLang = localStorage.getItem('lang') || 'en';
 let currentDate = formatDateLocal(new Date());
 let currentSlotIndex = -1;
+// Line trimmer scales (line-scales.mjs): the day's per-trimmer hours, and whether the lead typed in the tops box.
+let lineScales = { fillOn: false, slots: [] };
+let topsTouched = false;
 let dayData = {};
 let cultivarOptions = [];
 let queueAliases = [];
@@ -929,6 +935,14 @@ function initializeUI() {
     document.getElementById(id)?.addEventListener('input', renderChangeTotal);
     document.getElementById(id)?.addEventListener('change', renderChangeTotal);
   });
+  ['tops1', 'changeTops'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', () => { topsTouched = true; renderScaleSection(); });
+  });
+  document.getElementById('scale-section')?.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'line-scale-fill') setLineScaleFill(e.target.checked);
+  });
+  // The scales move without a save on this page: read them again every minute.
+  setInterval(() => { if (!document.hidden) loadLineScales(currentDate).then(() => { renderTimeline(); refreshOpenScales(); }); }, 60000);
 
   // Copy crew from previous hour
   const copyCrewBtn = document.getElementById('copy-crew-btn');
@@ -1092,6 +1106,7 @@ function createSlotElement(slot, currentSlot) {
     <div class="slot-row">
       <span class="slot-lbs ${hasData ? '' : 'empty'}">${hasData ? totalTops.toFixed(1) + ' lbs' : '—'}</span>${smallsDisplay}
       ${targetDisplay}
+      ${chipHtml(scaleHourAt(lineScales, index), currentLang)}
       <span class="slot-status-text visually-hidden">${statusText}</span>
     </div>
   `;
@@ -1168,6 +1183,8 @@ function populateForm(slot) {
   setCultivarValue(document.getElementById('changeCultivar'), data.changeCultivar || '');
   document.getElementById('changeTops').value = data.changeTops || 0;
   setChangeOpen(hadChange);
+  topsTouched = false;
+  renderScaleSection(slot);
 
   document.getElementById('buckers2').value = data.buckers2 || 0;
   document.getElementById('trimmers2').value = data.trimmers2 || 0;
@@ -1604,6 +1621,8 @@ function collectFormData() {
     qcNotes: document.getElementById('qcNotes').value,
     effectiveTrimmers1: effective.effectiveTrimmers1,
     effectiveTrimmers2: effective.effectiveTrimmers2,
+    // Line scales: tops the scales filled stay theirs while the lead leaves the box alone.
+    topsTouched,
   };
 }
 
@@ -1792,7 +1811,8 @@ async function loadDayData(date) {
     // Fetch both production data and scoreboard data in parallel
     const [productionData, scoreboardWrapper] = await Promise.all([
       productionApi.get('getProduction', { date }),
-      productionApi.get('scoreboard', { date })
+      productionApi.get('scoreboard', { date }),
+      loadLineScales(date),
     ]);
 
     const scoreboardData = scoreboardWrapper.scoreboard || {};
@@ -1824,6 +1844,7 @@ async function loadDayData(date) {
 
     renderTimeline();
     updateTimelineSummary();
+    refreshOpenScales();
   } catch (error) {
     console.error('Load error:', error);
   } finally {
@@ -4974,3 +4995,63 @@ loadCultivars = async function () {
   initBarcodeCard();
   initBagTimer();
 };
+
+// ===== LINE TRIMMER SCALES (migration 0074, line-scales.mjs) =====
+// Each trimmer seat's scale measures that person's tops per hour. Shown beside
+// the typed tops; with the day's switch on they fill the tops (typed tops win).
+
+async function loadLineScales(date) {
+  try {
+    const d = await productionApi.get('lineScaleHours', { date });
+    lineScales = { fillOn: !!d.fillOn, slots: d.slots || [] };
+  } catch {
+    lineScales = { fillOn: false, slots: [] };   // before migration 0074, or offline
+  }
+  return lineScales;
+}
+
+function editorOpen() {
+  return currentSlotIndex >= 0 && !!document.getElementById('editor-content')?.classList.contains('active');
+}
+
+function renderScaleSection(slot = TIME_SLOTS[currentSlotIndex]) {
+  const box = document.getElementById('scale-section');
+  if (!box) return;
+  const index = TIME_SLOTS.indexOf(slot);
+  const hour = index >= 0 ? scaleHourAt(lineScales, index) : null;
+  // Shown once any seat has weighed this day, so the switch is there before the first hour.
+  box.hidden = !lineScales.slots.length && !lineScales.fillOn;
+  if (box.hidden) return;
+  box.innerHTML = panelHtml(hour, { lang: currentLang, fillOn: lineScales.fillOn, typedTops: formTops1() });
+}
+
+// A reload while the hour is open: tops the scales filled follow them, unless the lead is typing.
+function refreshOpenScales() {
+  if (!editorOpen()) return;
+  const slot = TIME_SLOTS[currentSlotIndex];
+  const data = dayData[slot] || {};
+  if (!topsTouched && data.topsSource === 'scales') {
+    const hadChange = !!data.changeCultivar;
+    document.getElementById('tops1').value = hadChange
+      ? Math.max(0, Math.round(((data.tops1 || 0) - (data.changeTops || 0)) * 10) / 10)
+      : (data.tops1 || 0);
+    if (hadChange) document.getElementById('changeTops').value = data.changeTops || 0;
+    renderChangeTotal();
+  }
+  renderScaleSection(slot);
+}
+
+async function setLineScaleFill(on) {
+  const l = scaleLabels(currentLang);
+  const ask = currentLang === 'es'
+    ? (on ? '¿Llenar los tops de este día con las básculas? Los tops escritos se quedan.' : '¿Apagar? Los tops que llenaron las básculas vuelven a 0 para escribirlos.')
+    : (on ? 'Fill this day\'s tops from the scales? Typed tops stay.' : 'Turn it off? Tops the scales filled go back to 0 for the lead to type.');
+  if (!window.confirm(ask)) { renderScaleSection(); return; }
+  try {
+    await productionWrite.post('lineScaleFillSet', { date: currentDate, on });
+    showToast(l.switchLabel + (on ? ' ✓' : ' ✗'));
+  } catch {
+    showToast(currentLang === 'es' ? 'Necesita la contraseña de la granja en este equipo' : 'Needs the farm password on this device', 'error');
+  }
+  await loadDayData(currentDate);
+}

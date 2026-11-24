@@ -47,7 +47,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .ring-side { display: grid; gap: 14px; align-content: center; }
 .stat-label { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
 .stat-value { font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.stat-value.small { font-size: 26px; }
+.stat-value.ends { font-size: 26px; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .big { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -86,6 +86,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr; }
   .who-text b, .cv-name { font-size: 28px; }
   .stat-value, .big { font-size: 30px; }
+  .stat-value.ends { font-size: 20px; }
   .banner { font-size: 22px; }
   .name-list { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
