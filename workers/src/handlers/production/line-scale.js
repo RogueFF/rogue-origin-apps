@@ -82,13 +82,13 @@ export async function lineSeat(body, env) {
     }
     const p = Number.isInteger(personId) ? await env.DB.prepare('SELECT id FROM crew_people WHERE id = ? AND active = 1').bind(personId).first() : null;
     if (!p) return errorResponse('Unknown person', 'VALIDATION_ERROR', 400);
-    // One seat per person: a tap here takes them off any other seat.
+    // One seat per person: a tap here takes them off any other seat. Every tap restamps
+    // since, so the same seat tapped again on a new day reads as today's.
     await env.DB.batch([
       env.DB.prepare('DELETE FROM line_seats WHERE person_id = ? AND station_id != ?').bind(personId, station.station_id),
       env.DB.prepare(
         `INSERT INTO line_seats (station_id, person_id, since) VALUES (?, ?, datetime('now'))
-         ON CONFLICT (station_id) DO UPDATE SET since = CASE WHEN line_seats.person_id = excluded.person_id THEN line_seats.since ELSE excluded.since END,
-           person_id = excluded.person_id`
+         ON CONFLICT (station_id) DO UPDATE SET since = excluded.since, person_id = excluded.person_id`
       ).bind(station.station_id, personId),
     ]);
     const s = await env.DB.prepare('SELECT person_id, since FROM line_seats WHERE station_id = ?').bind(station.station_id).first();

@@ -101,7 +101,7 @@ test('crew list: ids and names only, never a card token', async () => {
 });
 
 test('name tap: one seat per person; the seat reads back with the line\'s cultivars', async () => {
-  const { env } = freshDb();
+  const { env, sqlite } = freshDb();
   const ana = await addPerson(env, 'Ana');
   await post(env, 'lineSeat', { stationId: 'table1', personId: ana });
   await post(env, 'lineSeat', { stationId: 'table2', personId: ana });
@@ -115,6 +115,11 @@ test('name tap: one seat per person; the seat reads back with the line\'s cultiv
   assert.deepEqual(s3.hours, [{ slot: '7-8', cultivar: 'Alpha', changeAt: '07:40', changeCultivar: 'Beta' }]);
   assert.equal((await get(env, 'action=lineState&stationId=qc1')).status, 400, 'a QC scale is not a seat');
   assert.equal((await post(env, 'lineSeat', { stationId: 'table1', personId: 999 })).status, 400);
+  // The next day, Ana taps the same seat again: it is today's seat (it was dropped every 15 s before).
+  sqlite.exec("UPDATE line_seats SET since = datetime('now', '-1 day')");
+  assert.equal((await data(get(env, 'action=lineState&stationId=table2'))).seat, null, "yesterday's seat is empty today");
+  await post(env, 'lineSeat', { stationId: 'table2', personId: ana });
+  assert.equal((await data(get(env, 'action=lineState&stationId=table2'))).seat.personId, ana);
   await post(env, 'lineSeat', { stationId: 'table2', personId: 0 });
   assert.equal((await data(get(env, 'action=lineState&stationId=table2'))).seat, null, 'tap out');
 });

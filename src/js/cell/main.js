@@ -17,8 +17,7 @@
  *     hour it was read in, per person and cultivar (line.mjs, seat.mjs), and sent
  *     to the Worker as absolute totals (lineScaleSave) for Hourly entry and Mis números.
  *
- * Reads ?action=scaleWeight (GET, no token) every 250 ms while a basket is armed
- * or running, every second otherwise, every 2 s while the scale is disconnected,
+ * Reads ?action=scaleWeight (GET, no token) every second, every 2 s while the scale is disconnected,
  * every 5 s while the page is hidden. The basket and the hour totals live in this
  * tablet's localStorage (ro-line:<station>), so a reload loses nothing.
  */
@@ -32,7 +31,10 @@ import {
 import { createSeat, elapsedMs } from './seat.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
-const JOB_MS = 250;      // a basket is armed or running
+// A batch is an hour, so nothing needs the cells' 250 ms: every seat is busy all
+// day on the line, and 8 seats at 250 ms would be ~1.1M Worker reads a day. The
+// lift and TARE rules (lift.mjs) hold at 1 s (tests/line-seat.test.mjs runs them there).
+const JOB_MS = 1000;     // a batch is armed or running
 const IDLE_MS = 1000;
 const DOWN_MS = 2000;    // scale disconnected
 const SLOW_MS = 5000;    // page hidden

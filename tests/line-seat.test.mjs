@@ -99,7 +99,7 @@ test('batches: an hour ends at its slot\'s end (lunch ends 11-12 at 12:00); the 
 });
 
 // ---- The seat, run on a fake clock: 250 ms readings from t0 (Pacific minutes).
-function rig({ person = 7, cultivar = 'Alpha', t0 = 8 * 60 + 58 } = {}) {
+function rig({ person = 7, cultivar = 'Alpha', t0 = 8 * 60 + 58, step = 250 } = {}) {
   const state = { phase: 'idle', cultivar, nextCultivar: '' };
   const tally = createTally(null, 'day');
   const events = [];
@@ -111,8 +111,8 @@ function rig({ person = 7, cultivar = 'Alpha', t0 = 8 * 60 + 58 } = {}) {
     on: { pickup: (p) => events.push({ kind: 'pickup', ...p }), finish: () => events.push({ kind: 'finish' }) },
   });
   let at = 0;
-  const feed = (g, ms = 250) => { for (let i = 0; i < Math.round(ms / 250); i++) { at += 250; seat.reading(at, g); } };
-  const ramp = (from, to, ms) => { const n = Math.round(ms / 250); for (let i = 1; i <= n; i++) { at += 250; seat.reading(at, from + (to - from) * i / n); } };
+  const feed = (g, ms = step) => { for (let i = 0; i < Math.max(1, Math.round(ms / step)); i++) { at += step; seat.reading(at, g); } };
+  const ramp = (from, to, ms) => { const n = Math.max(1, Math.round(ms / step)); for (let i = 1; i <= n; i++) { at += step; seat.reading(at, from + (to - from) * i / n); } };
   return { state, tally, seat, events, feed, ramp, setLine: (c) => { line = c; }, now: () => at };
 }
 const total = (tally, p = 7) => Math.round(tally.dayG(p) * 10) / 10;
@@ -230,4 +230,28 @@ test('a name tap on a tared empty basket arms it; a loaded or untared scale does
   assert.equal(r.state.phase, 'armed');
   const r2 = rig();
   assert.equal(r2.seat.start(168), false, 'an untared basket would count as tops');
+});
+
+test("at the screen's 1 s reading rate: the hour mark, a matched swap, and a heavier basket B tared", () => {
+  const r = rig({ step: 1000 });
+  r.feed(168, 3000);
+  r.feed(0, 3000);
+  assert.equal(r.state.phase, 'armed');
+  r.ramp(0, 230, 110000);
+  r.feed(230, 6000);
+  assert.equal(r.state.phase, 'finished');
+  r.feed(-160, 2000);
+  r.feed(0.4, 3000);
+  assert.equal(r.events.filter((e) => e.kind === 'pickup').length, 1);
+  near(r.events.find((e) => e.kind === 'pickup').g, 230);
+  assert.equal(r.state.phase, 'armed');
+  r.ramp(0, 300, 120000);
+  r.feed(300, 3000);
+  r.feed(-160, 2000);
+  r.feed(6.5, 4000);
+  r.feed(0, 3000);
+  const p = r.events.filter((e) => e.kind === 'pickup');
+  assert.equal(p.length, 2);
+  near(p[1].g, 300);
+  near(total(r.tally), 530, 1.5);
 });
