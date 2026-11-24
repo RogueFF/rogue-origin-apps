@@ -168,6 +168,46 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
   await context.close();
 });
 
+test('day start: yesterday\'s batch is gone; name, TARE, "Ready: start trimming", trim', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 1300 } });
+  const fake = makeFake();
+  await context.route(/workers\.dev/, (route) => fake.handle(route).catch(() => route.abort()));
+  await context.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+  const page = await context.newPage();
+  // Yesterday the 4:30 batch finished and nobody swapped; the tablet kept it.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('ro-line:table3', JSON.stringify({
+      phase: 'finished', basketDay: '2026-11-23', batchSlot: '4-4:30', cultivar: '2026 - Sour Lifter / Sungrown', nextCultivar: '',
+      person: { id: 2, name: 'Beto', day: '2026-11-23' }, swap: { liftSeen: false, doneAt: null, heldG: 300 }, finishedNetG: 300,
+    }));
+  });
+  // 6:55 AM Pacific, before the shift.
+  await page.clock.install({ time: new Date('2026-11-24T14:55:00Z') });
+  await page.clock.resume();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  fake.kg = 0.168;   // the empty basket is on, not tared yet
+  await page.goto(`${ROOT}/cell.html?station=table3`);
+
+  await expect(page.locator('#swapGuide')).toBeHidden();
+  await expect(page.locator('#nameDialog')).toBeVisible();
+  await page.locator('#nameList .name-btn', { hasText: 'Beto' }).click();
+  await expect(page.locator('#banner')).toContainText('press TARE');
+  await shot(page, 'day-1-tare');
+  await setKg(page, fake, 0, 3000);   // TARE on the scale
+  await expect(page.locator('#banner')).toHaveText('Ready: start trimming');
+  await expect(page.locator('#banner')).toHaveClass(/ready/);
+  await shot(page, 'day-2-ready');
+  await setKg(page, fake, 0.012, 2000);
+  await expect(page.locator('#banner')).toBeHidden();
+  await expect(page.locator('#toGo')).toHaveText('0.03 lb');
+  await shot(page, 'day-3-trimming');
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
 test('seat screen at phone width: nothing runs off the side', async ({ browser }) => {
   const { context, page, fake } = await rig(browser, { width: 375, height: 900 });
   fake.seat = null;

@@ -26,7 +26,7 @@ import { LIFT_G } from './lift.mjs';
 import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
 import { shortCultivar } from './queue.mjs';
 import {
-  G_PER_LB, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, hourFraction, slotEnd,
+  G_PER_LB, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, hourFraction, slotEnd, workingMinute,
 } from './line.mjs';
 import { createSeat, elapsedMs } from './seat.mjs';
 
@@ -65,6 +65,7 @@ registerLabels({
     bannerTare: 'Put the empty basket on and press TARE on the scale',
     bannerTared: 'Scale TARE pressed mid-batch: {g} kept. Tell the lead.',
     bannerName: 'Tap your name so your tops count for you',
+    bannerReady: 'Ready: start trimming',
     bannerBreak: 'Break until {to}: the clock is stopped. It starts again by itself.',
     bannerLunch: 'Lunch until {to}: the clock is stopped. It starts again by itself.',
     breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
@@ -91,6 +92,7 @@ registerLabels({
     bannerTare: 'Ponga la canasta vacía y presione TARA en la báscula',
     bannerTared: 'TARA de la báscula a mitad del lote: se guardaron {g}. Avise al líder.',
     bannerName: 'Toque su nombre para que sus tops cuenten para usted',
+    bannerReady: 'Listo: empiece a trimear',
     bannerBreak: 'Descanso hasta las {to}: el reloj está parado. Sigue solo.',
     bannerLunch: 'Almuerzo hasta las {to}: el reloj está parado. Sigue solo.',
     breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
@@ -283,6 +285,7 @@ function renderBanner() {
   else if (state.phase === 'running' && state.tareFlagG > 0) kind = 'tared';
   else if (state.phase === 'idle') kind = 'tare';
   else if (!me()) kind = 'name';
+  else if (state.phase === 'armed' && net() < 1) kind = 'ready';   // tared, name in, nothing trimmed yet
   el.banner.hidden = !kind;
   if (!kind) return;
   if (kind === 'break') {
@@ -291,7 +294,7 @@ function renderBanner() {
     return;
   }
   el.banner.className = `banner ${kind}`;
-  el.banner.textContent = t({ swap: 'bannerSwap', full: 'bannerFull', off: 'bannerOff', tared: 'bannerTared', tare: 'bannerTare', name: 'bannerName' }[kind])
+  el.banner.textContent = t({ swap: 'bannerSwap', full: 'bannerFull', off: 'bannerOff', tared: 'bannerTared', tare: 'bannerTare', name: 'bannerName', ready: 'bannerReady' }[kind])
     .replace('{g}', fmtG(state.tareFlagG || 0));
 }
 
@@ -561,7 +564,19 @@ async function rollDay() {
   tally = createTally(null, day);
   state.tally = tally.data;
   personToday(state, day);
+  freshBasketDay();
   save(); render();
+}
+
+// A new day starts clean: yesterday's batch (finished at 4:30, or left running)
+// and its swap guide never carry into the morning. The morning is: tap your
+// name, empty basket on, TARE, "Ready: start trimming". Yesterday's tops were
+// already credited to yesterday's hours.
+function freshBasketDay() {
+  const day = pacificDate();
+  if (state.basketDay === day) return;
+  if (state.basketDay) { seat.reset(); state.swap = null; state.nextCultivar = ''; }
+  state.basketDay = day;
 }
 
 // Report the basket to the Cells board (cells.html): a finished basket shows
@@ -602,7 +617,8 @@ setInterval(() => {
   save();
   renderTiles(); renderSwap();
   // The hour is done and the basket hasn't been swapped: chime again every minute.
-  if (state.phase === 'finished' && now - lastChimeAt >= CHIME_AGAIN_MS) { lastChimeAt = now; chime(); }
+  // Working minutes only: a 4:30 batch nobody swapped never chimes into the night, nor through lunch.
+  if (state.phase === 'finished' && now - lastChimeAt >= CHIME_AGAIN_MS && workingMinute(pacificMinutes(now), breakAt)) { lastChimeAt = now; chime(); }
   if (!document.hidden) reportBasket();
 }, 1000);
 setInterval(() => { if (!document.hidden) loadLine(); }, LINE_MS);
@@ -624,6 +640,7 @@ setInterval(checkBuild, BUILD_CHECK_MS);
 
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 personToday(state, pacificDate());
+freshBasketDay();
 save();
 reportBasket(true);
 render();
