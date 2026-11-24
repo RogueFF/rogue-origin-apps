@@ -71,6 +71,21 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .name-btn { min-height: 72px; font-size: 22px; font-weight: 700; }
 .name-btn.on { border: 3px solid var(--green); background: var(--green-dim); }
 
+/* The swap guide: covers the screen at the hour mark; the step the scale is waiting for is big and green. */
+.swap-guide { position: fixed; inset: 0; z-index: 20; background: rgba(20, 30, 22, .72); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.swap-card { background: var(--bg-card); border-radius: 22px; padding: 24px; width: min(820px, 100%); box-sizing: border-box; display: grid; gap: 14px; border: 4px solid var(--success); }
+.swap-card h2 { margin: 0; font-size: 36px; font-weight: 800; }
+.swap-held { margin: 0; font-size: 20px; color: var(--text-secondary); }
+.swap-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.swap-steps li { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 16px; border: 2px solid var(--border); font-size: 26px; font-weight: 700; color: var(--text-secondary); }
+.swap-steps .num { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--border); color: var(--text); font-size: 26px; font-weight: 800; }
+.swap-steps li.now { border-color: var(--success); background: var(--green-dim); color: var(--text); font-size: 30px; }
+.swap-steps li.now .num { background: var(--success); color: #fff; }
+.swap-steps li.done { opacity: .55; }
+.swap-steps li.done .num { background: var(--success); color: #fff; font-size: 0; }
+.swap-steps li.done .num::after { content: '✓'; font-size: 28px; }
+.swap-done { margin: 0; font-size: 40px; font-weight: 800; color: var(--success); text-align: center; padding: 24px 0; }
+
 .btn.hold.reset { justify-self: start; }
 .btn.hold > span:last-child { position: relative; }
 .btn.hold { color: var(--text-secondary); position: relative; overflow: hidden;
@@ -89,4 +104,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   .stat-value.ends { font-size: 20px; }
   .banner { font-size: 22px; }
   .name-list { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .swap-card h2 { font-size: 28px; }
+  .swap-steps li { font-size: 21px; padding: 12px; }
+  .swap-steps li.now { font-size: 23px; }
+  .swap-steps .num { width: 42px; height: 42px; }
 }

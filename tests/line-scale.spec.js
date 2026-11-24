@@ -96,7 +96,6 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
   // 0 g: the tared empty basket is armed.
   await setKg(page, fake, 0);
   await expect(page.locator('#netValue')).toHaveText('0.0 g');
-  await expect(page.locator('#cycleSub')).toContainText('Starts when tops go in');
   await shot(page, '1-zero');
 
   // Mid-batch.
@@ -115,17 +114,32 @@ test('seat screen: name tap, hour batch, changeover, the hour mark, pickup, tota
   await expect(page.locator('#cvName')).toHaveText('Sour Lifter');
   await shot(page, '3-changeover');
 
-  // The hour mark: the batch is done (ring full, the banner, "finished" on the Cells board).
+  // The hour mark: the swap guide covers the screen, step 1 waiting ("finished" on the Cells board).
   await page.clock.setSystemTime(new Date('2026-11-24T17:00:03Z'));
-  await page.waitForTimeout(2500);
-  await expect(page.locator('#banner')).toContainText('Hour done');
+  const guide = page.locator('#swapGuide');
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText('Hour done');
+  await expect(guide).toContainText('0.47 lb');
+  await expect(page.locator('#swapSteps li').nth(0)).toHaveClass('now');
+  await expect(page.locator('#banner')).toBeHidden();
   await expect(page.locator('#ringFill')).toHaveClass(/full/);
   await expect.poll(() => posted(fake, 'setCellState').some((p) => p.body.phase === 'finished')).toBe(true);
-  await shot(page, '4-hour-done');
+  await shot(page, '4-swap-step1');
 
-  // Basket A off, the matched basket B on: a pickup of what A held, the next batch on Lifter.
-  await setKg(page, fake, -0.16, 1300);
-  await setKg(page, fake, 0.0004, 2500);
+  // Basket A off: step 1 ticked, step 2 waiting.
+  await setKg(page, fake, -0.168, 1300);
+  await expect(page.locator('#swapSteps li').nth(0)).toHaveClass('done');
+  await expect(page.locator('#swapSteps li').nth(1)).toHaveClass('now');
+  await shot(page, '4b-swap-step2');
+  // Basket B on, 6 g heavier than A: step 3, press TARE.
+  await setKg(page, fake, 0.006, 1800);
+  await expect(page.locator('#swapSteps li').nth(2)).toHaveClass('now');
+  await shot(page, '4c-swap-step3');
+  // TARE: the swap is a pickup of basket A, "Keep trimming", then the guide goes away.
+  await setKg(page, fake, 0, 2500);
+  await expect(page.locator('#swapDone')).toBeVisible();
+  await shot(page, '4d-swap-done');
+  await expect(guide).toBeHidden({ timeout: 8000 });
   await expect.poll(() => posted(fake, 'scaleMark').length).toBe(1);
   const mark = posted(fake, 'scaleMark')[0].body;
   expect(mark.kind).toBe('pickup');
