@@ -29,6 +29,11 @@ import { ALL_TIME_SLOTS } from './production-helpers.js';
 export const FILL_SOURCE = 'cells';
 const r1 = (x) => Math.round((Number(x) || 0) * 10) / 10;
 
+// One T-Zero op runs the room's smalls every hour (Koa 2026-11-18: "Always will have
+// a T-zero op to run smalls"). The cell log has no field for it, so a filled hour
+// carries this many; labor-split charges T-Zero to smalls on cell days.
+export const CELL_TZERO = 1;
+
 /**
  * One hour of the cell log -> one monthly_production row (or null: nothing to fill).
  *
@@ -37,10 +42,10 @@ const r1 = (x) => Math.round((Number(x) || 0) * 10) / 10;
  * @param {Array<{personId:number, stationId:string, min:number}>} hour.people  typed people-hours
  * @param {Array<{stationId:string, tops:number|null, cultivar?:string|null}>} hour.cells  cell_hourly rows
  * @param {{smalls?:number|null, cultivar?:string|null}} [hour.room]  cell_room_hourly row
- * @param {number} [hour.tzero]  T-Zero people that hour (the log has no field for it; default 0)
+ * @param {number} [hour.tzero]  T-Zero people that hour (the log has no field for it; default CELL_TZERO)
  * @returns {null | object} the row's columns, plus `mixedCultivars` (not a column)
  */
-export function cellHourToProductionRow({ slotMinutes, people = [], cells = [], room = {}, tzero = 0 }) {
+export function cellHourToProductionRow({ slotMinutes, people = [], cells = [], room = {}, tzero = CELL_TZERO }) {
   const worked = people.filter((p) => (Number(p.min) || 0) > 0);
   const tops = r1(cells.reduce((a, c) => a + (Number(c.tops) || 0), 0));
   const smalls = r1(room?.smalls);
