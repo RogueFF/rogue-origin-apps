@@ -159,3 +159,47 @@ test('the line target leaves cell hours out of its running average', { skip: !Da
   assert.equal(s.targetBasis, 'line');
   assert.ok(Math.abs(s.targetRate - LINE_RATE) < 0.08, `line target stays ~1.25, got ${s.targetRate}`);
 });
+
+// Koa 2026-11-24: back on the line from 12:30 that day. Each hour keeps its own
+// basis, and an hour with buckers entered is always a line hour.
+test('a split day (cells in the morning, line from 12:30): the line hours grade per trimmer', { skip: !DatabaseSync }, async () => {
+  const { sqlite, env } = freshDb();
+  seedLineHistory(sqlite);
+  const D = '2026-11-24';
+  goal(sqlite, D, 0.48);
+  row(sqlite, SLOTS[0], { tops: 10, people: 20, date: D });                  // cell hour (filled)
+  row(sqlite, SLOTS[1], { tops: 14, people: 12, cells: false, date: D });    // line hour (typed, buckers)
+  const s = await board(env, D);
+  const [cell, line] = s.hourlyRates;
+  assert.equal(cell.basis, 'cells');
+  near(cell.target, 0.48, 'morning cell hour on the crew goal');
+  assert.equal(line.basis, 'line');
+  assert.ok(Math.abs(line.target - LINE_RATE) < 0.05, `line hour on the strain target: ${line.target}`);
+  assert.equal(s.targetBasis, 'line');     // the latest hour is a line hour
+  assert.ok(Math.abs(s.targetRate - LINE_RATE) < 0.05);
+});
+
+test('an hour with buckers entered is a line hour even if the cell fill wrote it', { skip: !DatabaseSync }, async () => {
+  const { sqlite, env } = freshDb();
+  seedLineHistory(sqlite);
+  const D = '2026-11-24';
+  goal(sqlite, D, 0.48);
+  sqlite.prepare('INSERT INTO monthly_production (production_date, time_slot, cultivar1, tops_lbs1, trimmers_line1, effective_trimmers_line1, buckers_line1, fill_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(D, SLOTS[0], STRAIN, 14, 12, 12, 8, 'cells');
+  const s = await board(env, D);
+  assert.equal(s.hourlyRates[0].basis, 'line');
+  assert.equal(s.targetBasis, 'line');
+});
+
+test('a line-only day after 11/24 grades on the line target, never the crew goal', { skip: !DatabaseSync }, async () => {
+  const { sqlite, env } = freshDb();
+  seedLineHistory(sqlite);
+  const D = '2026-11-25';
+  goal(sqlite, D, 0.48);
+  row(sqlite, SLOTS[0], { tops: 12, people: 10, cells: false, date: D });
+  row(sqlite, SLOTS[1], { tops: 13, people: 10, cells: false, date: D });
+  const s = await board(env, D);
+  assert.ok(s.hourlyRates.every((h) => h.basis === 'line'));
+  assert.equal(s.targetBasis, 'line');
+  assert.equal(s.cellGoal, null);
+});

@@ -145,7 +145,9 @@ async function getScoreboardData(env, date = null) {
   // line at the day's yield"; a typed day carries the last goal set), never
   // against the line's strain target, which is lbs per trimmer with buckers
   // beside them. Each hour keeps its own basis, so a mixed day grades right.
-  const cellBySlot = new Map(todayRows.map(r => [r.time_slot || '', r.fill_source === CELL_FILL_SOURCE]));
+  // An hour with buckers entered is a line hour (Koa 2026-11-24: back on the line
+  // from 11/24 12:30), graded on the line's per-trimmer target whatever filled it.
+  const cellBySlot = new Map(todayRows.map(r => [r.time_slot || '', r.fill_source === CELL_FILL_SOURCE && !(Number(r.buckers_line1) > 0)]));
   for (const row of rows) row.cells = cellBySlot.get(row.timeSlot) === true;
   const cellGoal = rows.some(r => r.cells) ? await getCellGoal(env, today) : null;
 
