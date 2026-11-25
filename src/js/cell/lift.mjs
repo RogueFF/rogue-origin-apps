@@ -51,7 +51,12 @@ export function createLiftWatch() {
     reading(at, gross, net) {
       if (gross < -LIFT_G) {
         if (!lift) {
-          lift = { fromNet: Math.max(0, ...recent.map(r => r.net)), landing: null };
+          // A basket came back heavy less than GRACE_MS ago (basket B may be on,
+          // no TARE yet) and now the reading dips again: basket A's weight is
+          // still owed. Line Seat 1, 2026-11-25 2:01 PM: B on +3.3 g, a dip to
+          // -118 g, then TARE: the pickup read 3.3 g and 480 g went missing.
+          const owed = back && at - back.at <= GRACE_MS ? back.fromNet : 0;
+          lift = { fromNet: Math.max(0, owed, ...recent.map(r => r.net)), landing: null };
           back = null;
         } else {
           lift.landing = null;                            // up again before it settled
@@ -133,6 +138,9 @@ export function createZeroWatch() {
   return {
     /** An empty-basket TARE that a returning basket could still undo. */
     get provisional() { return provisional !== null; },
+
+    /** A drop to about 0 is waiting out TARE_HOLD_MS: a TARE or a pickup, not decided yet. */
+    get pending() { return cand !== null; },
 
     /**
      * One reading. loaded(before) says whether the job holds tops, given the

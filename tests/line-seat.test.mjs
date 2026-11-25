@@ -108,7 +108,7 @@ function rig({ person = 7, cultivar = 'Alpha', t0 = 8 * 60 + 58, step = 250 } = 
   const seat = createSeat({
     state, tally, slotOf: (at) => slotAt(min(at)), hourOver: (at, key) => batchOver(min(at), key),
     personId: () => person, lineCultivar: () => line,
-    on: { pickup: (p) => events.push({ kind: 'pickup', ...p }), finish: () => events.push({ kind: 'finish' }) },
+    on: { pickup: (p) => events.push({ kind: 'pickup', ...p }), finish: (reason) => events.push({ kind: 'finish', reason }) },
   });
   let at = 0;
   const feed = (g, ms = step) => { for (let i = 0; i < Math.max(1, Math.round(ms / step)); i++) { at += step; seat.reading(at, g); } };
@@ -272,4 +272,58 @@ test("the hour goal: lb per trimmer-hour x the hour's working minutes; none with
   assert.equal(Math.round(hourGoalG(1.2, '12-1')), Math.round(1.2 * G_PER_LB / 2), '12:30-1:00');
   assert.equal(hourGoalG(null, '8-9'), null);
   assert.equal(hourGoalG(1.1, 'nope'), null);
+});
+
+// ---- Seat 1, 2026-11-25, 1:59-2:03 PM (Diego, Lifter): the settled readings from
+// scale_events, held between posts. Live, the swap closed basket A (483 g) as a 3.3 g
+// pickup and the 480 g came back off 2-3, which then sat at 0 g for 15 minutes.
+const SEAT1_SWAP = [[0, 470], [41, 483.49], [73, -131.55], [80, -131.81], [101, 483.29], [121, -131.79], [146, 3.33],
+  [156, -117.9], [157, 0], [162, 121.19], [163, 0], [204, 3.04], [222, 7.98], [234, 10.81], [260, 20]];
+function replaySeat1(step) {
+  const r = rig({ t0: 13 * 60 + 59, step });
+  r.seat.start(0);
+  let i = 0;
+  let low = 0;
+  for (let at = 0; at <= 260000; at += step) {
+    while (i + 1 < SEAT1_SWAP.length && SEAT1_SWAP[i + 1][0] * 1000 <= at) i++;
+    r.seat.reading(at, SEAT1_SWAP[i][1]);
+    low = Math.min(low, r.tally.data.b['2-3|7|Alpha']?.g ?? 0);
+  }
+  return { r, low };
+}
+for (const step of [1000, 250]) {
+  test(`Seat 1's 2:00 swap, replayed at ${step} ms: basket A is picked up at its 483 g, 2-3 never goes negative`, () => {
+    const { r, low } = replaySeat1(step);
+    const picks = r.events.filter((e) => e.kind === 'pickup').map((e) => Math.round(e.g * 10) / 10);
+    assert.deepEqual(picks, [483.5, 121.2], 'basket A, then the 121 g TAREd at 2:01:43');
+    near(r.tally.hourG('1-2', 7), 483.5, 0.2);
+    near(r.tally.hourG('2-3', 7), 141.2, 1);
+    assert.ok(low > -1, `2-3 dipped to ${low}`);
+  });
+}
+
+test('1 lb or the hour, whichever comes first: a 1 lb swap mid-hour, then a ~480 g swap at 2:00 with B heavier, a dip and TARE', () => {
+  const r = rig({ t0: 13 * 60 + 25 });   // 1:25 PM
+  tareEmptyBasket(r);
+  r.ramp(0, 456, 120000);
+  r.feed(456, 4000);
+  assert.equal(r.state.phase, 'finished', 'the basket is full at 1 lb, before the hour');
+  r.feed(-131.6, 2000);    // A off
+  r.feed(0.4, 3000);       // matched B on
+  assert.equal(r.events.filter((e) => e.kind === 'pickup').length, 1);
+  assert.equal(r.state.phase, 'armed');
+  r.ramp(0, 480, 1800000); // to 1:57:xx
+  r.feed(480, 200000);     // past 2:00
+  assert.equal(r.state.phase, 'finished', 'the second batch is done (1 lb came first)');
+  r.feed(-131.8, 3000);    // A off
+  r.feed(3.3, 9000);       // B on, 3.3 g heavier
+  r.feed(-117.9, 1000);    // a dip
+  r.feed(0, 4000);         // TARE
+  const picks = r.events.filter((e) => e.kind === 'pickup').map((e) => Math.round(e.g));
+  assert.deepEqual(picks, [456, 480]);
+  assert.deepEqual(r.events.filter((e) => e.kind === 'finish').map((e) => e.reason), ['full', 'full'], 'both baskets passed 1 lb before 2:00: each ends at 1 lb (the hour mark ends batches under 1 lb, tests above)');
+  near(r.tally.hourG('1-2', 7), 936, 1);
+  assert.ok(r.tally.hourG('2-3', 7) < 1, 'nothing owed by 2-3');
+  assert.ok((r.tally.data.b['2-3|7|Alpha']?.g ?? 0) > -1, '2-3 carries no hidden deficit');
+  assert.equal(r.state.phase, 'armed');
 });

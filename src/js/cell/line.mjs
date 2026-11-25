@@ -17,6 +17,9 @@
  *   · The trimmer taps their name; it holds for the day only.
  */
 export const G_PER_LB = 453.59237;
+// The basket holds 1 lb (Koa 2026-11-25: "whatever is sooner 1 lb or 1 hour"):
+// a batch ends at 1 lb NET or at the hour mark, whichever comes first.
+export const BASKET_G = 453.6;
 export const CREDIT_MIN_G = 0.1;      // smaller moves are scale noise: left for the next reading
 export const MAX_TICK_GAP_MS = 120 * 1000;   // a longer gap is a tablet that slept: no minutes for it
 
