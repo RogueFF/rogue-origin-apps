@@ -211,6 +211,11 @@ test('day start: yesterday\'s batch is gone; name, TARE, "Ready: start trimming"
   await expect(page.locator('#ringFill')).toHaveClass(/full/);
   await expect(page.locator('#netValue')).toHaveText('1.15 lb');
   await shot(page, 'day-4-goal-met');
+  // 1 lb in the basket (Koa 2026-11-25: whichever is sooner, 1 lb or the hour): the swap guide, titled for a full basket.
+  await setKg(page, fake, 0.52, 4500);
+  await expect(page.locator('#swapGuide')).toBeVisible();
+  await expect(page.locator('#swapTitle')).toHaveText('Basket full (1 lb): swap baskets');
+  await shot(page, 'day-5-basket-full');
   expect(errors).toEqual([]);
   await context.close();
 });

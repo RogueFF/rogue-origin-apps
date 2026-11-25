@@ -70,7 +70,7 @@ registerLabels({
     bannerBreak: 'Break until {to}: the clock is stopped. It starts again by itself.',
     bannerLunch: 'Lunch until {to}: the clock is stopped. It starts again by itself.',
     breakNote: 'Break {from}–{to}', lunchNote: 'Lunch {from}–{to}',
-    swapTitle: 'Hour done: swap baskets', swap1: 'Lift the full basket off and set it aside',
+    swapTitle: 'Hour done: swap baskets', swapTitleFull: 'Basket full (1 lb): swap baskets', swap1: 'Lift the full basket off and set it aside',
     swap2: 'Put the empty basket on the scale', swap3: 'Press TARE on the scale', swapDone: 'Done! Keep trimming',
     swapHeld: 'In the full basket: {lb} lb',
   },
@@ -97,7 +97,7 @@ registerLabels({
     bannerBreak: 'Descanso hasta las {to}: el reloj está parado. Sigue solo.',
     bannerLunch: 'Almuerzo hasta las {to}: el reloj está parado. Sigue solo.',
     breakNote: 'Descanso {from}–{to}', lunchNote: 'Almuerzo {from}–{to}',
-    swapTitle: 'Hora terminada: cambie de canasta', swap1: 'Quite la canasta llena y póngala aparte',
+    swapTitle: 'Hora terminada: cambie de canasta', swapTitleFull: 'Canasta llena (1 lb): cambie de canasta', swap1: 'Quite la canasta llena y póngala aparte',
     swap2: 'Ponga la canasta vacía en la báscula', swap3: 'Presione TARA en la báscula', swapDone: '¡Listo! Siga trimeando',
     swapHeld: 'En la canasta llena: {lb} lb',
   },
@@ -123,7 +123,7 @@ const el = {
   cv: $('cvName'), cvSub: $('cvSub'), cvNext: $('cvNext'),
   ring: $('ringFill'), net: $('netValue'), targetText: $('targetText'), toGo: $('toGo'), pct: $('pct'),
   dayLb: $('dayLb'), dayBaskets: $('dayBaskets'), pace: $('paceLb'),
-  reset: $('resetBtn'), swap: $('swapGuide'), swapSteps: $('swapSteps'), swapHeld: $('swapHeld'), swapDone: $('swapDone'),
+  reset: $('resetBtn'), swap: $('swapGuide'), swapTitle: $('swapTitle'), swapSteps: $('swapSteps'), swapHeld: $('swapHeld'), swapDone: $('swapDone'),
   dialog: $('nameDialog'), search: $('nameSearch'), names: $('nameList'), leave: $('leaveSeat'), cancel: $('nameCancel'),
 };
 
@@ -164,7 +164,7 @@ const seat = createSeat({
   slotOf, hourOver: (at, key) => batchOver(pacificMinutes(at), key), personId: myId, lineCultivar: () => lineCv,
   on: {
     // The hour is done: the swap guide takes the screen (renderSwap) until the swap.
-    finish: () => { state.swap = { liftSeen: false, doneAt: null, heldG: net() }; lastChimeAt = Date.now(); chime(); },
+    finish: (reason) => { state.swap = { liftSeen: false, doneAt: null, heldG: net(), reason }; lastChimeAt = Date.now(); chime(); },
     pickup: ({ g, cultivar, cycleMs, personId }) => {
       if (state.swap && !state.swap.doneAt) state.swap.doneAt = Date.now();
       mark('pickup', g / 1000, { cultivar: cultivar || null, cycleS: cycleMs ? cycleMs / 1000 : null, personId: personId || null });
@@ -231,6 +231,7 @@ function renderSwap() {
   el.swapDone.hidden = step !== 4;
   el.swapSteps.hidden = step === 4;
   el.swapHeld.hidden = step === 4;
+  el.swapTitle.textContent = t(state.swap.reason === 'full' ? 'swapTitleFull' : 'swapTitle');
   el.swapHeld.textContent = t('swapHeld').replace('{lb}', fmtLb(state.swap.heldG || state.finishedNetG || 0));
   [...el.swapSteps.children].forEach((li, i) => {
     li.className = i + 1 < step ? 'done' : i + 1 === step ? 'now' : '';
@@ -642,7 +643,10 @@ setInterval(() => { if (!document.hidden) loadRate(); }, RATE_MS);
 const BUILD = new URL(import.meta.url).searchParams.get('h');
 const BUILD_CHECK_MS = 3 * 60 * 1000;
 async function checkBuild() {
-  if (!BUILD || document.hidden || state.phase === 'running' || state.phase === 'finished' || seat.lifted || !el.dialog.hidden) return;
+  // On the line a seat is running all day, so a running batch may reload too (it
+  // lives in localStorage), but never mid-lift, mid-swap or with the swap guide up.
+  const now = Date.now();
+  if (!BUILD || document.hidden || state.phase === 'finished' || seat.lifted || seat.swapPending(now) || seat.provisional || !el.dialog.hidden) return;
   try {
     const r = await fetch(`${location.pathname}?build=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return;

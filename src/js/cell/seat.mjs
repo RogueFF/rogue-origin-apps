@@ -16,13 +16,14 @@
  *     loaded drop to 0) closes it: at the hour mark, or early with its weight.
  */
 import { createLiftWatch, createZeroWatch, EMPTY_G, BASKET_MIN_G } from './lift.mjs';
-import { creditBasket, closeBasket, nextBasketCultivar } from './line.mjs';
+import { BASKET_G, creditBasket, closeBasket, nextBasketCultivar } from './line.mjs';
 
 export const START_G = 1.0;     // two steps of the 0.5 g scale, so last-digit noise can't start it
 export const ON_SCALE_G = 2.0;  // more than this on an idle scale: not a tared empty basket
 // Less than this in the basket at the hour mark (the trimmer was away, or just
 // swapped): no swap is asked for, the batch simply goes on into the new hour.
 export const SWAP_MIN_G = 10;
+export const FULL_HOLD_MS = 3000;   // 1 lb held this long (a basket being set down passes through it)
 
 export function clearPauses(state) {
   state.pausedMs = 0; state.pausedAt = null; state.pauseNote = ''; state.pauseLog = [];
@@ -49,6 +50,7 @@ export function createSeat({ state, tally, slotOf, hourOver, personId, lineCulti
   const watch = createLiftWatch();
   const zero = createZeroWatch();
   let tareAt = null;
+  let fullSince = null;   // when the basket first read 1 lb this batch
   const busy = () => state.phase === 'running' || state.phase === 'finished';
   const net = (gross) => Math.max(0, gross) + (state.bankedG || 0);
   const credit = (at, g) => { if (g) tally.credit(slotOf(at), personId(), state.cultivar, g); };
@@ -69,10 +71,15 @@ export function createSeat({ state, tally, slotOf, hourOver, personId, lineCulti
 
   function pickup(at, g, gross) {
     const ms = state.phase === 'finished' ? state.finishedMs : elapsedMs(state, at);
-    credit(at, closeBasket(state, g));
+    // A pickup never counts less than the screen already credited to this basket:
+    // those grams came from this basket's own readings. Seat 1, 2026-11-25 2:01 PM,
+    // a dip and a TARE during the swap closed a 480 g basket as 3.3 g, and the 480 g
+    // came back off the new hour.
+    const held = Math.max(Number(g) || 0, state.basketG || 0);
+    credit(at, closeBasket(state, held));
     const cultivar = state.cultivar;
     tally.pickup(personId());
-    if (on.pickup) on.pickup({ g, cultivar, cycleMs: ms, personId: personId() });
+    if (on.pickup) on.pickup({ g: held, cultivar, cycleMs: ms, personId: personId() });
     toIdle();
     state.lastMs = ms;
     nextBasketCultivar(state, lineCultivar());
@@ -148,14 +155,21 @@ export function createSeat({ state, tally, slotOf, hourOver, personId, lineCulti
       }
       // A basket back heavy with no TARE yet may be basket B: what it reads isn't
       // basket A's tops, so the credit waits until the TARE (a pickup) or GRACE_MS (a shake).
-      const waiting = watch.swapPending(at);
+      // Likewise while a drop to 0 is being judged (a TARE or a pickup): the drop
+      // is not tops lost, so it is never credited as one.
+      const waiting = watch.swapPending(at) || zero.pending;
       if (!waiting && (state.phase === 'armed' || state.phase === 'running' || state.phase === 'finished')) credit(at, creditBasket(state, Math.max(0, n)));
-      if (state.phase === 'running' && state.batchSlot && hourOver(at, state.batchSlot)) {
-        if (n < SWAP_MIN_G) {
+      // The batch ends at 1 lb or the hour mark, whichever comes first.
+      if (state.phase === 'running') {
+        fullSince = n >= BASKET_G ? (fullSince ?? at) : null;
+        const full = fullSince !== null && at - fullSince >= FULL_HOLD_MS;
+        const hourDone = !!state.batchSlot && hourOver(at, state.batchSlot);
+        if (hourDone && !full && n < SWAP_MIN_G) {
           state.batchSlot = slotOf(at);   // next to nothing to pick up: carry on into the new hour
-        } else {
+        } else if (full || hourDone) {
           state.phase = 'finished'; state.finishedMs = elapsedMs(state, at); state.finishedNetG = n;
-          if (on.finish) on.finish();
+          fullSince = null;
+          if (on.finish) on.finish(full ? 'full' : 'hour');
           what = 'finish';
         }
       }
