@@ -109,3 +109,62 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   .swap-steps li.now { font-size: 23px; }
   .swap-steps .num { width: 42px; height: 42px; }
 }
+
+/* ---- One screen, no scrolling (Koa 2026-11-25): the seat fills the tablet's
+   height in either orientation, sized off the screen height so it fits as the
+   home-screen app or in Chrome with its address bar. Portrait: name and cultivar
+   side by side, the circle, then today and pace. Landscape: those on the left,
+   the circle on the right. The swap guide and the name list sit on top. */
+html, body { height: 100%; }
+body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.cell-head { flex: none; padding: 1.1vh 16px; }
+.cell-head h1 { font-size: clamp(22px, 3.8vh, 32px); }
+.head-right .btn.ghost { min-height: 40px; }
+.btn.hold.reset { min-height: 40px; font-size: 14px; padding: 4px 10px; }
+.cell-main { flex: 1; min-height: 0; width: 100%; max-width: none; box-sizing: border-box; padding: 0 16px 1.4vh; gap: 1.3vh 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: "who cv" "banner banner" "core core" "tiles tiles";
+  grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.who { grid-area: who; } .cv { grid-area: cv; } #banner { grid-area: banner; } .core { grid-area: core; } .tiles { grid-area: tiles; }
+.card { padding: 1.1vh 16px; box-sizing: border-box; }
+.who { min-height: 0; border-width: 3px; }
+.who-icon { font-size: clamp(24px, 3.6vh, 40px); }
+.who-text b, .cv-name { font-size: clamp(20px, 3.4vh, 34px); }
+.cv-name.none { font-size: clamp(16px, 2.4vh, 24px); }
+.who-text small, .cv-sub, .eyebrow { font-size: clamp(12px, 1.7vh, 15px); }
+.cv-next { margin-top: .6vh; padding: .8vh 12px; font-size: clamp(15px, 2.4vh, 22px); }
+.banner { font-size: clamp(17px, 2.7vh, 26px); padding: 1.1vh 14px; }
+.banner.full, .banner.ready { font-size: clamp(18px, 3vh, 30px); }
+.core { min-height: 0; overflow: hidden; display: flex; }
+/* The circle on top, "On the scale" and "Batch ends" side by side under it, in every orientation. */
+.ring-row { flex: 1; min-height: 0; margin: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; align-items: center; justify-items: center; }
+.ring-row .ring, .ring-row .ring-center { grid-column: 1; grid-row: 1; }
+.ring-row .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr; width: 100%; text-align: center; }
+.ring { height: 100%; width: auto; max-width: 100%; max-height: 100%; aspect-ratio: 1 / 1; justify-self: center; }
+.ring-center { align-self: center; justify-self: center; }
+.net { font-size: clamp(26px, 5vh, 48px); }
+.of { font-size: clamp(12px, 1.8vh, 16px); }
+.ring-side { gap: 1.2vh; }
+.stat-label { font-size: clamp(12px, 1.8vh, 16px); }
+.stat-value { font-size: clamp(22px, 4vh, 36px); }
+.stat-value.ends { font-size: clamp(17px, 2.8vh, 26px); }
+.tiles { grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile .big, .big { font-size: clamp(22px, 4vh, 38px); }
+.sub { font-size: clamp(12px, 1.8vh, 16px); min-height: 0; }
+
+@media (orientation: landscape) {
+  .cell-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-areas: "who core" "cv core" "banner core" "tiles core";
+    grid-template-rows: auto auto auto minmax(0, 1fr); }
+  .tiles { align-self: end; }
+  .ring-row { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; justify-items: center; }
+  .ring, .ring-center { grid-column: 1; grid-row: 1; }
+  .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr; width: 100%; text-align: center; }
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  .cell-main { grid-template-areas: "who who" "cv cv" "banner banner" "core core" "tiles tiles"; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .ring-row { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; justify-items: center; }
+  .ring, .ring-center { grid-column: 1; grid-row: 1; }
+  .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr; width: 100%; }
+  .head-right .awake { display: none; }
+}
