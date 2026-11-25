@@ -9,6 +9,9 @@
  *   GET  ?action=cellBoard                                             for cells.html
  *   POST ?action=collectPickup { id, undo? }                           bag/tag took it off the spot
  *
+ * Line seats (2026-11-25): a seat's pickup is collected by the swap; only queue-order
+ * baskets (job_id) wait below.
+ *
  * Waiting at the pickup spot (Koa 2026-11-11, migration 0060): two weight-matched
  * baskets per cell. At the chime the full basket goes to a marked spot beside the
  * cell and the matched empty one goes on the scale, which closes the job (a pickup
@@ -147,9 +150,13 @@ export async function getCellBoard(params, env, now = Date.now()) {
     allOrEmpty(env.DB.prepare(`SELECT station_id, stale_after_s FROM scale_stations WHERE kind = 'table' AND active = 1`)),
     recentEvents(env, now),
     // Before 0060 there is no collected_at: nothing shows as waiting.
+    // Only a basket for a queue order (job_id) waits for bag/tag's Collected tap.
+    // A line seat's pickup is collected by the swap itself (Koa 2026-11-25: "no
+    // ones been tapping collecting anyways, and id like this to be automated"),
+    // so it never sits on the board ringing every 2 minutes.
     allOrEmpty(env.DB.prepare(
       `SELECT id, station_id, ts, kg, cultivar, bag, cycle_s, job_id FROM scale_marks
-       WHERE kind = 'pickup' AND collected_at IS NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
+       WHERE kind = 'pickup' AND collected_at IS NULL AND job_id IS NOT NULL AND kg > 0 AND ts >= ? ORDER BY ts, id`
     ).bind(sqlTime(now - WAITING_HOURS * 3600e3))),
     eodActive(env, now, WINDOW_MS),
     // Continuous rounds closed today, per cell (Pacific midnight; offsets are whole minutes).
