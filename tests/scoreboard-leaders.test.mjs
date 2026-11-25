@@ -247,3 +247,15 @@ test('the rotating crew board shows the same day as the panel', () => {
   assert.equal(crewBoardUrl('en', null, '2026-11-17'), 'crew-board.html?tv=1&view=day&lang=en&day=2026-11-17');
   assert.equal(crewBoardUrl('es', null, 'nope'), 'crew-board.html?tv=1&view=day&lang=es');
 });
+
+test('off switch (Koa 2026-11-24): Top 5 and the ranking rotation are off, and init stops before anything runs', async () => {
+  const { SHOW_LEADERS } = await import('../src/js/scoreboard-v2/leaders-logic.js');
+  assert.equal(SHOW_LEADERS, false);
+  const js = readFileSync(join(REPO, 'src/js/scoreboard-v2/leaders.js'), 'utf8');
+  const init = js.slice(js.indexOf('function init()'));
+  const guard = init.indexOf('if (!SHOW_LEADERS) return;');
+  assert.ok(guard > 0, 'init checks the switch');
+  for (const call of ['render();', 'load();', 'setInterval(tick']) assert.ok(init.indexOf(call) > guard, `${call} comes after the switch`);
+  const html = readFileSync(join(REPO, 'src/pages/scoreboard-v2.html'), 'utf8');
+  assert.match(html, /id="leadersPanel"[^>]*hidden/, 'the panel starts hidden');
+});
