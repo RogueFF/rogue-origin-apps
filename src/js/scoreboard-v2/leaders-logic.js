@@ -21,6 +21,9 @@
  * Pure logic, no DOM: the controller is leaders.js; tests import this file.
  */
 
+// Off switch (Koa 2026-11-24, back on the line: "take scoreboard rankings and top 5 off for now").
+// false = no Top 5 panel and no TV rotation to the crew-board ranking. Flip to true to bring both back.
+export const SHOW_LEADERS = false;
 export const TOP = 5;
 export const REFRESH_MS = 5 * 60 * 1000;          // re-read the crew board every 5 min…
 export const HOLD_REFRESH_MS = 60 * 1000;         // …every minute while waiting for today's first hour

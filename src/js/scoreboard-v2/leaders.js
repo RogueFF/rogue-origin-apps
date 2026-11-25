@@ -12,6 +12,7 @@ import { registerLabels, getLang, t } from '../shared/i18n.js';
 import {
   LABELS, REFRESH_MS, HOLD_REFRESH_MS, FETCH_TIMEOUT_MS, ROTATE_EVERY_MS, ROTATE_SHOW_MS, ROTATE_RETRY_MS,
   PRELOAD_MS, READY_TIMEOUT_MS, nextRotationAt, panelModel, rotationMode, pacificToday, fmtDay, fill, shouldRotate, localApi, crewBoardUrl,
+  SHOW_LEADERS,
 } from './leaders-logic.js';
 
 registerLabels(LABELS);
@@ -181,6 +182,7 @@ function onInput() {
 }
 
 function init() {
+  if (!SHOW_LEADERS) return; // switched off: the panel stays hidden, nothing loads or rotates
   render();
   load();
   document.addEventListener('ro:langchange', render);
