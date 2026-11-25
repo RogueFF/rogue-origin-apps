@@ -2,7 +2,7 @@
 // per-trimmer tops beside the typed tops, the fill state, the day's switch. Made-up names.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scaleHourAt, chipHtml, panelHtml, LINE_KEYS } from '../src/js/hourly-entry/line-scales.mjs';
+import { scaleHourAt, chipHtml, panelHtml, LINE_KEYS, SHOW_TRIMMER_SCALES } from '../src/js/hourly-entry/line-scales.mjs';
 
 const scales = { fillOn: false, slots: [{ slot: '9-10', lb: 2.35, fill: 'hand', rows: [
   { stationId: 'table10', personId: 2, name: 'Beto', cultivar: '2026 - Sour Lifter / Sungrown', lb: 1.1, min: 50 },
@@ -36,4 +36,8 @@ test('editor panel: a row per seat in seat order, names escaped, total beside ty
   assert.match(on, /Ganan los tops escritos/);
   assert.match(on, /checked/);
   assert.match(panelHtml(null, { lang: 'en', fillOn: true }), /No scale weight/);
+});
+
+test('switched off on Hourly entry for now (Koa 2026-11-24); the builders stay for when it comes back', () => {
+  assert.equal(SHOW_TRIMMER_SCALES, false);
 });
