@@ -28,6 +28,7 @@ import { requireAuth } from '../../lib/auth.js';
 import { newToken } from './crew-numbers.js';
 import { ALL_TIME_SLOTS } from '../../lib/production-helpers.js';
 import { fillSlot } from './cell-fill.js';
+import { slotKeyOfRow } from '../../lib/line-fill.js';
 
 const G_PER_LB = 453.59237;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,6 +106,23 @@ export async function scaleHourRows(db, date) {
 }
 
 /**
+ * The hours the line ran on a date (Hourly entry rows with crew), each at its
+ * full working length: the yardstick for a scale-only trimmer's full day. The
+ * seats only see who sat at a scale, so judging against them alone made one
+ * trimmer's 22 minutes a "full day" (2026-11-24). No rows: {} (nobody is full).
+ */
+export async function lineSlotLen(db, date) {
+  const rows = (await db.prepare(
+    `SELECT time_slot FROM monthly_production WHERE production_date = ?
+       AND COALESCE(trimmers_line1, 0) + COALESCE(trimmers_line2, 0) > 0`
+  ).bind(date).all()).results || [];
+  const len = Object.fromEntries(SLOTS);
+  const out = {};
+  for (const r of rows) { const k = slotKeyOfRow(r.time_slot); if (k && len[k]) out[k] = len[k]; }
+  return out;
+}
+
+/**
  * Rebuild crew_days (and a typed day's meta) for one date from crew_hours and
  * the line seats' scale hours. only: rewrite just that person's day (a seat save
  * does this every minute or so; the full day is still read to judge full day).
@@ -116,6 +134,7 @@ export async function recomputeDay(db, date, { only = null } = {}) {
   const scale = await scaleHourRows(db, date);
   const scaleIds = new Set(scale.map((r) => r.person_id));
   const eff = effectiveHours([...rows, ...scale]);
+  let lineLen = null;   // read once, only when a scale-only person needs it
   const slotLen = {};
   for (const p of eff.values()) for (const [s, r] of p) slotLen[s] = Math.max(slotLen[s] || 0, Number(r.min) || 0);
 
@@ -137,8 +156,12 @@ export async function recomputeDay(db, date, { only = null } = {}) {
     const sheetFull = days.find((d) => d.person_id === id)?.sheet_full_day;
     // Typed hours, or scale hours with no sheet call, are judged from the hours
     // themselves: a scale-only half day is part day, never ranked as full.
-    const judged = typedIds.has(id) || (scaleIds.has(id) && (sheetFull === null || sheetFull === undefined));
-    const full = judged ? (fullDayOf(p, slotLen) ? 1 : 0) : (sheetFull === 0 ? 0 : 1);
+    const scaleOnly = !typedIds.has(id) && scaleIds.has(id) && (sheetFull === null || sheetFull === undefined);
+    // A scale-only trimmer is full when they sat (nearly) every hour the line ran.
+    if (scaleOnly && lineLen === null) lineLen = await lineSlotLen(db, date);
+    const full = typedIds.has(id) ? (fullDayOf(p, slotLen) ? 1 : 0)
+      : scaleOnly ? (Object.keys(lineLen).length && fullDayOf(p, lineLen) ? 1 : 0)
+      : (sheetFull === 0 ? 0 : 1);
     stmts.push(db.prepare(
       `INSERT INTO crew_days (work_date, person_id, cell, hours_json, tops_g, work_min, full_day)
        VALUES (?, ?, ?, ?, ?, ?, ?)
