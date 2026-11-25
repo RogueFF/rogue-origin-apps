@@ -267,3 +267,17 @@ test('full day for a scale-only trimmer is judged against the hours the line ran
   await save(fresh.env, [{ slot: '7-8', personId: x, cultivar: 'Alpha', g: 300, min: 60 }]);
   assert.equal(fresh.sqlite.prepare('SELECT full_day FROM crew_days WHERE person_id = ?').get(x).full_day, 0);
 });
+
+test("seat detail for the Cells board: the day's pickups and the names, only with detail=1", async () => {
+  const { env } = freshDb();
+  const ana = await addPerson(env, 'Ana');
+  await save(env, [{ slot: '8-9', personId: ana, cultivar: 'Alpha', g: 300, min: 40 }]);
+  await post(env, 'scaleMark', { stationId: 'table1', kind: 'pickup', kg: 0.4536, cultivar: 'Alpha', cycleS: 1500, personId: ana });
+  const plain = await data(get(env, `action=lineScaleSeat&stationId=table1&date=${TODAY}`));
+  assert.equal(plain.pickups, undefined);
+  const d = await data(get(env, `action=lineScaleSeat&stationId=table1&date=${TODAY}&detail=1`));
+  assert.equal(d.pickups.length, 1);
+  assert.deepEqual([d.pickups[0].g, d.pickups[0].cycleS, d.pickups[0].personId], [453.6, 1500, ana]);
+  assert.deepEqual(d.names, { [ana]: 'Ana' });
+  assert.ok(!JSON.stringify(d).includes('token'));
+});

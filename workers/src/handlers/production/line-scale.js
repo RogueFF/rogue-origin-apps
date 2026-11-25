@@ -7,7 +7,8 @@
  *   POST ?action=lineSeat      { stationId, personId }      a name tap (personId 0 = nobody); moves the person off any other seat
  *   POST ?action=lineScaleSave { stationId, date, rows: [{ slot, personId, cultivar, g, min }] }
  *                                                absolute totals per hour, person and cultivar at this seat
- *   GET  ?action=lineScaleSeat&stationId=&date=  this seat's totals (a tablet that lost its storage picks up from here)
+ *   GET  ?action=lineScaleSeat&stationId=&date=[&detail=1]  this seat's totals (a tablet that lost its storage picks up
+ *                                                from here); detail=1 adds the day's pickups and names (Cells board)
  *   GET  ?action=lineScaleHours&date=           every seat's hours, for Hourly entry
  *   POST ?action=lineScaleFillSet { date, on }  farm password: the per-day switch that lets the scales fill the tops
  *
@@ -160,11 +161,31 @@ export async function lineScaleSeat(params, env) {
     const rows = (await env.DB.prepare(
       'SELECT slot, person_id, cultivar, g, min FROM line_scale_hours WHERE work_date = ? AND station_id = ?'
     ).bind(date, station.station_id).all()).results || [];
-    return successResponse({ success: true, date, rows: rows.map((r) => ({ slot: r.slot, personId: r.person_id, cultivar: r.cultivar, g: r.g, min: r.min })) });
+    const out = { success: true, date, rows: rows.map((r) => ({ slot: r.slot, personId: r.person_id, cultivar: r.cultivar, g: r.g, min: r.min })) };
+    // detail=1 (the Cells board's seat panel, Koa 2026-11-25): the day's pickups and the names.
+    if (params.detail === '1') Object.assign(out, await seatDetail(env, station.station_id, date, rows));
+    return successResponse(out);
   } catch (e) {
     if (missingTable(e)) return successResponse({ success: true, date, rows: [] });
     throw e;
   }
+}
+
+/** A seat's pickups on a Pacific day (scale_marks) and the names behind its person ids. */
+async function seatDetail(env, stationId, date, rows) {
+  const marks = (await env.DB.prepare(
+    `SELECT ts, kg, cultivar, cycle_s, person_id FROM scale_marks
+      WHERE station_id = ? AND kind = 'pickup' AND ts >= date(?, '-1 day') AND ts < date(?, '+2 day') ORDER BY ts`
+  ).bind(stationId, date, date).all()).results || [];
+  const pickups = marks.filter((m) => pacificDay(parseSqliteUtc(m.ts)) === date)
+    .map((m) => ({ ts: m.ts, g: r1((Number(m.kg) || 0) * 1000), cultivar: m.cultivar || '', cycleS: m.cycle_s ?? null, personId: m.person_id ?? 0 }));
+  const ids = [...new Set([...rows.map((r) => r.person_id), ...pickups.map((p) => p.personId)].filter((id) => id > 0))];
+  const names = {};
+  for (const id of ids) {
+    const p = await env.DB.prepare('SELECT name FROM crew_people WHERE id = ?').bind(id).first();
+    if (p) names[id] = p.name;
+  }
+  return { pickups, names };
 }
 
 /** Every seat's hours for a day, for Hourly entry: per hour, a row per seat, person and cultivar. */

@@ -19,6 +19,9 @@
  * Worker's time, so a computer with a wrong clock still shows the right time.
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
+import { seatSummary, detailHtml, detailLabels } from './seat-detail.mjs';
+import { slotAt } from '../cell/line.mjs';
+import { pacificMinutes } from '../cell/breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const POLL_MS = 2000;
@@ -295,8 +298,76 @@ function tileFor(c) {
       <div class="bar"><i></i></div>
       <div class="t-foot"><div class="t-clock"></div><div class="t-note"></div></div>`;
     tileEls.set(c.stationId, tile);
+    // Tap a card: that seat's day, hour by hour (seat-detail.mjs).
+    tile.tabIndex = 0;
+    tile.setAttribute('role', 'button');
+    tile.addEventListener('click', () => openDetail(c.stationId, c.label));
+    tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(c.stationId, c.label); } });
   }
   return tile;
+}
+
+// ---- A seat's day (Koa 2026-11-25: "click on each cell card and view their hour-by-hour and key metrics")
+const DETAIL_MS = 30000;
+const RATE_MS = 5 * 60000;
+const pacificDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+let detail = null;   // { stationId, label, data, timer }
+let lineRate = null, rateAt = 0;
+const sd = document.createElement('div');
+sd.className = 'sd-overlay';
+sd.hidden = true;
+sd.innerHTML = '<div class="sd-card" role="dialog" aria-modal="true" aria-labelledby="sdTitle"><div class="sd-head"><h2 id="sdTitle"></h2><button type="button" class="btn sd-close"></button></div><div class="sd-body"></div></div>';
+document.body.appendChild(sd);
+sd.addEventListener('click', (e) => { if (e.target === sd) closeDetail(); });
+sd.querySelector('.sd-close').addEventListener('click', closeDetail);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && detail) closeDetail(); });
+
+async function loadRate() {
+  if (Date.now() - rateAt < RATE_MS) return;
+  try {
+    const d = await (await fetch(`${API}?action=getProduction&date=${pacificDate()}`, { cache: 'no-store' })).json();
+    const r = Number((d.data || d).targetRate);
+    if (r > 0) { lineRate = r; rateAt = Date.now(); }
+  } catch { /* no goal column */ }
+}
+async function loadDetail() {
+  if (!detail) return;
+  const id = detail.stationId;
+  try {
+    const [r] = await Promise.all([
+      fetch(`${API}?action=lineScaleSeat&stationId=${encodeURIComponent(id)}&date=${pacificDate()}&detail=1`, { cache: 'no-store' }),
+      loadRate(),
+    ]);
+    if (!detail || detail.stationId !== id) return;
+    detail.data = r.ok ? (await r.json()) : { noScale: true };
+  } catch { if (detail) detail.data = detail.data || { error: true }; }
+  renderDetail();
+}
+function renderDetail() {
+  if (!detail) return;
+  const lang = getLang();
+  const l = detailLabels(lang);
+  sd.querySelector('#sdTitle').textContent = l.title.replace('{seat}', detail.label);
+  sd.querySelector('.sd-close').textContent = l.close;
+  const body = sd.querySelector('.sd-body');
+  const d = detail.data;
+  if (!d) { body.innerHTML = '<p class="sd-none">…</p>'; return; }
+  if (d.noScale || d.error) { body.innerHTML = `<p class="sd-none">${l.none}</p>`; return; }
+  const s = seatSummary(d.rows || [], d.pickups || [], d.names || {}, lineRate);
+  body.innerHTML = detailHtml(s, { lang, seat: detail.label, current: slotAt(pacificMinutes(Date.now())) });
+}
+function openDetail(stationId, label) {
+  closeDetail();
+  detail = { stationId, label, data: null, timer: setInterval(() => { if (!document.hidden) loadDetail(); }, DETAIL_MS) };
+  sd.hidden = false;
+  renderDetail();
+  loadDetail();
+}
+function closeDetail() {
+  if (!detail) return;
+  clearInterval(detail.timer);
+  detail = null;
+  sd.hidden = true;
 }
 
 function renderGrid() {
@@ -413,7 +484,7 @@ setInterval(() => { if (!document.hidden && cells.length) render(); }, 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 
 el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'));
-document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; render(); });
+document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; render(); renderDetail(); });
 el.sound.addEventListener('click', () => { unlock(); chime(); });
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
 poll();
