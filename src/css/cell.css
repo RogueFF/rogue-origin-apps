@@ -38,8 +38,8 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .ring-row { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 18px; align-items: center; position: relative; }
 .ring { width: 100%; max-width: 280px; grid-column: 1; grid-row: 1; }
 .ring-bg { fill: none; stroke: var(--border); stroke-width: 18; }
-.ring-fill { fill: none; stroke: var(--green); stroke-width: 18; stroke-linecap: round; transition: stroke-dashoffset .4s ease, stroke .3s; }
-.ring-fill.near { stroke: var(--gold); }
+/* Gold while the hour's goal is being worked toward, green once it's met. */
+.ring-fill { fill: none; stroke: var(--gold); stroke-width: 18; stroke-linecap: round; transition: stroke-dashoffset .4s ease, stroke .3s; }
 .ring-fill.full { stroke: var(--success); }
 .ring-center { grid-column: 1; grid-row: 1; text-align: center; pointer-events: none; }
 .net { font-size: 44px; font-weight: 800; font-variant-numeric: tabular-nums; }

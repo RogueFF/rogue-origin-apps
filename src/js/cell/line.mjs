@@ -29,6 +29,20 @@ export const LINE_SLOTS = [
   { key: '4-4:30', start: 960, end: 990 },
 ];
 const slotIndex = (key) => LINE_SLOTS.findIndex((s) => s.key === key);
+// Working minutes in each hour (the 9:00 and 2:30 breaks come out), the same as crew_hours' SLOTS.
+export const SLOT_WORK_MIN = { '7-8': 60, '8-9': 60, '9-10': 50, '10-11': 60, '11-12': 60, '12-1': 30, '1-2': 60, '2-3': 50, '3-4': 60, '4-4:30': 30 };
+
+/**
+ * One trimmer's goal for an hour, in grams (Koa 2026-11-24: the seat's circle
+ * fills toward it). rate = the line's lb per trimmer-hour for the cultivar on the
+ * line (getProduction targetRate, the same number Hourly entry's hour target
+ * uses), times the hour's working minutes. null without a rate.
+ */
+export function hourGoalG(rate, key) {
+  const r = Number(rate);
+  const min = SLOT_WORK_MIN[key];
+  return r > 0 && min ? r * G_PER_LB * (min / 60) : null;
+}
 
 /**
  * The hour a moment's tops belong to. Before 7:00: 7-8. Lunch (a gap): the next

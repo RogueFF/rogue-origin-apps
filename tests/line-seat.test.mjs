@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  slotAt, lineCultivarAt, applyLineCultivar, nextBasketCultivar, personToday, createTally, tickMinutes, paceLbHr,
+  hourGoalG, slotAt, lineCultivarAt, applyLineCultivar, nextBasketCultivar, personToday, createTally, tickMinutes, paceLbHr,
   batchOver, hourFraction, G_PER_LB,
 } from '../src/js/cell/line.mjs';
 import { createSeat } from '../src/js/cell/seat.mjs';
@@ -264,4 +264,12 @@ test('a near-empty basket at the hour mark asks for no swap: the batch carries o
   assert.equal(r.state.phase, 'running');
   assert.equal(r.state.batchSlot, '9-10');
   assert.deepEqual(r.events, [], 'no chime, no pickup');
+});
+
+test("the hour goal: lb per trimmer-hour x the hour's working minutes; none without a rate", () => {
+  assert.equal(Math.round(hourGoalG(1.1, '8-9')), Math.round(1.1 * G_PER_LB));
+  assert.equal(Math.round(hourGoalG(1.2, '9-10')), Math.round(1.2 * G_PER_LB * 50 / 60), 'the 9:00 break comes out');
+  assert.equal(Math.round(hourGoalG(1.2, '12-1')), Math.round(1.2 * G_PER_LB / 2), '12:30-1:00');
+  assert.equal(hourGoalG(null, '8-9'), null);
+  assert.equal(hourGoalG(1.1, 'nope'), null);
 });
