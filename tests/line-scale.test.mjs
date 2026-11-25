@@ -281,3 +281,15 @@ test("seat detail for the Cells board: the day's pickups and the names, only wit
   assert.deepEqual(d.names, { [ana]: 'Ana' });
   assert.ok(!JSON.stringify(d).includes('token'));
 });
+
+test('Cells board: a line seat pickup is collected by the swap (never waits, never rings); a queue-order basket still waits', async () => {
+  const { env, sqlite } = freshDb();
+  const ana = await addPerson(env, 'Ana');
+  await post(env, 'scaleMark', { stationId: 'table1', kind: 'pickup', kg: 0.4536, cultivar: 'Alpha', cycleS: 1500, personId: ana });
+  await post(env, 'scaleMark', { stationId: 'table1', kind: 'pickup', kg: 0.2, cultivar: 'Alpha' });
+  let board = await data(get(env, 'action=cellBoard'));
+  assert.equal((board.waiting || []).length, 0, 'no card at the top, no 2-minute bell');
+  sqlite.exec(`INSERT INTO scale_marks (station_id, ts, kind, kg, job_id) VALUES ('table1', datetime('now'), 'pickup', 0.1, 42)`);
+  board = await data(get(env, 'action=cellBoard'));
+  assert.equal(board.waiting.length, 1, 'a basket for a queue order still waits for Collected');
+});
