@@ -79,7 +79,7 @@ test('tap a seat card: today, pace, batches, best hour, hours at goal, and the h
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(SHOTS, 'cells-floor.png') });
   await page.locator('#floor [data-station="table1"]').click();
-  await expect(page.locator('.sd-overlay h2')).toHaveText('Seat 1 · today');
+  await expect(page.locator('.sd-overlay h2')).toHaveText('Seat 2 · today');
   await page.keyboard.press('Escape');
   await page.locator('#viewCards').click();
   const card = page.locator('.tile', { hasText: 'Cell 1' });
@@ -87,7 +87,7 @@ test('tap a seat card: today, pace, batches, best hour, hours at goal, and the h
   await card.click();
   const panel = page.locator('.sd-overlay');
   await expect(panel).toBeVisible();
-  await expect(panel.locator('h2')).toHaveText('Cell 1 · today');
+  await expect(panel.locator('h2')).toHaveText('Seat 2 · today');
   await expect(panel.locator('.sd-table tbody tr')).toHaveCount(4);
   await expect(panel.locator('.sd-tile').nth(0)).toContainText(`${((170.8 + 227.8 + 946.7 + 300.4) / G).toFixed(2)} lb`);
   await expect(panel.locator('.sd-tile').nth(2)).toContainText('2');
