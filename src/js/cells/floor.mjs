@@ -9,6 +9,8 @@
  * hour's tops toward the hour goal, gold while working, green once met.
  * Pure (no DOM), so it is unit-tested (tests/cells-floor.test.mjs).
  */
+import { stationAt } from '../cell/seats.mjs';
+
 export const SEATS = 16;
 export const G_PER_LB = 453.59237;
 const PITCH = 132;          // one table to the next in the same row
@@ -41,7 +43,7 @@ export function floorModel(cells = [], slotRows = [], lastNames = {}, rate = nul
   const goalG = rate > 0 && SLOT_MIN[slot] ? rate * G_PER_LB * SLOT_MIN[slot] / 60 : null;
   const seats = [];
   for (let n = 1; n <= SEATS; n++) {
-    const id = `table${n}`;
+    const id = stationAt(n);   // the scale station at this seat (seats.mjs: table1 is at seat 2)
     const c = cells.find((x) => x.stationId === id) || null;
     const mine = slotRows.filter((r) => r.stationId === id);
     const g = mine.reduce((a, r) => a + Math.max(0, Number(r.g) || 0), 0);

@@ -21,6 +21,7 @@
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { seatSummary, detailHtml, detailLabels } from './seat-detail.mjs';
 import { floorModel, floorSvg } from './floor.mjs';
+import { seatOf } from '../cell/seats.mjs';
 import { slotAt } from '../cell/line.mjs';
 import { pacificMinutes } from '../cell/breaks.mjs';
 
@@ -304,8 +305,9 @@ function tileFor(c) {
     // Tap a card: that seat's day, hour by hour (seat-detail.mjs).
     tile.tabIndex = 0;
     tile.setAttribute('role', 'button');
-    tile.addEventListener('click', () => openDetail(c.stationId, c.label));
-    tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(c.stationId, c.label); } });
+    const seatLabel = () => (seatOf(c.stationId) ? tf('seatN', { n: seatOf(c.stationId) }) : c.label);
+    tile.addEventListener('click', () => openDetail(c.stationId, seatLabel()));
+    tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(c.stationId, seatLabel()); } });
   }
   return tile;
 }

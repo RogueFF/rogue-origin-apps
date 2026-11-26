@@ -29,6 +29,7 @@ import {
   G_PER_LB, hourGoalG, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, slotEnd, workingMinute,
 } from './line.mjs';
 import { createSeat, elapsedMs } from './seat.mjs';
+import { seatOf } from './seats.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 // A batch is an hour, so nothing needs the cells' 250 ms: every seat is busy all
@@ -179,7 +180,7 @@ const net = () => (gross === null ? 0 : seat.net(gross));
 
 // ---- Render
 function render() {
-  el.name.textContent = `${t('seat')} ${station.replace(/^\D+/, '') || station}`;
+  el.name.textContent = `${t('seat')} ${seatOf(station) ?? station}`;   // where the seat is on the floor (seats.mjs)
   renderWho();
   renderCultivar();
   const now = Date.now();

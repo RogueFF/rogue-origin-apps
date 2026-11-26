@@ -9,7 +9,7 @@ import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SCREENS = ['src/js/cell/main.js', 'src/js/cells/main.js', 'src/js/cells/seat-detail.mjs', 'src/js/cells/floor.mjs', 'src/js/cell/lift.mjs', 'src/js/cell/breaks.mjs', 'src/js/cell-hourly/main.js', 'src/js/rawout/main.js', 'src/js/rawout/rates.mjs', 'src/js/bagtag/main.js', 'src/js/bagtag/view.mjs', 'src/js/cell/queue.mjs', 'src/js/cell/line.mjs', 'src/js/cell/seat.mjs', 'src/js/pull/main.js', 'src/js/pull/view.mjs', 'src/js/demo/orders.mjs', 'src/js/walkthrough/main.js', 'src/js/walkthrough/sim.mjs', 'src/js/walkthrough/guard.mjs'];
+const SCREENS = ['src/js/cell/main.js', 'src/js/cells/main.js', 'src/js/cells/seat-detail.mjs', 'src/js/cells/floor.mjs', 'src/js/cell/seats.mjs', 'src/js/cell/lift.mjs', 'src/js/cell/breaks.mjs', 'src/js/cell-hourly/main.js', 'src/js/rawout/main.js', 'src/js/rawout/rates.mjs', 'src/js/bagtag/main.js', 'src/js/bagtag/view.mjs', 'src/js/cell/queue.mjs', 'src/js/cell/line.mjs', 'src/js/cell/seat.mjs', 'src/js/pull/main.js', 'src/js/pull/view.mjs', 'src/js/demo/orders.mjs', 'src/js/walkthrough/main.js', 'src/js/walkthrough/sim.mjs', 'src/js/walkthrough/guard.mjs'];
 
 test('every cell screen module parses', () => {
   const dir = mkdtempSync(join(tmpdir(), 'cell-parse-'));
