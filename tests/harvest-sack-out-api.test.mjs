@@ -249,3 +249,38 @@ test('routing: /salida and /out serve the page; the decoder is JS with a long ca
   assert.equal(js.status, 200); assert.match(js.headers.get('content-type'), /javascript/);
   assert.match(js.headers.get('cache-control') || '', /max-age=\d{6,}/);
 });
+
+// 2026-11-25: Sour Lifter has a #113 in each cut. The 2nd-cut one could not go
+// out: the scan was dropped in the page, and typing "Sour Lifter" + 113 can
+// only name the 1st-cut bag. The cut rides in the chip's code (SLIFT-C2).
+function twoCuts(sqlite) {
+  seed(sqlite, { id: `${YY}-SLIFT-113`, serial: 113, cultivar: 'Sour Lifter', cultivar_code: 'SLIFT' });
+  seed(sqlite, { id: `${YY}-SLIFT-C2-113`, serial: 113, cultivar: 'Sour Lifter', cut_number: 2, cultivar_code: 'SLIFT' });
+}
+
+test('a 2nd-cut tag scans out, and leaves the 1st-cut bag of the same number alone', async () => {
+  const { sqlite, env, ctx, settle } = freshDb(); poolStub(); twoCuts(sqlite);
+  const r = await post(env, ctx, 'sack_out', { q: `${YY}-SLIFT-C2-113`, by: 'scan' }); await quiet(settle);
+  assert.equal(r.state, 'out'); assert.equal(r.sack.sack_id, `${YY}-SLIFT-C2-113`); assert.equal(r.sack.cut_number, 2);
+  assert.ok(row(sqlite, `${YY}-SLIFT-C2-113`).opened_at); assert.equal(row(sqlite, `${YY}-SLIFT-113`).opened_at, null);
+});
+
+test('chips: one per cultivar and cut; the later cut\'s code types its own bag', async () => {
+  const { sqlite, env, ctx, settle } = freshDb(); poolStub(); twoCuts(sqlite);
+  seed(sqlite, { id: `${YY}-SLIFT-114`, serial: 114, cultivar: 'Sour Lifter', cultivar_code: 'SLIFT' });
+  const t = await get(env, ctx, 'sack_out_today');
+  assert.deepEqual(t.chips.map(c => [c.code, c.cultivar, c.cut_number, c.in_inventory]),
+    [['SLIFT', 'Sour Lifter', 1, 2], ['SLIFT-C2', 'Sour Lifter', 2, 1]]);
+  const r = await post(env, ctx, 'sack_out', { code: 'SLIFT-C2', number: 113, by: 'typed' }); await quiet(settle);
+  assert.equal(r.state, 'out'); assert.equal(r.sack.sack_id, `${YY}-SLIFT-C2-113`);
+  assert.equal(row(sqlite, `${YY}-SLIFT-113`).opened_at, null);
+  const one = await post(env, ctx, 'sack_out', { code: 'SLIFT', number: 113, by: 'typed' }); await quiet(settle);
+  assert.equal(one.sack.sack_id, `${YY}-SLIFT-113`);
+});
+
+test('a bare number owned by two cuts asks which, and says the cut', async () => {
+  const { sqlite, env, ctx } = freshDb(); poolStub(); twoCuts(sqlite);
+  const r = await post(env, ctx, 'sack_out', { q: '113' });
+  assert.equal(r.state, 'ambiguous');
+  assert.deepEqual(r.candidates.map(c => [c.sack_id, c.cut_number]), [[`${YY}-SLIFT-113`, 1], [`${YY}-SLIFT-C2-113`, 2]]);
+});

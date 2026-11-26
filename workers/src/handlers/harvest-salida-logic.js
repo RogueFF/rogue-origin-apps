@@ -8,7 +8,9 @@
  * at the bottom too.
  */
 
-// A tag is ONLY a two-digit season, a cultivar code and a number. Anything a
+// A tag is ONLY a two-digit season, a cultivar code, a later cut's "C2" and a
+// number (26-SLIFT-151, 26-SLIFT-C2-113: numbers restart for each cut, so the
+// cut is part of the id). Anything a
 // QR can carry that is not that (wifi codes, other URLs, markup) is "not a
 // tag" and is dropped silently — the regex is also what keeps attacker text
 // out of every request and every DOM node.
@@ -18,7 +20,7 @@ export function parseTag(text) {
   const m = /^https?:\/\/[^/\s]+\/s\/([^/?#\s]+)\/?(?:[?#].*)?$/i.exec(s);
   if (m) s = m[1];
   s = s.toUpperCase();
-  return /^\d{2}-[A-Z0-9]{1,10}-\d{1,5}$/.test(s) ? { id: s } : null;
+  return /^\d{2}-[A-Z0-9]{1,10}(-C\d{1,2})?-\d{1,5}$/.test(s) ? { id: s } : null;
 }
 
 // A handheld scanner "types" a whole tag in tens of milliseconds; a gloved
@@ -94,6 +96,11 @@ export function orderChips(chips, recent) {
     rank(a) - rank(b) || (b.in_inventory || 0) - (a.in_inventory || 0) || String(a.cultivar || a.code).localeCompare(String(b.cultivar || b.code)));
 }
 
+// " · Corte 2" for a later cut, nothing for the first: most cultivars only have one.
+export function cutLabel(cut, s) {
+  return Number(cut) >= 2 ? ' · ' + s.cut + ' ' + Number(cut) : '';
+}
+
 export function rememberCode(recent, code) {
   return [code].concat((Array.isArray(recent) ? recent : []).filter((c) => c !== code)).slice(0, 30);
 }
@@ -110,7 +117,8 @@ export function queueLoad(raw) {
 export function feedbackFor(resp, s, fromOurQueue) {
   const r = resp || {};
   const sack = r.sack || {};
-  const name = [sack.cultivar, sack.serial != null ? '#' + sack.serial : ''].filter(Boolean).join(' ');
+  // Each cut has its own #113: a later cut is said out loud, so the right bag is seen to go.
+  const name = [sack.cultivar, sack.serial != null ? '#' + sack.serial : ''].filter(Boolean).join(' ') + cutLabel(sack.cut_number, s);
   const dest = r.order ? (r.order.nickname || r.order.shopify_order_name || '') : s.stock;
   let state = r.state;
   if (state === 'already_out' && fromOurQueue) state = 'out';
@@ -249,7 +257,7 @@ export const LOGIC_SOURCE = logicSource([
   ['parseTag', parseTag], ['isScannerBurst', isScannerBurst], ['debounceSeen', debounceSeen],
   ['queueReduce', queueReduce], ['pacificTime', pacificTime], ['countText', countText],
   ['busyRetry', busyRetry], ['undoNeedsConfirm', undoNeedsConfirm], ['orderChips', orderChips],
-  ['rememberCode', rememberCode], ['queueLoad', queueLoad], ['feedbackFor', feedbackFor],
+  ['cutLabel', cutLabel], ['rememberCode', rememberCode], ['queueLoad', queueLoad], ['feedbackFor', feedbackFor],
   ['groupToday', groupToday], ['escapeHtml', escapeHtml], ['embedJson', embedJson],
   ['closeDayView', closeDayView], ['firstCutOf', firstCutOf], ['closeDayCheck', closeDayCheck], ['closeDayYieldLines', closeDayYieldLines],
 ]);

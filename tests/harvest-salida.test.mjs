@@ -171,6 +171,12 @@ test('page script boots on a stub DOM and a simulated scan POSTs sack_out once',
   const posts = calls.filter(([u]) => /action=sack_out$/.test(u));
   assert.equal(posts.length, 1, 'debounced, foreign QR ignored');
   assert.deepEqual(JSON.parse(posts[0][1]), { q: '26-SLIFT-151', by: 'scan', order_id: null });
+  // A 2nd-cut tag goes through the same camera path (it was dropped here, 2026-11-25).
+  win.salidaSim(URL_ + '26-SLIFT-C2-113');
+  await new Promise((r) => setTimeout(r, 20));
+  const after = calls.filter(([u]) => /action=sack_out$/.test(u));
+  assert.equal(after.length, 2);
+  assert.deepEqual(JSON.parse(after[1][1]), { q: '26-SLIFT-C2-113', by: 'scan', order_id: null });
 });
 
 const EN = SALIDA_STRINGS.en;
@@ -347,4 +353,22 @@ test('salidaPageBody carries the close-day panel and its strings in both languag
     assert.ok(html.includes(SALIDA_STRINGS[lang].closeTitle));
     assert.ok(html.includes('Biomass #2') && html.includes('Premium #1'));
   }
+});
+
+// 2026-11-25: Sour Lifter 2nd cut #113 (26-SLIFT-C2-113) could not be scanned
+// out. The cut is part of a later cut's id, and parseTag dropped it as "not a
+// tag", silently, so the camera and the handheld did nothing at all.
+test('parseTag: a later cut\'s tag (26-SLIFT-C2-113) is a tag, as id, URL and scanner burst', () => {
+  assert.deepEqual(parseTag('26-SLIFT-C2-113'), { id: '26-SLIFT-C2-113' });
+  assert.deepEqual(parseTag(URL_ + '26-slift-c2-113'), { id: '26-SLIFT-C2-113' });
+  assert.deepEqual(parseTag('26-GG4-C12-7'), { id: '26-GG4-C12-7' });
+  assert.ok(isScannerBurst([...'26-SLIFT-C2-113'].map((ch, i) => ({ ch, t: i * 10 }))));
+  for (const q of ['26-SLIFT-C2', '26-SLIFT-C-113', '26-SLIFT-C123-1', '26-SLIFT-X2-113', '26-SLIFT-C2-C3-1']) assert.equal(parseTag(q), null, q);
+});
+
+test('feedbackFor: a later cut is named beside the bag number, a first cut is not', () => {
+  const S = SALIDA_STRINGS.es;
+  const out = (cut) => feedbackFor({ state: 'out', sack: { cultivar: 'Sour Lifter', serial: 113, cut_number: cut }, order: null }, S, false).line;
+  assert.match(out(2), new RegExp('Sour Lifter #113 · ' + S.cut + ' 2 → '));
+  assert.ok(!out(1).includes(S.cut)); assert.ok(!out(null).includes(S.cut));
 });
