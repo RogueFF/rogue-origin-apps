@@ -23,7 +23,7 @@
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { LIFT_G } from './lift.mjs';
-import { breakAt, breakMsBetween, clockOf, pacificMinutes } from './breaks.mjs';
+import { breakAt, breakMsBetween, clockOf, pacificMinutes, workingTime } from './breaks.mjs';
 import { shortCultivar } from './queue.mjs';
 import {
   G_PER_LB, hourGoalG, slotAt, lineCultivarAt, applyLineCultivar, personToday, createTally, tickMinutes, paceLbHr, batchOver, slotEnd, workingMinute,
@@ -49,7 +49,7 @@ const BASKET_OFF_G = -50;       // reading this low: the full basket is off the 
 
 registerLabels({
   en: {
-    waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal', disconnected: 'Scale disconnected',
+    waiting: 'Waiting for scale', live: 'Scale live', stale: 'No scale signal', disconnected: 'Scale disconnected', dayDone: 'Day done',
     seat: 'Seat', awake: 'Screen stays on', battery: 'Scale node battery',
     tapName: 'Tap your name', notYou: 'Not you? Tap here', changeName: 'Change', whoTitle: 'Who is at this seat?',
     searchName: 'Type your name', leaveSeat: 'Nobody: leave the seat empty', cancel: 'Cancel', noCrew: 'No names yet. Tell the lead.',
@@ -76,7 +76,7 @@ registerLabels({
     swapHeld: 'In the full basket: {lb} lb',
   },
   es: {
-    waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula', disconnected: 'Báscula desconectada',
+    waiting: 'Esperando la báscula', live: 'Báscula en vivo', stale: 'Sin señal de la báscula', disconnected: 'Báscula desconectada', dayDone: 'Día terminado',
     seat: 'Puesto', awake: 'Pantalla encendida', battery: 'Batería del nodo de la báscula',
     tapName: 'Toque su nombre', notYou: '¿No es usted? Toque aquí', changeName: 'Cambiar', whoTitle: '¿Quién está en este puesto?',
     searchName: 'Escriba su nombre', leaveSeat: 'Nadie: dejar el puesto vacío', cancel: 'Cancelar', noCrew: 'Todavía no hay nombres. Avise al líder.',
@@ -202,8 +202,10 @@ function render() {
   el.pct.textContent = done ? t('batchDone') : end === null ? '—' : t('endsAt').replace('{t}', clockOf(end)).replace('{m}', left);
   el.ring.setAttribute('stroke-dashoffset', String(RING_LEN * (1 - frac)));
   el.ring.classList.toggle('full', hourG >= fullG);
-  el.dot.className = `live-dot ${live ? 'live' : 'stale'}`;
-  el.liveText.textContent = disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
+  // Outside the working day a silent scale is switched off for the night: grey "Day done", not red.
+  const dayDone = !live && !workingTime(pacificMinutes(now));
+  el.dot.className = `live-dot ${live ? 'live' : dayDone ? 'off' : 'stale'}`;
+  el.liveText.textContent = dayDone ? t('dayDone') : disconnected() ? t('disconnected') : gross === null ? t('waiting') : live ? t('live') : t('stale');
   renderBattery();
   renderBanner();
   renderTiles();

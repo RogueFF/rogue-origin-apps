@@ -10,6 +10,7 @@
  * Pure (no DOM), so it is unit-tested (tests/cells-floor.test.mjs).
  */
 import { stationAt } from '../cell/seats.mjs';
+import { workingTime } from '../cell/breaks.mjs';
 
 export const SEATS = 16;
 export const G_PER_LB = 453.59237;
@@ -39,7 +40,9 @@ const PAN = { cx: 52, cy: 94, r: 17 };
  * @param {number|null} rate   lb per trimmer-hour
  * @param {string} slot        the current hour key
  */
-export function floorModel(cells = [], slotRows = [], lastNames = {}, rate = null, slot = '') {
+export function floorModel(cells = [], slotRows = [], lastNames = {}, rate = null, slot = '', minutes = null) {
+  // Outside the working day a silent scale is switched off for the night: grey, not red.
+  const working = minutes === null || workingTime(minutes);
   const goalG = rate > 0 && SLOT_MIN[slot] ? rate * G_PER_LB * SLOT_MIN[slot] / 60 : null;
   const seats = [];
   for (let n = 1; n <= SEATS; n++) {
@@ -57,6 +60,7 @@ export function floorModel(cells = [], slotRows = [], lastNames = {}, rate = nul
       else if (j.phase === 'running') state = 'filling';
       else state = 'waiting';
     } else if (scale) state = scale.live ? 'noTablet' : 'down';
+    if (state === 'down' && !working) state = 'dayDone';
     seats.push({
       n, stationId: id, ...seatXY(n), state,
       name: who ? who.name || null : (lastNames[id] || null),
@@ -71,8 +75,8 @@ export function floorModel(cells = [], slotRows = [], lastNames = {}, rate = nul
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const L = {
-  en: { seat: 'Seat', noScale: 'no scale', ready: 'Ready for pickup', down: 'Scale down', line: 'Trim line', goal: 'Goal this hour {lb} lb' },
-  es: { seat: 'Puesto', noScale: 'sin báscula', ready: 'Lista para recoger', down: 'Báscula caída', line: 'Línea de trimeo', goal: 'Meta esta hora {lb} lb' },
+  en: { seat: 'Seat', noScale: 'no scale', ready: 'Ready for pickup', down: 'Scale down', dayDone: 'Day done', line: 'Trim line', goal: 'Goal this hour {lb} lb' },
+  es: { seat: 'Puesto', noScale: 'sin báscula', ready: 'Lista para recoger', down: 'Báscula caída', dayDone: 'Día terminado', line: 'Línea de trimeo', goal: 'Meta esta hora {lb} lb' },
 };
 
 /** The floor as one SVG. Each table is a <g data-station> the board makes tappable. */
@@ -86,7 +90,7 @@ export function floorSvg(model, { lang = 'en' } = {}) {
     const pan = s.top ? { x: s.x, y: s.y + H - PAN.cy } : { x: s.x, y: s.y + PAN.cy };
     const numY = s.top ? s.y + 80 : s.y + 66;
     const textY = s.top ? s.y - 14 : s.y + H + 26;
-    const sub = s.state === 'ready' ? l.ready : s.state === 'down' ? l.down : s.state === 'empty' ? l.noScale : `${s.hourLb.toFixed(2)} lb`;
+    const sub = s.state === 'ready' ? l.ready : s.state === 'down' ? l.down : s.state === 'dayDone' ? l.dayDone : s.state === 'empty' ? l.noScale : `${s.hourLb.toFixed(2)} lb`;
     const name = s.name ? esc(s.name.split(' ')[0]) : '';
     return `<g class="seat ${s.state}${s.met ? ' met' : ''}" data-station="${s.stationId}" data-n="${s.n}" tabindex="0" role="button" aria-label="${esc(l.seat)} ${s.n}">
       <path class="tbl" d="${TABLE}" transform="${flip}"/>

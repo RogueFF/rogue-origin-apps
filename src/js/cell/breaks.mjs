@@ -13,6 +13,15 @@ export const BREAKS = [
   { start: 14 * 60 + 30, end: 14 * 60 + 40, kind: 'break' },
 ];
 
+// The working day (Koa 2026-11-25: "shows as scale down however its 4:26, they start
+// cleaning at 4:20"). Scales are switched off at cleanup and before the shift, so a
+// silent scale outside these hours is the day being done, not a fault. Cleanup is
+// the same 4:20 as the scoreboard's EOD_HOLD_FROM.
+export const SHIFT_START_MIN = 7 * 60;
+export const CLEANUP_MIN = 16 * 60 + 20;
+/** Inside the working day: a scale that stops posting is a problem worth red. */
+export const workingTime = (minutes) => minutes >= SHIFT_START_MIN && minutes < CLEANUP_MIN;
+
 /** The break `minutes` (Pacific minutes since midnight, may be fractional) falls in, or null. */
 export function breakAt(minutes) {
   return BREAKS.find(b => minutes >= b.start && minutes < b.end) || null;

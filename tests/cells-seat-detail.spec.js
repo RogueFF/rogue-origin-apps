@@ -106,3 +106,30 @@ test('tap a seat card: today, pace, batches, best hour, hours at goal, and the h
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test('after the 4:20 cleanup a switched-off scale reads "Day done" in grey, not red "Scale down"', async ({ browser }) => {
+  for (const [when, cls, text] of [['2026-11-26T00:26:00Z', /dayDone/, 'Day done'], ['2026-11-25T22:20:00Z', /down/, 'Scale down']]) {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const t0 = Date.parse(when);
+    const b = { ...board, serverNow: t0 };
+    await context.route(/workers\.dev/, (route) => {
+      const a = new URL(route.request().url()).searchParams.get('action');
+      const ok = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+      if (a === 'cellBoard') return ok(b);
+      if (a === 'cellQueue') return ok({ cells: [] });
+      if (a === 'lineScaleHours') return ok({ success: true, slots: [] });
+      if (a === 'getProduction') return ok({ success: true, targetRate: 1.1 });
+      return route.abort();
+    });
+    await context.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+    const page = await context.newPage();
+    await page.clock.install({ time: new Date(t0) });
+    await page.clock.resume();
+    await page.goto(PAGE);
+    const seat6 = page.locator('#floor [data-station="table6"]');
+    await expect(seat6).toHaveClass(cls);
+    await expect(seat6).toContainText(text);
+    if (text === 'Day done') await page.screenshot({ path: path.join(SHOTS, 'cells-floor-day-done.png') });
+    await context.close();
+  }
+});

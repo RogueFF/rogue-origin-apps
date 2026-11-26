@@ -57,3 +57,16 @@ test('the station-to-seat map: table1 (built for Cell 1) is at seat 2, where Die
   assert.equal(seat2.state, 'filling');
   assert.equal(m.seats.find((s) => s.n === 1).state, 'empty');
 });
+
+test('a silent scale is red only in the working day: "Day done" from the 4:20 cleanup until the shift starts', async () => {
+  const { workingTime } = await import('../src/js/cell/breaks.mjs');
+  const cells = [{ stationId: 'table1', scale: { live: false }, job: { phase: 'running', tabletOnline: true } }];
+  const at = (h, m) => floorModel(cells, [], {}, 1.1, '2-3', h * 60 + m).seats.find((s) => s.stationId === 'table1').state;
+  assert.equal(at(14, 0), 'down', '2:00 PM: a real fault, red');
+  assert.equal(at(16, 26), 'dayDone', '4:26 PM: cleanup, the node is off for the night');
+  assert.equal(at(6, 30), 'dayDone', 'before the shift');
+  assert.equal(at(16, 19), 'down');
+  assert.equal(workingTime(7 * 60), true);
+  assert.equal(workingTime(16 * 60 + 20), false);
+  assert.match(floorSvg(floorModel(cells, [], {}, 1.1, '4-4:30', 16 * 60 + 26), { lang: 'en' }), /seat dayDone[\s\S]*Day done/);
+});
