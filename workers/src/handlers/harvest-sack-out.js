@@ -33,6 +33,17 @@ const say = (c, m) => m[c?.ui?.lang === 'es' ? 'es' : 'en'];
  */
 const codeOf = (row) => (row && row.cultivar_code) || null;
 
+/**
+ * The code a typed entry sends with the bag number. Numbers restart for each
+ * cut, so a later cut has its own chip and its code carries the cut the way the
+ * bag id does: SLIFT-C2 + 113 is 26-SLIFT-C2-113. With one chip per cultivar a
+ * 2nd-cut bag could not be typed out at all (Sour Lifter #113, 2026-11-25).
+ */
+const chipCode = (row) => {
+  const code = codeOf(row);
+  return code && Number(row.cut_number) >= 2 ? `${code}-C${Number(row.cut_number)}` : code;
+};
+
 /** Once a sack has weights it has been worked; it can no longer go back. */
 const pastUndo = (s) => !!(s.weights_allocated_at || s.weights_source
   || ['tops_lbs', 'smalls_lbs', 'biomass_lbs', 'trim_lbs', 'waste_lbs'].some(c => s[c] != null));
@@ -113,8 +124,8 @@ async function sackOut(c, deps) {
   const isTest = deps.isTestMode(env) ? 1 : 0;
   if (p.ambiguous !== undefined) {
     const c = await query(db, `
-      SELECT sack_id, cultivar, serial FROM harvest_sacks
-      WHERE serial = ? AND season = ? AND is_test = ? AND voided_at IS NULL ORDER BY cultivar
+      SELECT sack_id, cultivar, serial, cut_number FROM harvest_sacks
+      WHERE serial = ? AND season = ? AND is_test = ? AND voided_at IS NULL ORDER BY cultivar, cut_number
     `, [p.ambiguous, deps.getSeason(), isTest]);
     if (c.length !== 1) return successResponse({ success: true, state: c.length ? 'ambiguous' : 'not_found', ...empty, candidates: c });
     p.id = c[0].sack_id;
@@ -259,9 +270,9 @@ export async function sackOutToday(db, env, params, deps) {
     g.sacks.push({ sack_id: r.sack_id, serial: r.serial, zone: r.zone, cut_number: r.cut_number, opened_at: r.opened_at, out_by: r.out_by, can_undo: !pastUndo(r) });
   }
   const chipRows = await query(db, `
-    SELECT cultivar, cultivar_code, COUNT(*) AS n FROM harvest_sacks
+    SELECT cultivar, cultivar_code, cut_number, COUNT(*) AS n FROM harvest_sacks
     WHERE is_test = ? AND season = ? AND opened_at IS NULL AND voided_at IS NULL AND printed_at IS NOT NULL
-    GROUP BY cultivar, cultivar_code ORDER BY cultivar
+    GROUP BY cultivar, cultivar_code, cut_number ORDER BY cultivar, cut_number
   `, [isTest, deps.getSeason()]);
   const strain = new Map();
   for (const r of rows) {
@@ -274,7 +285,7 @@ export async function sackOutToday(db, env, params, deps) {
   }
   return {
     success: true, date, tz: 'UTC', is_test: !!isTest, total: rows.length, groups: [...groups.values()],
-    chips: chipRows.map(c => ({ code: codeOf(c), cultivar: c.cultivar, in_inventory: c.n })),
+    chips: chipRows.map(c => ({ code: chipCode(c), cultivar: c.cultivar, cut_number: c.cut_number, in_inventory: c.n })),
     by_strain: [...strain.values()].map(e => ({ season: e.season, cultivar: e.cultivar, cut_number: e.cut_number, sacks: e.sacks, strain_titles: [...e.titles] })),
   };
 }

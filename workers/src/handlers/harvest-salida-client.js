@@ -8,7 +8,7 @@
  * debounce bypassed) after load, so a headless screenshot shows the result.
  */
 /* global parseTag, isScannerBurst, debounceSeen, queueReduce, pacificTime, countText, busyRetry,
-          undoNeedsConfirm, orderChips, rememberCode, queueLoad, feedbackFor, groupToday, escapeHtml, embedJson,
+          undoNeedsConfirm, orderChips, cutLabel, rememberCode, queueLoad, feedbackFor, groupToday, escapeHtml, embedJson,
           closeDayView, firstCutOf, closeDayCheck, closeDayYieldLines,
           BarcodeDetector */
 // The names above are the LOGIC_SOURCE functions inlined ahead of this code in
@@ -45,7 +45,7 @@ export function salidaMain(boot, S, decoderUrl) {
     if (navigator.vibrate && fb.vibrate && fb.vibrate.length) navigator.vibrate(fb.vibrate); beep(fb.beep);
     const pick = $('spick'); pick.textContent = '';
     if (resp && resp.state === 'ambiguous') for (const c of resp.candidates || []) {
-      pick.appendChild(button(c.cultivar + ' #' + c.serial, 'big', () => send({ q: c.sack_id, by: 'typed', order_id: null })));
+      pick.appendChild(button(c.cultivar + ' #' + c.serial + cutLabel(c.cut_number, S), 'big', () => send({ q: c.sack_id, by: 'typed', order_id: null })));
     }
     renderLast(resp && resp.sack && (fb.tone === 'ok' || fb.undoLive) ? resp : null);
   }
@@ -209,7 +209,7 @@ export function salidaMain(boot, S, decoderUrl) {
       if (sel && !list.includes(sel)) list = [...list.slice(0, CHIP_FOLD - 1), sel];
     }
     for (const ch of list) {
-      const b = button((ch.code === code ? '✓ ' : '') + (ch.cultivar || ch.code), 'chip' + (ch.code === code ? ' on' : ''), () => { code = ch.code; store.set(CKEY, code); store.set(RKEY, rememberCode(store.get(RKEY, []), code)); renderChips(); focusNum(); });
+      const b = button((ch.code === code ? '✓ ' : '') + (ch.cultivar || ch.code) + cutLabel(ch.cut_number, S), 'chip' + (ch.code === code ? ' on' : ''), () => { code = ch.code; store.set(CKEY, code); store.set(RKEY, rememberCode(store.get(RKEY, []), code)); renderChips(); focusNum(); });
       b.setAttribute('aria-pressed', ch.code === code ? 'true' : 'false');
       const cd = document.createElement('small'); cd.textContent = ch.code; const n = document.createElement('em'); n.textContent = ch.in_inventory ?? '';
       b.append(cd, n); host.appendChild(b);
