@@ -116,3 +116,33 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
   .sd-table th:nth-child(3), .sd-table td:nth-child(3) { display: none; }
   .sd-bar { width: 60px; }
 }
+
+/* ---- The floor (floor.mjs): the trim line from above, tables shaped like the real ones. */
+.view-toggle { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+.view-toggle .btn { border: 0; border-radius: 0; min-height: 40px; }
+.view-toggle .btn.on { background: var(--green); color: #fff; }
+.floor { background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; padding: 8px; }
+.floor[hidden], .grid[hidden] { display: none; }
+.floor-svg { width: 100%; height: auto; display: block; font-family: var(--font-ui); }
+.floor-svg .aisle { stroke: #e6e2d8; stroke-width: 3; stroke-dasharray: 10 10; }
+.floor-svg .seat { cursor: pointer; outline: none; }
+.floor-svg .seat:focus-visible .tbl, .floor-svg .seat:hover .tbl { stroke-width: 5; }
+.floor-svg .tbl { fill: #fff; stroke: #c9cdc2; stroke-width: 3; transition: fill .3s, stroke .3s; }
+.floor-svg .pan-bg { fill: #f6f7f3; stroke: #e3e6de; stroke-width: 7; }
+.floor-svg .pan { fill: none; stroke: var(--gold); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset .5s ease, stroke .3s; }
+.floor-svg .seat.met .pan { stroke: var(--success); }
+.floor-svg .num { font-size: 26px; font-weight: 800; text-anchor: middle; fill: #2d3a32; }
+.floor-svg .who { font-size: 17px; font-weight: 800; text-anchor: middle; fill: #2d3a32; }
+.floor-svg .sub { font-size: 15px; font-weight: 600; text-anchor: middle; fill: #6b6f66; }
+.floor-svg .goal { font-size: 14px; font-weight: 600; text-anchor: end; fill: #6b6f66; }
+.floor-svg .seat.filling .tbl { stroke: var(--green); }
+.floor-svg .seat.waiting .tbl, .floor-svg .seat.noTablet .tbl { stroke: var(--info); }
+.floor-svg .seat.ready .tbl { fill: #fff3d6; stroke: var(--gold); stroke-width: 5; animation: seatglow 1.6s ease-in-out infinite; }
+.floor-svg .seat.ready .sub { fill: #8a5a00; font-weight: 800; }
+.floor-svg .seat.down .tbl { fill: #fdecec; stroke: var(--danger); stroke-width: 4; }
+.floor-svg .seat.down .sub { fill: var(--danger); font-weight: 800; }
+.floor-svg .seat.empty .tbl { fill: #f6f6f2; stroke-dasharray: 6 6; }
+.floor-svg .seat.empty .pan, .floor-svg .seat.empty .pan-bg { opacity: .35; }
+.floor-svg .seat.empty .num { fill: #a3a79c; }
+@keyframes seatglow { 50% { fill: #ffe7a8; } }
+@media (prefers-reduced-motion: reduce) { .floor-svg .seat.ready .tbl { animation: none; } }

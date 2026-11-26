@@ -28,6 +28,10 @@ const board = {
       job: { phase: 'running', tabletOnline: true, cultivar: LF, bag: null, targetG: null, clockStart: NOW - 12 * 60000 } },
     { stationId: 'table2', label: 'Cell 2', lane: 'wholesale', scale: null,
       job: { phase: 'idle', tabletOnline: true, cultivar: null } },
+    { stationId: 'table3', label: 'Cell 3', lane: 'wholesale', scale: { weightG: 460, live: true },
+      job: { phase: 'finished', tabletOnline: true, cultivar: LF, finishedNetG: 460, finishedAt: NOW - 60000 } },
+    { stationId: 'table6', label: 'Cell 6', lane: 'wholesale', scale: { weightG: null, live: false },
+      job: { phase: 'running', tabletOnline: true, cultivar: LF, clockStart: NOW - 60000 } },
   ],
 };
 const seat1 = {
@@ -53,6 +57,12 @@ test('tap a seat card: today, pace, batches, best hour, hours at goal, and the h
     if (action === 'cellBoard') return ok(board);
     if (action === 'cellQueue') return ok({ cells: [] });
     if (action === 'getProduction') return ok({ success: true, targetRate: 1.1, production: [] });
+    if (action === 'lineScaleHours') return ok({ success: true, date: '2026-11-25', fillOn: false, slots: [{ slot: '2-3', rows: [
+      { stationId: 'table1', personId: 5, name: 'Diego', g: 300.4, min: 20 },
+      { stationId: 'table2', personId: 6, name: 'Ana', g: 520, min: 20 },
+      { stationId: 'table3', personId: 7, name: 'Beto', g: 120, min: 20 },
+      { stationId: 'table6', personId: 8, name: 'Carla', g: 260, min: 20 },
+    ] }] });
     if (action === 'lineScaleSeat') return url.searchParams.get('stationId') === 'table1' ? ok(seat1) : ok({ error: 'Not a scale seat' }, 400);
     return route.abort();
   });
@@ -63,6 +73,15 @@ test('tap a seat card: today, pace, batches, best hour, hours at goal, and the h
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(PAGE);
+  // The floor is the default view (Koa 2026-11-25).
+  await expect(page.locator('#floor svg')).toBeVisible();
+  await expect(page.locator('#floor [data-station]')).toHaveCount(16);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: path.join(SHOTS, 'cells-floor.png') });
+  await page.locator('#floor [data-station="table1"]').click();
+  await expect(page.locator('.sd-overlay h2')).toHaveText('Seat 1 · today');
+  await page.keyboard.press('Escape');
+  await page.locator('#viewCards').click();
   const card = page.locator('.tile', { hasText: 'Cell 1' });
   await expect(card).toBeVisible();
   await card.click();

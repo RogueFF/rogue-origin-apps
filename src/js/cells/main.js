@@ -20,6 +20,7 @@
  */
 import { registerLabels, setLang, getLang, t } from '../shared/i18n.js';
 import { seatSummary, detailHtml, detailLabels } from './seat-detail.mjs';
+import { floorModel, floorSvg } from './floor.mjs';
 import { slotAt } from '../cell/line.mjs';
 import { pacificMinutes } from '../cell/breaks.mjs';
 
@@ -43,6 +44,7 @@ registerLabels({
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cont: 'Continuous', roundN: 'round {n}',
     changeover: 'Changeover', coLine: 'Changeover · {a} → {b}', coWeigh: 'weighing the leftover, then the new cultivar',
     qNow: 'NOW', qNext: 'NEXT', orderReady: 'Order ready', atSpotOf: 'at {cell}’s pickup spot · {n} basket(s)',
+    floorView: 'Floor', cardsView: 'Cards', seatN: 'Seat {n}',
   },
   es: {
     title: 'Celdas', rawLink: 'Entrega de crudo', queueLink: 'Cola de empaque', pullLink: 'Lista de surtido', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
@@ -56,6 +58,7 @@ registerLabels({
     qOz: '¼ oz', hOz: '½ oz', oz1: '1 oz', qLb: '¼ lb', hLb: '½ lb', lb1: '1 lb', cont: 'Continuo', roundN: 'ronda {n}',
     changeover: 'Cambio', coLine: 'Cambio · {a} → {b}', coWeigh: 'pesando lo que sobra, luego la variedad nueva',
     qNow: 'AHORA', qNext: 'SIGUIENTE', orderReady: 'Orden lista', atSpotOf: 'en el lugar de recogida de {cell} · {n} canasta(s)',
+    floorView: 'Planta', cardsView: 'Tarjetas', seatN: 'Puesto {n}',
   },
 });
 const tf = (key, vars) => t(key).replace(/\{(\w+)\}/g, (_, k) => vars[k]);
@@ -435,7 +438,52 @@ function renderGrid() {
 }
 
 const spotFor = id => waiting.filter(w => w.stationId === id && !collecting.has(w.id)).length;
-function render() { renderPickups(); renderGrid(); }
+function render() { renderPickups(); if (view === 'floor') renderFloor(); else renderGrid(); }
+
+// ---- The floor (floor.mjs): the trim line from above, the default view (Koa 2026-11-25).
+const VIEW_KEY = 'ro-cells:view';
+let view = (() => { try { return localStorage.getItem(VIEW_KEY) || 'floor'; } catch { return 'floor'; } })();
+const floorEl = $('floor');
+let lineHours = { slots: [] };
+let lastNames = {};
+const FLOOR_MS = 30000;
+async function loadLineHours() {
+  try {
+    const r = await fetch(`${API}?action=lineScaleHours&date=${pacificDate()}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    lineHours = d.data || d;
+    lastNames = {};
+    for (const s of lineHours.slots || []) for (const row of s.rows || []) if (row.name && row.min > 0) lastNames[row.stationId] = row.name;
+  } catch { /* the floor still shows states */ }
+  loadRate().then(() => { if (view === 'floor') renderFloor(); });
+}
+function renderFloor() {
+  const slot = slotAt(pacificMinutes(Date.now()));
+  const rows = ((lineHours.slots || []).find((s) => s.slot === slot) || {}).rows || [];
+  floorEl.innerHTML = floorSvg(floorModel(cells, rows, lastNames, lineRate, slot), { lang: getLang() });
+  el.quiet.textContent = '';
+}
+function setView(v) {
+  view = v === 'cards' ? 'cards' : 'floor';
+  try { localStorage.setItem(VIEW_KEY, view); } catch { /* per visit */ }
+  floorEl.hidden = view !== 'floor';
+  el.grid.hidden = view === 'floor';
+  $('viewFloor').classList.toggle('on', view === 'floor');
+  $('viewCards').classList.toggle('on', view === 'cards');
+  render();
+}
+floorEl.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-station]');
+  if (g) openDetail(g.dataset.station, tf('seatN', { n: g.dataset.n }));
+});
+floorEl.addEventListener('keydown', (e) => {
+  const g = e.target.closest && e.target.closest('[data-station]');
+  if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDetail(g.dataset.station, tf('seatN', { n: g.dataset.n })); }
+});
+$('viewFloor').addEventListener('click', () => setView('floor'));
+$('viewCards').addEventListener('click', () => setView('cards'));
+setInterval(() => { if (!document.hidden && view === 'floor') loadLineHours(); }, FLOOR_MS);
 
 let timer = null;
 async function poll() {
@@ -487,5 +535,7 @@ el.lang.addEventListener('click', () => setLang(getLang() === 'es' ? 'en' : 'es'
 document.addEventListener('ro:langchange', () => { el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES'; render(); renderDetail(); });
 el.sound.addEventListener('click', () => { unlock(); chime(); });
 el.lang.textContent = getLang() === 'es' ? 'EN' : 'ES';
+setView(view);
+loadLineHours();
 poll();
 pollQueues();
