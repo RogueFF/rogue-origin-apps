@@ -23,7 +23,7 @@ import { seatSummary, detailHtml, detailLabels } from './seat-detail.mjs';
 import { floorModel, floorSvg } from './floor.mjs';
 import { seatOf } from '../cell/seats.mjs';
 import { slotAt } from '../cell/line.mjs';
-import { pacificMinutes } from '../cell/breaks.mjs';
+import { pacificMinutes, scheduleState } from '../cell/breaks.mjs';
 
 const PROD_API = 'https://rogue-origin-api.roguefamilyfarms.workers.dev/api/production';
 const POLL_MS = 2000;
@@ -36,7 +36,7 @@ registerLabels({
   en: {
     title: 'Cells', rawLink: 'Raw hand-out', queueLink: 'Bag/tag queue', pullLink: 'Pull list', soundOn: '🔔 Tap to turn sound on', ready: 'Ready for pickup', waiting: 'waiting',
     idle: 'Idle', armed: 'Ready', running: 'Filling', paused: 'Paused', finished: 'Ready for pickup',
-    down: 'Scale disconnected', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
+    down: 'Scale disconnected', dayDone: 'Day done', notStarted: 'Not started', break: 'Break', lunch: 'Lunch', offline: 'Tablet off', noOrder: 'No order picked', of: 'of',
     notrec: 'NOT RECORDING', noScreen: 'trimming, no cell screen open', tabletOff: 'trimming, tablet not reporting', noJob: 'trimming, no job started',
     atSpot: 'At pickup spot', collected: 'Collected ✓', undo: 'Undo', collectedMsg: 'Collected: {cell}', spotCount: '🧺 {n} at pickup spot',
     collectFail: 'Could not mark it collected. Try again.',
@@ -50,7 +50,7 @@ registerLabels({
   es: {
     title: 'Celdas', rawLink: 'Entrega de crudo', queueLink: 'Cola de empaque', pullLink: 'Lista de surtido', soundOn: '🔔 Toque para activar el sonido', ready: 'Listo para recoger', waiting: 'esperando',
     idle: 'Sin trabajo', armed: 'Lista', running: 'Llenando', paused: 'En pausa', finished: 'Listo para recoger',
-    down: 'Báscula desconectada', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
+    down: 'Báscula desconectada', dayDone: 'Día terminado', notStarted: 'Sin empezar', break: 'Descanso', lunch: 'Almuerzo', offline: 'Tableta apagada', noOrder: 'Sin orden', of: 'de',
     notrec: 'NO SE GRABA', noScreen: 'recortando, sin pantalla abierta', tabletOff: 'recortando, la tableta no reporta', noJob: 'recortando, sin trabajo iniciado',
     atSpot: 'En el punto de recogida', collected: 'Recogido ✓', undo: 'Deshacer', collectedMsg: 'Recogido: {cell}', spotCount: '🧺 {n} en el punto de recogida',
     collectFail: 'No se pudo marcar como recogido. Intente otra vez.',
@@ -133,7 +133,8 @@ function statusOf(c) {
   const j = c.job;
   if (!j) return null;                                   // never on a screen
   if (!j.tabletOnline) return 'offline';
-  if (c.scale && !c.scale.live && j.phase !== 'finished') return 'down';
+  // A scale meant to be off (before the shift, a break, lunch, from the 4:20 cleanup) says why, in grey.
+  if (c.scale && !c.scale.live && j.phase !== 'finished') { const s = scheduleState(pacificMinutes(Date.now())); return s === 'working' ? 'down' : s; }
   if (j.phase === 'running' && j.paused) return 'paused';
   // Continuous, between the old cultivar's last pickup and the new one's first gram (0063).
   if (c.changeover) return 'changeover';
@@ -463,7 +464,7 @@ async function loadLineHours() {
 function renderFloor() {
   const slot = slotAt(pacificMinutes(Date.now()));
   const rows = ((lineHours.slots || []).find((s) => s.slot === slot) || {}).rows || [];
-  floorEl.innerHTML = floorSvg(floorModel(cells, rows, lastNames, lineRate, slot), { lang: getLang() });
+  floorEl.innerHTML = floorSvg(floorModel(cells, rows, lastNames, lineRate, slot, pacificMinutes(Date.now())), { lang: getLang() });
   el.quiet.textContent = '';
 }
 function setView(v) {

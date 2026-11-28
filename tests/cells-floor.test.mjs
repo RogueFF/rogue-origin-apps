@@ -57,3 +57,35 @@ test('the station-to-seat map: table1 (built for Cell 1) is at seat 2, where Die
   assert.equal(seat2.state, 'filling');
   assert.equal(m.seats.find((s) => s.n === 1).state, 'empty');
 });
+
+test('a silent scale is red only in the working day: "Day done" from the 4:20 cleanup until the shift starts', async () => {
+  const { workingTime } = await import('../src/js/cell/breaks.mjs');
+  const cells = [{ stationId: 'table1', scale: { live: false }, job: { phase: 'running', tabletOnline: true } }];
+  const at = (h, m) => floorModel(cells, [], {}, 1.1, '2-3', h * 60 + m).seats.find((s) => s.stationId === 'table1').state;
+  assert.equal(at(14, 0), 'down', '2:00 PM: a real fault, red');
+  assert.equal(at(16, 26), 'dayDone', '4:26 PM: cleanup, the node is off for the night');
+  assert.equal(at(6, 30), 'notStarted', 'before the shift');
+  assert.equal(at(16, 19), 'down');
+  assert.equal(workingTime(7 * 60), true);
+  assert.equal(workingTime(16 * 60 + 20), false);
+  assert.match(floorSvg(floorModel(cells, [], {}, 1.1, '4-4:30', 16 * 60 + 26), { lang: 'en' }), /seat dayDone[\s\S]*Day done/);
+});
+
+test('a silent scale says why it is off, from the schedule; red only in working minutes', async () => {
+  const { scheduleState, SHIFT_START_MIN, CLEANUP_MIN } = await import('../src/js/cell/breaks.mjs');
+  assert.equal(SHIFT_START_MIN, 7 * 60, "Hourly entry's first hour");
+  assert.equal(CLEANUP_MIN, 16 * 60 + 20, "the scoreboard's EOD_HOLD_FROM");
+  const cells = [{ stationId: 'table1', scale: { live: false }, job: { phase: 'running', tabletOnline: true } }];
+  const seat = (h, m) => floorModel(cells, [], {}, 1.1, '', h * 60 + m).seats.find((s) => s.stationId === 'table1');
+  const cases = [[6, 40, 'notStarted', 'Not started'], [9, 5, 'break', 'Break'], [12, 10, 'lunch', 'Lunch'],
+    [14, 35, 'break', 'Break'], [16, 26, 'dayDone', 'Day done'], [10, 30, 'down', 'Scale down'], [13, 0, 'down', 'Scale down']];
+  for (const [h, m, state, label] of cases) {
+    assert.equal(seat(h, m).state, state, `${h}:${m}`);
+    assert.equal(scheduleState(h * 60 + m) === 'working', state === 'down');
+    const svg = floorSvg({ seats: [seat(h, m)], goalLb: null }, { lang: 'en' });
+    assert.match(svg, new RegExp(label));
+    assert.equal(/class="seat [^"]* off/.test(svg), state !== 'down', `${h}:${m} grey`);
+  }
+  assert.match(floorSvg({ seats: [seat(12, 10)], goalLb: null }, { lang: 'es' }), /Almuerzo/);
+  assert.match(floorSvg({ seats: [seat(6, 40)], goalLb: null }, { lang: 'es' }), /Sin empezar/);
+});

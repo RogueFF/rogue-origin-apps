@@ -168,3 +168,6 @@ body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; 
   .ring-side { grid-row: 2; grid-template-columns: 1fr 1fr; width: 100%; }
   .head-right .awake { display: none; }
 }
+
+/* Day done: the scale is switched off after cleanup or before the shift. */
+.live-dot.off .dot { background: var(--text-light, #a3a79c); }

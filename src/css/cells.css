@@ -146,3 +146,10 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .floor-svg .seat.empty .num { fill: #a3a79c; }
 @keyframes seatglow { 50% { fill: #ffe7a8; } }
 @media (prefers-reduced-motion: reduce) { .floor-svg .seat.ready .tbl { animation: none; } }
+
+/* Day done (4:20 cleanup to the next shift): a scale switched off for the night, calm grey, not red. */
+.tile.dayDone, .tile.notStarted, .tile.break, .tile.lunch { border-left-color: #a3a79c; }
+.tile.dayDone .pill, .tile.notStarted .pill, .tile.break .pill, .tile.lunch .pill { background: #e6e6e0; color: #4d5140; }
+.floor-svg .seat.off .tbl { fill: #f3f3ef; stroke: #b9bcb2; }
+.floor-svg .seat.off .pan, .floor-svg .seat.off .pan-bg { opacity: .5; }
+.floor-svg .seat.off .sub { fill: #6b6f66; }
