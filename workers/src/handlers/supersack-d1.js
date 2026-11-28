@@ -8,11 +8,13 @@
  *   summary        (GET)  — aggregated KPIs for a date range (by day/week/month)
  *   tops_remaining (GET)  — projected finished tops (lbs) in current raw inventory (public)
  *   tops_breakdown (GET)  — per-cultivar projection (Bearer auth; competitively sensitive)
+ *   yield_rates    (GET)  — measured tops/smalls/trim per sack, per sack type (Bearer auth)
  *   backfill       (POST) — one-time backfill from pool API + production data
  */
 
 import { successResponse, errorResponse, parseBody, getAction, getQueryParams } from '../lib/response.js';
 import { buildRates } from '../lib/sack-rates.js';
+import { buildYieldRates, filterSackTypes, YIELD_RATES_API_VERSION } from '../lib/yield-rates.js';
 import { constantTimeEqual } from '../lib/auth.js';
 import { fullSackLbsForTitle, seasonFromTitle } from '../lib/sack-weight.js';
 import { handleScannedDay, handleDayYield, handleCloseDayPreview, handleCloseDay } from './supersack-day-yield.js';
@@ -65,6 +67,8 @@ export async function handleSupersackD1(request, env, ctx) {
       return await topsRemaining(request, env, ctx);
     case 'tops_breakdown':
       return await topsBreakdown(request, env, ctx);
+    case 'yield_rates':
+      return await yieldRates(request, env, ctx, params);
     // End of day for scanned (2026+) sacks. Same no-password posture as submit:
     // scanned_day is a read, and day_yield only re-runs the idempotent allocation.
     case 'scanned_day':
@@ -537,6 +541,114 @@ async function topsBreakdown(request, env, ctx) {
       return new Response(stale.body, { status: 200, headers: h });
     }
     return rawJson({ error: 'Inventory temporarily unavailable' }, 502);
+  }
+}
+
+/**
+ * History for yield_rates, one row per floor strain title.
+ *
+ * CLEAN DAYS ONLY (Koa, 2026-11-11). When cultivars run together, one's tops
+ * get weighed in with another's: on 2026-10-27 Lifter opened 5 sacks and shows
+ * no tops, because they went on the scale as Sour Lifter. A row like that is
+ * not "Lifter made nothing" — it means that day's split between strains is
+ * wrong, for the strain that lost the pounds AND the one that gained them. So
+ * a day is used only when every row that opened sacks has tops of its own (and
+ * none is the impossible tops > half the raw weight, or the strainless
+ * 'Unknown'). Any other day is dropped whole, for every strain and every
+ * output. Deliberately stricter than tops_breakdown's per-row filter.
+ *
+ * Smalls and trim are summed over the same clean days — they are logged in
+ * lumps, so only the total over the run means anything.
+ */
+export const YIELD_HISTORY_SQL = `
+    WITH dirty AS (
+      SELECT DISTINCT date FROM supersack_entries
+      WHERE sacks_opened > 0
+        AND (tops_lbs <= 0 OR tops_lbs > raw_lbs * 0.5 OR strain = 'Unknown')
+    )
+    SELECT strain,
+           SUM(sacks_opened) AS tops_sacks,
+           SUM(tops_lbs)     AS tops_lbs,
+           MIN(CASE WHEN sacks_opened > 0 THEN date END) AS tops_first,
+           MAX(CASE WHEN sacks_opened > 0 THEN date END) AS tops_last,
+           SUM(sacks_opened) AS run_sacks,
+           SUM(smalls_lbs)   AS smalls_lbs,
+           SUM(trim_lbs)     AS trim_lbs,
+           MIN(date)         AS run_first,
+           MAX(date)         AS run_last
+    FROM supersack_entries
+    WHERE strain <> 'Unknown'
+      AND date NOT IN (SELECT date FROM dirty)
+    GROUP BY strain`;
+
+/**
+ * yield_rates — measured finished pounds per sack for every Super Sack variant
+ * (lib/yield-rates.js holds the contract and the reasoning). Same sensitivity,
+ * token and caching as tops_breakdown, which is left untouched: 5-minute fresh
+ * copy, 24-hour last-good served with X-Stale, 502 only with no copy at all.
+ * The cache holds the full payload; keyed lookups filter it on the way out.
+ */
+async function yieldRates(request, env, ctx, params = {}) {
+  // --- Auth FIRST, fail closed: no work and no cache for the unauthorized. ---
+  const expected = env.BREAKDOWN_API_KEY;
+  if (!expected) {
+    console.error('[supersack yield_rates] BREAKDOWN_API_KEY not configured');
+    return rawJson({ error: 'unauthorized' }, 401);
+  }
+  const authHeader = request.headers.get('authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token || !constantTimeEqual(token, expected)) {
+    return rawJson({ error: 'unauthorized' }, 401);
+  }
+  if (params.v != null && String(params.v) !== String(YIELD_RATES_API_VERSION)) {
+    return rawJson({ error: `unsupported version: v=${params.v}` }, 400);
+  }
+
+  const respond = (payload, headers) => rawJson(
+    { ...payload, sack_types: filterSackTypes(payload.sack_types || [], params) }, 200, headers,
+  );
+
+  const cache = caches.default;
+  const freshKey = new Request('https://cache.local/supersack/yield_rates-v1');
+  const lastGoodKey = new Request('https://cache.local/supersack/yield_rates-v1-lg');
+
+  const hit = await freshHit(cache, freshKey);
+  if (hit) return respond(await hit.json(), { 'Cache-Control': 'private, max-age=300' });
+
+  try {
+    if (!env.POOL_INVENTORY_API_URL || !env.POOL_INVENTORY_API_KEY) throw new Error('inventory proxy not configured');
+    const history = await env.DB.prepare(YIELD_HISTORY_SQL).all().then(r => r.results || []);
+
+    const r = await fetch(env.POOL_INVENTORY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'get_supersack_variants', apiKey: env.POOL_INVENTORY_API_KEY }),
+      redirect: 'follow',
+    });
+    const data = JSON.parse(await r.text());
+    if (data.error) throw new Error(data.error);
+    const variants = data.variants || [];
+
+    const cultivarOf = await resolveTitleCultivars(env.DB, [...history.map(h => h.strain), ...variants.map(v => v.title)]);
+    const payload = buildYieldRates(history, variants, cultivarOf);
+    const body = JSON.stringify(payload);
+
+    if (ctx && ctx.waitUntil) {
+      // Stored `public` so caches.default keeps them; the keys are synthetic
+      // and never reachable from the edge (see topsBreakdown).
+      ctx.waitUntil(cache.put(freshKey, new Response(body, {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
+      })));
+      ctx.waitUntil(cache.put(lastGoodKey, new Response(body, {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' },
+      })));
+    }
+    return respond(payload, { 'Cache-Control': 'private, max-age=300' });
+  } catch (e) {
+    console.error('[supersack yield_rates] compute failed:', e?.message || e);
+    const stale = await cache.match(lastGoodKey);
+    if (stale) return respond(await stale.json(), { 'X-Stale': 'true', 'Cache-Control': 'private, max-age=0' });
+    return rawJson({ error: 'Yield rates temporarily unavailable' }, 502);
   }
 }
 
