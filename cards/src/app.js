@@ -7,9 +7,11 @@
 //   GET /weekly[?week=2026-W42]        → the week's card (default: last complete Mon–Fri week, Pacific)
 //   GET /eod[?date=2026-10-16]         → end-of-day card (default: today, Pacific)
 //   GET /midday[?date=2026-10-19]      → midday card (default: today, Pacific)
+//   GET /cell[?station=table1&date=]   → one cell's Phase 1 card (default: table1, today)
 //   ?format=json                       → the card model instead of the PNG
 import { UpstreamError } from './data.js';
 import { weeklyModel, eodModel, middayModel } from './model.js';
+import { cellModel, stripDates } from './cell-model.js';
 import { cardTree } from './layout.js';
 import { renderPng } from './render.js';
 import { pacificDate, lastCompleteWeek, weekRange, weekDates, isYmd, priorWeekday, addDaysYmd } from './periods.js';
@@ -70,6 +72,9 @@ function weekParam(url, today) {
   return week;
 }
 
+/** Station ids the cell card takes: table1..table99. */
+const STATION = /^table\d{1,2}$/;
+
 /** Each card: its period end (for Cache-Control) and how to build its model from the API. */
 const CARDS = {
   weekly: {
@@ -119,6 +124,27 @@ const CARDS = {
       ]);
       if (!real(dashboardToday)) return null;
       return middayModel({ date, scoreboard, dashboardToday, priorDay: real(priorDay), sackOut, generatedAt });
+    },
+  },
+  cell: {
+    period: (url, today) => {
+      const date = dateParam(url, today);
+      const station = url.searchParams.get('station') ?? 'table1';
+      if (!STATION.test(station)) throw new BadRequest('station must look like table1');
+      return { date, station, end: date };
+    },
+    async model(api, { date, station }, generatedAt) {
+      // The day itself, and the 5-day strip (Phase 1's days, or the 5 shift days to this one).
+      // Days still to come are not fetched.
+      const dates = stripDates(date).filter((d) => d !== date);
+      const [day, ...others] = await Promise.all([
+        api.cellDay(station, date),
+        ...dates.map((d) => (d < date ? api.cellDay(station, d) : Promise.resolve(null))),
+      ]);
+      const byDate = new Map(dates.map((d, i) => [d, others[i]]));
+      byDate.set(date, day);
+      const strip = stripDates(date).map((d) => ({ date: d, day: byDate.get(d) ?? null }));
+      return cellModel({ date, day, strip, generatedAt });
     },
   },
 };
